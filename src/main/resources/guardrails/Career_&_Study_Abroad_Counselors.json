@@ -1,0 +1,38 @@
+{
+  "niche": "Career & Study Abroad Counselors",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "visa": "immigration",
+    "admission": "enrollment",
+    "college": "university",
+    "ielts": "exam",
+    "country": "destination"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "immigration": 10,
+    "enrollment": 9,
+    "university": 8
+  }
+}

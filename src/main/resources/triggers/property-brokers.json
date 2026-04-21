@@ -1,0 +1,25 @@
+{
+  "subCategory": "Property Brokers",
+  "direct_triggers": ["buy flat","need property","property inquiry","looking for house","buy 2bhk","buy 3bhk","commercial property","plot for sale","real estate inquiry","need apartment","rent house"],
+  "intent_triggers": {
+    "booking_intent": ["schedule site visit","book property visit","can i see the property","arrange a meeting","visit tomorrow"],
+    "pricing_intent": ["what is the price","how much does it cost","property rates","per sqft rate","budget range","emi options","home loan"],
+    "requirement_intent": ["i need 2 bhk","looking for plot","need commercial space","want to invest in property","near metro station","good locality","school nearby"]
+  },
+  "entity_keywords": {
+    "property": ["flat","house","apartment","villa","plot","land","commercial","office","shop","penthouse"],
+    "specification": ["bhk","sqft","sq.ft","furnished","semi-furnished","ready to move","under construction","gated community"],
+    "transaction": ["buy","purchase","rent","lease","invest","resale","booking","registry","loan","emi"],
+    "location": ["locality","area","society","colony","sector","possession","facing","floor","vastu"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15},
+  "flow": {
+    "type": "LEAD_CAPTURE",
+    "steps": [
+      { "dataKey": "property_type", "question": "🏠 What type of property are you looking for?", "usesButtons": true, "options": ["Apartment", "Villa", "Plot"] },
+      { "dataKey": "budget", "question": "💰 What is your budget range?", "usesButtons": false },
+      { "dataKey": "timeline", "question": "📅 When are you planning to buy?", "usesButtons": false },
+      { "dataKey": "email", "question": "📩 Please provide your email for detailed property proposals:", "usesButtons": false }
+    ]
+  }
+}

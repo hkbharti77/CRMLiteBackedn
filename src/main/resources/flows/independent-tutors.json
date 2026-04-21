@@ -1,0 +1,22 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "subject",
+      "question": "📚 Which subject do you need help with? (e.g., Math, Science, English)",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Math", "Science", "English"]
+    },
+    {
+      "dataKey": "class_level",
+      "question": "🎓 What is the student's class or grade level?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email to schedule a free trial session:",
+      "usesButtons": false
+    }
+  ]
+}

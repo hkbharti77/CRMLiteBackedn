@@ -1,0 +1,35 @@
+{
+  "subCategory": "Skin & Aesthetic Clinics",
+  "direct_triggers": [
+    "book appointment", "skin consultation", "acne treatment", "laser therapy",
+    "botox treatment", "skin problem", "need dermatologist", "remove pimples",
+    "pigmentation treatment", "scar removal", "skin checkup", "facial booking"
+  ],
+  "intent_triggers": {
+    "booking_intent": [
+      "i want to book", "can i get an appointment", "schedule consultation",
+      "when can i visit", "next available slot", "visit doctor"
+    ],
+    "inquiry_intent": [
+      "how much does laser cost", "what is the charge for botox",
+      "what treatments do you offer", "is acne treatment permanent",
+      "which skin doctor is available", "tell me about services"
+    ],
+    "concern_intent": [
+      "my skin is dark", "i have acne marks", "my face has spots",
+      "pimples on face", "skin is dull", "wrinkles treatment",
+      "uneven skin tone", "dark circles removal"
+    ]
+  },
+  "entity_keywords": {
+    "skin": ["skin", "face", "complexion", "pore", "tone", "glow", "acne", "pimple", "blackhead"],
+    "treatment": ["laser", "botox", "filler", "peel", "facial", "derma", "microneedling", "cleanup"],
+    "condition": ["pigmentation", "scar", "wrinkle", "rosacea", "eczema", "darkspot", "blemish"],
+    "action": ["book", "appointment", "consult", "visit", "checkup", "treatment", "remove", "fix"]
+  },
+  "config": {
+    "similarity_threshold": 80,
+    "min_words_for_scoring": 4,
+    "entity_boost": 15
+  }
+}

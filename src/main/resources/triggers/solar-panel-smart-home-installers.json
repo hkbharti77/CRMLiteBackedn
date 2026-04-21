@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Solar Panel / Smart Home Installers",
+  "direct_triggers": ["solar panel","solar installation","solar quote","smart home setup","home automation","need solar","solar subsidy","electricity bill","rooftop solar","solar inquiry"],
+  "intent_triggers": {
+    "booking_intent": ["book survey","schedule site visit","call for inspection","book installation","get free survey"],
+    "pricing_intent": ["how much does solar cost","panel price","monthly savings","return on investment","subsidy amount","total installation cost"],
+    "concern_intent": ["high electricity bill","want to reduce power cost","government scheme","net metering","off grid solution","backup during outage"]
+  },
+  "entity_keywords": {
+    "solar": ["solar","panel","photovoltaic","inverter","battery","kw","kilowatt","rooftop","ground mount"],
+    "smart": ["automation","smart home","alexa","google home","cctv","doorbell","wifi","sensor","lighting"],
+    "benefit": ["savings","subsidy","roi","electricity","bill","government","scheme","net metering","backup"],
+    "action": ["install","setup","survey","quote","book","inspect","connect","mount"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

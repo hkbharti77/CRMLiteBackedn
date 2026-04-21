@@ -1,0 +1,38 @@
+{
+  "niche": "Gym / Personal Fitness Trainers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "gym": "workout",
+    "trainer": "coaching",
+    "plan": "diet",
+    "membership": "subscription",
+    "weight": "loss"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "coaching": 10,
+    "workout": 9,
+    "diet": 8
+  }
+}

@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Freelance Makeup Artists (MUA)",
+  "direct_triggers": ["bridal makeup","book makeup","makeup artist","makeup trial","party makeup","function makeup","engagement makeup","need makeup","makeup booking","bridal look","glam makeup"],
+  "intent_triggers": {
+    "booking_intent": ["book makeup appointment","check availability for date","reserve for wedding","book bridal makeup","is date available"],
+    "pricing_intent": ["how much for bridal makeup","party makeup cost","package price","trial charges","full day cost"],
+    "inquiry_intent": ["which products do you use","do you travel","will you come home","airbrush or regular","trial included in package"]
+  },
+  "entity_keywords": {
+    "occasion": ["wedding","bridal","engagement","reception","sangeet","haldi","party","birthday","photoshoot"],
+    "service": ["makeup","airbrush","blush","contouring","eye shadow","lashes","lipstick","hairstyle","braid"],
+    "look": ["natural","glam","matte","dewy","HD","bridal","editorial","western","traditional"],
+    "action": ["book","reserve","schedule","trial","appointment","get ready","hire"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

@@ -1,0 +1,17 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "project_type",
+      "question": "💻 What type of design project do you need? (Web, Branding, Social Media)",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Web Design", "Branding", "Social Media"]
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email for a custom quote and portfolio:",
+      "usesButtons": false
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "niche": "Insurance Agents",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "policy": "coverage",
+    "premium": "payment",
+    "claim": "payout",
+    "life": "type",
+    "health": "type"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "coverage": 10,
+    "payout": 9,
+    "payment": 8
+  }
+}

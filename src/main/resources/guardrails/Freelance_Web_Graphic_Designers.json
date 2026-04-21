@@ -1,0 +1,38 @@
+{
+  "niche": "Freelance Web/Graphic Designers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "website": "development",
+    "logo": "branding",
+    "app": "development",
+    "ux": "design",
+    "hosting": "deployment"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "development": 10,
+    "branding": 9,
+    "design": 8
+  }
+}

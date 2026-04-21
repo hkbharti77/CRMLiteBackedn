@@ -1,0 +1,39 @@
+{
+  "niche": "Skin & Aesthetic Clinics",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "laser": "laser_hair_removal",
+    "facial": "medical_facial",
+    "peel": "chemical_peel",
+    "botox": "anti_aging",
+    "filler": "dermal_filler"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "anti_aging": 10,
+    "dermal_filler": 9,
+    "laser_hair_removal": 8,
+    "medical_facial": 7
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "shoot_type",
+      "question": "📸 What type of shoot are you looking for?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Wedding", "Pre-wedding", "Portfolio"]
+    },
+    {
+      "dataKey": "event_date",
+      "question": "📅 When is your event?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Provide your email for package details:",
+      "usesButtons": false
+    }
+  ]
+}

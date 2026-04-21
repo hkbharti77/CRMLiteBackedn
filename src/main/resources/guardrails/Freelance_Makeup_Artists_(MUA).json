@@ -1,0 +1,38 @@
+{
+  "niche": "Freelance Makeup Artists (MUA)",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "makeup": "bridal",
+    "styling": "hair",
+    "party": "event",
+    "trial": "preview",
+    "package": "pricing"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "bridal": 10,
+    "event": 9,
+    "preview": 8
+  }
+}

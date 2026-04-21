@@ -1,0 +1,39 @@
+{
+  "niche": "Independent Tutors",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "class": "session",
+    "course": "program",
+    "math": "subject",
+    "science": "subject",
+    "english": "subject",
+    "batch": "group"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "program": 10,
+    "session": 9,
+    "subject": 8
+  }
+}

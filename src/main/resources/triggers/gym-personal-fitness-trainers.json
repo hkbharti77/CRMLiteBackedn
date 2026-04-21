@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Gym / Personal Fitness Trainers",
+  "direct_triggers": ["join gym","gym membership","personal trainer","weight loss","fitness plan","trial session","workout plan","muscle gain","enroll gym","need trainer","gym near me"],
+  "intent_triggers": {
+    "booking_intent": ["i want to join","book trial session","when can i start","schedule a visit","enroll today"],
+    "pricing_intent": ["how much is membership","gym fees","personal training cost","monthly charges","what are your rates"],
+    "goal_intent": ["i want to lose weight","want to build muscle","need to get fit","reduce belly fat","improve stamina","athletic training","post pregnancy fitness"]
+  },
+  "entity_keywords": {
+    "fitness": ["gym","workout","exercise","training","fitness","cardio","weights","crossfit"],
+    "body": ["weight","muscle","fat","core","abs","strength","stamina","endurance","flexibility"],
+    "service": ["trainer","membership","plan","diet","protein","supplement","coaching","personal"],
+    "action": ["join","enroll","trial","book","start","lose","gain","build","reduce"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

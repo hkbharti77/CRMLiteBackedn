@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Premium Tour & Travel Operators",
+  "direct_triggers": ["book trip","travel package","tour package","honeymoon trip","group tour","need holiday","tour inquiry","book hotel","europe tour","dubai package","travel inquiry","family vacation"],
+  "intent_triggers": {
+    "booking_intent": ["book travel package","plan my trip","schedule itinerary","reserve hotel","book flight"],
+    "pricing_intent": ["how much does tour cost","package price","per person cost","budget trip","all inclusive price","group discount"],
+    "inquiry_intent": ["what destinations do you cover","visa included","is breakfast included","how many days","customized itinerary","best time to visit"]
+  },
+  "entity_keywords": {
+    "destination": ["goa","manali","kashmir","kerala","rajasthan","dubai","europe","bali","thailand","singapore","maldives","london"],
+    "travel": ["tour","trip","holiday","vacation","travel","itinerary","package","excursion","cruise"],
+    "service": ["hotel","flight","visa","transfer","guide","insurance","meals","sightseeing","resort"],
+    "type": ["honeymoon","family","solo","group","corporate","pilgrimage","budget","luxury","adventure"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

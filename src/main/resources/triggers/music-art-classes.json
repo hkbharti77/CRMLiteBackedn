@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Music & Art Classes",
+  "direct_triggers": ["music class","guitar class","learn guitar","art class","painting class","join music","vocal class","enroll music","learn piano","singing class","art lessons","drawing class"],
+  "intent_triggers": {
+    "booking_intent": ["i want to join","book trial class","when does batch start","enroll my child","schedule demo"],
+    "inquiry_intent": ["which instruments do you teach","online or offline","class timings","fees for music class","beginner friendly"],
+    "interest_intent": ["i want to learn guitar","my child loves music","interested in art","want to sing better","improve painting skills","learn from scratch"]
+  },
+  "entity_keywords": {
+    "music": ["guitar","piano","keyboard","violin","tabla","flute","sitar","drums","singing","vocals","classical"],
+    "art": ["painting","drawing","sketching","watercolor","oil","acrylic","portrait","landscape"],
+    "action": ["learn","join","enroll","book","practice","trial","start","demo"],
+    "level": ["beginner","intermediate","advanced","basic","professional","amateur","hobbyist"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

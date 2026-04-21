@@ -1,0 +1,38 @@
+{
+  "niche": "Music & Art Classes",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "guitar": "music",
+    "piano": "music",
+    "painting": "art",
+    "sketching": "art",
+    "workshop": "event"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "music": 10,
+    "art": 10,
+    "event": 9
+  }
+}

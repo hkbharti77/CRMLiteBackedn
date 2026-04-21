@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Career & Study Abroad Counselors",
+  "direct_triggers": ["study abroad","visa assistance","university admission","need counselor","masters abroad","scholarship help","ielts preparation","abroad consultation","gre preparation","phd abroad"],
+  "intent_triggers": {
+    "booking_intent": ["book consultation","schedule appointment","can i meet counselor","need guidance session","book counseling"],
+    "inquiry_intent": ["which university is best","what is ielts requirement","how much does it cost to study abroad","visa process","scholarship eligibility","gmat score needed"],
+    "concern_intent": ["i was rejected","my gpa is low","can i get admission without gre","late application","admission chances","gap year acceptable"]
+  },
+  "entity_keywords": {
+    "destination": ["uk","usa","canada","australia","germany","ireland","new zealand","singapore","europe"],
+    "qualification": ["ielts","toefl","gre","gmat","sat","duolingo","english test","language score"],
+    "study": ["university","college","masters","bachelor","phd","mba","scholarship","admission","visa"],
+    "action": ["apply","enroll","book","consult","guide","counsel","prepare","shortlist"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

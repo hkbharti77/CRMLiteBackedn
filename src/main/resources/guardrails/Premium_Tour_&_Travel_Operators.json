@@ -1,0 +1,38 @@
+{
+  "niche": "Premium Tour & Travel Operators",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "package": "itinerary",
+    "flight": "transport",
+    "hotel": "stay",
+    "visa": "entry",
+    "tour": "landscape"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "itinerary": 10,
+    "stay": 9,
+    "transport": 8
+  }
+}

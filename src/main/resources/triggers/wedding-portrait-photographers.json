@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Wedding & Portrait Photographers",
+  "direct_triggers": ["wedding photography","book photographer","photo shoot","pre wedding","candid photography","event photography","need photographer","portrait shoot","photo package","wedding coverage"],
+  "intent_triggers": {
+    "booking_intent": ["book a photographer","check availability","reserve date","is date available","book for wedding"],
+    "pricing_intent": ["how much does photography cost","package price","candid price","video and photo combo","what packages are available"],
+    "inquiry_intent": ["how many photos delivered","what camera do you use","do you travel","same day edit","raw files included","album included"]
+  },
+  "entity_keywords": {
+    "photography": ["photo","photography","photographer","camera","shoot","lens","click","capture","coverage"],
+    "event": ["wedding","pre-wedding","engagement","reception","birthday","corporate","newborn","maternity"],
+    "product": ["album","video","reel","highlights","slideshow","frame","prints","edit","raw"],
+    "style": ["candid","traditional","cinematic","documentary","portrait","fashion","aerial","drone"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

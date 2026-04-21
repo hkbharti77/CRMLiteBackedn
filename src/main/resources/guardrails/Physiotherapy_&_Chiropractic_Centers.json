@@ -1,0 +1,38 @@
+{
+  "niche": "Physiotherapy & Chiropractic Centers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "physio": "rehabilitation",
+    "massage": "therapy",
+    "alignment": "spine",
+    "exercise": "fitness",
+    "shoulder": "joint"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "rehabilitation": 10,
+    "spine": 9,
+    "joint": 8
+  }
+}

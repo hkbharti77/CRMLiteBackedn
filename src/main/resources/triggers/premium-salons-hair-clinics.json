@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Premium Salons & Hair Clinics",
+  "direct_triggers": ["book appointment","hair cut","hair colour","book slot","hair treatment","hair spa","hair smoothing","need haircut","hair highlights","keratin treatment","hair transplant consultation","salon booking"],
+  "intent_triggers": {
+    "booking_intent": ["i want to book","can i get slot","when is next available","schedule my visit","book hair appointment"],
+    "pricing_intent": ["how much for haircut","what is the price","cost of keratin","price for colouring","how much does it cost"],
+    "inquiry_intent": ["what services are available","do you do hair transplant","which products do you use","tell me about treatments"]
+  },
+  "entity_keywords": {
+    "hair": ["hair","haircut","hairstyle","trim","cut","strand","scalp","roots","split"],
+    "service": ["colour","color","highlights","keratin","smoothing","spa","blowdry","rebonding","straightening","transplant"],
+    "beauty": ["waxing","threading","facial","manicure","pedicure","eyebrow","lashes"],
+    "action": ["book","appointment","slot","visit","style","fix","schedule"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

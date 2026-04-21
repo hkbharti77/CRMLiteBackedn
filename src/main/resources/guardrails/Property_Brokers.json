@@ -1,0 +1,40 @@
+{
+  "niche": "Property Brokers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "flat": "apartment",
+    "plot": "land",
+    "house": "villa",
+    "rent": "lease",
+    "buy": "purchase",
+    "visit": "showing"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "purchase": 10,
+    "lease": 9,
+    "showing": 8,
+    "land": 7
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "niche": "Yoga & Meditation Instructors",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "yoga": "practice",
+    "meditation": "mindfulness",
+    "asana": "pose",
+    "breath": "pranayama",
+    "online": "remote"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "practice": 10,
+    "mindfulness": 9,
+    "remote": 8
+  }
+}

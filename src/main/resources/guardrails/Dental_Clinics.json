@@ -1,0 +1,39 @@
+{
+  "niche": "Dental Clinics",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "rct": "root_canal",
+    "treatment": "root_canal",
+    "whitening": "teeth_whitening",
+    "extraction": "tooth_removal",
+    "cleaning": "scaling"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "root_canal": 10,
+    "tooth_removal": 9,
+    "scaling": 8,
+    "teeth_whitening": 7
+  }
+}

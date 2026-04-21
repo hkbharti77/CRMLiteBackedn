@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Auto / Used Car Dealers",
+  "direct_triggers": ["buy car","sell car","used car","test drive","car price","second hand car","car loan","car inquiry","need car","exchange car","car valuation"],
+  "intent_triggers": {
+    "booking_intent": ["book test drive","schedule car visit","can i see the car","when can i come","visit showroom"],
+    "pricing_intent": ["how much does car cost","car price list","emi options","car loan interest","down payment","what is exchange value","insurance cost"],
+    "requirement_intent": ["looking for petrol car","need diesel suv","want cng vehicle","family car","budget car","first car","upgrade my car"]
+  },
+  "entity_keywords": {
+    "vehicle": ["car","vehicle","suv","sedan","hatchback","muv","mpv","jeep","pickup"],
+    "specification": ["petrol","diesel","cng","electric","hybrid","automatic","manual","4wd","awd"],
+    "transaction": ["buy","sell","exchange","emi","loan","insurance","rto","rc","test drive","valuation"],
+    "condition": ["used","second hand","new","refurbished","certified","pre-owned","km driven"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

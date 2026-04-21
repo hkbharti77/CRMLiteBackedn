@@ -1,0 +1,22 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "destination",
+      "question": "✈️ Where are you planning to travel?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Europe", "Bali", "Dubai"]
+    },
+    {
+      "dataKey": "travel_dates",
+      "question": "📅 Tentative travel dates?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Provide your email for custom itineraries:",
+      "usesButtons": false
+    }
+  ]
+}

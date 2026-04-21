@@ -1,0 +1,13 @@
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+.vscode/
+.idea/
+*.iml
+.DS_Store
+backend_start.log
+compile_log.txt
+run_log.txt

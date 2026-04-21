@@ -1,0 +1,23 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "interest",
+      "question": "🎨 Which instrument or art form are you interested in?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Guitar", "Piano", "Sketching"]
+    },
+    {
+      "dataKey": "skill_level",
+      "question": "📈 What is your current skill level? (Beginner, Intermediate, Advanced)",
+      "usesButtons": true,
+      "options": ["Beginner", "Intermediate", "Advanced"]
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email to receive class details and pricing:",
+      "usesButtons": false
+    }
+  ]
+}

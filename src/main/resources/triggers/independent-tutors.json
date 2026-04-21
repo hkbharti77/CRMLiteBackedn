@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Independent Tutors",
+  "direct_triggers": ["need tutor","maths tuition","join class","book demo","enroll now","need teacher","online class","exam preparation","physics tuition","coding class","home tuition","demo class"],
+  "intent_triggers": {
+    "booking_intent": ["i want to join","can i enroll","book a demo class","when does batch start","schedule trial session"],
+    "inquiry_intent": ["how much is tuition fee","what subjects do you teach","online or offline","which board do you cover","cbse or icse"],
+    "concern_intent": ["my child is weak in maths","struggling with physics","need help urgently","board exams coming","failing in science"]
+  },
+  "entity_keywords": {
+    "subject": ["maths","math","physics","chemistry","biology","english","hindi","science","social","coding","python","java"],
+    "academic": ["tuition","class","teacher","tutor","coaching","course","curriculum","board","cbse","icse"],
+    "action": ["learn","study","enroll","join","demo","practice","improve","prepare","book"],
+    "urgency": ["exam","test","result","fail","weak","urgent","board","competitive","entrance"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Insurance Agents",
+  "direct_triggers": ["life insurance","health insurance","vehicle insurance","buy policy","term plan","insurance inquiry","need insurance","renew insurance","claim help","policy details","mediclaim"],
+  "intent_triggers": {
+    "booking_intent": ["book appointment","meet insurance agent","schedule consultation","talk to advisor","call me back"],
+    "pricing_intent": ["how much premium","what is the cost","cheapest plan","compare policies","premium calculator","maturity amount"],
+    "concern_intent": ["my policy expired","need to renew","claim is rejected","need nominee change","policy surrender","tax benefit under 80c","best plan for family"]
+  },
+  "entity_keywords": {
+    "insurance": ["insurance","policy","premium","cover","claim","nominee","lic","hdfc","sbi","icici","bajaj"],
+    "type": ["life","health","term","endowment","ulip","mediclaim","vehicle","travel","home","crop"],
+    "finance": ["maturity","bonus","surrender","loan against policy","tax","80c","investment","return"],
+    "action": ["buy","renew","claim","compare","invest","protect","cover","insure"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

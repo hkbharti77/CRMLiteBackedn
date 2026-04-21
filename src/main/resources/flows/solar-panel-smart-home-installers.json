@@ -1,0 +1,25 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "monthly_bill",
+      "question": "☀️ What is your average monthly electricity bill?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "rooftop_area",
+      "question": "🏠 Approximate rooftop area available (in sqft)?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "timeline",
+      "question": "📅 When are you planning the installation?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email for a free feasibility report:",
+      "usesButtons": false
+    }
+  ]
+}

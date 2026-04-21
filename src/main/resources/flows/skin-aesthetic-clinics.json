@@ -1,0 +1,21 @@
+{
+  "flowType": "APPOINTMENT",
+  "steps": [
+    {
+      "dataKey": "treatment",
+      "question": "💆 Which aesthetic treatment are you looking for?",
+      "usesButtons": true,
+      "dynamicSource": true
+    },
+    {
+      "dataKey": "date_time",
+      "question": "📅 Select or type your preferred appointment time:",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email for booking confirmation:",
+      "usesButtons": false
+    }
+  ]
+}

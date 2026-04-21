@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Yoga & Meditation Instructors",
+  "direct_triggers": ["yoga class","join yoga","meditation class","book session","yoga trial","stress relief","morning yoga","need yoga","learn meditation","yoga online","enroll yoga"],
+  "intent_triggers": {
+    "booking_intent": ["i want to join","book yoga class","when does batch start","can i try a session","schedule first class"],
+    "inquiry_intent": ["what type of yoga","online or offline class","beginner friendly","what is the timing","which yoga is best for"],
+    "wellness_intent": ["i am stressed","anxiety problem","cant sleep","want to relax","need mental peace","improve flexibility","breathing issues","weight management yoga"]
+  },
+  "entity_keywords": {
+    "practice": ["yoga","meditation","pranayama","asana","mindfulness","breathing","stretching","flexibility"],
+    "wellness": ["stress","anxiety","sleep","relax","peace","calm","balance","energy","detox"],
+    "type": ["hatha","power","yin","vinyasa","ashtanga","kundalini","restorative","nidra"],
+    "action": ["join","enroll","book","session","class","learn","practice","start","try"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

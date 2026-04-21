@@ -1,0 +1,38 @@
+{
+  "niche": "Homeopathy & Ayurveda Doctors",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "consultation": "checkup",
+    "medicine": "prescription",
+    "ayurveda": "treatment",
+    "herb": "supplement",
+    "immunity": "boost"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "checkup": 10,
+    "treatment": 9,
+    "prescription": 8
+  }
+}

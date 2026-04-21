@@ -1,0 +1,16 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "class_type",
+      "question": "🧘 Which class type are you interested in?",
+      "usesButtons": true,
+      "dynamicSource": true
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email to receive class schedules:",
+      "usesButtons": false
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "vehicle_type",
+      "question": "🚗 Which type of vehicle are you interested in?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Hatchback", "Sedan", "SUV"]
+    },
+    {
+      "dataKey": "budget",
+      "question": "💰 What is your budget range?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email for price lists and stock updates:",
+      "usesButtons": false
+    }
+  ]
+}

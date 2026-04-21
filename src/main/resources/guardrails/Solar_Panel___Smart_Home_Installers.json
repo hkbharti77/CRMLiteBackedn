@@ -1,0 +1,38 @@
+{
+  "niche": "Solar Panel / Smart Home Installers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "solar": "energy",
+    "panel": "equipment",
+    "installation": "setup",
+    "cost": "quote",
+    "saving": "reduction"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "setup": 10,
+    "quote": 9,
+    "energy": 8
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "requirement",
+      "question": "📝 Please describe your requirement or interest:",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Please provide your email for a detailed response:",
+      "usesButtons": false
+    }
+  ]
+}

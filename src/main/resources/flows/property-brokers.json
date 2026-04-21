@@ -1,0 +1,27 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "property_type",
+      "question": "🏠 What type of property are you looking for?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Apartment", "Villa", "Plot"]
+    },
+    {
+      "dataKey": "budget",
+      "question": "💰 What is your budget range?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "timeline",
+      "question": "📅 When are you planning to buy?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Finally, please provide your email address for detailed property brochures:",
+      "usesButtons": false
+    }
+  ]
+}

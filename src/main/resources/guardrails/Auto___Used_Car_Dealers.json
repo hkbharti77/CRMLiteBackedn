@@ -1,0 +1,38 @@
+{
+  "niche": "Auto / Used Car Dealers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "car": "vehicle",
+    "test": "drive",
+    "sell": "valuation",
+    "buy": "purchase",
+    "insurance": "protection"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "purchase": 10,
+    "valuation": 9,
+    "drive": 8
+  }
+}

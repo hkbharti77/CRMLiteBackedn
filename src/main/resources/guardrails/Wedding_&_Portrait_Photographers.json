@@ -1,0 +1,38 @@
+{
+  "niche": "Wedding & Portrait Photographers",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "shoot": "session",
+    "album": "product",
+    "video": "film",
+    "prewedding": "event",
+    "studio": "location"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "session": 10,
+    "event": 9,
+    "product": 8
+  }
+}

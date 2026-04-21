@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Interior Designers & Architects",
+  "direct_triggers": ["interior design","home renovation","modular kitchen","need architect","design quote","interior inquiry","home decor","office design","3d design","home layout","bedroom design"],
+  "intent_triggers": {
+    "booking_intent": ["book design consultation","schedule site visit","meet designer","book architect","arrange visit"],
+    "pricing_intent": ["how much for interior design","renovation cost","per sqft design cost","modular kitchen price","what is your rate"],
+    "inquiry_intent": ["what style do you specialize in","vastu compliant design","how long renovation takes","turnkey or partial","which materials used"]
+  },
+  "entity_keywords": {
+    "space": ["bedroom","living room","kitchen","bathroom","office","shop","hall","balcony","terrace"],
+    "design": ["interior","decor","renovation","architecture","blueprint","3d","elevation","layout","vastu"],
+    "furniture": ["sofa","wardrobe","modular","cabinet","bed","table","shelf","tv unit","curtain"],
+    "material": ["wood","marble","granite","tiles","wallpaper","paint","false ceiling","flooring","glass"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

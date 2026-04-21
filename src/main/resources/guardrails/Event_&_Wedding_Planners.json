@@ -1,0 +1,38 @@
+{
+  "niche": "Event & Wedding Planners",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "wedding": "event",
+    "decor": "styling",
+    "venue": "location",
+    "catering": "food",
+    "budget": "planning"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "event": 10,
+    "planning": 9,
+    "styling": 8
+  }
+}

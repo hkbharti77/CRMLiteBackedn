@@ -1,0 +1,17 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "policy_type",
+      "question": "🛡️ Which insurance type are you looking for? (Health, Life, Motor)",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Health", "Life", "Motor"]
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Provide your email for a free quote:",
+      "usesButtons": false
+    }
+  ]
+}

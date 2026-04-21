@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Event & Wedding Planners",
+  "direct_triggers": ["plan wedding","event planner","wedding planning","book planner","birthday party","corporate event","decor inquiry","catering inquiry","venue selection","anniversary event","sangeet decor","wedding decor"],
+  "intent_triggers": {
+    "booking_intent": ["book event planner","schedule meeting","discuss event","planning consultation","reserve date"],
+    "pricing_intent": ["how much for wedding planning","event cost","decor budget","all inclusive package","what does it cost"],
+    "inquiry_intent": ["what services included","do you handle catering","which venues do you work with","how many events done","team size"]
+  },
+  "entity_keywords": {
+    "event": ["wedding","reception","sangeet","mehendi","haldi","birthday","anniversary","corporate","conference","exhibition"],
+    "service": ["decor","decoration","catering","venue","photography","lighting","sound","invitation","planning","coordination"],
+    "logistics": ["guest","seating","stage","mandap","theme","budget","timeline","vendor","checklist"],
+    "action": ["plan","organize","book","manage","arrange","coordinate","hire","reserve","schedule"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

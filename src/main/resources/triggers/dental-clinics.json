@@ -1,0 +1,45 @@
+{
+  "subCategory": "Dental Clinics",
+  "direct_triggers": [
+    "book appointment", "teeth cleaning", "root canal", "need dentist",
+    "tooth pain", "dental checkup", "fix my teeth", "book dental",
+    "teeth whitening", "my tooth hurts", "dental consultation", "toothache",
+    "braces consultation", "dental filling", "tooth extraction"
+  ],
+  "intent_triggers": {
+    "booking_intent": [
+      "i want to book", "i need an appointment", "can i get a slot",
+      "schedule my visit", "when can i come", "available time slot",
+      "can i book today", "next available date"
+    ],
+    "inquiry_intent": [
+      "how much does it cost", "what is the price", "what are your charges",
+      "tell me about services", "what treatments do you offer",
+      "do you treat", "is this covered", "what are the fees"
+    ],
+    "pain_intent": [
+      "my tooth is paining", "i have severe pain", "unbearable toothache",
+      "my teeth are sensitive", "pain since days", "gum pain",
+      "swelling in mouth", "bleeding gums"
+    ]
+  },
+  "entity_keywords": {
+    "dental": ["tooth", "teeth", "dental", "dentist", "cavity", "gum", "molar", "incisor"],
+    "treatment": ["cleaning", "whitening", "extraction", "filling", "root canal", "crown", "braces", "implant"],
+    "action": ["book", "appointment", "consult", "visit", "checkup", "schedule", "fix"],
+    "pain": ["pain", "hurt", "ache", "sensitive", "bleeding", "swollen", "infection"]
+  },
+  "config": {
+    "similarity_threshold": 80,
+    "min_words_for_scoring": 4,
+    "entity_boost": 15
+  },
+  "flow": {
+    "type": "APPOINTMENT",
+    "steps": [
+      { "dataKey": "treatment", "question": "🦷 Which treatment would you like to book?", "usesButtons": true, "dynamicSource": true },
+      { "dataKey": "date_time", "question": "📅 Please select or type your preferred date and time:", "usesButtons": false },
+      { "dataKey": "email", "question": "📩 Please provide your email for appointment confirmation:", "usesButtons": false }
+    ]
+  }
+}

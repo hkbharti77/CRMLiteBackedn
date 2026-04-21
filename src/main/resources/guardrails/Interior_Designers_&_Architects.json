@@ -1,0 +1,38 @@
+{
+  "niche": "Interior Designers & Architects",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "design": "concept",
+    "modular": "kitchen",
+    "wardrobe": "furniture",
+    "visit": "consultation",
+    "renovation": "update"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "concept": 10,
+    "consultation": 9,
+    "kitchen": 8
+  }
+}

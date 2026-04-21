@@ -1,0 +1,17 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "goal",
+      "question": "💪 What is your primary fitness goal? (Weight Loss, Muscle Gain, Endurance)",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Weight Loss", "Muscle Gain", "Endurance"]
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email to receive our membership plans:",
+      "usesButtons": false
+    }
+  ]
+}

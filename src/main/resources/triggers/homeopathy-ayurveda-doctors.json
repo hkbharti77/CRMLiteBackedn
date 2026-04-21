@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Homeopathy & Ayurveda Doctors",
+  "direct_triggers": ["book appointment","ayurvedic treatment","homeopathy doctor","natural cure","herbal medicine","panchakarma treatment","ayurveda clinic","immunity boost","chronic disease help","need consultation"],
+  "intent_triggers": {
+    "booking_intent": ["i want to consult","can i get appointment","when is doctor available","schedule my visit","book doctor today"],
+    "inquiry_intent": ["what is ayurveda","what treatments available","how does homeopathy work","which herbs for","natural remedy for"],
+    "concern_intent": ["i am suffering from","chronic problem","long term issue","not getting cured","side effects of medicine","want natural treatment"]
+  },
+  "entity_keywords": {
+    "system": ["homeopathy","ayurveda","ayurvedic","herbal","naturopathy","holistic"],
+    "treatment": ["panchakarma","detox","rasayana","medicine","remedy","cure","kashayam"],
+    "condition": ["chronic","diabetes","thyroid","arthritis","immunity","digestion","skin","hair"],
+    "action": ["book","consult","appointment","visit","advice","prescription","treat"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

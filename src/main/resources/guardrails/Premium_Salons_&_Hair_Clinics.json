@@ -1,0 +1,38 @@
+{
+  "niche": "Premium Salons & Hair Clinics",
+  "intents": [
+    "price",
+    "cost",
+    "fees",
+    "timing",
+    "hours",
+    "location",
+    "address",
+    "map",
+    "appointment",
+    "booking",
+    "services",
+    "contact",
+    "support",
+    "help"
+  ],
+  "entities": {
+    "haircut": "styling",
+    "spa": "treatment",
+    "pedicure": "grooming",
+    "massage": "relaxation",
+    "makeup": "bridal"
+  },
+  "hinglish": {
+    "kitna": "price",
+    "kitne": "price",
+    "kab": "timing",
+    "kaha": "location",
+    "batao": "help"
+  },
+  "priorities": {
+    "bridal": 10,
+    "treatment": 9,
+    "styling": 8
+  }
+}

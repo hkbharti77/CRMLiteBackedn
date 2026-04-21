@@ -1,0 +1,22 @@
+{
+  "flowType": "ENQUIRY",
+  "steps": [
+    {
+      "dataKey": "country",
+      "question": "🎓 Which country are you targeting for your studies?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["USA", "UK", "Canada", "Australia"]
+    },
+    {
+      "dataKey": "intake",
+      "question": "📅 Which intake year are you planning for?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Enter your email for a free counseling session invitation:",
+      "usesButtons": false
+    }
+  ]
+}

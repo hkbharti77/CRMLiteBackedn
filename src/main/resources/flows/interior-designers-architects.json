@@ -1,0 +1,27 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "project_type",
+      "question": "🏡 What type of project is this?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["Residential", "Commercial", "Renovation"]
+    },
+    {
+      "dataKey": "area",
+      "question": "📏 Approximate area of the project (in sqft)?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "timeline",
+      "question": "📅 When are you planning to start?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Please provide your email for a detailed portfolio and quote:",
+      "usesButtons": false
+    }
+  ]
+}

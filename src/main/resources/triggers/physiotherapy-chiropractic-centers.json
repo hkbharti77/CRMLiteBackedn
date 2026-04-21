@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Physiotherapy & Chiropractic Centers",
+  "direct_triggers": ["book physio","back pain treatment","knee pain physio","physiotherapy session","book appointment","spine problem","sports injury","need rehab","joint pain treatment","neck pain physio","chiropractic adjustment"],
+  "intent_triggers": {
+    "booking_intent": ["i want to book session","can i get appointment","schedule physiotherapy","when is therapist available","book a slot"],
+    "pain_intent": ["i have back pain","my knee is hurting","shoulder is stiff","neck pain since days","unable to walk properly","pain after accident","post surgery rehab"],
+    "inquiry_intent": ["what is physiotherapy","how many sessions needed","is it covered by insurance","what does chiro do","tell me about treatment"]
+  },
+  "entity_keywords": {
+    "body": ["back","spine","knee","shoulder","neck","hip","ankle","wrist","elbow","joint"],
+    "condition": ["pain","injury","sprain","fracture","arthritis","spondylitis","sciatica","frozen shoulder","slip disc"],
+    "therapy": ["physio","physiotherapy","chiropractic","rehab","rehabilitation","exercise","traction","ultrasound"],
+    "action": ["book","appointment","session","consult","treat","heal","recover","fix"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}

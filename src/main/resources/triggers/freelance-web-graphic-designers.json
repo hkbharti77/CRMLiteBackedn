@@ -1,0 +1,16 @@
+﻿{
+  "subCategory": "Freelance Web/Graphic Designers",
+  "direct_triggers": ["need website","logo design","website design","graphic design","social media design","brand identity","design quote","need designer","build website","ecommerce website","ui design"],
+  "intent_triggers": {
+    "booking_intent": ["book design consultation","schedule call","discuss project","start project","hire designer"],
+    "pricing_intent": ["how much for website","logo design cost","monthly social media cost","ecommerce price","what are your rates"],
+    "project_intent": ["need new website","want to rebrand","redesign existing","create mobile app","social media posts","design brochure","product catalog"]
+  },
+  "entity_keywords": {
+    "web": ["website","web","wordpress","shopify","ecommerce","landing page","portfolio","blog","app"],
+    "design": ["logo","branding","graphic","ui","ux","mockup","wireframe","prototype","identity"],
+    "content": ["banner","flyer","poster","brochure","social media","instagram","post","reel","thumbnail"],
+    "action": ["design","build","create","develop","rebrand","redesign","update","launch","publish"]
+  },
+  "config": {"similarity_threshold": 80,"min_words_for_scoring": 4,"entity_boost": 15}
+}
