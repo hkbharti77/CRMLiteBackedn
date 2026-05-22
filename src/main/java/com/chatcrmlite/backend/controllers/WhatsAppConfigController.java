@@ -29,7 +29,7 @@ public class WhatsAppConfigController {
     private WhatsAppConfigRepository whatsappConfigRepository;
 
     @Autowired
-    private com.chatcrmlite.backend.services.WhatsAppService whatsappService;
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService whatsappMenuService;
 
     @Autowired
     private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
@@ -46,10 +46,10 @@ public class WhatsAppConfigController {
     @GetMapping("/feature-labels")
     public ResponseEntity<Map<String, String>> getFeatureLabels() {
         Map<String, String> labels = new HashMap<>();
-        labels.put("SOS", com.chatcrmlite.backend.services.WhatsAppService.SOS_LABEL);
-        labels.put("TRUST", com.chatcrmlite.backend.services.WhatsAppService.TRUST_LABEL);
-        labels.put("OFFER", com.chatcrmlite.backend.services.WhatsAppService.OFFER_LABEL);
-        labels.put("ABOUT", com.chatcrmlite.backend.services.WhatsAppService.ABOUT_LABEL);
+        labels.put("SOS", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.SOS_LABEL);
+        labels.put("TRUST", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.TRUST_LABEL);
+        labels.put("OFFER", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.OFFER_LABEL);
+        labels.put("ABOUT", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.ABOUT_LABEL);
         return ResponseEntity.ok(labels);
     }
 
@@ -75,6 +75,7 @@ public class WhatsAppConfigController {
         String wabaId = (String) body.get("wabaId");
         String accessToken = (String) body.get("accessToken");
         String verifyToken = (String) body.get("verifyToken");
+        String appSecret = (String) body.get("appSecret");
         String interactiveMenuJson = (String) body.get("interactiveMenuJson");
         String welcomeMessage = (String) body.get("welcomeMessage");
         String returningMessage = (String) body.get("returningMessage");
@@ -95,7 +96,7 @@ public class WhatsAppConfigController {
                 com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
                         interactiveMenuJson, 
                         com.chatcrmlite.backend.dto.MenuDto.class);
-                whatsappService.validateMenu(menu);
+                whatsappMenuService.validateMenu(menu);
             } catch (Exception e) {
                 return ResponseEntity.badRequest().body("Menu validation failed: " + e.getMessage());
             }
@@ -109,11 +110,12 @@ public class WhatsAppConfigController {
         config.setWabaId(wabaId != null ? wabaId.trim() : null);
         config.setAccessToken(accessToken != null ? accessToken.trim() : null);
         config.setVerifyToken(verifyToken != null ? verifyToken.trim() : null);
-        config.setInteractiveMenuJson(interactiveMenuJson);
+        config.setAppSecret(appSecret != null ? appSecret.trim() : null);
+        config.setInteractiveMenuJson(interactiveMenuJson != null && !interactiveMenuJson.isBlank() ? interactiveMenuJson.trim() : null);
         config.setWelcomeMessage(welcomeMessage);
         config.setReturningMessage(returningMessage);
-        config.setCustomSubMenusJson(customSubMenusJson);
-        config.setCustomMessagesJson(customMessagesJson);
+        config.setCustomSubMenusJson(customSubMenusJson != null && !customSubMenusJson.isBlank() ? customSubMenusJson.trim() : null);
+        config.setCustomMessagesJson(customMessagesJson != null && !customMessagesJson.isBlank() ? customMessagesJson.trim() : null);
         
         // Dynamic Buttons Data
         config.setReviewUrl(reviewUrl);

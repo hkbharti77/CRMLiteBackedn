@@ -46,4 +46,41 @@ public class SecurityLog {
         BIOMETRICS_TOGGLED,
         SESSIONS_REVOKED
     }
+    public static SecurityLogBuilder builder() {
+        return new SecurityLogBuilder();
+    }
+
+    public static class SecurityLogBuilder {
+        private User user;
+        private LogAction action;
+        private String status;
+        private String details;
+        private String ipAddress;
+        private String deviceName;
+
+        public SecurityLogBuilder user(User user) { this.user = user; return this; }
+        public SecurityLogBuilder action(LogAction action) { this.action = action; return this; }
+        public SecurityLogBuilder status(String status) { this.status = status; return this; }
+        public SecurityLogBuilder details(String details) { this.details = details; return this; }
+        public SecurityLogBuilder ipAddress(String ipAddress) { this.ipAddress = ipAddress; return this; }
+        public SecurityLogBuilder deviceName(String deviceName) { this.deviceName = deviceName; return this; }
+
+        public SecurityLog build() {
+            SecurityLog log = new SecurityLog();
+            log.setUser(user);
+            log.setAction(action);
+            log.setStatus(status);
+            log.setDetails(details);
+            log.setIpAddress(ipAddress);
+            log.setDeviceName(deviceName);
+            return log;
+        }
+    }
+
+    public void setUser(User user) { this.user = user; }
+    public void setAction(LogAction action) { this.action = action; }
+    public void setStatus(String status) { this.status = status; }
+    public void setDetails(String details) { this.details = details; }
+    public void setIpAddress(String ipAddress) { this.ipAddress = ipAddress; }
+    public void setDeviceName(String deviceName) { this.deviceName = deviceName; }
 }

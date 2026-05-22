@@ -2,6 +2,17 @@
   "flowType": "APPOINTMENT",
   "steps": [
     {
+      "dataKey": "patient_name",
+      "question": "🦷 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "is_new_patient",
+      "question": "👤 Are you a new patient or an existing patient?",
+      "usesButtons": true,
+      "options": ["New Patient", "Existing Patient"]
+    },
+    {
       "dataKey": "treatment",
       "question": "🦷 Which treatment would you like to book?",
       "usesButtons": true,

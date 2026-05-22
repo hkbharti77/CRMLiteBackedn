@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crmlite-backend
+  namespace: prod
+  labels:
+    app: crmlite
+    region: eu-central-1
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: crmlite
+  template:
+    metadata:
+      labels:
+        app: crmlite
+    spec:
+      containers:
+      - name: backend
+        image: crmlite/backend:latest
+        ports:
+        - containerPort: 8080
+        env:
+        # DB Writer (Global Primary in US)
+        - name: SPRING_DATASOURCE_WRITER_URL
+          value: "jdbc:postgresql://crmlite-primary.cluster-ro-xxx.us-east-1.rds.amazonaws.com:5432/crmlite"
+        
+        # DB Reader (Local Replica in EU)
+        - name: SPRING_DATASOURCE_READER_URL
+          value: "jdbc:postgresql://crmlite-secondary.cluster-ro-xxx.eu-central-1.rds.amazonaws.com:5432/crmlite"
+        
+        - name: WHATSAPP_REGION
+          value: "eu-central-1"
+        
+        - name: REDIS_HOST
+          value: "crmlite-redis-eu.cache.amazonaws.com"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: crmlite-service
+spec:
+  selector:
+    app: crmlite
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: LoadBalancer

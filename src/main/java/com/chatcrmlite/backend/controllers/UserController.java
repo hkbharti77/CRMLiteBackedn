@@ -13,8 +13,6 @@ import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.MessageRepository;
 import com.chatcrmlite.backend.services.SecurityService;
-import lombok.Builder;
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -84,8 +82,6 @@ public class UserController {
         return ResponseEntity.ok(UserProfileDto.from(user));
     }
 
-    // ─── SECURITY SUITE ENDPOINTS ──────────────────────────────────────────
-
     @GetMapping("/me/security-dashboard")
     public ResponseEntity<?> getSecurityDashboard(@AuthenticationPrincipal String email) {
         User user = userRepository.findByEmail(email).orElseThrow();
@@ -94,7 +90,7 @@ public class UserController {
                 .biometricsEnabled(user.getBiometricsEnabled())
                 .loginAlertsEnabled(user.getLoginAlertsEnabled())
                 .ipWhitelist(user.getIpWhitelist())
-                .accountStatus(user.getAccountStatus())
+                .accountStatus(user.getAccountStatus().name())
                 .build());
     }
 
@@ -175,32 +171,95 @@ public class UserController {
 
     // ─── DTOS ─────────────────────────────────────────────────────────────
 
-    @Data
-    @Builder
     public static class ExportDataDto {
         private UserProfileDto user;
         private List<Lead> leads;
         private List<Contact> contacts;
         private List<Message> messages;
+
+        public ExportDataDto() {}
+        public ExportDataDto(UserProfileDto user, List<Lead> leads, List<Contact> contacts, List<Message> messages) {
+            this.user = user;
+            this.leads = leads;
+            this.contacts = contacts;
+            this.messages = messages;
+        }
+
+        public UserProfileDto getUser() { return user; }
+        public List<Lead> getLeads() { return leads; }
+        public List<Contact> getContacts() { return contacts; }
+        public List<Message> getMessages() { return messages; }
+
+        public static ExportDataDtoBuilder builder() { return new ExportDataDtoBuilder(); }
+        public static class ExportDataDtoBuilder {
+            private UserProfileDto user;
+            private List<Lead> leads;
+            private List<Contact> contacts;
+            private List<Message> messages;
+            public ExportDataDtoBuilder user(UserProfileDto user) { this.user = user; return this; }
+            public ExportDataDtoBuilder leads(List<Lead> leads) { this.leads = leads; return this; }
+            public ExportDataDtoBuilder contacts(List<Contact> contacts) { this.contacts = contacts; return this; }
+            public ExportDataDtoBuilder messages(List<Message> messages) { this.messages = messages; return this; }
+            public ExportDataDto build() { return new ExportDataDto(user, leads, contacts, messages); }
+        }
     }
 
-    @Data
-    @Builder
     public static class SecurityDashboardDto {
         private int healthScore;
         private boolean biometricsEnabled;
         private boolean loginAlertsEnabled;
         private Set<String> ipWhitelist;
         private String accountStatus;
+
+        public SecurityDashboardDto() {}
+        public SecurityDashboardDto(int healthScore, boolean biometricsEnabled, boolean loginAlertsEnabled, Set<String> ipWhitelist, String accountStatus) {
+            this.healthScore = healthScore;
+            this.biometricsEnabled = biometricsEnabled;
+            this.loginAlertsEnabled = loginAlertsEnabled;
+            this.ipWhitelist = ipWhitelist;
+            this.accountStatus = accountStatus;
+        }
+
+        public int getHealthScore() { return healthScore; }
+        public boolean isBiometricsEnabled() { return biometricsEnabled; }
+        public boolean isLoginAlertsEnabled() { return loginAlertsEnabled; }
+        public Set<String> getIpWhitelist() { return ipWhitelist; }
+        public String getAccountStatus() { return accountStatus; }
+
+        public static SecurityDashboardDtoBuilder builder() { return new SecurityDashboardDtoBuilder(); }
+        public static class SecurityDashboardDtoBuilder {
+            private int healthScore;
+            private boolean biometricsEnabled;
+            private boolean loginAlertsEnabled;
+            private Set<String> ipWhitelist;
+            private String accountStatus;
+            public SecurityDashboardDtoBuilder healthScore(int healthScore) { this.healthScore = healthScore; return this; }
+            public SecurityDashboardDtoBuilder biometricsEnabled(boolean biometricsEnabled) { this.biometricsEnabled = biometricsEnabled; return this; }
+            public SecurityDashboardDtoBuilder loginAlertsEnabled(boolean loginAlertsEnabled) { this.loginAlertsEnabled = loginAlertsEnabled; return this; }
+            public SecurityDashboardDtoBuilder ipWhitelist(Set<String> ipWhitelist) { this.ipWhitelist = ipWhitelist; return this; }
+            public SecurityDashboardDtoBuilder accountStatus(String accountStatus) { this.accountStatus = accountStatus; return this; }
+            public SecurityDashboardDto build() { return new SecurityDashboardDto(healthScore, biometricsEnabled, loginAlertsEnabled, ipWhitelist, accountStatus); }
+        }
     }
 
-    @Data
-    @Builder
     public static class SessionDto {
         private UUID id;
         private String deviceName;
         private String ipAddress;
         private String lastActiveAt;
+
+        public SessionDto() {}
+        public SessionDto(UUID id, String deviceName, String ipAddress, String lastActiveAt) {
+            this.id = id;
+            this.deviceName = deviceName;
+            this.ipAddress = ipAddress;
+            this.lastActiveAt = lastActiveAt;
+        }
+
+        public UUID getId() { return id; }
+        public String getDeviceName() { return deviceName; }
+        public String getIpAddress() { return ipAddress; }
+        public String getLastActiveAt() { return lastActiveAt; }
 
         public static SessionDto from(UserSession s) {
             return SessionDto.builder()
@@ -210,16 +269,35 @@ public class UserController {
                     .lastActiveAt(s.getLastActiveAt().toString())
                     .build();
         }
+
+        public static SessionDtoBuilder builder() { return new SessionDtoBuilder(); }
+        public static class SessionDtoBuilder {
+            private UUID id;
+            private String deviceName;
+            private String ipAddress;
+            private String lastActiveAt;
+            public SessionDtoBuilder id(UUID id) { this.id = id; return this; }
+            public SessionDtoBuilder deviceName(String deviceName) { this.deviceName = deviceName; return this; }
+            public SessionDtoBuilder ipAddress(String ipAddress) { this.ipAddress = ipAddress; return this; }
+            public SessionDtoBuilder lastActiveAt(String lastActiveAt) { this.lastActiveAt = lastActiveAt; return this; }
+            public SessionDto build() { return new SessionDto(id, deviceName, ipAddress, lastActiveAt); }
+        }
     }
 
-    @Data
     public static class SecuritySettingsRequest {
         private Boolean biometricsEnabled;
         private Boolean loginAlertsEnabled;
         private Set<String> ipWhitelist;
+
+        public SecuritySettingsRequest() {}
+        public Boolean getBiometricsEnabled() { return biometricsEnabled; }
+        public void setBiometricsEnabled(Boolean biometricsEnabled) { this.biometricsEnabled = biometricsEnabled; }
+        public Boolean getLoginAlertsEnabled() { return loginAlertsEnabled; }
+        public void setLoginAlertsEnabled(Boolean loginAlertsEnabled) { this.loginAlertsEnabled = loginAlertsEnabled; }
+        public Set<String> getIpWhitelist() { return ipWhitelist; }
+        public void setIpWhitelist(Set<String> ipWhitelist) { this.ipWhitelist = ipWhitelist; }
     }
 
-    @Data
     public static class UpdateUserRequest {
         private String displayName;
         private String phone;
@@ -231,10 +309,32 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+
+        public UpdateUserRequest() {}
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        public String getPhone() { return phone; }
+        public void setPhone(String phone) { this.phone = phone; }
+        public String getBusinessName() { return businessName; }
+        public void setBusinessName(String businessName) { this.businessName = businessName; }
+        public String getBusinessType() { return businessType; }
+        public void setBusinessType(String businessType) { this.businessType = businessType; }
+        public String getBusinessSubType() { return businessSubType; }
+        public void setBusinessSubType(String businessSubType) { this.businessSubType = businessSubType; }
+        public String getAddress() { return address; }
+        public void setAddress(String address) { this.address = address; }
+        public String getAboutUs() { return aboutUs; }
+        public void setAboutUs(String aboutUs) { this.aboutUs = aboutUs; }
+        public Double getLatitude() { return latitude; }
+        public void setLatitude(Double latitude) { this.latitude = latitude; }
+        public Double getLongitude() { return longitude; }
+        public void setLongitude(Double longitude) { this.longitude = longitude; }
+        public String getLogoUrl() { return logoUrl; }
+        public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
     }
 
-    @Data
     public static class UserProfileDto {
+        private String id;
         private String email;
         private String displayName;
         private String phone;
@@ -247,8 +347,35 @@ public class UserController {
         private Double longitude;
         private String logoUrl;
 
+        public UserProfileDto() {}
+        public String getId() { return id; }
+        public void setId(String id) { this.id = id; }
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        public String getPhone() { return phone; }
+        public void setPhone(String phone) { this.phone = phone; }
+        public String getBusinessName() { return businessName; }
+        public void setBusinessName(String businessName) { this.businessName = businessName; }
+        public String getBusinessType() { return businessType; }
+        public void setBusinessType(String businessType) { this.businessType = businessType; }
+        public String getBusinessSubType() { return businessSubType; }
+        public void setBusinessSubType(String businessSubType) { this.businessSubType = businessSubType; }
+        public String getAddress() { return address; }
+        public void setAddress(String address) { this.address = address; }
+        public String getAboutUs() { return aboutUs; }
+        public void setAboutUs(String aboutUs) { this.aboutUs = aboutUs; }
+        public Double getLatitude() { return latitude; }
+        public void setLatitude(Double latitude) { this.latitude = latitude; }
+        public Double getLongitude() { return longitude; }
+        public void setLongitude(Double longitude) { this.longitude = longitude; }
+        public String getLogoUrl() { return logoUrl; }
+        public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
+            dto.setId(user.getId().toString());
             dto.setEmail(user.getEmail());
             dto.setDisplayName(user.getDisplayName());
             dto.setPhone(user.getPhone());

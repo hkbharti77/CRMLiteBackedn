@@ -6,7 +6,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.MessageRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
-import com.chatcrmlite.backend.services.WhatsAppService;
+import com.chatcrmlite.backend.services.whatsapp.WhatsAppMessageService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,7 +29,7 @@ public class MessageController {
     private UserRepository userRepository;
 
     @Autowired
-    private WhatsAppService whatsappService;
+    private WhatsAppMessageService whatsappMessageService;
 
     @GetMapping("/chats")
     public ResponseEntity<List<Map<String, Object>>> getActiveChats(@AuthenticationPrincipal String email) {
@@ -83,7 +83,7 @@ public class MessageController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String text = request.get("text");
-        whatsappService.sendMessage(contactId, text, user);
+        whatsappMessageService.sendMessage(contactId, text, user);
         
         return ResponseEntity.ok().build();
     }
@@ -97,7 +97,7 @@ public class MessageController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         try {
-            whatsappService.sendTenantMenu(contactId, user);
+            whatsappMessageService.sendTenantMenu(contactId, user);
             return ResponseEntity.ok("Menu sent successfully");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Failed to send menu: " + e.getMessage());

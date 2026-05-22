@@ -10,6 +10,13 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.output.TokenUsage;
+import com.chatcrmlite.backend.models.User;
+import com.chatcrmlite.backend.repositories.UserRepository;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -19,64 +26,100 @@ import java.util.stream.Collectors;
 public class RagRetrievalService {
 
     @Autowired
-    private DocumentChunkRepository repository;
+    private HybridSearchService hybridSearchService;
 
     @Autowired
-    private LocalVectorStoreService localVectorStore;
+    private PromptBuilder promptBuilder;
+
+    @Autowired
+    private HallucinationDetector hallucinationDetector;
 
     /** 
      * Injected automatically by langchain4j-google-ai-gemini-spring-boot-starter 
-     * using properties in application.properties
      */
     @Autowired(required = false)
     private ChatLanguageModel chatLanguageModel;
 
-    private final EmbeddingModel embeddingModel = new AllMiniLmL6V2QuantizedEmbeddingModel();
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private AIQuotaService quotaService;
+
+    @Autowired
+    private SemanticCacheService semanticCacheService;
+
+    @Autowired
+    private TokenBudgetService tokenBudgetService;
+
+    @Autowired
+    private CostTracker costTracker;
+
+    @Autowired
+    private EmbeddingModel embeddingModel;
 
     /**
-     * Hybrid Retrieval + LLM Generation with Circuit Breaker and Token Guard.
+     * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker, 
+     * Prompt Injection Defense, and Hallucination detection.
      */
-    @CircuitBreaker(name = "gemini", fallbackMethod = "fallbackResponse")
+    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackResponse")
     public String getAiResponse(String query, UUID tenantId) {
-        // Validation check for the injected model
         if (chatLanguageModel == null) {
             return "AI feature is currently being configured. Please check back later.";
         }
 
         long start = System.currentTimeMillis();
 
-        // 1. Generate Embedding for the query (Local)
-        float[] queryEmbedding = embeddingModel.embed(query).content().vector();
+        // 1. Quota Check
+        User user = userRepository.findById(tenantId).orElseThrow(() -> new RuntimeException("Tenant not found"));
+        quotaService.checkAndEnforceQuota(tenantId, user.getPlanType());
 
-        // 2. In-Memory Vector Search
-        List<String> chunks = localVectorStore.search(tenantId, queryEmbedding, 8);
+        // 2. Generate Query Embedding
+        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
+        float[] queryEmbedding = embedding.vector();
+
+        // 3. Semantic Cache Check (O(log N) in DB)
+        String cachedResponse = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        // 4. Hybrid Retrieval (Vector + BM25)
+        int topK = 4;
+        List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
         
         if (chunks.isEmpty()) {
             log.info("[RAG] No context found for tenant {} and query '{}'", tenantId, query);
             return null; 
         }
 
-        // 3. Build Context with Token Guard
-        String context = String.join("\n---\n", chunks);
+        // 5. Build Structured Prompt (Injection Resistant)
+        String niche = user.getBusinessType(); 
+        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche);
 
-        // 4. Prompting using the injected Spring Bean
-        String prompt = "You are a business assistant for a CRM platform.\n\n" +
-                        "RULES:\n" +
-                        "- Answer ONLY using the provided context below.\n" +
-                        "- If the answer is missing from the context, say exactly: \"I don't know\".\n" +
-                        "- Do NOT guess or hallucinate.\n" +
-                        "- Keep your response short, precise, and professional (under 3 sentences).\n\n" +
-                        "CONTEXT:\n" + context + "\n\n" +
-                        "QUESTION: " + query;
-
-        String response = chatLanguageModel.generate(prompt);
+        // 6. Generate Response
+        Response<AiMessage> responseObj = chatLanguageModel.generate(List.of(UserMessage.from(prompt)));
+        String response = responseObj.content().text();
         
-        long llmTime = System.currentTimeMillis() - start;
-        log.info("[RAG-LOG] Tenant: {} | Query: {} | Retrieved: {} | Latency: {}ms", tenantId, query, chunks.size(), llmTime);
-
-        if ("I don't know".equalsIgnoreCase(response.trim())) {
+        // 7. Post-generation Hallucination Guard
+        String contextString = String.join("\n", chunks);
+        if (!hallucinationDetector.isValid(response, contextString)) {
+            log.warn("[RAG] Response rejected by HallucinationDetector for query: {}", query);
             return null;
         }
+
+        // 8. Track Usage & Costs
+        if (responseObj.tokenUsage() != null) {
+            TokenUsage usage = responseObj.tokenUsage();
+            tokenBudgetService.recordTokenUsage(tenantId, usage.inputTokenCount(), usage.outputTokenCount());
+            costTracker.trackCost(usage.inputTokenCount(), usage.outputTokenCount(), tenantId);
+        }
+
+        long latency = System.currentTimeMillis() - start;
+        log.info("[RAG] Success | Tenant: {} | Latency: {}ms", tenantId, latency);
+
+        // 9. Cache successful result
+        semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);
 
         return response;
     }

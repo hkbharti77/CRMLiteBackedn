@@ -8,6 +8,20 @@
       "dynamicSource": true
     },
     {
+      "dataKey": "hair_length",
+      "question": "💇 What is your hair length? (helps us estimate time and pricing)",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Short", "Medium", "Long", "Extra Long"]
+    },
+    {
+      "dataKey": "stylist_preference",
+      "question": "👩‍🎨 Do you have a preferred stylist?",
+      "usesButtons": true,
+      "dynamicSource": true,
+      "options": ["No preference"]
+    },
+    {
       "dataKey": "date_time",
       "question": "📅 Please select or type your preferred booking time:",
       "usesButtons": false

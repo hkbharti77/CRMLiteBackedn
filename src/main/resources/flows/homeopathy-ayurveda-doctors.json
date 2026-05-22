@@ -3,10 +3,26 @@
   "steps": [
     {
       "dataKey": "consultation_type",
-      "question": "🌿 Which consultation type do you need? (Homeopathy, Ayurveda)",
+      "question": "🌿 Which consultation type do you need?",
       "usesButtons": true,
       "dynamicSource": true,
       "options": ["Homeopathy", "Ayurveda"]
+    },
+    {
+      "dataKey": "chief_complaint",
+      "question": "📋 Please briefly describe your main health concern or reason for visit:",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "age",
+      "question": "🎂 What is your age?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "is_first_visit",
+      "question": "👤 Is this your first visit to our clinic?",
+      "usesButtons": true,
+      "options": ["Yes, First Visit", "No, Follow-up"]
     },
     {
       "dataKey": "date_time",

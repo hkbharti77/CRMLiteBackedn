@@ -2,23 +2,40 @@
   "flowType": "LEAD_CAPTURE",
   "steps": [
     {
+      "dataKey": "property_type",
+      "question": "🏠 What type of property is this for?",
+      "usesButtons": true,
+      "options": ["Residential Home", "Commercial Building", "Industrial / Factory"]
+    },
+    {
       "dataKey": "monthly_bill",
       "question": "☀️ What is your average monthly electricity bill?",
-      "usesButtons": false
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Under ₹1,000", "₹1,000 – ₹3,000", "₹3,000 – ₹8,000", "Above ₹8,000"]
     },
     {
       "dataKey": "rooftop_area",
       "question": "🏠 Approximate rooftop area available (in sqft)?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Under 200 sqft", "200–500 sqft", "500–1000 sqft", "Above 1000 sqft"]
+    },
+    {
+      "dataKey": "state",
+      "question": "📍 Which state is the property located in? (important for subsidy eligibility)",
       "usesButtons": false
     },
     {
       "dataKey": "timeline",
       "question": "📅 When are you planning the installation?",
-      "usesButtons": false
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Immediately", "Within 1 month", "1–3 months", "Just exploring"]
     },
     {
       "dataKey": "email",
-      "question": "📩 Enter your email for a free feasibility report:",
+      "question": "📩 Enter your email for a free feasibility report and subsidy details:",
       "usesButtons": false
     }
   ]

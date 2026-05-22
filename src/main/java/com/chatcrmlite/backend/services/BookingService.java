@@ -1,14 +1,18 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.dto.BookingRequest;
+import com.chatcrmlite.backend.event.BookingConfirmedEvent;
 import com.chatcrmlite.backend.models.Booking;
-import com.chatcrmlite.backend.models.Lead;
+import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.BookingRepository;
-import com.chatcrmlite.backend.repositories.LeadRepository;
+import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,12 +24,13 @@ import java.util.UUID;
 
 @Service
 public class BookingService {
+    private static final Logger log = LoggerFactory.getLogger(BookingService.class);
 
     @Autowired private BookingRepository bookingRepository;
-    @Autowired private LeadRepository leadRepository;
+    @Autowired private ContactRepository contactRepository;
     @Autowired private ObjectMapper objectMapper;
-
-    // ── Helpers ────────────────────────────────────────────────────────────
+    @Autowired private ApplicationEventPublisher eventPublisher;
+    @Autowired private ReferenceNumberService referenceNumberService;
 
     public Map<String, String> parseCollectedData(String json) {
         try {
@@ -41,53 +46,55 @@ public class BookingService {
         catch (Exception e) { return "{}"; }
     }
 
-    // ── CRUD ───────────────────────────────────────────────────────────────
-
     @Transactional
     public Booking createBooking(BookingRequest req, User owner) {
-        Lead lead = leadRepository.findById(req.getLeadId())
-                .filter(l -> l.getOwner().getId().equals(owner.getId()))
-                .orElseThrow(() -> new RuntimeException("Lead not found or access denied"));
+        Contact contact = contactRepository.findById(req.getContactId())
+                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .orElseThrow(() -> new RuntimeException("Contact not found or access denied"));
 
-        lead.setStatus(Lead.LeadStatus.BOOKED);
-        lead.setLastActivity(LocalDateTime.now());
-        leadRepository.save(lead);
-
+        String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.BOOKING);
         Booking booking = Booking.builder()
-                .lead(lead)
+                .referenceNumber(referenceNumber)
+                .contact(contact)
                 .owner(owner)
                 .service(req.getService())
                 .preferredSlot(req.getPreferredSlot())
                 .collectedData("{}")
                 .build();
 
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
-    /**
-     * Called from WhatsAppFlowService when BOOKING flow completes.
-     */
     @Transactional
-    public Booking bookFromFlow(Lead lead, User owner, String service,
+    public Booking bookFromFlow(Contact contact, User owner, String service,
                                 String preferredSlot, Map<String, String> flowData) {
+        String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.BOOKING);
         Booking booking = Booking.builder()
-                .lead(lead)
+                .referenceNumber(referenceNumber)
+                .contact(contact)
                 .owner(owner)
                 .service(service)
                 .preferredSlot(preferredSlot)
                 .collectedData(serialize(flowData))
                 .build();
-        return bookingRepository.save(booking);
+        Booking saved = bookingRepository.save(booking);
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "FLOW"));
+        return saved;
     }
 
+    @Transactional(readOnly = true)
     public List<Booking> getAllBookings(User owner) {
         return bookingRepository.findByOwner_IdOrderByCreatedAtDesc(owner.getId());
     }
 
-    public List<Booking> getBookingsForLead(UUID leadId, User owner) {
-        return bookingRepository.findByLead_IdAndOwner_IdOrderByCreatedAtDesc(leadId, owner.getId());
+    @Transactional(readOnly = true)
+    public List<Booking> getBookingsForContact(UUID contactId, User owner) {
+        return bookingRepository.findByContact_IdAndOwner_IdOrderByCreatedAtDesc(contactId, owner.getId());
     }
 
+    @Transactional(readOnly = true)
     public List<Booking> getBookingsByStatus(Booking.BookingStatus status, User owner) {
         return bookingRepository.findByOwner_IdAndStatus(owner.getId(), status);
     }
@@ -96,25 +103,31 @@ public class BookingService {
     public Booking completeBooking(UUID id, User owner) {
         Booking b = getOwned(id, owner);
         b.setStatus(Booking.BookingStatus.COMPLETED);
-        return bookingRepository.save(b);
+        Booking saved = bookingRepository.save(b);
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     @Transactional
     public Booking cancelBooking(UUID id, User owner) {
         Booking b = getOwned(id, owner);
         b.setStatus(Booking.BookingStatus.CANCELLED);
-        return bookingRepository.save(b);
+        Booking saved = bookingRepository.save(b);
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     @Transactional
     public Booking markNoShow(UUID id, User owner) {
         Booking b = getOwned(id, owner);
         b.setStatus(Booking.BookingStatus.NO_SHOW);
-        return bookingRepository.save(b);
+        Booking saved = bookingRepository.save(b);
+        eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     private Booking getOwned(UUID id, User owner) {
-        return bookingRepository.findById(id)
+        return bookingRepository.findByIdWithContact(id)
                 .filter(b -> b.getOwner().getId().equals(owner.getId()))
                 .orElseThrow(() -> new RuntimeException("Booking not found or access denied"));
     }

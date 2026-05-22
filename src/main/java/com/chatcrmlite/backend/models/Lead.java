@@ -1,74 +1,80 @@
 package com.chatcrmlite.backend.models;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+
 @Entity
 @Table(name = "leads")
-@Data
-@NoArgsConstructor
-@AllArgsConstructor
-@Builder
-public class Lead {
+public class Lead extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)
     private UUID id;
 
+    /**
+     * Human-readable lead reference number.
+     * Format: first 4 letters of business name (uppercase) + hyphen + 4-digit sequence.
+     * Example: GYAN-0001, GYAN-0002, DENT-0001
+     * Generated on first save; unique per owner.
+     */
+    @Column(name = "lead_number", unique = false, updatable = false)
+    private String leadNumber;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "contact_id")
+    @JoinColumn(name = "contact_id", nullable = false)
     private Contact contact;
 
     @Enumerated(EnumType.STRING)
     private LeadStatus status;
 
     /**
-     * Enquiries stored as a JSON array string.
-     * Each element: { "id": "uuid", "type": "WHATSAPP|MANUAL|AI", "message": "...",
-     *                 "source": "...", "status": "OPEN|RESOLVED|FOLLOW_UP",
-     *                 "createdAt": "ISO-datetime" }
+     * @deprecated AP-1: Migrating to relational lead_enquiries table.
+     * This column is preserved during migration for backfill and will be
+     * dropped after V10027 data migration completes.
+     * Use LeadEnquiryRepository for all new enquiry reads/writes.
      */
+    @Deprecated
     @Column(columnDefinition = "text")
-    @Builder.Default
     private String enquiries = "[]";
 
+    /** Relational replacement for the enquiries JSON blob (AP-1). */
+    @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private List<LeadEnquiry> enquiryList = new ArrayList<>();
+
     @Column(name = "deleted", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
-    @Builder.Default
     private boolean deleted = false;
 
-    @ElementCollection
-    @Builder.Default
-    private List<String> tags = new ArrayList<>();
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(
+        name = "lead_tags",
+        joinColumns = @JoinColumn(name = "lead_id"),
+        inverseJoinColumns = @JoinColumn(name = "tag_id")
+    )
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private List<Tag> tags = new ArrayList<>();
 
-    @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
-
-    @Builder.Default
     private LocalDateTime lastActivity = LocalDateTime.now();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_id")
+    @JoinColumn(name = "owner_id", nullable = false)
     private User owner;
 
-    // ── Deal / Payment Tracking ────────────────────────────────────────────
     private BigDecimal dealValue;
 
     @Enumerated(EnumType.STRING)
-    @Builder.Default
     private PaymentStatus paymentStatus = PaymentStatus.NONE;
 
-    @Builder.Default
     private String currency = "INR";
-
     private String dealLabel;
+
+    @Version
+    private Long version;
 
     public enum PaymentStatus {
         NONE, PENDING, PARTIAL, PAID
@@ -76,5 +82,102 @@ public class Lead {
 
     public enum LeadStatus {
         NEW, INTERESTED, FOLLOW_UP, BOOKED, CLOSED_WON, CLOSED_LOST
+    }
+
+    public Lead() {}
+
+    public Lead(UUID id, String leadNumber, Contact contact, LeadStatus status, String enquiries, boolean deleted, List<Tag> tags, LocalDateTime createdAt, LocalDateTime lastActivity, User owner, BigDecimal dealValue, PaymentStatus paymentStatus, String currency, String dealLabel, Long version) {
+        this.id = id;
+        this.leadNumber = leadNumber;
+        this.contact = contact;
+        this.status = status;
+        this.enquiries = (enquiries != null) ? enquiries : "[]";
+        this.deleted = deleted;
+        this.tags = (tags != null) ? tags : new ArrayList<>();
+        this.createdAt = (createdAt != null) ? createdAt : LocalDateTime.now();
+        this.lastActivity = (lastActivity != null) ? lastActivity : LocalDateTime.now();
+        this.owner = owner;
+        this.dealValue = dealValue;
+        this.paymentStatus = (paymentStatus != null) ? paymentStatus : PaymentStatus.NONE;
+        this.currency = (currency != null) ? currency : "INR";
+        this.dealLabel = dealLabel;
+        this.version = version;
+    }
+
+    public UUID getId() { return id; }
+    public String getLeadNumber() { return leadNumber; }
+    public Contact getContact() { return contact; }
+    public LeadStatus getStatus() { return status; }
+    public String getEnquiries() { return enquiries; }
+    public boolean isDeleted() { return deleted; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<Tag> getTags() { return tags; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public LocalDateTime getLastActivity() { return lastActivity; }
+    public User getOwner() { return owner; }
+    public BigDecimal getDealValue() { return dealValue; }
+    public PaymentStatus getPaymentStatus() { return paymentStatus; }
+    public String getCurrency() { return currency; }
+    public String getDealLabel() { return dealLabel; }
+    public Long getVersion() { return version; }
+
+    public void setId(UUID id) { this.id = id; }
+    public void setLeadNumber(String leadNumber) { this.leadNumber = leadNumber; }
+    public void setContact(Contact contact) { this.contact = contact; }
+    public void setStatus(LeadStatus status) { this.status = status; }
+    /** @deprecated Use LeadEnquiryRepository instead */
+    @Deprecated public void setEnquiries(String enquiries) { this.enquiries = enquiries; }
+    public void setDeleted(boolean deleted) { this.deleted = deleted; }
+    public void setTags(List<Tag> tags) { this.tags = tags; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setLastActivity(LocalDateTime lastActivity) { this.lastActivity = lastActivity; }
+    public void setOwner(User owner) { this.owner = owner; }
+    public void setDealValue(BigDecimal dealValue) { this.dealValue = dealValue; }
+    public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
+    public void setCurrency(String currency) { this.currency = currency; }
+    public void setDealLabel(String dealLabel) { this.dealLabel = dealLabel; }
+    public void setVersion(Long version) { this.version = version; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public List<LeadEnquiry> getEnquiryList() { return enquiryList; }
+    public void setEnquiryList(List<LeadEnquiry> enquiryList) { this.enquiryList = enquiryList; }
+
+    public static LeadBuilder builder() { return new LeadBuilder(); }
+
+    public static class LeadBuilder {
+        private UUID id;
+        private String leadNumber;
+        private Contact contact;
+        private LeadStatus status;
+        private String enquiries = "[]";
+        private boolean deleted = false;
+        private List<Tag> tags;
+        private LocalDateTime createdAt = LocalDateTime.now();
+        private LocalDateTime lastActivity = LocalDateTime.now();
+        private User owner;
+        private BigDecimal dealValue;
+        private PaymentStatus paymentStatus = PaymentStatus.NONE;
+        private String currency = "INR";
+        private String dealLabel;
+        private Long version;
+
+        public LeadBuilder id(UUID id) { this.id = id; return this; }
+        public LeadBuilder leadNumber(String leadNumber) { this.leadNumber = leadNumber; return this; }
+        public LeadBuilder contact(Contact contact) { this.contact = contact; return this; }
+        public LeadBuilder status(LeadStatus status) { this.status = status; return this; }
+        public LeadBuilder enquiries(String enquiries) { this.enquiries = enquiries; return this; }
+        public LeadBuilder deleted(boolean deleted) { this.deleted = deleted; return this; }
+        public LeadBuilder tags(List<Tag> tags) { this.tags = tags; return this; }
+        public LeadBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public LeadBuilder lastActivity(LocalDateTime lastActivity) { this.lastActivity = lastActivity; return this; }
+        public LeadBuilder owner(User owner) { this.owner = owner; return this; }
+        public LeadBuilder dealValue(BigDecimal dealValue) { this.dealValue = dealValue; return this; }
+        public LeadBuilder paymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; return this; }
+        public LeadBuilder currency(String currency) { this.currency = currency; return this; }
+        public LeadBuilder dealLabel(String dealLabel) { this.dealLabel = dealLabel; return this; }
+        public LeadBuilder version(Long version) { this.version = version; return this; }
+
+        public Lead build() {
+            return new Lead(id, leadNumber, contact, status, enquiries, deleted, tags, createdAt, lastActivity, owner, dealValue, paymentStatus, currency, dealLabel, version);
+        }
     }
 }

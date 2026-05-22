@@ -30,8 +30,6 @@ public class RagController {
     @Autowired
     private DocumentChunkRepository repository;
 
-    @Autowired
-    private com.chatcrmlite.backend.services.LocalVectorStoreService localStore;
 
     private final Map<UUID, CompletableFuture<Map<String, Object>>> activeTasks = new HashMap<>();
 
@@ -106,7 +104,6 @@ public class RagController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
         repository.deleteByDocumentIdAndTenantId(docId, user.getId());
-        localStore.removeDocumentMemory(docId, user.getId());
         return ResponseEntity.noContent().build();
     }
 

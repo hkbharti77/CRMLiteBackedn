@@ -7,6 +7,8 @@ import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -16,6 +18,7 @@ import java.util.List;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
+    private static final Logger log = LoggerFactory.getLogger(DataInitializer.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -49,14 +52,14 @@ public class DataInitializer implements CommandLineRunner {
                 
                 // Delete contact
                 contactRepository.delete(contact);
-                System.out.println("Purged mock contact and related data for: " + name);
+                log.info("[Init] Purged mock contact: {}", name);
             }
         }
 
         // System is initialized with an empty database to ensure production-like state.
         // Users should register through the Auth flow.
         if (userRepository.count() == 0) {
-            System.out.println("No users found in database. Ready for new registrations.");
+            log.info("[Init] No users found. Ready for new registrations.");
         }
     }
 }

@@ -13,6 +13,10 @@ import java.util.UUID;
 public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UUID> {
 
     List<DocumentChunk> findByTenantId(UUID tenantId);
+    
+    org.springframework.data.domain.Page<DocumentChunk> findByTenantId(UUID tenantId, org.springframework.data.domain.Pageable pageable);
+    
+    long countByTenantId(UUID tenantId);
 
     List<DocumentChunk> findByDocumentIdAndTenantId(UUID documentId, UUID tenantId);
 
@@ -27,5 +31,10 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
                    "FROM document_chunks " +
                    "WHERE tenant_id = :tenantId", nativeQuery = true)
     List<Object[]> findDistinctDocumentsByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Query(value = "SELECT content FROM document_chunks " +
+                   "WHERE tenant_id = :tenantId " +
+                   "ORDER BY embedding <=> cast(:embedding as vector) LIMIT :limit", nativeQuery = true)
+    List<String> findSimilarChunks(@Param("tenantId") UUID tenantId, @Param("embedding") String embedding, @Param("limit") int limit);
 
 }

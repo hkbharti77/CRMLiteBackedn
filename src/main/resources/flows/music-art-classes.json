@@ -6,13 +6,25 @@
       "question": "🎨 Which instrument or art form are you interested in?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Guitar", "Piano", "Sketching"]
+      "options": ["Guitar", "Piano", "Violin", "Drums", "Sketching", "Painting"]
     },
     {
       "dataKey": "skill_level",
-      "question": "📈 What is your current skill level? (Beginner, Intermediate, Advanced)",
+      "question": "📈 What is your current skill level?",
       "usesButtons": true,
       "options": ["Beginner", "Intermediate", "Advanced"]
+    },
+    {
+      "dataKey": "student_age",
+      "question": "🎂 Who is the student?",
+      "usesButtons": true,
+      "options": ["Child (under 12)", "Teenager (12–18)", "Adult (18+)"]
+    },
+    {
+      "dataKey": "class_mode",
+      "question": "🏠 How would you like to attend the classes?",
+      "usesButtons": true,
+      "options": ["In-person", "Online"]
     },
     {
       "dataKey": "email",

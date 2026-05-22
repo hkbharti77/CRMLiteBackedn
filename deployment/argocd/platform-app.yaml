@@ -1,0 +1,20 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: crmlite-platform-prod
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/crmlite/platform-manifests.git
+    targetRevision: HEAD
+    path: environments/production
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: crmlite-prod
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

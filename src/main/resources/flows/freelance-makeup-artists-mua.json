@@ -3,10 +3,29 @@
   "steps": [
     {
       "dataKey": "occasion",
-      "question": "💄 What is the occasion? (Wedding, Party, Shoot)",
+      "question": "💄 What is the occasion?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Wedding", "Party", "Shoot"]
+      "options": ["Wedding", "Party", "Shoot", "Engagement", "Other"]
+    },
+    {
+      "dataKey": "number_of_people",
+      "question": "👥 How many people need makeup done?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Just me (1)", "2–3 people", "4–6 people", "7+ people"]
+    },
+    {
+      "dataKey": "location",
+      "question": "📍 Where would you like the makeup done?",
+      "usesButtons": true,
+      "options": ["At my home / venue", "At your studio"]
+    },
+    {
+      "dataKey": "trial_needed",
+      "question": "🪞 Would you like a trial session before the event?",
+      "usesButtons": true,
+      "options": ["Yes, I want a trial", "No trial needed"]
     },
     {
       "dataKey": "event_date",

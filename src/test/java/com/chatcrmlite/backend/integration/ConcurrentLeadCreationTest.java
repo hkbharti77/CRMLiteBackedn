@@ -6,7 +6,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
-import com.chatcrmlite.backend.services.LeadService;
+import com.chatcrmlite.backend.services.lead.LeadService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +28,6 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @SpringBootTest
 @ActiveProfiles("test")
-@Transactional
 public class ConcurrentLeadCreationTest {
 
     @Autowired
@@ -43,8 +42,19 @@ public class ConcurrentLeadCreationTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     private User testUser;
     private Contact testContact;
+
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        leadRepository.deleteAll();
+        contactRepository.deleteAll();
+        userRepository.deleteAll();
+        tenantRepository.deleteAll();
+    }
 
     @BeforeEach
     void setUp() {

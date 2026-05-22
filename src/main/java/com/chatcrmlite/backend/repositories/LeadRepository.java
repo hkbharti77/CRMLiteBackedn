@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.repository.query.Param;
 
 public interface LeadRepository extends JpaRepository<Lead, UUID> {
     List<Lead> findAllByOwner(User owner);
@@ -27,14 +28,55 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
             Contact contact, List<Lead.LeadStatus> excludedStatuses);
 
     /** Paginated leads for a user — used by performance-optimized endpoints */
-    @Query("SELECT l FROM Lead l WHERE l.owner = :owner AND l.deleted = false")
+    @Query("SELECT l FROM Lead l WHERE l.owner = :owner")
     Page<Lead> findAllByOwnerPaged(User owner, Pageable pageable);
 
     /** Optimized: fetch leads with contact eagerly to avoid N+1 queries */
-    @Query("SELECT l FROM Lead l JOIN FETCH l.contact WHERE l.owner = :owner AND l.deleted = false ORDER BY l.lastActivity DESC")
+    @Query("SELECT l FROM Lead l JOIN FETCH l.contact WHERE l.owner = :owner ORDER BY l.lastActivity DESC")
     List<Lead> findAllByOwnerWithContact(User owner);
+
+    /** Optimized: fetch leads with contact and tags eagerly to avoid lazy initialization */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.owner = :owner " +
+           "ORDER BY l.lastActivity DESC")
+    List<Lead> findAllByOwnerWithContactAndTags(@Param("owner") User owner);
 
     /** Optimized: fetch all leads for a contact with owner in one query */
     @Query("SELECT l FROM Lead l JOIN FETCH l.contact c WHERE c = :contact AND l.owner = :owner ORDER BY l.createdAt DESC")
-    List<Lead> findAllByContactAndOwnerOptimized(Contact contact, User owner);
+    List<Lead> findAllByContactAndOwnerOptimized(@Param("contact") Contact contact, @Param("owner") User owner);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.contact = :contact AND l.owner = :owner AND l.status NOT IN :excludedStatuses")
+    long countByContactAndOwnerAndStatusNotIn(
+            @Param("contact") Contact contact, 
+            @Param("owner") User owner, 
+            @Param("excludedStatuses") List<Lead.LeadStatus> excludedStatuses);
+
+    @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
+           "COALESCE(SUM(l.dealValue), 0), " +
+           "COALESCE(SUM(CASE WHEN l.paymentStatus = 'PAID' THEN l.dealValue ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN l.dealValue ELSE 0 END), 0), " +
+           "COUNT(CASE WHEN l.dealValue IS NOT NULL THEN 1 END), " +
+           "COUNT(CASE WHEN l.paymentStatus = 'PAID' THEN 1 END), " +
+           "COUNT(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN 1 END), " +
+           "'INR') " +
+           "FROM Lead l WHERE l.owner = :owner")
+    com.chatcrmlite.backend.dto.RevenueReportDTO calculateRevenueReport(@Param("owner") User owner);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE Lead l SET l.lastActivity = :lastActivity WHERE l.id = :id")
+    void updateLastActivity(@Param("id") UUID id, @Param("lastActivity") java.time.LocalDateTime lastActivity);
+
+    /** Count total leads for an owner — used to generate sequential lead numbers */
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner")
+    long countByOwner(@Param("owner") User owner);
+
+    /** Count leads created today for a specific owner (for reference number generation) */
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner AND CAST(l.createdAt AS date) = CAST(CURRENT_TIMESTAMP AS date)")
+    long countByOwnerAndToday(@Param("owner") User owner);
+
+    /** Count leads created today with a specific date prefix (for reference number generation) */
+    @Query(value = "SELECT COUNT(l) FROM leads l WHERE l.owner_id = :ownerId AND l.lead_number LIKE :datePrefix || '%'", nativeQuery = true)
+    long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
 }

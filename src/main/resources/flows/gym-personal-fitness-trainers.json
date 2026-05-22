@@ -3,14 +3,32 @@
   "steps": [
     {
       "dataKey": "goal",
-      "question": "💪 What is your primary fitness goal? (Weight Loss, Muscle Gain, Endurance)",
+      "question": "💪 What is your primary fitness goal?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Weight Loss", "Muscle Gain", "Endurance"]
+      "options": ["Weight Loss", "Muscle Gain", "Endurance", "Flexibility", "General Fitness"]
+    },
+    {
+      "dataKey": "fitness_level",
+      "question": "📊 What is your current fitness level?",
+      "usesButtons": true,
+      "options": ["Beginner", "Intermediate", "Advanced"]
+    },
+    {
+      "dataKey": "session_type",
+      "question": "🏋️ What type of session are you looking for?",
+      "usesButtons": true,
+      "options": ["Personal Training", "Group Class", "Online Coaching"]
+    },
+    {
+      "dataKey": "preferred_slot",
+      "question": "📅 What time slot works best for you?",
+      "usesButtons": true,
+      "options": ["Morning (6–10am)", "Afternoon (12–4pm)", "Evening (5–9pm)"]
     },
     {
       "dataKey": "email",
-      "question": "📩 Enter your email to receive our membership plans:",
+      "question": "📩 Enter your email to receive your personalised plan and schedule:",
       "usesButtons": false
     }
   ]

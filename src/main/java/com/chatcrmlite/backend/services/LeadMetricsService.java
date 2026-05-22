@@ -1,11 +1,12 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.Lead;
-import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.LeadRepository;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -14,65 +15,45 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
-/**
- * Monitoring and observability service for the multiple-leads-per-contact feature.
- *
- * Tracks:
- * - 11.1 Leads-per-contact distribution
- * - 11.2 Lead creation patterns and anomalies
- * - 11.3 API response time tracking (via request counters)
- * - 11.4 Alerts for unusual lead creation patterns
- * - 11.5 Periodic metric summaries logged for dashboard consumption
- */
-@Slf4j
 @Service
 public class LeadMetricsService {
+    private static final Logger log = LoggerFactory.getLogger(LeadMetricsService.class);
 
     @Autowired
     private LeadRepository leadRepository;
 
-    // ── 11.3 API response time tracking ───────────────────────────────────
     private final Map<String, AtomicLong> apiCallCounts   = new ConcurrentHashMap<>();
     private final Map<String, AtomicLong> apiTotalMs      = new ConcurrentHashMap<>();
 
-    // ── 11.2 Lead creation tracking (per owner, per minute window) ────────
     private final Map<UUID, List<LocalDateTime>> recentCreations = new ConcurrentHashMap<>();
 
-    // Threshold: more than 10 leads created in 1 minute = anomaly
     private static final int CREATION_ANOMALY_THRESHOLD = 10;
 
-    // ── 11.3 Record API call timing ───────────────────────────────────────
     public void recordApiCall(String endpoint, long durationMs) {
         apiCallCounts.computeIfAbsent(endpoint, k -> new AtomicLong(0)).incrementAndGet();
         apiTotalMs.computeIfAbsent(endpoint, k -> new AtomicLong(0)).addAndGet(durationMs);
 
-        // Warn if response time exceeds 200ms SLA
         if (durationMs > 200) {
             log.warn("[Lead-Metrics] Slow API response: {} took {}ms (SLA: 200ms)", endpoint, durationMs);
         }
     }
 
-    // ── 11.2 Track lead creation and detect anomalies ─────────────────────
     public void recordLeadCreation(UUID ownerId, String contactWaId) {
         recentCreations.computeIfAbsent(ownerId, k -> Collections.synchronizedList(new ArrayList<>()))
                 .add(LocalDateTime.now());
 
-        // Check for anomaly: too many leads created in last 60 seconds
         List<LocalDateTime> times = recentCreations.get(ownerId);
         LocalDateTime oneMinuteAgo = LocalDateTime.now().minusMinutes(1);
         long recentCount = times.stream().filter(t -> t.isAfter(oneMinuteAgo)).count();
 
         if (recentCount > CREATION_ANOMALY_THRESHOLD) {
-            // 11.4 Alert
             log.warn("[Lead-Alert] Unusual lead creation pattern detected! Owner {} created {} leads in the last 60s (contact: {})",
                     ownerId, recentCount, contactWaId);
         }
 
-        // Prune old entries to prevent memory leak
         times.removeIf(t -> t.isBefore(LocalDateTime.now().minusHours(1)));
     }
 
-    // ── 11.1 Leads-per-contact distribution ───────────────────────────────
     public Map<String, Object> getLeadsPerContactDistribution() {
         List<Lead> allLeads = leadRepository.findAll();
 
@@ -101,7 +82,6 @@ public class LeadMetricsService {
         return distribution;
     }
 
-    // ── 11.3 Get API performance summary ──────────────────────────────────
     public Map<String, Object> getApiPerformanceSummary() {
         Map<String, Object> summary = new LinkedHashMap<>();
         apiCallCounts.forEach((endpoint, count) -> {
@@ -117,8 +97,8 @@ public class LeadMetricsService {
         return summary;
     }
 
-    // ── 11.5 Scheduled metric summary (every 30 minutes) ──────────────────
     @Scheduled(fixedDelay = 30 * 60 * 1000)
+    @SchedulerLock(name = "LeadMetricsService_logPeriodicMetrics", lockAtMostFor = "25m", lockAtLeastFor = "10m")
     public void logPeriodicMetrics() {
         try {
             Map<String, Object> dist = getLeadsPerContactDistribution();

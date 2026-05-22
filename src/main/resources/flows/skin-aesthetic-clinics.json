@@ -2,10 +2,29 @@
   "flowType": "APPOINTMENT",
   "steps": [
     {
+      "dataKey": "skin_concern",
+      "question": "✨ What is your primary skin concern?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Acne / Pimples", "Pigmentation", "Anti-aging", "Hair Removal", "Other"]
+    },
+    {
       "dataKey": "treatment",
       "question": "💆 Which aesthetic treatment are you looking for?",
       "usesButtons": true,
       "dynamicSource": true
+    },
+    {
+      "dataKey": "first_time",
+      "question": "👤 Is this your first time visiting our clinic?",
+      "usesButtons": true,
+      "options": ["Yes, First Time", "No, Returning Client"]
+    },
+    {
+      "dataKey": "allergies",
+      "question": "⚠️ Do you have any known skin allergies or sensitivities we should be aware of?",
+      "usesButtons": true,
+      "options": ["No allergies", "Yes, have allergies"]
     },
     {
       "dataKey": "date_time",

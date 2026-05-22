@@ -14,9 +14,23 @@
       "usesButtons": false
     },
     {
+      "dataKey": "budget_range",
+      "question": "💰 What is your approximate budget for the interior work?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Under ₹5L", "₹5L – ₹20L", "₹20L – ₹50L", "Above ₹50L"]
+    },
+    {
+      "dataKey": "city",
+      "question": "📍 Which city is the project located in?",
+      "usesButtons": false
+    },
+    {
       "dataKey": "timeline",
       "question": "📅 When are you planning to start?",
-      "usesButtons": false
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Immediately", "Within 1 month", "1–3 months", "Just planning"]
     },
     {
       "dataKey": "email",

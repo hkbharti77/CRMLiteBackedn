@@ -1,6 +1,6 @@
 package com.chatcrmlite.backend.controllers;
 
-import com.chatcrmlite.backend.models.Contact;
+import com.chatcrmlite.backend.dto.ContactDTO;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.ContactService;
@@ -29,19 +29,13 @@ public class ContactController {
     }
 
     @GetMapping
-    public ResponseEntity<List<Contact>> getContacts() {
+    public ResponseEntity<List<ContactDTO>> getContacts() {
         return ResponseEntity.ok(contactService.getContactsByUser(getAuthenticatedUser()));
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<Contact> getContact(@PathVariable UUID id) {
-        // Simple lookup, ensuring ownership
-        Contact contact = contactService.getContactsByUser(getAuthenticatedUser())
-                .stream()
-                .filter(c -> c.getId().equals(id))
-                .findFirst()
-                .orElseThrow(() -> new RuntimeException("Contact not found"));
-        return ResponseEntity.ok(contact);
+    public ResponseEntity<ContactDTO> getContact(@PathVariable UUID id) {
+        return ResponseEntity.ok(contactService.getContactById(id, getAuthenticatedUser()));
     }
 
     @PatchMapping("/{id}/tags")

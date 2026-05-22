@@ -1,0 +1,87 @@
+package com.chatcrmlite.backend.services.whatsapp;
+
+import com.chatcrmlite.backend.models.Contact;
+import com.chatcrmlite.backend.models.User;
+import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.repositories.ContactRepository;
+import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.services.flow.FlowStateMachine;
+import com.chatcrmlite.backend.services.workflow.ProcessingContext;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class WhatsAppFlowHandler {
+
+    private final WhatsAppConfigRepository whatsappConfigRepository;
+    private final ContactRepository contactRepository;
+    private final FlowStateMachine flowStateMachine;
+    private final ObjectMapper objectMapper;
+
+    @Transactional
+    public void executeFlowLogic(ProcessingContext context) {
+        try {
+            WhatsAppConfig config = whatsappConfigRepository.findByUserId(context.getTenantId())
+                    .orElseThrow(() -> new RuntimeException("Config not found"));
+            User owner = config.getUser();
+            Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)
+                    .orElseThrow(() -> new RuntimeException("Contact not found"));
+
+            String text = (String) context.getMetadata().get("text");
+            String type = (String) context.getMetadata().get("type");
+            
+            JsonNode root = objectMapper.readTree(context.getPayload());
+            JsonNode value = root.path("entry").get(0).path("changes").get(0).path("value");
+            JsonNode messageNode = value.path("messages").get(0);
+            
+            String selectionId = null;
+            boolean isInteractiveSelection = false;
+            if ("interactive".equals(type)) {
+                JsonNode interactive = messageNode.path("interactive");
+                selectionId = interactive.path(interactive.path("type").asText()).path("id").asText();
+                isInteractiveSelection = true;
+            }
+
+            // Keyword check (Greeting/Menu)
+            String lower = text.trim().toLowerCase();
+            boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
+            boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
+
+            if ("text".equals(type) && (isGreeting || isNavCommand)) {
+                flowStateMachine.resetFlow(contact);
+                context.getMetadata().put("responseType", isGreeting ? "GREETING" : "MENU");
+                return;
+            }
+
+            // Flow Engine execution
+            boolean consumed = flowStateMachine.processFlow(contact, owner, text, selectionId, isInteractiveSelection);
+            if (consumed) {
+                context.getMetadata().put("responseType", "FLOW_CONSUMED");
+                return;
+            }
+
+            // If it was an interactive selection, let's put it as INTERACTIVE_SELECTION instead of MENU
+            if (isInteractiveSelection && selectionId != null) {
+                context.getMetadata().put("responseType", "INTERACTIVE_SELECTION");
+                context.getMetadata().put("selectionId", selectionId);
+                log.info("🔀 [Flow-Stage] Handled interactive selection '{}' for {}", selectionId, context.getMessageId());
+                return;
+            }
+
+            // Fallback if not consumed
+            if (!context.getMetadata().containsKey("responseType")) {
+                context.getMetadata().put("responseType", "MENU");
+            }
+            
+            log.info("🔀 [Flow-Stage] Completed for {}", context.getMessageId());
+        } catch (Exception e) {
+            log.error("❌ [Flow-Stage] Failed for {}", context.getMessageId(), e);
+        }
+    }
+}

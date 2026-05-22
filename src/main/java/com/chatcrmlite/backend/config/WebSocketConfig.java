@@ -59,6 +59,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      * Authenticate WebSocket connections using JWT token.
      * Token can be passed as STOMP header: "Authorization: Bearer <token>"
      */
+    @Autowired
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
+    @Autowired
+    private com.chatcrmlite.backend.security.TenantSubscriptionInterceptor subscriptionInterceptor;
+
+    /**
+     * Authenticate WebSocket connections and enforce subscription authorization.
+     */
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration.interceptors(new ChannelInterceptor() {
@@ -73,17 +82,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         String token = authHeader.substring(7);
                         if (jwtUtils.validateJwtToken(token)) {
                             String email = jwtUtils.getEmailFromJwtToken(token);
-                            UsernamePasswordAuthenticationToken auth =
-                                    new UsernamePasswordAuthenticationToken(
-                                            email, null,
-                                            List.of(new SimpleGrantedAuthority("ROLE_USER"))
-                                    );
-                            accessor.setUser(auth);
+                            
+                            // Resolve the tenant context (Tenant ID) once during CONNECT
+                            userRepository.findByEmail(email).ifPresent(user -> {
+                                com.chatcrmlite.backend.security.UserPrincipal principal = 
+                                        new com.chatcrmlite.backend.security.UserPrincipal(user.getEmail(), user.getTenant().getId());
+                                accessor.setUser(principal);
+                            });
                         }
                     }
                 }
                 return message;
             }
-        });
+        }, subscriptionInterceptor);
     }
 }

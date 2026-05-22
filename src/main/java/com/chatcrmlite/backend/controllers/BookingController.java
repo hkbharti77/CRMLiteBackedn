@@ -41,10 +41,10 @@ public class BookingController {
                 .stream().map(this::toDTO).collect(Collectors.toList()));
     }
 
-    /** GET /api/v1/bookings/lead/{leadId} — bookings for a lead */
-    @GetMapping("/lead/{leadId}")
-    public ResponseEntity<List<BookingDTO>> getForLead(@PathVariable UUID leadId) {
-        return ResponseEntity.ok(bookingService.getBookingsForLead(leadId, getAuthenticatedUser())
+    /** GET /api/v1/bookings/contact/{contactId} — bookings for a contact */
+    @GetMapping("/contact/{contactId}")
+    public ResponseEntity<List<BookingDTO>> getForContact(@PathVariable UUID contactId) {
+        return ResponseEntity.ok(bookingService.getBookingsForContact(contactId, getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
     }
 
@@ -76,11 +76,9 @@ public class BookingController {
     private BookingDTO toDTO(Booking b) {
         return BookingDTO.builder()
                 .id(b.getId())
-                .leadId(b.getLead().getId())
-                .leadStatus(b.getLead().getStatus().name())
-                .contactName(b.getLead().getContact().getName())
-                .contactWaId(b.getLead().getContact().getWaId())
-                .contactId(b.getLead().getContact().getId())
+                .contactName(b.getContact().getName())
+                .contactWaId(b.getContact().getWaId())
+                .contactId(b.getContact().getId())
                 .service(b.getService())
                 .preferredSlot(b.getPreferredSlot())
                 .collectedData(bookingService.parseCollectedData(b.getCollectedData()))

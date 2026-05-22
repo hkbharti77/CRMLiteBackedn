@@ -2,11 +2,29 @@
   "flowType": "LEAD_CAPTURE",
   "steps": [
     {
+      "dataKey": "transaction_type",
+      "question": "🏠 Are you looking to buy, rent, or lease a property?",
+      "usesButtons": true,
+      "options": ["Buy", "Rent", "Lease / Commercial"]
+    },
+    {
       "dataKey": "property_type",
-      "question": "🏠 What type of property are you looking for?",
+      "question": "🏘️ What type of property are you looking for?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Apartment", "Villa", "Plot"]
+      "options": ["Apartment / Flat", "Villa / House", "Plot / Land", "Commercial Space"]
+    },
+    {
+      "dataKey": "bhk_preference",
+      "question": "🛏️ What is your BHK / size preference?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["1 BHK", "2 BHK", "3 BHK", "4 BHK / Villa"]
+    },
+    {
+      "dataKey": "preferred_location",
+      "question": "📍 Which area or locality are you looking in?",
+      "usesButtons": false
     },
     {
       "dataKey": "budget",
@@ -15,12 +33,14 @@
     },
     {
       "dataKey": "timeline",
-      "question": "📅 When are you planning to buy?",
-      "usesButtons": false
+      "question": "📅 When are you planning to move / buy?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Immediately", "Within 3 months", "3–6 months", "Just exploring"]
     },
     {
       "dataKey": "email",
-      "question": "📩 Finally, please provide your email address for detailed property brochures:",
+      "question": "📩 Please provide your email for property brochures and site visit scheduling:",
       "usesButtons": false
     }
   ]

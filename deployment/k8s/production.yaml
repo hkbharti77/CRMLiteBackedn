@@ -1,0 +1,286 @@
+# ── Kubernetes Production Manifests ──────────────────────────────────────────
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: crmlite-prod
+  labels:
+    environment: production
+
+---
+# ConfigMap — non-sensitive configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: crmlite-config
+  namespace: crmlite-prod
+data:
+  SPRING_PROFILES_ACTIVE: "prod"
+  SPRING_APPLICATION_NAME: "backend"
+  REDIS_PORT: "6379"
+  ALLOWED_ORIGINS: "https://app.crmlite.io"
+  OTLP_ENDPOINT: "http://tempo.monitoring.svc.cluster.local:4317"
+
+---
+# Secret — mount from external secret manager (AWS Secrets Manager / Vault)
+# In production, use External Secrets Operator instead of hardcoding
+apiVersion: v1
+kind: Secret
+metadata:
+  name: crmlite-secrets
+  namespace: crmlite-prod
+type: Opaque
+# stringData is populated by CI/CD pipeline or External Secrets Operator
+# DO NOT commit actual values to git
+stringData:
+  DB_USERNAME: "PLACEHOLDER"
+  DB_PASSWORD: "PLACEHOLDER"
+  JWT_SECRET: "PLACEHOLDER"
+  REDIS_PASSWORD: "PLACEHOLDER"
+  WHATSAPP_VERIFY_TOKEN: "PLACEHOLDER"
+  META_APP_SECRET: "PLACEHOLDER"
+  GEMINI_API_KEY: "PLACEHOLDER"
+  SMTP_USERNAME: "PLACEHOLDER"
+  SMTP_PASSWORD: "PLACEHOLDER"
+
+---
+# Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: crmlite-backend
+  namespace: crmlite-prod
+  labels:
+    app: crmlite-backend
+    version: "1.0.0"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: crmlite-backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0    # Zero-downtime: always keep 3 pods running
+  template:
+    metadata:
+      labels:
+        app: crmlite-backend
+        version: "1.0.0"
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8080"
+    spec:
+      # Graceful shutdown — wait for in-flight requests to complete
+      terminationGracePeriodSeconds: 60
+
+      # Pod anti-affinity — spread across nodes to avoid single-node failure
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                topologyKey: kubernetes.io/hostname
+                labelSelector:
+                  matchLabels:
+                    app: crmlite-backend
+
+      # Security context — non-root, read-only filesystem
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+
+      containers:
+        - name: backend
+          image: ghcr.io/crmlite/backend:${VERSION}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+
+          # Resource limits — prevent OOM kills and CPU throttling
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "768Mi"
+
+          # Environment from ConfigMap
+          envFrom:
+            - configMapRef:
+                name: crmlite-config
+
+          # Environment from Secrets
+          env:
+            - name: DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: DB_USERNAME
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: DB_PASSWORD
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: JWT_SECRET
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: REDIS_PASSWORD
+            - name: WHATSAPP_VERIFY_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: WHATSAPP_VERIFY_TOKEN
+            - name: META_APP_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: META_APP_SECRET
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: GEMINI_API_KEY
+            - name: SMTP_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: SMTP_USERNAME
+            - name: SMTP_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: crmlite-secrets
+                  key: SMTP_PASSWORD
+            - name: SPRING_DATASOURCE_WRITER_URL
+              value: "jdbc:postgresql://crmlite-primary.rds.amazonaws.com:5432/chatcrmdb"
+            - name: SPRING_DATASOURCE_READER_URL
+              value: "jdbc:postgresql://crmlite-replica.rds.amazonaws.com:5432/chatcrmdb"
+            - name: REDIS_HOST
+              value: "crmlite-redis.cache.amazonaws.com"
+
+          # Liveness probe — restart pod if JVM deadlocked
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            failureThreshold: 3
+            timeoutSeconds: 10
+
+          # Readiness probe — only send traffic when app + Redis + DB are ready
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+            timeoutSeconds: 10
+
+          # Startup probe — give 3 min for slow starts (embedding model warmup)
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 18    # 30s + 18*10s = 3 minutes total
+
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+---
+# Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: crmlite-backend-svc
+  namespace: crmlite-prod
+  labels:
+    app: crmlite-backend
+spec:
+  selector:
+    app: crmlite-backend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+  type: ClusterIP    # Use Ingress controller, not LoadBalancer per service
+
+---
+# Horizontal Pod Autoscaler
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: crmlite-backend-hpa
+  namespace: crmlite-prod
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: crmlite-backend
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300    # 5 min cooldown before scale-down
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 120
+
+---
+# Pod Disruption Budget — ensure at least 2 pods survive during maintenance
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: crmlite-backend-pdb
+  namespace: crmlite-prod
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: crmlite-backend

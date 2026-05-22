@@ -73,7 +73,7 @@ public class SecurityService {
 
     @Transactional
     public void lockAccount(User user) {
-        user.setAccountStatus("LOCKED");
+        user.setAccountStatus(User.AccountStatus.LOCKED);
         userRepository.save(user);
         revokeAllSessions(user);
         logSecurityEvent(user, SecurityLog.LogAction.ACCOUNT_LOCKED, "SUCCESS", "Account locked by owner", null, null);

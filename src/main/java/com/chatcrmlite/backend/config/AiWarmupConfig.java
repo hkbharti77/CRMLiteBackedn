@@ -4,10 +4,12 @@ import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2Quantize
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import com.chatcrmlite.backend.security.TenantContext;
 import org.springframework.stereotype.Component;
 
 @Slf4j
 @Component
+@org.springframework.context.annotation.Profile("!test")
 public class AiWarmupConfig {
 
     /**
@@ -19,8 +21,9 @@ public class AiWarmupConfig {
 
     @EventListener(ApplicationReadyEvent.class)
     public void warmUp() {
-        log.info("[AI-Warmup] Initializing and fixing DB constraints...");
+        TenantContext.setAdminMode(true);
         try {
+            log.info("[AI-Warmup] Initializing and fixing DB constraints...");
             jdbcTemplate.execute("ALTER TABLE document_chunks DROP CONSTRAINT IF EXISTS content_length_limit");
             log.info("[AI-Warmup] Successfully dropped content_length_limit constraint.");
             
@@ -53,6 +56,8 @@ public class AiWarmupConfig {
             log.info("[AI-Warmup] Embedding model ready.");
         } catch (Exception e) {
             log.error("[AI-Warmup] Failed to warm up model: {}", e.getMessage());
+        } finally {
+            TenantContext.setAdminMode(false);
         }
     }
 }

@@ -5,6 +5,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.ReminderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
+import net.javacrumbs.shedlock.spring.annotation.SchedulerLock;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -35,6 +36,7 @@ public class ReminderService {
 
     // Phase 1 Scheduled Task: Check for due reminders every minute
     @Scheduled(fixedRate = 60000)
+    @SchedulerLock(name = "ReminderService_checkDueReminders", lockAtMostFor = "50s", lockAtLeastFor = "30s")
     public void checkDueReminders() {
         LocalDateTime now = LocalDateTime.now();
         List<Reminder> dueReminders = reminderRepository.findAllByDueDateBeforeAndIsCompletedFalse(now);

@@ -1,21 +1,20 @@
 package com.chatcrmlite.backend.dto;
 
-import lombok.Data;
-
-/**
- * Request body for adding or updating an enquiry on a lead.
- */
-@Data
 public class EnquiryRequest {
-    /** WHATSAPP | MANUAL | AI | FLOW */
     private String type;
-
-    /** The enquiry message */
     private String message;
-
-    /** Source label — e.g. "WhatsApp", "Manual Entry" */
     private String source;
-
-    /** OPEN | RESOLVED | FOLLOW_UP  (optional on create, required on update) */
     private String status;
+
+    public EnquiryRequest() {}
+
+    public String getType() { return type; }
+    public String getMessage() { return message; }
+    public String getSource() { return source; }
+    public String getStatus() { return status; }
+
+    public void setType(String type) { this.type = type; }
+    public void setMessage(String message) { this.message = message; }
+    public void setSource(String source) { this.source = source; }
+    public void setStatus(String status) { this.status = status; }
 }

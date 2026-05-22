@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head><meta charset="UTF-8"/><title th:text="${subject}">New Booking</title></head>
+<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif">
+
+<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+       style="background:#f3f4f6;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr><td align="center">
+    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+           style="background:#ffffff;max-width:600px;width:100%">
+      <tr><td style="padding:0 36px 24px">
+
+        <table style="width:100%;border-collapse:collapse">
+          <tr>
+            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
+                       font-size:13px;width:36%;border:1px solid #e5e7eb">Customer</td>
+            <td style="padding:9px 14px;color:#374151;font-size:13px;border:1px solid #e5e7eb">
+              <span th:text="${contactName}">Name</span>
+              &nbsp;&middot;&nbsp;
+              <a th:href="'mailto:' + ${contactEmail}" th:text="${contactEmail}"
+                 style="color:#6366f1;text-decoration:none">email</a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
+                       font-size:13px;border:1px solid #e5e7eb">Service</td>
+            <td style="padding:9px 14px;color:#374151;font-size:13px;border:1px solid #e5e7eb"
+                th:text="${service}">Service</td>
+          </tr>
+          <tr th:if="${preferredSlot != null and !#strings.isEmpty(preferredSlot)}">
+            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
+                       font-size:13px;border:1px solid #e5e7eb">Preferred Slot</td>
+            <td style="padding:9px 14px;color:#374151;font-size:13px;border:1px solid #e5e7eb"
+                th:text="${preferredSlot}">Slot</td>
+          </tr>
+        </table>
+
+      </td></tr>
+    </table>
+  </td></tr>
+</table>
+
+<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=${ctaLabel},ctaUrl=${ctaUrl})}"></div>
+
+</body>
+</html>

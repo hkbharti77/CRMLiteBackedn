@@ -14,11 +14,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.chatcrmlite.backend.dto.MenuDto;
 import lombok.extern.slf4j.Slf4j;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import java.util.ArrayList;
 import java.util.List;
 
 @Slf4j
 @Component
+@CircuitBreaker(name = "whatsappClient")
 public class MetaWhatsAppClient implements WhatsAppClient {
 
     @Autowired
@@ -163,7 +165,12 @@ public class MetaWhatsAppClient implements WhatsAppClient {
                         btnMap.put("type", "reply");
                         Map<String, Object> replyMap = new HashMap<>();
                         replyMap.put("id", row.getId());
-                        replyMap.put("title", row.getTitle());
+                        // WhatsApp button title: max 20 chars
+                        String title = row.getTitle();
+                        if (title != null && title.length() > 20) {
+                            title = title.substring(0, 20);
+                        }
+                        replyMap.put("title", title);
                         btnMap.put("reply", replyMap);
                         buttonsBody.add(btnMap);
                     }

@@ -7,15 +7,17 @@ import com.chatcrmlite.backend.dto.EnquiryRequest;
 import com.chatcrmlite.backend.dto.LeadDTO;
 import com.chatcrmlite.backend.dto.RevenueReportDTO;
 import com.chatcrmlite.backend.models.Lead;
+import com.chatcrmlite.backend.models.Tag;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.LeadMetricsService;
-import com.chatcrmlite.backend.services.LeadService;
+import com.chatcrmlite.backend.services.lead.LeadService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -37,9 +39,11 @@ public class LeadController {
     // ── Lead Queries ───────────────────────────────────────────────────────
 
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<LeadDTO>> getLeads() {
-        return ResponseEntity.ok(leadService.getLeadsByUser(getAuthenticatedUser())
-                .stream().map(this::toDTO).collect(Collectors.toList()));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getLeadsByUser(user)
+                .stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
     /** GET /api/v1/leads/paged?page=0&size=20 — paginated for large datasets */
@@ -47,9 +51,10 @@ public class LeadController {
     public ResponseEntity<?> getLeadsPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        var pagedResult = leadService.getLeadsByUserPaged(getAuthenticatedUser(), page, size);
+        User user = getAuthenticatedUser();
+        var pagedResult = leadService.getLeadsByUserPaged(user, page, size);
         return ResponseEntity.ok(java.util.Map.of(
-                "content",       pagedResult.getContent().stream().map(this::toDTO).collect(Collectors.toList()),
+                "content",       pagedResult.getContent().stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()),
                 "totalElements", pagedResult.getTotalElements(),
                 "totalPages",    pagedResult.getTotalPages(),
                 "page",          pagedResult.getNumber(),
@@ -59,21 +64,24 @@ public class LeadController {
 
     @GetMapping("/status/{status}")
     public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
-        return ResponseEntity.ok(leadService.getLeadsByStatus(status, getAuthenticatedUser())
-                .stream().map(this::toDTO).collect(Collectors.toList()));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getLeadsByStatus(status, user)
+                .stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
     /** GET /api/v1/leads/contact/{contactId} — ALL leads for a contact */
     @GetMapping("/contact/{contactId}")
     public ResponseEntity<List<LeadDTO>> getLeadsByContact(@PathVariable UUID contactId) {
-        return ResponseEntity.ok(leadService.getLeadsByContactId(contactId, getAuthenticatedUser())
-                .stream().map(this::toDTO).collect(Collectors.toList()));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getLeadsByContactId(contactId, user)
+                .stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
     /** GET /api/v1/leads/contact/{contactId}/latest — most recent lead */
     @GetMapping("/contact/{contactId}/latest")
     public ResponseEntity<LeadDTO> getLatestLeadByContact(@PathVariable UUID contactId) {
-        return ResponseEntity.ok(toDTO(leadService.getLatestLeadByContactId(contactId, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.getLatestLeadByContactId(contactId, user), user));
     }
 
     @GetMapping("/revenue")
@@ -87,7 +95,8 @@ public class LeadController {
     public ResponseEntity<LeadDTO> updateStatus(
             @PathVariable UUID id,
             @RequestParam Lead.LeadStatus status) {
-        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, user), user));
     }
 
     // ── Enquiry CRUD ───────────────────────────────────────────────────────
@@ -103,7 +112,9 @@ public class LeadController {
     public ResponseEntity<LeadDTO> addEnquiry(
             @PathVariable UUID id,
             @RequestBody EnquiryRequest req) {
-        return ResponseEntity.ok(toDTO(leadService.addEnquiry(id, req, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        leadService.addEnquiry(id, req, user);
+        return ResponseEntity.ok(toDTO(leadService.getLeadById(id, user), user));
     }
 
     /** PATCH /api/v1/leads/{id}/enquiries/{enquiryId} — update an enquiry */
@@ -112,7 +123,9 @@ public class LeadController {
             @PathVariable UUID id,
             @PathVariable String enquiryId,
             @RequestBody EnquiryRequest req) {
-        return ResponseEntity.ok(toDTO(leadService.updateEnquiry(id, enquiryId, req, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        leadService.updateEnquiry(id, enquiryId, req, user);
+        return ResponseEntity.ok(toDTO(leadService.getLeadById(id, user), user));
     }
 
     /** DELETE /api/v1/leads/{id}/enquiries/{enquiryId} — delete an enquiry */
@@ -120,7 +133,9 @@ public class LeadController {
     public ResponseEntity<LeadDTO> deleteEnquiry(
             @PathVariable UUID id,
             @PathVariable String enquiryId) {
-        return ResponseEntity.ok(toDTO(leadService.deleteEnquiry(id, enquiryId, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        leadService.deleteEnquiry(id, enquiryId, user);
+        return ResponseEntity.ok(toDTO(leadService.getLeadById(id, user), user));
     }
 
     // ── Deal ───────────────────────────────────────────────────────────────
@@ -129,7 +144,8 @@ public class LeadController {
     public ResponseEntity<LeadDTO> updateDeal(
             @PathVariable UUID id,
             @RequestBody DealUpdateDTO dto) {
-        return ResponseEntity.ok(toDTO(leadService.updateDealInfo(id, dto, getAuthenticatedUser())));
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.updateDealInfo(id, dto, user), user));
     }
 
     // ── Metrics (11.1, 11.3, 11.5) ────────────────────────────────────────
@@ -148,24 +164,55 @@ public class LeadController {
 
     // ── Mapper ─────────────────────────────────────────────────────────────
 
-    private LeadDTO toDTO(Lead lead) {
+    private LeadDTO toDTO(Lead lead, User owner) {
+        LocalDateTime createdAt = lead.getCreatedAt();
+        boolean isNew = createdAt != null && createdAt.isAfter(LocalDateTime.now().minusHours(24));
+        String createdAtHuman = formatRelativeTime(createdAt);
+
         return LeadDTO.builder()
                 .id(lead.getId())
+                .leadNumber(lead.getLeadNumber())
                 .contact(ContactDTO.builder()
                         .id(lead.getContact().getId())
                         .waId(lead.getContact().getWaId())
                         .name(lead.getContact().getName())
-                        .tags(lead.getContact().getTags())
+                        .tags(lead.getContact().getTags().stream()
+                                .map(Tag::getName)
+                                .collect(Collectors.toList()))
                         .source(lead.getContact().getSource())
                         .build())
                 .status(lead.getStatus())
-                .enquiries(leadService.parseEnquiries(lead.getEnquiries()))
-                .createdAt(lead.getCreatedAt())
+                .enquiries(leadService.getEnquiries(lead.getId(), owner))
+                .createdAt(createdAt)
                 .lastActivity(lead.getLastActivity())
                 .dealValue(lead.getDealValue())
                 .paymentStatus(lead.getPaymentStatus())
                 .currency(lead.getCurrency())
                 .dealLabel(lead.getDealLabel())
+                .isNew(isNew)
+                .createdAtHuman(createdAtHuman)
                 .build();
+    }
+
+    /**
+     * Converts a LocalDateTime to a human-readable relative time string.
+     * Examples: "Just now", "5 mins ago", "2 hours ago", "Yesterday", "3 days ago"
+     */
+    private String formatRelativeTime(LocalDateTime dateTime) {
+        if (dateTime == null) return "";
+
+        LocalDateTime now = LocalDateTime.now();
+        long minutes = java.time.Duration.between(dateTime, now).toMinutes();
+        long hours   = java.time.Duration.between(dateTime, now).toHours();
+        long days    = java.time.Duration.between(dateTime, now).toDays();
+
+        if (minutes < 1)   return "Just now";
+        if (minutes < 60)  return minutes + " min" + (minutes == 1 ? "" : "s") + " ago";
+        if (hours < 24)    return hours + " hour" + (hours == 1 ? "" : "s") + " ago";
+        if (days == 1)     return "Yesterday";
+        if (days < 7)      return days + " days ago";
+        if (days < 30)     return (days / 7) + " week" + (days / 7 == 1 ? "" : "s") + " ago";
+        if (days < 365)    return (days / 30) + " month" + (days / 30 == 1 ? "" : "s") + " ago";
+        return (days / 365) + " year" + (days / 365 == 1 ? "" : "s") + " ago";
     }
 }

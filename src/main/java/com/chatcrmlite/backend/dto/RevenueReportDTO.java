@@ -3,10 +3,22 @@ package com.chatcrmlite.backend.dto;
 import lombok.Builder;
 import lombok.Data;
 import java.math.BigDecimal;
+import lombok.extern.jackson.Jacksonized;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import lombok.NoArgsConstructor;
+import lombok.AllArgsConstructor;
+
+import java.io.Serializable;
 
 @Data
 @Builder
-public class RevenueReportDTO {
+@Jacksonized
+@JsonIgnoreProperties(ignoreUnknown = true)
+@NoArgsConstructor
+@AllArgsConstructor
+public class RevenueReportDTO implements Serializable {
+    private static final long serialVersionUID = 1L;
+
     private BigDecimal totalPipelineValue;  // Sum of ALL deal values
     private BigDecimal receivedRevenue;     // Sum of PAID deal values
     private BigDecimal pendingRevenue;      // Sum of PENDING + PARTIAL deal values

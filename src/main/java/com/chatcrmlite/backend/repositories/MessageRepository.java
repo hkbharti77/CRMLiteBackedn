@@ -13,4 +13,6 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     
     // For RAG Context Analysis
     List<Message> findByContactAndDirection(Contact contact, Message.Direction direction, org.springframework.data.domain.Pageable pageable);
+    
+    long countByContact(Contact contact);
 }

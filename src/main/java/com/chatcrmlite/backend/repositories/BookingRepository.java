@@ -3,17 +3,30 @@ package com.chatcrmlite.backend.repositories;
 import com.chatcrmlite.backend.models.Booking;
 import com.chatcrmlite.backend.models.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface BookingRepository extends JpaRepository<Booking, UUID> {
 
-    List<Booking> findByOwner_IdOrderByCreatedAtDesc(UUID ownerId);
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE b.owner.id = :ownerId ORDER BY b.createdAt DESC")
+    List<Booking> findByOwner_IdOrderByCreatedAtDesc(@Param("ownerId") UUID ownerId);
 
-    List<Booking> findByLead_IdAndOwner_IdOrderByCreatedAtDesc(UUID leadId, UUID ownerId);
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE c.id = :contactId AND b.owner.id = :ownerId ORDER BY b.createdAt DESC")
+    List<Booking> findByContact_IdAndOwner_IdOrderByCreatedAtDesc(@Param("contactId") UUID contactId, @Param("ownerId") UUID ownerId);
 
-    List<Booking> findByOwner_IdAndStatus(UUID ownerId, Booking.BookingStatus status);
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE b.owner.id = :ownerId AND b.status = :status")
+    List<Booking> findByOwner_IdAndStatus(@Param("ownerId") UUID ownerId, @Param("status") Booking.BookingStatus status);
+
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE b.id = :id")
+    Optional<Booking> findByIdWithContact(@Param("id") UUID id);
+
+    // Count bookings created today with a specific date prefix (for reference number generation)
+    @Query(value = "SELECT COUNT(b) FROM bookings b WHERE b.owner_id = :ownerId AND b.reference_number LIKE :datePrefix || '%'", nativeQuery = true)
+    long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
 }

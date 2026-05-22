@@ -1,14 +1,18 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.dto.AppointmentRequest;
+import com.chatcrmlite.backend.event.AppointmentScheduledEvent;
 import com.chatcrmlite.backend.models.Appointment;
-import com.chatcrmlite.backend.models.Lead;
+import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.AppointmentRepository;
-import com.chatcrmlite.backend.repositories.LeadRepository;
+import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,12 +25,13 @@ import java.util.UUID;
 
 @Service
 public class AppointmentService {
+    private static final Logger log = LoggerFactory.getLogger(AppointmentService.class);
 
     @Autowired private AppointmentRepository appointmentRepository;
-    @Autowired private LeadRepository leadRepository;
+    @Autowired private ContactRepository contactRepository;
     @Autowired private ObjectMapper objectMapper;
-
-    // ── Helpers ────────────────────────────────────────────────────────────
+    @Autowired private ApplicationEventPublisher eventPublisher;
+    @Autowired private ReferenceNumberService referenceNumberService;
 
     public Map<String, String> parseCollectedData(String json) {
         try {
@@ -42,20 +47,16 @@ public class AppointmentService {
         catch (Exception e) { return "{}"; }
     }
 
-    // ── CRUD ───────────────────────────────────────────────────────────────
-
     @Transactional
     public Appointment bookAppointment(AppointmentRequest req, User owner) {
-        Lead lead = leadRepository.findById(req.getLeadId())
-                .filter(l -> l.getOwner().getId().equals(owner.getId()))
-                .orElseThrow(() -> new RuntimeException("Lead not found or access denied"));
+        Contact contact = contactRepository.findById(req.getContactId())
+                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .orElseThrow(() -> new RuntimeException("Contact not found or access denied"));
 
-        lead.setStatus(Lead.LeadStatus.BOOKED);
-        lead.setLastActivity(LocalDateTime.now());
-        leadRepository.save(lead);
-
+        String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.APPOINTMENT);
         Appointment appt = Appointment.builder()
-                .lead(lead)
+                .referenceNumber(referenceNumber)
+                .contact(contact)
                 .owner(owner)
                 .appointmentDateTime(req.getAppointmentDateTime())
                 .title(req.getTitle())
@@ -63,35 +64,40 @@ public class AppointmentService {
                 .collectedData("{}")
                 .build();
 
-        return appointmentRepository.save(appt);
+        Appointment saved = appointmentRepository.save(appt);
+        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
-    /**
-     * Called from WhatsAppFlowService when APPOINTMENT flow completes.
-     * Stores full structured flow data as JSON in collectedData.
-     */
     @Transactional
-    public Appointment bookFromFlow(Lead lead, User owner, String title,
+    public Appointment bookFromFlow(Contact contact, User owner, String title,
                                     Map<String, String> flowData, LocalDateTime dateTime) {
+        String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.APPOINTMENT);
         Appointment appt = Appointment.builder()
-                .lead(lead)
+                .referenceNumber(referenceNumber)
+                .contact(contact)
                 .owner(owner)
                 .title(title)
                 .appointmentDateTime(dateTime)
                 .collectedData(serialize(flowData))
                 .build();
-        return appointmentRepository.save(appt);
+        Appointment saved = appointmentRepository.save(appt);
+        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "FLOW"));
+        return saved;
     }
 
+    @Transactional(readOnly = true)
     public List<Appointment> getAllAppointments(User owner) {
         return appointmentRepository.findByOwner_IdOrderByAppointmentDateTimeAsc(owner.getId());
     }
 
-    public List<Appointment> getAppointmentsForLead(UUID leadId, User owner) {
+    @Transactional(readOnly = true)
+    public List<Appointment> getAppointmentsForContact(UUID contactId, User owner) {
         return appointmentRepository
-                .findByLead_IdAndOwner_IdOrderByAppointmentDateTimeAsc(leadId, owner.getId());
+                .findByContact_IdAndOwner_IdOrderByAppointmentDateTimeAsc(contactId, owner.getId());
     }
 
+    @Transactional(readOnly = true)
     public List<Appointment> getTodayAppointments(User owner) {
         LocalDateTime start = LocalDate.now().atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
@@ -99,6 +105,7 @@ public class AppointmentService {
                 owner.getId(), start, end, Appointment.AppointmentStatus.SCHEDULED);
     }
 
+    @Transactional(readOnly = true)
     public long countTodayAppointments(User owner) {
         LocalDateTime start = LocalDate.now().atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
@@ -110,25 +117,31 @@ public class AppointmentService {
     public Appointment completeAppointment(UUID id, User owner) {
         Appointment appt = getOwned(id, owner);
         appt.setStatus(Appointment.AppointmentStatus.COMPLETED);
-        return appointmentRepository.save(appt);
+        Appointment saved = appointmentRepository.save(appt);
+        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     @Transactional
     public Appointment cancelAppointment(UUID id, User owner) {
         Appointment appt = getOwned(id, owner);
         appt.setStatus(Appointment.AppointmentStatus.CANCELLED);
-        return appointmentRepository.save(appt);
+        Appointment saved = appointmentRepository.save(appt);
+        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     @Transactional
     public Appointment markNoShow(UUID id, User owner) {
         Appointment appt = getOwned(id, owner);
         appt.setStatus(Appointment.AppointmentStatus.NO_SHOW);
-        return appointmentRepository.save(appt);
+        Appointment saved = appointmentRepository.save(appt);
+        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "MANUAL"));
+        return saved;
     }
 
     private Appointment getOwned(UUID id, User owner) {
-        return appointmentRepository.findById(id)
+        return appointmentRepository.findByIdWithContact(id)
                 .filter(a -> a.getOwner().getId().equals(owner.getId()))
                 .orElseThrow(() -> new RuntimeException("Appointment not found or access denied"));
     }

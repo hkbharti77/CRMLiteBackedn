@@ -50,9 +50,9 @@ public class AppointmentController {
         return ResponseEntity.ok(appointmentService.countTodayAppointments(getAuthenticatedUser()));
     }
 
-    @GetMapping("/lead/{leadId}")
-    public ResponseEntity<List<AppointmentDTO>> getForLead(@PathVariable UUID leadId) {
-        return ResponseEntity.ok(appointmentService.getAppointmentsForLead(leadId, getAuthenticatedUser())
+    @GetMapping("/contact/{contactId}")
+    public ResponseEntity<List<AppointmentDTO>> getForContact(@PathVariable UUID contactId) {
+        return ResponseEntity.ok(appointmentService.getAppointmentsForContact(contactId, getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
     }
 
@@ -74,11 +74,9 @@ public class AppointmentController {
     private AppointmentDTO toDTO(Appointment a) {
         return AppointmentDTO.builder()
                 .id(a.getId())
-                .leadId(a.getLead().getId())
-                .leadStatus(a.getLead().getStatus().name())
-                .contactName(a.getLead().getContact().getName())
-                .contactWaId(a.getLead().getContact().getWaId())
-                .contactId(a.getLead().getContact().getId())
+                .contactName(a.getContact().getName())
+                .contactWaId(a.getContact().getWaId())
+                .contactId(a.getContact().getId())
                 .appointmentDateTime(a.getAppointmentDateTime())
                 .title(a.getTitle())
                 .collectedData(appointmentService.parseCollectedData(a.getCollectedData()))

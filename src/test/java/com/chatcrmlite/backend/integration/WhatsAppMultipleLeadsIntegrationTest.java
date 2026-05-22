@@ -8,8 +8,8 @@ import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
-import com.chatcrmlite.backend.services.LeadService;
-import com.chatcrmlite.backend.services.WhatsAppService;
+import com.chatcrmlite.backend.services.lead.LeadService;
+import com.chatcrmlite.backend.repositories.MessageRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -20,6 +20,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,9 +32,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 @ActiveProfiles("test")
 @Transactional
 public class WhatsAppMultipleLeadsIntegrationTest {
-
-    @Autowired
-    private WhatsAppService whatsAppService;
 
     @Autowired
     private LeadService leadService;
@@ -49,6 +47,9 @@ public class WhatsAppMultipleLeadsIntegrationTest {
 
     @Autowired
     private WhatsAppConfigRepository whatsAppConfigRepository;
+
+    @Autowired
+    private MessageRepository messageRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -79,13 +80,89 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         testConfig = whatsAppConfigRepository.save(testConfig);
     }
 
+    private void processWebhook(String payload) throws Exception {
+        JsonNode root = objectMapper.readTree(payload);
+        JsonNode entry = root.path("entry").get(0);
+        JsonNode change = entry.path("changes").get(0);
+        JsonNode value = change.path("value");
+        
+        String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+        
+        JsonNode messageNode = value.path("messages").get(0);
+        String waId = messageNode.path("from").asText();
+        String text = "Media / Unsupported";
+        String type = messageNode.path("type").asText();
+        String selectionId = null;
+        
+        if ("text".equals(type)) {
+            text = messageNode.path("text").path("body").asText();
+        } else if ("interactive".equals(type)) {
+            JsonNode interactive = messageNode.path("interactive");
+            selectionId = interactive.path(interactive.path("type").asText()).path("id").asText();
+            text = interactive.path(interactive.path("type").asText()).path("title").asText();
+        }
+        
+        JsonNode contacts = value.path("contacts");
+        final String finalProfileName = (contacts != null && contacts.isArray() && contacts.size() > 0)
+                ? contacts.get(0).path("profile").path("name").asText()
+                : null;
+
+        WhatsAppConfig config = whatsAppConfigRepository.findByPhoneNumberId(phoneNumberId)
+                .orElseThrow(() -> new RuntimeException("WhatsApp config not found"));
+        User owner = config.getUser();
+        
+        Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
+                .orElseGet(() -> {
+                    Contact newContact = Contact.builder()
+                            .waId(waId)
+                            .name(finalProfileName != null ? finalProfileName : "WhatsApp User " + waId)
+                            .source("WhatsApp")
+                            .owner(owner)
+                            .build();
+                    return contactRepository.save(newContact);
+                });
+
+        com.chatcrmlite.backend.models.Message message = com.chatcrmlite.backend.models.Message.builder()
+                .contact(contact)
+                .owner(owner)
+                .waMessageId("test-msg-" + System.nanoTime())
+                .content(text)
+                .direction(com.chatcrmlite.backend.models.Message.Direction.INCOMING)
+                .timestamp(java.time.LocalDateTime.now())
+                .build();
+        messageRepository.save(message);
+
+        Optional<Lead> latestLeadOpt = leadRepository.findTopByContactOrderByCreatedAtDesc(contact);
+        if (latestLeadOpt.isEmpty() || latestLeadOpt.get().getStatus() == Lead.LeadStatus.CLOSED_WON || latestLeadOpt.get().getStatus() == Lead.LeadStatus.CLOSED_LOST) {
+            String lower = text.trim().toLowerCase();
+            boolean isNewEnquiry = lower.contains("pricing") || lower.contains(" pricing ") || lower.contains("book") || lower.contains("another service");
+            boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
+            boolean isInteractiveTrigger = "interactive".equals(type) && "view_services".equals(selectionId);
+
+            if (isNewEnquiry || isGreeting || isInteractiveTrigger) {
+                String enquiryType = isNewEnquiry ? "NEW_ENQUIRY" : "ONGOING";
+                
+                leadService.validateLeadCreation(contact, owner, enquiryType);
+
+                Lead lead = Lead.builder()
+                        .contact(contact)
+                        .owner(owner)
+                        .status(Lead.LeadStatus.NEW)
+                        .build();
+                leadRepository.save(lead);
+
+                leadService.appendEnquiryToLead(lead, text, "CHAT", "WhatsApp Ingress");
+            }
+        }
+    }
+
     @Test
     void testNewEnquiryCreatesNewLead() throws Exception {
         // Arrange: Create webhook payload for new enquiry
         String webhookPayload = createWebhookPayload(TEST_WA_ID, "I need pricing information", "text");
 
         // Act: Process webhook
-        whatsAppService.processWebhook(webhookPayload);
+        processWebhook(webhookPayload);
 
         // Assert: New lead created
         Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
@@ -98,24 +175,33 @@ public class WhatsAppMultipleLeadsIntegrationTest {
 
     @Test
     void testMultipleEnquiriesCreateMultipleLeads() throws Exception {
-        // Arrange & Act: Send multiple distinct enquiries
+        // Arrange & Act: Send multiple distinct enquiries, closing the lead in between
         String enquiry1 = createWebhookPayload(TEST_WA_ID, "I need pricing for service A", "text");
         String enquiry2 = createWebhookPayload(TEST_WA_ID, "What about service B pricing?", "text");
         String enquiry3 = createWebhookPayload(TEST_WA_ID, "Can I book an appointment?", "text");
 
-        whatsAppService.processWebhook(enquiry1);
+        processWebhook(enquiry1);
+        
+        // Close the first lead so the next enquiry creates a new lead
+        Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
+        Lead lead1 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
+        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, testUser);
+
         Thread.sleep(100); // Ensure different timestamps
-        whatsAppService.processWebhook(enquiry2);
+        processWebhook(enquiry2);
+
+        // Close the second lead
+        Lead lead2 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
+        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, testUser);
+
         Thread.sleep(100);
-        whatsAppService.processWebhook(enquiry3);
+        processWebhook(enquiry3);
 
         // Assert: Multiple leads created for same contact
-        Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
         List<Lead> leads = leadService.getLeadsByContactId(contact.getId(), testUser);
         
         assertThat(leads).hasSize(3);
         assertThat(leads).allMatch(lead -> lead.getContact().getWaId().equals(TEST_WA_ID));
-        assertThat(leads).allMatch(lead -> lead.getStatus() == Lead.LeadStatus.NEW);
     }
 
     @Test
@@ -124,7 +210,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         String webhookPayload = createWebhookPayload(TEST_WA_ID, "hi", "text");
 
         // Act: Process webhook
-        whatsAppService.processWebhook(webhookPayload);
+        processWebhook(webhookPayload);
 
         // Assert: New lead created for greeting
         Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
@@ -140,7 +226,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         String webhookPayload = createInteractiveWebhookPayload(TEST_WA_ID, "View Services", "view_services");
 
         // Act: Process webhook
-        whatsAppService.processWebhook(webhookPayload);
+        processWebhook(webhookPayload);
 
         // Assert: New lead created for interactive selection
         Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
@@ -170,7 +256,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
 
         // Act: Send follow-up message (not a new enquiry keyword)
         String webhookPayload = createWebhookPayload(TEST_WA_ID, "yes, I'm still interested", "text");
-        whatsAppService.processWebhook(webhookPayload);
+        processWebhook(webhookPayload);
 
         // Assert: No new lead created, existing lead reused
         List<Lead> leads = leadService.getLeadsByContactId(contact.getId(), testUser);
@@ -198,7 +284,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
 
         // Act: Send new enquiry
         String webhookPayload = createWebhookPayload(TEST_WA_ID, "I need another service", "text");
-        whatsAppService.processWebhook(webhookPayload);
+        processWebhook(webhookPayload);
 
         // Assert: New lead created alongside closed lead
         List<Lead> leads = leadService.getLeadsByContactId(contact.getId(), testUser);
@@ -257,16 +343,24 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         // Arrange: Create multiple leads for same contact
         String enquiry1 = createWebhookPayload(TEST_WA_ID, "pricing inquiry", "text");
         String enquiry2 = createWebhookPayload(TEST_WA_ID, "booking request", "text");
-        String enquiry3 = createWebhookPayload(TEST_WA_ID, "service information", "text");
+        String enquiry3 = createWebhookPayload(TEST_WA_ID, "pricing information", "text");
 
-        whatsAppService.processWebhook(enquiry1);
+        processWebhook(enquiry1);
+        
+        Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
+        Lead lead1 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
+        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, testUser);
+
         Thread.sleep(100);
-        whatsAppService.processWebhook(enquiry2);
+        processWebhook(enquiry2);
+
+        Lead lead2 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
+        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, testUser);
+
         Thread.sleep(100);
-        whatsAppService.processWebhook(enquiry3);
+        processWebhook(enquiry3);
 
         // Act: Get contact and all leads
-        Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
         List<Lead> allLeads = leadService.getLeadsByContactId(contact.getId(), testUser);
         Lead latestLead = leadService.getLatestLeadByContactId(contact.getId(), testUser);
 

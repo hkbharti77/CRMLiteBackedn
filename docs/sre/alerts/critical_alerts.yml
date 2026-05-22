@@ -1,0 +1,52 @@
+groups:
+- name: crm-lite-alerts
+  rules:
+  - alert: HighHTTP5xxErrorRate
+    expr: sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) > 0.1
+    for: 2m
+    labels:
+      severity: p1
+    annotations:
+      summary: "High HTTP 5xx error rate on {{ $labels.instance }}"
+      description: "The API is returning 5xx errors for more than 10% of requests over the last 5 minutes."
+      runbook: "docs/sre/runbooks/WebhookFailure.md"
+
+  - alert: RedisStreamBacklogHigh
+    expr: whatsapp_async_stream_backlog_count > 500
+    for: 5m
+    labels:
+      severity: p2
+    annotations:
+      summary: "WhatsApp Message Backlog is climbing"
+      description: "More than 500 messages are pending in the Redis stream. Consumers might be stuck or overloaded."
+      runbook: "docs/sre/runbooks/QueueOverload.md"
+
+  - alert: DatabaseConnectionPoolSaturation
+    expr: hikaricp_connections_active / hikaricp_connections_max > 0.9
+    for: 1m
+    labels:
+      severity: p1
+    annotations:
+      summary: "Database connection pool near saturation"
+      description: "DB connection pool is at {{ $value | humanizePercentage }} capacity. Request timeouts are imminent."
+      runbook: "docs/sre/runbooks/DBExhaustion.md"
+
+  - alert: GeminiApiLatencyHigh
+    expr: avg_over_time(ai_execution_time_seconds[5m]) > 30
+    for: 2m
+    labels:
+      severity: p2
+    annotations:
+      summary: "AI Response Latency is high"
+      description: "Gemini API is taking more than 30s to respond on average over the last 5m."
+      runbook: "docs/sre/runbooks/AIOutage.md"
+
+  - alert: RedisConnectivityLost
+    expr: up{job="redis"} == 0
+    for: 1m
+    labels:
+      severity: p0
+    annotations:
+      summary: "Redis instance is down"
+      description: "Redis is unreachable. Caching, sessions, and async processing are currently disabled."
+      runbook: "docs/sre/runbooks/RedisFailure.md"

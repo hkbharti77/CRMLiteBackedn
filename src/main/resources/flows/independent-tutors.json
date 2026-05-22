@@ -3,15 +3,29 @@
   "steps": [
     {
       "dataKey": "subject",
-      "question": "📚 Which subject do you need help with? (e.g., Math, Science, English)",
+      "question": "📚 Which subject do you need help with?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Math", "Science", "English"]
+      "options": ["Math", "Science", "English", "Hindi", "Social Studies"]
     },
     {
       "dataKey": "class_level",
       "question": "🎓 What is the student's class or grade level?",
-      "usesButtons": false
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Class 1–5", "Class 6–10", "Class 11–12", "College / University"]
+    },
+    {
+      "dataKey": "tutoring_mode",
+      "question": "🏠 How would you prefer the tutoring sessions?",
+      "usesButtons": true,
+      "options": ["Online", "Home Visit", "At Tutor's Place"]
+    },
+    {
+      "dataKey": "sessions_per_week",
+      "question": "📆 How many sessions per week are you looking for?",
+      "usesButtons": true,
+      "options": ["1 session/week", "2–3 sessions/week", "Daily (5 days/week)"]
     },
     {
       "dataKey": "email",

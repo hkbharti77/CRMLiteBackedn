@@ -1,16 +1,15 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.DocumentChunk;
-import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
-import dev.langchain4j.data.segment.TextSegment;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 import org.apache.poi.xwpf.usermodel.XWPFParagraph;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -24,24 +23,19 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class RagIngestionService {
+    private static final Logger log = LoggerFactory.getLogger(RagIngestionService.class);
 
     @Autowired
-    private DocumentChunkRepository repository;
+    private EmbeddingPersistenceService persistenceService;
 
     @Autowired
-    private LocalVectorStoreService localStore;
+    private EmbeddingModel embeddingModel;
 
-    private final EmbeddingModel embeddingModel = new AllMiniLmL6V2QuantizedEmbeddingModel();
+    @Autowired
+    private SemanticChunker semanticChunker;
 
-    private static final int CHUNK_SIZE = 400; // tokens approx
-    private static final int CHUNK_OVERLAP = 60;
-
-    /**
-     * Async ingestion of a document. Supports PDF, DOCX, TXT.
-     */
     @Async
     @Transactional
     public CompletableFuture<Map<String, Object>> ingestDocument(MultipartFile file, UUID tenantId) {
@@ -57,9 +51,6 @@ public class RagIngestionService {
         }
     }
 
-    /**
-     * Ingest raw text directly. Supported for legacy training endpoints.
-     */
     @Async
     @Transactional
     public CompletableFuture<Map<String, Object>> ingestText(String text, UUID tenantId, String source) {
@@ -73,34 +64,31 @@ public class RagIngestionService {
                 throw new RuntimeException("Empty content");
             }
 
-            // Cleanup & Chunking
-            List<String> chunks = chunkText(text);
-            int savedCount = 0;
+            // Use the new SemanticChunker for better context preservation
+            List<String> chunks = semanticChunker.chunk(text);
+            List<DocumentChunk> docChunks = new ArrayList<>();
 
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
-                if (chunk.length() < 30) continue; 
-
+                
                 String hash = hashContent(chunk);
-                float[] embedding = embeddingModel.embed(chunk).content().vector();
+                // Convert vector to String for the ColumnTransformer
+                float[] vector = embeddingModel.embed(chunk).content().vector();
+                String embeddingString = Arrays.toString(vector);
 
                 DocumentChunk docChunk = DocumentChunk.builder()
                         .documentId(documentId)
                         .tenantId(tenantId)
                         .content(chunk)
                         .contentHash(hash)
-                        .embedding(embedding)
+                        .embedding(embeddingString)
                         .metadata(Map.of("chunk_index", i, "source", source != null ? source : "raw_text"))
                         .build();
 
-                try {
-                    repository.save(docChunk);
-                    localStore.addToMemory(docChunk);
-                    savedCount++;
-                } catch (Exception e) {
-                    log.warn("Duplicate chunk for tenant {}: {}", tenantId, hash);
-                }
+                docChunks.add(docChunk);
             }
+
+            int savedCount = persistenceService.saveChunks(tenantId, docChunks);
 
             log.info("Text ingestion completed for tenant {}. Chunks: {}", tenantId, savedCount);
             status.put("status", "COMPLETED");
@@ -134,21 +122,6 @@ public class RagIngestionService {
                 return new String(is.readAllBytes(), StandardCharsets.UTF_8);
             }
         }
-    }
-
-    private List<String> chunkText(String text) {
-        // Primitive chunking logic (Simple but effective for 5 pages)
-        // For better results, use a proper Tokenizer
-        String[] words = text.split("\\s+");
-        List<String> chunks = new ArrayList<>();
-        
-        for (int i = 0; i < words.length; i += (CHUNK_SIZE - CHUNK_OVERLAP)) {
-            int end = Math.min(i + CHUNK_SIZE, words.length);
-            String chunk = String.join(" ", Arrays.copyOfRange(words, i, end));
-            chunks.add(chunk);
-            if (end == words.length) break;
-        }
-        return chunks;
     }
 
     private String hashContent(String content) throws Exception {

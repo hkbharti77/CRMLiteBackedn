@@ -1,0 +1,35 @@
+apiVersion: v2
+name: crmlite-service
+description: Standard Golden Path Helm chart for CRMLite services
+
+# Default values for all services
+values:
+  replicaCount: 2
+  image:
+    repository: crmlite/SERVICE_NAME
+    tag: latest
+    pullPolicy: Always
+  
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+    requests:
+      cpu: 100m
+      memory: 512Mi
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+  # Standardized Observability
+  metrics:
+    enabled: true
+    path: /actuator/prometheus
+    port: 8080
+
+  probes:
+    livenessPath: /actuator/health/liveness
+    readinessPath: /actuator/health/readiness

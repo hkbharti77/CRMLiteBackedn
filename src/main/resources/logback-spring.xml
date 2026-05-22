@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+
+    <!-- ══════════════════════════════════════════════════════════════════════
+         CRMLite Structured Logging Configuration
+         
+         IMPORTANT: Must include Spring Boot defaults.xml to register %clr,
+         %wEx and other Spring Boot Logback conversion words before use.
+         ═══════════════════════════════════════════════════════════════════ -->
+
+    <!-- Registers %clr, %wEx, %m, %logger etc. from Spring Boot -->
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="backend"/>
+
+    <!-- ── DEV / DEFAULT: Coloured console ──────────────────────────────── -->
+    <springProfile name="dev,default">
+        <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder>
+                <pattern>%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p){highlight} %clr([${appName:- },%X{traceId:-},%X{spanId:-}]){blue} %clr(%-40.40logger{39}){cyan} : %m%n%wEx</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+        <logger name="com.chatcrmlite" level="DEBUG"/>
+        <logger name="org.springframework.security" level="WARN"/>
+        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="io.lettuce" level="WARN"/>
+    </springProfile>
+
+    <!-- ── PRODUCTION: JSON to stdout (parsed by Docker / Loki) ─────────── -->
+    <springProfile name="prod">
+        <appender name="JSON_STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- Propagate MDC fields into every JSON log event -->
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <includeMdcKeyName>spanId</includeMdcKeyName>
+                <includeMdcKeyName>tenantId</includeMdcKeyName>
+                <includeMdcKeyName>messageId</includeMdcKeyName>
+                <includeMdcKeyName>userId</includeMdcKeyName>
+
+                <!-- Static fields added to every event -->
+                <customFields>{"app":"crmlite","environment":"production"}</customFields>
+
+                <!-- Shorten stack traces for readability in log dashboards -->
+                <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                    <maxDepthPerCause>10</maxDepthPerCause>
+                    <shortenedClassNameLength>20</shortenedClassNameLength>
+                    <exclude>^sun\.reflect\..*</exclude>
+                    <exclude>^java\.lang\.reflect\..*</exclude>
+                </throwableConverter>
+            </encoder>
+        </appender>
+
+        <!-- Async wrapper — reduces I/O blocking on hot request paths -->
+        <appender name="ASYNC_JSON" class="ch.qos.logback.classic.AsyncAppender">
+            <queueSize>2048</queueSize>
+            <discardingThreshold>0</discardingThreshold>
+            <appender-ref ref="JSON_STDOUT"/>
+        </appender>
+
+        <root level="WARN">
+            <appender-ref ref="ASYNC_JSON"/>
+        </root>
+        <logger name="com.chatcrmlite" level="INFO"/>
+        <logger name="org.flywaydb" level="INFO"/>
+        <logger name="org.hibernate" level="WARN"/>
+        <logger name="io.lettuce" level="WARN"/>
+        <logger name="org.springframework.data.redis" level="WARN"/>
+    </springProfile>
+
+</configuration>

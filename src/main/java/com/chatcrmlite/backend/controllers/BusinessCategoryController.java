@@ -6,7 +6,6 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.BusinessCategoryRepository;
 import com.chatcrmlite.backend.repositories.BusinessSubCategoryRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
-import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,8 +29,6 @@ public class BusinessCategoryController {
     @Autowired
     private UserRepository userRepository;
 
-    // ─── PUBLIC (read-only) ────────────────────────────────────────────
-    // Returns hierarchical structure: { categoryName: [subcat1, subcat2] }
     @GetMapping
     public ResponseEntity<?> getAllCategories() {
         List<BusinessCategory> categories = categoryRepository.findAll();
@@ -47,14 +44,11 @@ public class BusinessCategoryController {
         return ResponseEntity.ok(result);
     }
 
-    // Returns full category list with IDs (for management UI)
     @GetMapping("/details")
     public ResponseEntity<?> getAllCategoryDetails(@AuthenticationPrincipal String email) {
         requireOwnerOrAdmin(email);
         return ResponseEntity.ok(categoryRepository.findAll());
     }
-
-    // ─── OWNER / ADMIN ONLY ────────────────────────────────────────────
 
     @PostMapping
     public ResponseEntity<?> createCategory(
@@ -94,11 +88,9 @@ public class BusinessCategoryController {
         if (!categoryRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
         }
-        categoryRepository.deleteById(id); // Cascades to sub-categories
+        categoryRepository.deleteById(id);
         return ResponseEntity.ok("Category deleted successfully.");
     }
-
-    // ─── SUB-CATEGORY ENDPOINTS ────────────────────────────────────────
 
     @PostMapping("/{categoryId}/subcategories")
     public ResponseEntity<?> addSubCategory(
@@ -147,8 +139,6 @@ public class BusinessCategoryController {
         return ResponseEntity.ok("Sub-category deleted successfully.");
     }
 
-    // ─── HELPER ────────────────────────────────────────────────────────
-
     private void requireOwnerOrAdmin(String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -157,13 +147,19 @@ public class BusinessCategoryController {
         }
     }
 
-    @Data
     public static class CategoryRequest {
         private String name;
+        public CategoryRequest() {}
+        public CategoryRequest(String name) { this.name = name; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
     }
 
-    @Data
     public static class SubCategoryRequest {
         private String name;
+        public SubCategoryRequest() {}
+        public SubCategoryRequest(String name) { this.name = name; }
+        public String getName() { return name; }
+        public void setName(String name) { this.name = name; }
     }
 }

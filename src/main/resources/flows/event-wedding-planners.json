@@ -6,12 +6,26 @@
       "question": "🎉 What type of event are you planning?",
       "usesButtons": true,
       "dynamicSource": true,
-      "options": ["Wedding", "Corporate", "Birthday Party"]
+      "options": ["Wedding", "Corporate Event", "Birthday Party", "Engagement", "Social Gathering"]
     },
     {
       "dataKey": "guest_count",
       "question": "👥 Expected number of guests?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Under 50", "50–200", "200–500", "500+"]
+    },
+    {
+      "dataKey": "city",
+      "question": "📍 Which city will the event be held in?",
       "usesButtons": false
+    },
+    {
+      "dataKey": "budget_range",
+      "question": "💰 What is your approximate budget for the event?",
+      "usesButtons": true,
+      "usesList": true,
+      "options": ["Under ₹2L", "₹2L – ₹10L", "₹10L – ₹50L", "Above ₹50L"]
     },
     {
       "dataKey": "event_date",
