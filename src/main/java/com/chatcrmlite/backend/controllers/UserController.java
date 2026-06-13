@@ -155,6 +155,7 @@ public class UserController {
     }
 
     @GetMapping("/me/export-data")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> exportData(@AuthenticationPrincipal String email) {
         User user = userRepository.findByEmail(email).orElseThrow();
         List<Lead> leads = leadRepository.findAllByOwner(user);

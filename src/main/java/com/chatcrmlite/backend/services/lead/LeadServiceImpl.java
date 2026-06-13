@@ -58,7 +58,12 @@ public class LeadServiceImpl implements LeadService {
     public List<Lead> getLeadsByContactId(UUID contactId, User owner) {
         Contact contact = contactRepository.findById(contactId)
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
-        return leadRepository.findAllByContactAndOwnerOptimized(contact, owner);
+        List<Lead> leads = leadRepository.findAllByContactAndOwnerOptimized(contact, owner);
+        // Initialize lazy relationships to avoid LazyInitializationException outside transaction
+        leads.forEach(lead -> {
+            lead.getContact().getTags().size();  // Force load lazy collection
+        });
+        return leads;
     }
 
     @Override
@@ -66,10 +71,13 @@ public class LeadServiceImpl implements LeadService {
     public Lead getLatestLeadByContactId(UUID contactId, User owner) {
         Contact contact = contactRepository.findById(contactId)
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
-        return leadRepository.findAllByContact(contact).stream()
+        Lead lead = leadRepository.findAllByContact(contact).stream()
                 .filter(l -> l.getOwner().getId().equals(owner.getId()))
                 .max(java.util.Comparator.comparing(Lead::getCreatedAt))
                 .orElseThrow(() -> new RuntimeException("No lead found for this contact"));
+        // Initialize lazy relationships to avoid LazyInitializationException outside transaction
+        lead.getContact().getTags().size();  // Force load lazy collection
+        return lead;
     }
 
     @Override
@@ -101,7 +109,12 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Cacheable(value = "leadsByStatus", key = "#status + '_' + #user.id")
     public List<Lead> getLeadsByStatus(Lead.LeadStatus status, User user) {
-        return leadRepository.findAllByStatusAndOwner(status, user);
+        List<Lead> leads = leadRepository.findAllByStatusAndOwner(status, user);
+        // Initialize lazy relationships to avoid LazyInitializationException outside transaction
+        leads.forEach(lead -> {
+            lead.getContact().getTags().size();  // Force load lazy collection
+        });
+        return leads;
     }
 
     @Override

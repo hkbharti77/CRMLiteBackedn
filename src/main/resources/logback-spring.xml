@@ -13,8 +13,9 @@
 
     <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="backend"/>
 
-    <!-- ── DEV / DEFAULT: Coloured console ──────────────────────────────── -->
+    <!-- ── DEV / DEFAULT: Console + Separate log files ──────────────────── -->
     <springProfile name="dev,default">
+        <!-- Console output -->
         <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
             <encoder>
                 <pattern>%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p){highlight} %clr([${appName:- },%X{traceId:-},%X{spanId:-}]){blue} %clr(%-40.40logger{39}){cyan} : %m%n%wEx</pattern>
@@ -22,13 +23,86 @@
             </encoder>
         </appender>
 
+        <!-- SUCCESS logs (INFO level) -->
+        <appender name="SUCCESS_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/success.log</file>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>INFO</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} : %msg%n%wEx</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/success.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>10MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>100MB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <!-- WARNING logs -->
+        <appender name="WARN_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/warning.log</file>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>WARN</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} : %msg%n%wEx</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/warning.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>10MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>100MB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <!-- ERROR logs -->
+        <appender name="ERROR_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+            <file>logs/error.log</file>
+            <filter class="ch.qos.logback.classic.filter.LevelFilter">
+                <level>ERROR</level>
+                <onMatch>ACCEPT</onMatch>
+                <onMismatch>DENY</onMismatch>
+            </filter>
+            <encoder>
+                <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} : %msg%n%wEx</pattern>
+                <charset>UTF-8</charset>
+            </encoder>
+            <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+                <fileNamePattern>logs/error.%d{yyyy-MM-dd}.%i.log</fileNamePattern>
+                <maxFileSize>10MB</maxFileSize>
+                <maxHistory>7</maxHistory>
+                <totalSizeCap>100MB</totalSizeCap>
+            </rollingPolicy>
+        </appender>
+
+        <!-- Root logger -->
         <root level="INFO">
             <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="SUCCESS_FILE"/>
+            <appender-ref ref="WARN_FILE"/>
+            <appender-ref ref="ERROR_FILE"/>
         </root>
-        <logger name="com.chatcrmlite" level="DEBUG"/>
+
+        <!-- Show application logs at INFO level -->
+        <logger name="com.chatcrmlite" level="INFO"/>
+        <!-- Suppress verbose logs from dependencies -->
         <logger name="org.springframework.security" level="WARN"/>
-        <logger name="org.hibernate.SQL" level="DEBUG"/>
+        <logger name="org.springframework.web" level="WARN"/>
+        <logger name="org.springframework.boot" level="WARN"/>
+        <logger name="org.springframework.data" level="WARN"/>
+        <logger name="org.hibernate" level="ERROR"/>
+        <logger name="org.hibernate.SQL" level="WARN"/>
         <logger name="io.lettuce" level="WARN"/>
+        <logger name="org.flywaydb" level="WARN"/>
+        <logger name="org.postgresql" level="WARN"/>
     </springProfile>
 
     <!-- ── PRODUCTION: JSON to stdout (parsed by Docker / Loki) ─────────── -->

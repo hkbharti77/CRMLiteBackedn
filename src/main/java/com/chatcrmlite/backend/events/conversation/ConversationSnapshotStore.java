@@ -1,8 +1,8 @@
 package com.chatcrmlite.backend.events.conversation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.persistence.*;
-import lombok.*;
+import jakarta.persistence.EntityManager;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,21 +39,5 @@ public class ConversationSnapshotStore {
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize snapshot", e);
         }
-    }
-
-    @Entity
-    @Table(name = "conversation_snapshots")
-    @Getter @Setter
-    public static class SnapshotEntity {
-        @Id
-        private UUID conversationId;
-        
-        @Column(nullable = false)
-        private int version;
-        
-        @Column(columnDefinition = "jsonb", nullable = false)
-        private String state;
-        
-        private java.time.LocalDateTime createdAt = java.time.LocalDateTime.now();
     }
 }

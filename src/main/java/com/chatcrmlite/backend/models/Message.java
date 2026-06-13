@@ -16,7 +16,7 @@ public class Message extends BaseTenantEntity {
     @Column(nullable = false, unique = true)
     private String waMessageId; // ID from Meta
 
-    @ElementCollection
+    @ElementCollection(fetch = FetchType.EAGER)
     private List<String> tags = new ArrayList<>();
 
     @ManyToOne(fetch = FetchType.LAZY)

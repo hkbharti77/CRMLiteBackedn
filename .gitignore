@@ -11,3 +11,51 @@ target/
 backend_start.log
 compile_log.txt
 run_log.txt
+
+# Database files - exclude local postgres data
+postgres_data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Documentation - exclude generated audit and analysis files
+docs/audit/
+docs/deep_systems_audit/
+docs/project-docs/
+*_AUDIT.md
+*_ANALYSIS.md
+ARCHITECTURE_AUDIT.md
+TECH_STACK.md
+REFACTOR_ROADMAP.md
+PRODUCTION_READINESS_REPORT.md
+
+# Log files
+logs/
+*.err.log
+*.out.log
+
+# Environment files
+.env.local
+.env.*.local
+
+# Build artifacts
+build/
+dist/
+out/
+
+# IDE specific files
+*.swp
+*.swo
+*~
+.project
+.classpath
+.c9/
+
+# OS files
+Thumbs.db
+.AppleDouble
+.LSOverride
+
+# Node modules (if any frontend code in backend)
+node_modules/
+package-lock.json

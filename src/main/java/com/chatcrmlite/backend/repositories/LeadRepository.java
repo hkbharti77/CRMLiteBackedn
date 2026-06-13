@@ -14,11 +14,22 @@ import org.springframework.data.repository.query.Param;
 
 public interface LeadRepository extends JpaRepository<Lead, UUID> {
     List<Lead> findAllByOwner(User owner);
-    List<Lead> findAllByStatusAndOwner(Lead.LeadStatus status, User owner);
+    /** Optimized: fetch leads by status with contact and tags eagerly to avoid lazy initialization */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.status = :status AND l.owner = :owner " +
+           "ORDER BY l.lastActivity DESC")
+    List<Lead> findAllByStatusAndOwner(@Param("status") Lead.LeadStatus status, @Param("owner") User owner);
     List<Lead> findAllByOwnerAndDeletedTrue(User owner);
 
-    /** All leads for a contact (multiple leads per contact supported) */
-    List<Lead> findAllByContact(Contact contact);
+    /** All leads for a contact (multiple leads per contact supported) — eager-load tags */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE c = :contact " +
+           "ORDER BY l.createdAt DESC")
+    List<Lead> findAllByContact(@Param("contact") Contact contact);
 
     /** Latest lead for a contact — used for quick status checks */
     Optional<Lead> findTopByContactOrderByCreatedAtDesc(Contact contact);
@@ -27,9 +38,13 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     Optional<Lead> findTopByContactAndStatusNotInOrderByCreatedAtDesc(
             Contact contact, List<Lead.LeadStatus> excludedStatuses);
 
-    /** Paginated leads for a user — used by performance-optimized endpoints */
-    @Query("SELECT l FROM Lead l WHERE l.owner = :owner")
-    Page<Lead> findAllByOwnerPaged(User owner, Pageable pageable);
+    /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.owner = :owner " +
+           "ORDER BY l.lastActivity DESC")
+    Page<Lead> findAllByOwnerPaged(@Param("owner") User owner, Pageable pageable);
 
     /** Optimized: fetch leads with contact eagerly to avoid N+1 queries */
     @Query("SELECT l FROM Lead l JOIN FETCH l.contact WHERE l.owner = :owner ORDER BY l.lastActivity DESC")
@@ -43,8 +58,12 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
            "ORDER BY l.lastActivity DESC")
     List<Lead> findAllByOwnerWithContactAndTags(@Param("owner") User owner);
 
-    /** Optimized: fetch all leads for a contact with owner in one query */
-    @Query("SELECT l FROM Lead l JOIN FETCH l.contact c WHERE c = :contact AND l.owner = :owner ORDER BY l.createdAt DESC")
+    /** Optimized: fetch all leads for a contact with owner and tags in one query */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE c = :contact AND l.owner = :owner " +
+           "ORDER BY l.createdAt DESC")
     List<Lead> findAllByContactAndOwnerOptimized(@Param("contact") Contact contact, @Param("owner") User owner);
 
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.contact = :contact AND l.owner = :owner AND l.status NOT IN :excludedStatuses")

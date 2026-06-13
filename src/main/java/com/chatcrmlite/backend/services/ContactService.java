@@ -60,7 +60,7 @@ public class ContactService {
                 .map(msg -> MessageDTO.builder()
                         .id(msg.getId())
                         .content(msg.getContent())
-                        .direction(msg.getDirection())
+                        .direction(msg.getDirection().toString())
                         .timestamp(msg.getTimestamp())
                         .waMessageId(msg.getWaMessageId())
                         .build())

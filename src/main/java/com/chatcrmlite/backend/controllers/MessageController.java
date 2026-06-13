@@ -32,6 +32,7 @@ public class MessageController {
     private WhatsAppMessageService whatsappMessageService;
 
     @GetMapping("/chats")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<Map<String, Object>>> getActiveChats(@AuthenticationPrincipal String email) {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
@@ -58,6 +59,7 @@ public class MessageController {
     }
 
     @GetMapping("/{contactId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<Message>> getMessageHistory(
             @PathVariable UUID contactId,
             @AuthenticationPrincipal String email) {

@@ -48,6 +48,7 @@ public class LeadController {
 
     /** GET /api/v1/leads/paged?page=0&size=20 — paginated for large datasets */
     @GetMapping("/paged")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getLeadsPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -63,6 +64,7 @@ public class LeadController {
     }
 
     @GetMapping("/status/{status}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(leadService.getLeadsByStatus(status, user)
@@ -71,6 +73,7 @@ public class LeadController {
 
     /** GET /api/v1/leads/contact/{contactId} — ALL leads for a contact */
     @GetMapping("/contact/{contactId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<LeadDTO>> getLeadsByContact(@PathVariable UUID contactId) {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(leadService.getLeadsByContactId(contactId, user)
@@ -79,6 +82,7 @@ public class LeadController {
 
     /** GET /api/v1/leads/contact/{contactId}/latest — most recent lead */
     @GetMapping("/contact/{contactId}/latest")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> getLatestLeadByContact(@PathVariable UUID contactId) {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(toDTO(leadService.getLatestLeadByContactId(contactId, user), user));
@@ -92,6 +96,7 @@ public class LeadController {
     // ── Status ─────────────────────────────────────────────────────────────
 
     @PatchMapping("/{id}/status")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> updateStatus(
             @PathVariable UUID id,
             @RequestParam Lead.LeadStatus status) {
@@ -109,6 +114,7 @@ public class LeadController {
 
     /** POST /api/v1/leads/{id}/enquiries — add a new enquiry */
     @PostMapping("/{id}/enquiries")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> addEnquiry(
             @PathVariable UUID id,
             @RequestBody EnquiryRequest req) {
@@ -119,6 +125,7 @@ public class LeadController {
 
     /** PATCH /api/v1/leads/{id}/enquiries/{enquiryId} — update an enquiry */
     @PatchMapping("/{id}/enquiries/{enquiryId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> updateEnquiry(
             @PathVariable UUID id,
             @PathVariable String enquiryId,
@@ -130,6 +137,7 @@ public class LeadController {
 
     /** DELETE /api/v1/leads/{id}/enquiries/{enquiryId} — delete an enquiry */
     @DeleteMapping("/{id}/enquiries/{enquiryId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> deleteEnquiry(
             @PathVariable UUID id,
             @PathVariable String enquiryId) {
@@ -141,6 +149,7 @@ public class LeadController {
     // ── Deal ───────────────────────────────────────────────────────────────
 
     @PatchMapping("/{id}/deal")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> updateDeal(
             @PathVariable UUID id,
             @RequestBody DealUpdateDTO dto) {
