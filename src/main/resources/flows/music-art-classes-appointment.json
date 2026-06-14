@@ -1,0 +1,24 @@
+{
+  "flowType": "APPOINTMENT",
+  "steps": [
+    {
+      "dataKey": "visit",
+      "question": "🎵 Would you like to schedule a studio tour or a free trial class?",
+      "usesButtons": true,
+      "options": [
+        "Studio Tour",
+        "Free Trial Class"
+      ]
+    },
+    {
+      "dataKey": "date_time",
+      "question": "📅 Preferred date and time?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for confirmation:",
+      "usesButtons": false
+    }
+  ]
+}

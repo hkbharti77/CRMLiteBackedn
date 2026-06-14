@@ -1,0 +1,26 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "shoot",
+      "question": "📸 What type of photography are you looking for?",
+      "usesButtons": true,
+      "options": [
+        "Wedding",
+        "Portrait/Portfolio",
+        "Maternity",
+        "Corporate"
+      ]
+    },
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email to receive our portfolio and rates:",
+      "usesButtons": false
+    }
+  ]
+}

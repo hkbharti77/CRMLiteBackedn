@@ -1,0 +1,24 @@
+{
+  "flowType": "APPOINTMENT",
+  "steps": [
+    {
+      "dataKey": "visit",
+      "question": "📐 Would you like an office consultation or a site visit?",
+      "usesButtons": true,
+      "options": [
+        "Office Consultation",
+        "Site Visit"
+      ]
+    },
+    {
+      "dataKey": "date_time",
+      "question": "📅 When should we schedule this?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for the appointment confirmation:",
+      "usesButtons": false
+    }
+  ]
+}

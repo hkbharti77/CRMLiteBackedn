@@ -24,12 +24,43 @@ public class FlowConfigService {
     }
 
     public FlowConfigDTO getFlowConfig(User user) {
+        return getFlowConfig(user, null);
+    }
+
+    public FlowConfigDTO getFlowConfig(User user, String explicitSuffix) {
         String slug = FlowTriggerEngine.toSlug(user.getBusinessSubType());
-        FlowConfigDTO config = loadFlow(slug);
+        String suffix = "";
+
+        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
+            suffix = "-" + explicitSuffix.toLowerCase();
+        } else if (user != null) {
+            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
+                suffix = "-appointment";
+            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
+                suffix = "-booking";
+            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
+                suffix = "-lead";
+            }
+        }
+
+        FlowConfigDTO config = null;
+        
+        // Try specific module flow first
+        if (!suffix.isEmpty()) {
+            config = loadFlow(slug + suffix);
+        }
+        
+        // Fallback to base niche flow
+        if (config == null) {
+            config = loadFlow(slug);
+        }
+
+        // Fallback to generic flow
         if (config == null) {
             log.warn("[FlowConfigService] No flow found for slug='{}', falling back to generic", slug);
             config = loadFlow("generic");
         }
+        
         if (config == null) {
             log.error("[FlowConfigService] generic.json missing from classpath — returning empty config");
             return FlowConfigDTO.builder().flowType("ENQUIRY").build();

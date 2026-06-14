@@ -1,0 +1,25 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "session",
+      "question": "💆 Which specific therapy session are you booking?",
+      "usesButtons": true,
+      "options": [
+        "Spinal Adjustment",
+        "Deep Tissue Therapy",
+        "Rehab Session"
+      ]
+    },
+    {
+      "dataKey": "date",
+      "question": "📅 Select your session date:",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for booking confirmation:",
+      "usesButtons": false
+    }
+  ]
+}

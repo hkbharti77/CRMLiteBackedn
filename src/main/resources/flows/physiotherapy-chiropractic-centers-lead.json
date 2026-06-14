@@ -1,0 +1,26 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "pain_area",
+      "question": "🦴 Where are you experiencing pain or discomfort?",
+      "usesButtons": true,
+      "options": [
+        "Back/Neck",
+        "Joints (Knee/Shoulder)",
+        "Sports Injury",
+        "Post-Surgery"
+      ]
+    },
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for our therapy brochure:",
+      "usesButtons": false
+    }
+  ]
+}

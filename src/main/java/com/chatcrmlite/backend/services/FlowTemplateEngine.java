@@ -34,17 +34,55 @@ public class FlowTemplateEngine {
 
     public FlowTemplateEngine() {}
 
-    public String getTriggerButtonLabel(String subCategoryName) {
-        return getLabels(subCategoryName).trigger();
+    public String getTriggerButtonLabel(com.chatcrmlite.backend.models.User user) {
+        return getTriggerButtonLabel(user, null);
     }
 
-    public String getServicesLabel(String subCategoryName) {
+    public String getTriggerButtonLabel(com.chatcrmlite.backend.models.User user, String explicitSuffix) {
+        String subCategoryName = user != null ? user.getBusinessSubType() : null;
+        String baseLabel = getLabels(subCategoryName).trigger();
+        String emoji = extractEmoji(baseLabel);
+        
+        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
+            if (explicitSuffix.equalsIgnoreCase("appointment")) {
+                return emoji + "Book Appointment";
+            } else if (explicitSuffix.equalsIgnoreCase("booking")) {
+                return emoji + "Book Service";
+            } else if (explicitSuffix.equalsIgnoreCase("lead")) {
+                return emoji + "Enquire Now";
+            }
+        }
+        
+        if (user != null) {
+            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
+                return emoji + "Book Appointment";
+            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
+                return emoji + "Book Service";
+            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
+                return emoji + "Enquire Now";
+            }
+        }
+        return baseLabel;
+    }
+
+    public String getServicesLabel(com.chatcrmlite.backend.models.User user) {
+        String subCategoryName = user != null ? user.getBusinessSubType() : null;
         return getLabels(subCategoryName).services();
     }
 
-    public String getTriggerListLabel(String subCategoryName) {
-        String label = getTriggerButtonLabel(subCategoryName);
+    public String getTriggerListLabel(com.chatcrmlite.backend.models.User user) {
+        String label = getTriggerButtonLabel(user);
         return label.length() > 24 ? label.substring(0, 24) : label;
+    }
+    
+    private String extractEmoji(String label) {
+        if (label == null || label.isBlank()) return "";
+        int spaceIdx = label.indexOf(" ");
+        // simple heuristic: if there's a space in the first 4 chars, assume the prefix is an emoji
+        if (spaceIdx > 0 && spaceIdx <= 4) {
+            return label.substring(0, spaceIdx) + " ";
+        }
+        return "";
     }
 
     private LabelPair getLabels(String subCategoryName) {

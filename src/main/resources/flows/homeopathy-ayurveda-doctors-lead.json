@@ -1,0 +1,20 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "concern",
+      "question": "🌿 What health concern are you seeking alternative treatment for?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email address to receive more information:",
+      "usesButtons": false
+    }
+  ]
+}

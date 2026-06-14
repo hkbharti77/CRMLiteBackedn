@@ -38,6 +38,10 @@ public class Tenant implements Serializable {
     @Column(nullable = false)
     private Boolean onboardingCompleted = false;
 
+    private Boolean forceShowBooking = null;
+    private Boolean forceShowAppointment = null;
+    private Boolean forceShowLeads = null;
+
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -50,7 +54,7 @@ public class Tenant implements Serializable {
 
     public Tenant() {}
 
-    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users) {
+    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, Boolean forceShowBooking, Boolean forceShowAppointment, Boolean forceShowLeads, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users) {
         this.id = id;
         this.businessName = businessName;
         this.businessType = businessType;
@@ -62,6 +66,9 @@ public class Tenant implements Serializable {
         this.logoUrl = logoUrl;
         this.planType = planType != null ? planType : User.PlanType.FREE;
         this.onboardingCompleted = onboardingCompleted != null ? onboardingCompleted : false;
+        this.forceShowBooking = forceShowBooking;
+        this.forceShowAppointment = forceShowAppointment;
+        this.forceShowLeads = forceShowLeads;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.whatsappConfig = whatsappConfig;
         this.users = users != null ? users : new HashSet<>();
@@ -100,6 +107,15 @@ public class Tenant implements Serializable {
     public Boolean getOnboardingCompleted() { return onboardingCompleted; }
     public void setOnboardingCompleted(Boolean onboardingCompleted) { this.onboardingCompleted = onboardingCompleted; }
 
+    public Boolean getForceShowBooking() { return forceShowBooking; }
+    public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
+
+    public Boolean getForceShowAppointment() { return forceShowAppointment; }
+    public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
+
+    public Boolean getForceShowLeads() { return forceShowLeads; }
+    public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -123,6 +139,9 @@ public class Tenant implements Serializable {
         private String logoUrl;
         private User.PlanType planType = User.PlanType.FREE;
         private Boolean onboardingCompleted = false;
+        private Boolean forceShowBooking;
+        private Boolean forceShowAppointment;
+        private Boolean forceShowLeads;
         private LocalDateTime createdAt;
         private WhatsAppConfig whatsappConfig;
         private Set<User> users;
@@ -138,12 +157,15 @@ public class Tenant implements Serializable {
         public TenantBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
         public TenantBuilder planType(User.PlanType planType) { this.planType = planType; return this; }
         public TenantBuilder onboardingCompleted(Boolean onboardingCompleted) { this.onboardingCompleted = onboardingCompleted; return this; }
+        public TenantBuilder forceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; return this; }
+        public TenantBuilder forceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; return this; }
+        public TenantBuilder forceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; return this; }
         public TenantBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public TenantBuilder whatsappConfig(WhatsAppConfig whatsappConfig) { this.whatsappConfig = whatsappConfig; return this; }
         public TenantBuilder users(Set<User> users) { this.users = users; return this; }
 
         public Tenant build() {
-            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, createdAt, whatsappConfig, users);
+            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, createdAt, whatsappConfig, users);
         }
     }
 }

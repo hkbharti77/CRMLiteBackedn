@@ -52,6 +52,10 @@ public class FlowDefinitionLoader {
      * Returns empty if nothing is found at all.
      */
     public Optional<FlowMachineDef> resolveFlowMachineDef(User owner) {
+        return resolveFlowMachineDef(owner, null);
+    }
+
+    public Optional<FlowMachineDef> resolveFlowMachineDef(User owner, String explicitSuffix) {
         // 1 & 2 — check DB first (tenant-scoped, then global)
         for (ConversationState.FlowType type : ConversationState.FlowType.values()) {
             Optional<FlowDefinition> dbDef = flowDefinitionRepository
@@ -66,7 +70,7 @@ public class FlowDefinitionLoader {
         }
 
         // 3 & 4 — fall back to classpath JSON files
-        FlowConfigDTO config = flowConfigService.getFlowConfig(owner);
+        FlowConfigDTO config = flowConfigService.getFlowConfig(owner, explicitSuffix);
         if (config == null || config.getSteps() == null || config.getSteps().isEmpty()) {
             log.warn("[FlowLoader] No flow config found for owner={}", owner.getId());
             return Optional.empty();

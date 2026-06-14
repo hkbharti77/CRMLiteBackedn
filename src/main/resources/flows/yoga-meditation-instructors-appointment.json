@@ -1,0 +1,24 @@
+{
+  "flowType": "APPOINTMENT",
+  "steps": [
+    {
+      "dataKey": "trial",
+      "question": "🕉️ Would you like to schedule a 1-on-1 assessment or a free trial class?",
+      "usesButtons": true,
+      "options": [
+        "1-on-1 Assessment",
+        "Free Trial Class"
+      ]
+    },
+    {
+      "dataKey": "date_time",
+      "question": "📅 When would you like to attend?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email to confirm your spot:",
+      "usesButtons": false
+    }
+  ]
+}

@@ -76,6 +76,11 @@ public class UserController {
         if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
         if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
         if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
+        
+        // Manual module overrides
+        if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
+        if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
+        if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
 
         userRepository.save(user);
 
@@ -310,6 +315,9 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private Boolean forceShowBooking;
+        private Boolean forceShowAppointment;
+        private Boolean forceShowLeads;
 
         public UpdateUserRequest() {}
         public String getDisplayName() { return displayName; }
@@ -332,6 +340,12 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public Boolean getForceShowBooking() { return forceShowBooking; }
+        public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
+        public Boolean getForceShowAppointment() { return forceShowAppointment; }
+        public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
+        public Boolean getForceShowLeads() { return forceShowLeads; }
+        public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
     }
 
     public static class UserProfileDto {
@@ -347,6 +361,9 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private Boolean forceShowBooking;
+        private Boolean forceShowAppointment;
+        private Boolean forceShowLeads;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -373,6 +390,12 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public Boolean getForceShowBooking() { return forceShowBooking; }
+        public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
+        public Boolean getForceShowAppointment() { return forceShowAppointment; }
+        public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
+        public Boolean getForceShowLeads() { return forceShowLeads; }
+        public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
 
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
@@ -388,6 +411,9 @@ public class UserController {
             dto.setLatitude(user.getLatitude());
             dto.setLongitude(user.getLongitude());
             dto.setLogoUrl(user.getLogoUrl());
+            dto.setForceShowBooking(user.getForceShowBooking());
+            dto.setForceShowAppointment(user.getForceShowAppointment());
+            dto.setForceShowLeads(user.getForceShowLeads());
             return dto;
         }
     }

@@ -1,0 +1,20 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "service_type",
+      "question": "📦 Which service would you like to book?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "date",
+      "question": "📅 Select the date for your booking:",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for the booking receipt:",
+      "usesButtons": false
+    }
+  ]
+}

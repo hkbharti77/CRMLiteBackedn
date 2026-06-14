@@ -1,0 +1,25 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "vehicle",
+      "question": "🚗 Which specific vehicle model are you booking/reserving?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "booking_amount",
+      "question": "💰 What is your intended token/booking amount?",
+      "usesButtons": true,
+      "options": [
+        "₹10,000",
+        "₹25,000",
+        "₹50,000+"
+      ]
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Please provide your email for the booking receipt:",
+      "usesButtons": false
+    }
+  ]
+}

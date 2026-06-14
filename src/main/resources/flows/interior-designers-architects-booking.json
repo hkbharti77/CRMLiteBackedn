@@ -1,0 +1,25 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "service",
+      "question": "🛋️ Which design service are you officially booking?",
+      "usesButtons": true,
+      "options": [
+        "Full Home Interior",
+        "Single Room Makeover",
+        "Architectural Plan"
+      ]
+    },
+    {
+      "dataKey": "start_date",
+      "question": "📅 When is the project start date?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for the contract and initial invoice:",
+      "usesButtons": false
+    }
+  ]
+}

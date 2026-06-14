@@ -1,0 +1,25 @@
+{
+  "flowType": "BOOKING",
+  "steps": [
+    {
+      "dataKey": "subject",
+      "question": "📖 Which subject or course package are you booking?",
+      "usesButtons": true,
+      "options": [
+        "Math/Science Pack",
+        "Language Pack",
+        "Test Prep (SAT/ACT)"
+      ]
+    },
+    {
+      "dataKey": "start_date",
+      "question": "📅 When would you like the tutoring to begin?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email for enrollment details:",
+      "usesButtons": false
+    }
+  ]
+}

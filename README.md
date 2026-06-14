@@ -11,6 +11,7 @@
 
 ## 📋 Table of Contents
 
+- [🌟 About The Project](#-about-the-project)
 - [🎯 Features](#-features)
 - [🏗️ Architecture](#-architecture)
 - [🔧 Tech Stack](#-tech-stack)
@@ -20,6 +21,17 @@
 - [📊 API Endpoints](#-api-endpoints)
 - [🐛 Troubleshooting](#-troubleshooting)
 - [📝 Contributing](#-contributing)
+
+---
+
+## 🌟 About The Project
+
+**CRMLite** is a full-stack, multi-tenant CRM application powered by Spring Boot and React Native, seamlessly integrated with the Meta WhatsApp API. It automates customer interactions through dynamic WhatsApp menus, captures leads in real-time, and provides business owners with a centralized mobile dashboard to manage chats, appointments, and support tickets, significantly boosting their operational efficiency.
+
+### 💡 How it works:
+- **Customer Side:** Customers interact with a business directly through WhatsApp—no app download required. The backend automatically replies with dynamic, interactive WhatsApp menus (e.g., "Book Appointment", "Get Support").
+- **Business Side:** Business owners use the CRMLite mobile app to monitor live chats, manage auto-captured leads, and reply to customers in real-time using WebSockets. 
+- **Automation:** It offers 24/7 automation, ensuring that businesses never miss a potential lead, even outside working hours.
 
 ---
 
@@ -94,13 +106,13 @@
 
 ## ⚙️ Installation
 
-### Prerequisites
+### 📋 Prerequisites
 ```bash
-✓ Java 21+
-✓ Maven 3.8+
-✓ PostgreSQL 17+
-✓ Docker & Docker Compose (optional)
-✓ Git
+✅ Java 21+
+✅ Maven 3.8+
+✅ PostgreSQL 17+
+✅ Docker & Docker Compose (optional)
+✅ Git
 ```
 
 ### 1️⃣ Clone Repository
@@ -130,15 +142,15 @@ docker-compose -f docker-compose.yml up -d postgres redis
 mvn spring-boot:run
 ```
 
-✅ Server running on `http://localhost:8080`
+✅ **Server running on** `http://localhost:8080`
 
 ---
 
 ## 🚀 Quick Start
 
-### API Authentication
+### 🔐 API Authentication
 ```bash
-# Get JWT Token
+# 🔑 Get JWT Token
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -147,7 +159,7 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
   }'
 ```
 
-### Create a Lead
+### 👥 Create a Lead
 ```bash
 curl -X POST http://localhost:8080/api/v1/leads \
   -H "Authorization: Bearer YOUR_JWT_TOKEN" \
@@ -160,19 +172,19 @@ curl -X POST http://localhost:8080/api/v1/leads \
   }'
 ```
 
-### WebSocket Connection
+### ⚡ WebSocket Connection
 ```javascript
-// Connect to real-time chat
+// 🔗 Connect to real-time chat
 const ws = new WebSocket('ws://localhost:8080/ws/chat');
 
 ws.onmessage = (event) => {
-  console.log('Message:', event.data);
+  console.log('📨 Message:', event.data);
 };
 
 ws.send(JSON.stringify({
   type: 'MESSAGE',
   contactId: 'uuid',
-  content: 'Hello!'
+  content: 'Hello! 👋'
 }));
 ```
 
@@ -180,114 +192,29 @@ ws.send(JSON.stringify({
 
 ## 🛠️ Recent Updates
 
-### 🔥 Hibernate LazyInitializationException Fix (Latest)
+### 🔥 WhatsApp Multi-Flow Dynamic Menus (Latest)
 
-#### Problem 🚨
-```
-org.hibernate.LazyInitializationException: 
-failed to lazily initialize a collection of role: 
-com.chatcrmlite.backend.models.Message.tags: 
-could not initialize proxy - no Session
-```
+#### Feature 📱
+Added full support for concurrently hosting multiple business modules (Leads, Appointments, Bookings) within the same WhatsApp interaction menu.
 
-**Root Cause:** Lazy-loaded collections and relationships accessed after Hibernate session closure.
-
-#### Solution ✅
-
-##### 1️⃣ **Added @Transactional to Controllers**
-```java
-@GetMapping("/contact/{contactId}/latest")
-@Transactional(readOnly = true)  // ← FIXED
-public ResponseEntity<LeadDTO> getLatestLeadByContact(
-    @PathVariable UUID contactId) {
-  // Session stays open during DTO conversion
-}
-```
-
-**Impact:** 9 controller methods now keep sessions open ✓
-
-##### 2️⃣ **Changed Lazy to Eager Loading**
-```java
-@Entity
-public class Message {
-    @ElementCollection(fetch = FetchType.EAGER)  // ← FIXED
-    private List<String> tags = new ArrayList<>();
-}
-```
-
-**Result:** Tags loaded immediately without N+1 queries ✓
-
-##### 3️⃣ **Optimized Repository Queries**
-```java
-@Query("SELECT DISTINCT l FROM Lead l " +
-       "JOIN FETCH l.contact c " +
-       "LEFT JOIN FETCH c.tags " +  // ← FIXED
-       "WHERE l.owner = :owner")
-List<Lead> findAllByOwnerWithContactAndTags(@Param("owner") User owner);
-```
-
-**Performance:** Single query instead of N+1 ✓
-
-##### 4️⃣ **Service Layer Initialization**
-```java
-@Override
-@Cacheable(value = "leadsByStatus")
-public List<Lead> getLeadsByStatus(Lead.LeadStatus status, User user) {
-    List<Lead> leads = leadRepository.findAllByStatusAndOwner(status, user);
-    // Force initialize lazy collections before caching
-    leads.forEach(lead -> lead.getContact().getTags().size());  // ← FIXED
-    return leads;
-}
-```
-
-**Benefit:** Cached entities don't cause lazy loading errors ✓
-
-##### 5️⃣ **Fixed Entity Scanning Issue**
-```java
-// BEFORE (nested class) ❌
-public class ConversationSnapshotStore {
-    @Entity
-    public static class SnapshotEntity { }
-}
-
-// AFTER (standalone class) ✅
-@Entity
-public class SnapshotEntity { }
-```
-
-**Resolved:** Hibernate properly scans entity classes ✓
-
-#### Endpoints Fixed 🎯
-| Endpoint | Status | Method |
-|----------|--------|--------|
-| `GET /api/v1/leads` | ✅ Fixed | List all leads |
-| `GET /api/v1/leads/paged` | ✅ Fixed | Paginated results |
-| `GET /api/v1/leads/contact/{id}` | ✅ Fixed | Leads by contact |
-| `GET /api/v1/leads/contact/{id}/latest` | ✅ Fixed | Latest lead |
-| `GET /api/v1/messages/{contactId}` | ✅ Fixed | Chat history |
-| `PATCH /api/v1/leads/{id}/status` | ✅ Fixed | Update status |
-
-#### Performance Impact 📊
-- **Before:** N+1 queries + LazyInitializationException errors
-- **After:** 
-  - ✅ Single optimized query per request
-  - ✅ 60% reduction in database queries
-  - ✅ ~300ms faster response times
-  - ✅ Zero lazy loading exceptions
+#### Enhancements ✅
+- **Dynamic Module Aggregation**: Backend automatically determines the tenant's primary flow based on their business category and forcefully merges it with any additional modules toggled via the frontend.
+- **Smart Menu Scaling**: If the total number of menu options exceeds WhatsApp's limit of 3 buttons, the backend automatically converts the `interactive` message type from a Button Menu to a List Menu.
+- **Backwards Compatibility**: Custom JSON menus saved previously are automatically parsed, and single hardcoded `trigger_flow` buttons are dynamically expanded to include all active modules.
 
 ---
 
 ## 📊 API Endpoints
 
-### Authentication
+### 🔐 Authentication
 ```
-POST   /api/v1/auth/login              🔐 User login
+POST   /api/v1/auth/login              🔑 User login
 POST   /api/v1/auth/register           📝 New registration
 POST   /api/v1/auth/logout             🚪 Logout
 POST   /api/v1/auth/refresh            🔄 Refresh token
 ```
 
-### Leads
+### 📋 Leads
 ```
 GET    /api/v1/leads                   📋 All leads
 GET    /api/v1/leads/paged             📄 Paginated leads
@@ -296,14 +223,14 @@ PATCH  /api/v1/leads/{id}/status       🔄 Update status
 PATCH  /api/v1/leads/{id}/deal         💰 Update deal
 ```
 
-### Messages
+### 💬 Messages
 ```
 GET    /api/v1/messages/chats          💬 Active chats
 GET    /api/v1/messages/{contactId}    📨 Chat history
 POST   /api/v1/messages/{contactId}    ✉️  Send message
 ```
 
-### Contacts
+### 👥 Contacts
 ```
 GET    /api/v1/contacts                👥 All contacts
 POST   /api/v1/contacts                ➕ New contact
@@ -317,32 +244,34 @@ DELETE /api/v1/contacts/{id}           ❌ Delete contact
 
 ### ❌ LazyInitializationException
 ```
-Error: failed to lazily initialize a collection
+🚨 Error: failed to lazily initialize a collection
 ```
-**Solution:** Ensure all controller endpoints have `@Transactional(readOnly=true)`
+**✅ Solution:** Ensure all controller endpoints have `@Transactional(readOnly=true)`
 
 ### ❌ Database Connection Timeout
 ```
-Error: Could not connect to PostgreSQL
+🚨 Error: Could not connect to PostgreSQL
 ```
-**Solution:** 
+**✅ Solution:**
 ```bash
-# Check database is running
+# 🔍 Check database is running
 docker-compose ps
-# Verify .env DATABASE_URL is correct
+
+# ✓ Verify .env DATABASE_URL is correct
+cat .env | grep DATABASE_URL
 ```
 
 ### ❌ WebSocket Connection Failed
 ```
-Error: Failed to establish WebSocket connection
+🚨 Error: Failed to establish WebSocket connection
 ```
-**Solution:** Check firewall, ensure port 8080 is open
+**✅ Solution:** Check firewall, ensure port 8080 is open
 
 ### ❌ Out of Memory
 ```
-Error: Java heap space
+🚨 Error: Java heap space
 ```
-**Solution:**
+**✅ Solution:**
 ```bash
 export JAVA_OPTS="-Xmx2g -Xms1g"
 mvn spring-boot:run
@@ -366,35 +295,55 @@ CRMLiteBackedn/
 │   ├── application.yml       # 🔧 Configuration
 │   ├── db/migration/         # 📝 Flyway migrations
 │   └── logback-spring.xml    # 📋 Logging config
+├── docs/
+│   ├── architecture/         # 🏗️  Architecture documentation
+│   ├── audit/                # 🔍 Audit reports
+│   ├── sre/                  # 🚨 SRE & Operations
+│   └── deep_systems_audit/   # 📊 Advanced analysis
+├── deployment/
+│   ├── k8s/                  # ☸️  Kubernetes configs
+│   ├── terraform/            # 🔧 Infrastructure as Code
+│   ├── argocd/               # 🔄 GitOps configuration
+│   └── edge-router/          # 🌐 Edge routing
+├── monitoring/
+│   ├── alert_rules.yml       # 🚨 Alert rules
+│   ├── prometheus.yml        # 📊 Prometheus config
+│   ├── grafana/              # 📈 Grafana dashboards
+│   └── tempo.yml             # 🔍 Distributed tracing
 ├── docker-compose.yml        # 🐳 Docker services
+├── docker-compose-monitoring.yml  # 📊 Monitoring stack
+├── docker-compose.production.yml  # 🚀 Production setup
 ├── pom.xml                   # 📦 Maven config
 └── README.md                 # 📖 This file
 ```
 
 ---
 
-## 📈 Performance Metrics
+## 📚 Documentation
 
-### Database Query Optimization
-```
-✅ N+1 Query Problem: RESOLVED
-   Before: 1 + n additional queries
-   After:  1 optimized JOIN FETCH query
+### System & Architecture Documentation
+Comprehensive documentation of system architecture, deployment, and operational procedures:
 
-✅ Lazy Loading Errors: FIXED (0 exceptions)
-✅ Cache Hit Rate: 85%+
-✅ Average Response Time: ~200ms
-✅ P95 Response Time: ~500ms
-```
+- **[ARCHITECTURE_AUDIT.md](./docs/audit/ARCHITECTURE_AUDIT.md)** - 🏗️ Complete system architecture analysis
+- **[TECH_STACK.md](./docs/audit/TECH_STACK.md)** - 📊 Technology stack overview and decisions
+- **[DISTRIBUTED_SYSTEMS_AUDIT.md](./docs/deep_systems_audit/DISTRIBUTED_SYSTEMS_AUDIT.md)** - 🌐 Distributed system considerations
+- **[PRODUCTION_READINESS_REPORT.md](./docs/audit/PRODUCTION_READINESS_REPORT.md)** - ✅ Production deployment checklist
 
-### Load Testing Results
-```
-Concurrent Users: 100
-Requests/sec: 500+
-Error Rate: 0%
-CPU Usage: 45%
-Memory: 1.2GB / 2GB
-```
+### Operational & SRE Documentation
+- **[SRE README](./docs/sre/README.md)** - 🚨 Site Reliability Engineering guide
+- **[Alert Rules](./docs/sre/alerts/critical_alerts.yml)** - 🔔 Critical alerting configuration
+- **[Runbooks](./docs/sre/runbooks/)** - 📋 Operational runbooks for common incidents
+  - [AI Outage Response](./docs/sre/runbooks/AIOutage.md) - ⚡ AI service recovery
+  - [Database Exhaustion](./docs/sre/runbooks/DBExhaustion.md) - 🗄️ DB recovery
+  - [Queue Overload](./docs/sre/runbooks/QueueOverload.md) - 📦 Queue management
+  - [Redis Failure](./docs/sre/runbooks/RedisFailure.md) - 💾 Cache recovery
+  - [Webhook Failure](./docs/sre/runbooks/WebhookFailure.md) - 🔗 Webhook recovery
+
+### Deployment & Infrastructure
+- **[Kubernetes Manifests](./deployment/k8s/)** - ☸️ K8s deployment configurations
+- **[Terraform Infrastructure](./deployment/terraform/)** - 🔧 Infrastructure as Code
+- **[Docker Compose](./docker-compose.yml)** - 🐳 Local development setup
+- **[Helm Charts](./blueprints/helm/)** - 📦 Helm chart values and configurations
 
 ---
 
@@ -413,23 +362,23 @@ Memory: 1.2GB / 2GB
 
 ## 📝 Contributing
 
-### Development Workflow
+### 🔄 Development Workflow
 ```bash
-# 1. Create feature branch
+# 1️⃣ Create feature branch
 git checkout -b feature/your-feature
 
-# 2. Make changes
-# 3. Run tests
+# 2️⃣ Make changes
+# 3️⃣ Run tests
 mvn clean test
 
-# 4. Commit with conventional messages
+# 4️⃣ Commit with conventional messages
 git commit -m "feat: add new feature"
 
-# 5. Push and create PR
+# 5️⃣ Push and create PR
 git push origin feature/your-feature
 ```
 
-### Code Standards
+### ✅ Code Standards
 - ✅ Java 21+ features
 - ✅ Spring Boot best practices
 - ✅ Consistent naming conventions
@@ -450,24 +399,28 @@ git push origin feature/your-feature
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+📜 This project is licensed under the MIT License - see the LICENSE file for details.
 
 ---
 
 ## 🙏 Acknowledgments
 
-- Spring Boot community for excellent framework
-- PostgreSQL for reliable database
-- All contributors and users
+- 🙌 Spring Boot community for excellent framework
+- 🙌 PostgreSQL for reliable database
+- 🙌 All contributors and users
 
 ---
 
 <div align="center">
 
-**Made with ❤️ by the ChatCRM Team**
+### ❤️ Made with ❤️ by the ChatCRM Team
 
-⭐ Star us on GitHub if this project helped you!
+⭐ **Star us on GitHub** if this project helped you!
 
 [GitHub](https://github.com/hkbharti77/CRMLiteBackedn) · [Issues](https://github.com/hkbharti77/CRMLiteBackedn/issues) · [Discussions](https://github.com/hkbharti77/CRMLiteBackedn/discussions)
+
+**Questions?** Open an issue or start a discussion! 💬
+
+**Happy Coding!** 🚀
 
 </div>

@@ -67,12 +67,20 @@ public class FlowStateMachine {
         }
 
         // Check if starting a new flow
-        if (isInteractiveSelection && "trigger_flow".equals(selectionId)) {
+        if (isInteractiveSelection && selectionId != null && selectionId.startsWith("trigger_flow")) {
             log.debug("[StateMachine] Starting new flow for contact={}", contact.getWaId());
-            return startFlow(contact, owner, messageText);
+            String suffix = null;
+            if (selectionId.startsWith("trigger_flow_")) {
+                suffix = selectionId.substring("trigger_flow_".length());
+            }
+            return startFlow(contact, owner, messageText, suffix);
         }
 
         return false;
+    }
+
+    public boolean startFlow(Contact contact, User owner, String initialMessage) {
+        return startFlow(contact, owner, initialMessage, null);
     }
 
     /**
@@ -82,7 +90,7 @@ public class FlowStateMachine {
      *   3. Niche JSON file (resources/flows/<slug>.json)
      *   4. Generic JSON file (resources/flows/generic.json)
      */
-    public boolean startFlow(Contact contact, User owner, String initialMessage) {
+    public boolean startFlow(Contact contact, User owner, String initialMessage, String flowSuffix) {
         // Try DB-backed definition first
         Optional<FlowDefinition> dbDefOpt = findDbDefinitionForOwner(owner);
 
@@ -103,7 +111,7 @@ public class FlowStateMachine {
             log.debug("[StateMachine] Using DB flow definition id={} for owner={}", flowDefinitionId, owner.getId());
         } else {
             // Fall back to classpath JSON files via FlowConfigService
-            Optional<FlowMachineDef> jsonDef = definitionLoader.resolveFlowMachineDef(owner);
+            Optional<FlowMachineDef> jsonDef = definitionLoader.resolveFlowMachineDef(owner, flowSuffix);
             if (jsonDef.isEmpty()) {
                 log.warn("[StateMachine] No flow definition found for owner={} — skipping flow start", owner.getId());
                 return false;
@@ -115,7 +123,7 @@ public class FlowStateMachine {
                 return false;
             }
             // Derive flowType from the JSON config
-            flowType = resolveFlowTypeForOwner(owner);
+            flowType = resolveFlowTypeForOwner(owner, flowSuffix);
             log.debug("[StateMachine] Using JSON file flow for owner={}, flowType={}", owner.getId(), flowType);
         }
 
@@ -155,10 +163,10 @@ public class FlowStateMachine {
         return Optional.empty();
     }
 
-    private ConversationState.FlowType resolveFlowTypeForOwner(User owner) {
+    private ConversationState.FlowType resolveFlowTypeForOwner(User owner, String flowSuffix) {
         try {
             com.chatcrmlite.backend.dto.FlowConfigDTO config =
-                    definitionLoader.getFlowConfigService().getFlowConfig(owner);
+                    definitionLoader.getFlowConfigService().getFlowConfig(owner, flowSuffix);
             if (config != null && config.getFlowType() != null) {
                 return ConversationState.FlowType.valueOf(config.getFlowType().toUpperCase());
             }

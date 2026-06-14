@@ -55,9 +55,9 @@ public class FlowConfigController {
 
         return ResponseEntity.ok(Map.of(
                 "subCategory",        subCategory != null ? subCategory : "",
-                "triggerButtonLabel", templateEngine.getTriggerButtonLabel(subCategory),
-                "triggerListLabel",   templateEngine.getTriggerListLabel(subCategory),
-                "servicesLabel",      templateEngine.getServicesLabel(subCategory)
+                "triggerButtonLabel", templateEngine.getTriggerButtonLabel(user),
+                "triggerListLabel",   templateEngine.getTriggerListLabel(user),
+                "servicesLabel",      templateEngine.getServicesLabel(user)
         ));
     }
 

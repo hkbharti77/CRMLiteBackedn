@@ -1,0 +1,26 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "issue",
+      "question": "🦷 What dental issue are you experiencing?",
+      "usesButtons": true,
+      "options": [
+        "Toothache",
+        "Cosmetic/Whitening",
+        "Routine Checkup",
+        "Other"
+      ]
+    },
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Provide your email so our clinic can reach out to you:",
+      "usesButtons": false
+    }
+  ]
+}

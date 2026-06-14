@@ -249,28 +249,22 @@ public class WhatsAppMenuService {
                 rows = new ArrayList<>();
                 menu.getSections().get(0).setRows(rows);
             }
-            if (rows.size() < 3) {
-                String btnType = config.getThirdButtonType();
-                if (btnType == null) btnType = "ABOUT";
-                
-                String label = null;
-                String id = null;
-                if ("TRUST".equals(btnType) && isTrust) {
-                    label = TRUST_LABEL; id = "get_trust";
-                } else if ("OFFER".equals(btnType) && isOffer) {
-                    label = OFFER_LABEL; id = "get_offer";
-                } else if ("SOS".equals(btnType) && isSos) {
-                    label = SOS_LABEL; id = "get_support";
-                } else if ("ABOUT".equals(btnType) && isAbout) {
-                    label = ABOUT_LABEL; id = "get_about";
-                }
-
-                if (label != null) {
-                    List<MenuDto.MenuRowDto> modifiableRows = new ArrayList<>(rows);
-                    modifiableRows.add(MenuDto.MenuRowDto.builder().id(id).title(label).build());
-                    menu.getSections().get(0).setRows(modifiableRows);
-                }
+            List<MenuDto.MenuRowDto> modifiableRows = new ArrayList<>(rows);
+            
+            if (modifiableRows.size() < 3 && isSos && modifiableRows.stream().noneMatch(r -> "get_support".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).build());
             }
+            if (modifiableRows.size() < 3 && isTrust && modifiableRows.stream().noneMatch(r -> "get_trust".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_trust").title(TRUST_LABEL).build());
+            }
+            if (modifiableRows.size() < 3 && isOffer && modifiableRows.stream().noneMatch(r -> "get_offer".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_offer").title(OFFER_LABEL).build());
+            }
+            if (modifiableRows.size() < 3 && isAbout && modifiableRows.stream().noneMatch(r -> "get_about".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_about").title(ABOUT_LABEL).build());
+            }
+            
+            menu.getSections().get(0).setRows(modifiableRows);
         } else if ("list".equals(menu.getType())) {
             List<MenuDto.MenuRowDto> dynamicRows = new ArrayList<>();
             if (isTrust) {
@@ -295,38 +289,131 @@ public class WhatsAppMenuService {
     }
 
     private void refreshTriggerLabels(MenuDto menu, User owner) {
-        // FIX #2: Add null checks for menu and owner
         if (menu == null || owner == null) {
             log.warn("[WhatsAppMenuService] Cannot refresh trigger labels: menu or owner is null");
             return;
         }
         
-        String label = templateEngine.getTriggerButtonLabel(owner.getBusinessSubType());
+        List<MenuDto.MenuRowDto> flowRows = new ArrayList<>();
+        boolean hasSpecificToggles = false;
+
+        boolean hasAppointment = Boolean.TRUE.equals(owner.getForceShowAppointment());
+        boolean hasBooking = Boolean.TRUE.equals(owner.getForceShowBooking());
+        boolean hasLead = Boolean.TRUE.equals(owner.getForceShowLeads());
+
+        FlowTemplateEngine.FlowBlueprint blueprint = templateEngine.getBlueprint(owner.getBusinessSubType());
+        if (blueprint != null) {
+            com.chatcrmlite.backend.models.ConversationState.FlowType primaryFlow = blueprint.getFlowType();
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.APPOINTMENT) hasAppointment = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.BOOKING) hasBooking = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
+        }
+
+        if (hasAppointment) {
+            flowRows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_appointment")
+                .title(templateEngine.getTriggerButtonLabel(owner, "appointment")).build());
+            hasSpecificToggles = true;
+        }
+        if (hasBooking) {
+            flowRows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_booking")
+                .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
+            hasSpecificToggles = true;
+        }
+        if (hasLead) {
+            flowRows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_lead")
+                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+            hasSpecificToggles = true;
+        }
+
+        if (!hasSpecificToggles) {
+            flowRows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow")
+                .title(templateEngine.getTriggerButtonLabel(owner)).build());
+        }
+
+        int totalRows = 0;
         if (menu.getSections() != null) {
             for (MenuDto.MenuSectionDto s : menu.getSections()) {
-                // FIX #2: Check section itself is not null
                 if (s != null && s.getRows() != null) {
+                    List<MenuDto.MenuRowDto> newRows = new ArrayList<>();
                     for (MenuDto.MenuRowDto r : s.getRows()) {
-                        // FIX #2: Check row is not null
                         if (r != null && "trigger_flow".equals(r.getId())) {
-                            r.setTitle(label);
+                            newRows.addAll(flowRows);
+                        } else {
+                            // If the menu already had specific triggers from a previous bad save, let's filter them if we are replacing
+                            if (r != null && !r.getId().startsWith("trigger_flow_")) {
+                                newRows.add(r);
+                            }
                         }
                     }
+                    s.setRows(newRows);
+                    totalRows += newRows.size();
                 }
             }
+        }
+        
+        if ("button".equals(menu.getType()) && totalRows > 3) {
+            menu.setType("list");
+            menu.setButton("View Options");
         }
     }
 
     private MenuDto buildDefaultMenu(User owner) {
-        String sub = owner.getBusinessSubType();
-        List<MenuDto.MenuRowDto> rows = List.of(
-            MenuDto.MenuRowDto.builder().id("trigger_flow").title(templateEngine.getTriggerButtonLabel(sub)).build(),
-            MenuDto.MenuRowDto.builder().id("get_support").title("\uD83C\uDFAB Get Support").build()
-        );
+        List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+        boolean hasSpecificToggles = false;
+
+        boolean hasAppointment = Boolean.TRUE.equals(owner.getForceShowAppointment());
+        boolean hasBooking = Boolean.TRUE.equals(owner.getForceShowBooking());
+        boolean hasLead = Boolean.TRUE.equals(owner.getForceShowLeads());
+
+        FlowTemplateEngine.FlowBlueprint blueprint = templateEngine.getBlueprint(owner.getBusinessSubType());
+        if (blueprint != null) {
+            com.chatcrmlite.backend.models.ConversationState.FlowType primaryFlow = blueprint.getFlowType();
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.APPOINTMENT) hasAppointment = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.BOOKING) hasBooking = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
+        }
+
+        if (hasAppointment) {
+            rows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_appointment")
+                .title(templateEngine.getTriggerButtonLabel(owner, "appointment")).build());
+            hasSpecificToggles = true;
+        }
+        if (hasBooking) {
+            rows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_booking")
+                .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
+            hasSpecificToggles = true;
+        }
+        if (hasLead) {
+            rows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_lead")
+                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+            hasSpecificToggles = true;
+        }
+
+        if (!hasSpecificToggles) {
+            rows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow")
+                .title(templateEngine.getTriggerButtonLabel(owner)).build());
+        }
+
+        String type = "button";
+        String buttonText = null;
+        if (rows.size() > 2) {
+            type = "list";
+            buttonText = "View Options";
+        }
+
         return MenuDto.builder()
-                .type("button")
+                .type(type)
+                .button(buttonText)
                 .bodyText("How can we help you?")
-                .sections(List.of(MenuDto.MenuSectionDto.builder().rows(rows).build()))
+                .sections(List.of(MenuDto.MenuSectionDto.builder().title("Our Services").rows(rows).build()))
                 .build();
     }
 

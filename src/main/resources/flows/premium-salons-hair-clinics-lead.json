@@ -1,0 +1,25 @@
+{
+  "flowType": "LEAD_CAPTURE",
+  "steps": [
+    {
+      "dataKey": "interest",
+      "question": "✂️ What service are you interested in?",
+      "usesButtons": true,
+      "options": [
+        "Hair Styling/Color",
+        "Hair Transplant/Loss",
+        "Skin/Nail Care"
+      ]
+    },
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "usesButtons": false
+    },
+    {
+      "dataKey": "email",
+      "question": "📩 Email to receive our service catalog:",
+      "usesButtons": false
+    }
+  ]
+}

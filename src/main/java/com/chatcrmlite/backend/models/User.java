@@ -105,6 +105,13 @@ public class User implements Serializable {
     public void setLogoUrl(String url) { if (tenant != null) tenant.setLogoUrl(url); }
     public void setOnboardingCompleted(Boolean comp) { if (tenant != null) tenant.setOnboardingCompleted(comp); }
     public void setPlanType(PlanType plan) { if (tenant != null) tenant.setPlanType(com.chatcrmlite.backend.models.User.PlanType.valueOf(plan.name())); }
+    public void setForceShowBooking(Boolean val) { if (tenant != null) tenant.setForceShowBooking(val); }
+    public void setForceShowAppointment(Boolean val) { if (tenant != null) tenant.setForceShowAppointment(val); }
+    public void setForceShowLeads(Boolean val) { if (tenant != null) tenant.setForceShowLeads(val); }
+
+    public Boolean getForceShowBooking() { return tenant != null ? tenant.getForceShowBooking() : null; }
+    public Boolean getForceShowAppointment() { return tenant != null ? tenant.getForceShowAppointment() : null; }
+    public Boolean getForceShowLeads() { return tenant != null ? tenant.getForceShowLeads() : null; }
 
     public LocalDateTime getConsentAt() { return consentAt; }
     public void setConsentAt(LocalDateTime consentAt) { this.consentAt = consentAt; }
