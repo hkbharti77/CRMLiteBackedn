@@ -81,7 +81,7 @@ public class GuardrailServiceImpl implements GuardrailService {
             
             GuardrailResult result = GuardrailResult.builder()
                     .decision(decision)
-                    .reason(decision == Decision.CALL_AI ? "high_signal_intent" : (score >= 15 ? "ambiguous_signal" : "low_signal_fallback"))
+                    .reason(decision == Decision.CALL_AI ? "high_signal_intent" : (score >= 10 ? "ambiguous_signal" : "low_signal_fallback"))
                     .detectedIntent(primaryIntent)
                     .contextKey(contextKey)
                     .suggestion(getSuggestion(primaryIntent))
@@ -157,9 +157,11 @@ public class GuardrailServiceImpl implements GuardrailService {
     }
 
     private Decision makeDecision(int score, Set<String> intents) {
-        if (score >= 45 || (!intents.isEmpty() && score >= 30)) return Decision.CALL_AI;
-        if (score >= 15) return Decision.CLARIFY;
-        return Decision.MENU;
+        // If the user explicitly asks for the menu or intents strictly dictate it, return MENU
+        if (intents.contains("menu")) return Decision.MENU;
+        
+        // Otherwise, trust the RAG LLM to handle the query and respond
+        return Decision.CALL_AI;
     }
 
     private String getSuggestion(String intent) {

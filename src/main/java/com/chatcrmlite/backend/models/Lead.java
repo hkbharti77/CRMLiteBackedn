@@ -63,6 +63,7 @@ public class Lead extends BaseTenantEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private User owner;
 
     private BigDecimal dealValue;

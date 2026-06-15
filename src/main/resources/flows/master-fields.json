@@ -1,0 +1,971 @@
+{
+  "steps": [
+    {
+      "dataKey": "name",
+      "fieldType": "TEXT",
+      "question": "👋 What is your full name?",
+      "required": true,
+      "defaultEnabled": true,
+      "displayOrder": 1
+    },
+    {
+      "dataKey": "phone",
+      "fieldType": "PHONE",
+      "question": "📱 Please provide your contact number:",
+      "required": true,
+      "defaultEnabled": true,
+      "displayOrder": 2
+    },
+    {
+      "dataKey": "email",
+      "fieldType": "EMAIL",
+      "question": "📩 What is your email address?",
+      "required": false,
+      "defaultEnabled": true,
+      "displayOrder": 3
+    },
+    {
+      "dataKey": "age",
+      "fieldType": "NUMBER",
+      "question": "🎂 What is your age?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 4
+    },
+    {
+      "dataKey": "gender",
+      "fieldType": "DROPDOWN",
+      "question": "👤 What is your gender?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 5,
+      "options": [
+        "Male",
+        "Female",
+        "Other"
+      ]
+    },
+    {
+      "dataKey": "budget",
+      "fieldType": "TEXT",
+      "question": "💰 What is your estimated budget?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 6
+    },
+    {
+      "dataKey": "address",
+      "fieldType": "TEXTAREA",
+      "question": "📍 Please share your full address/location:",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 7
+    },
+    {
+      "dataKey": "city",
+      "fieldType": "TEXT",
+      "question": "🏙️ Which city are you located in?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 8
+    },
+    {
+      "dataKey": "pincode",
+      "fieldType": "NUMBER",
+      "question": "📮 What is your pincode/zip code?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 9
+    },
+    {
+      "dataKey": "preferred_contact_time",
+      "fieldType": "DROPDOWN",
+      "question": "🕐 When is the best time for us to contact you?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 10,
+      "options": [
+        "Morning (9am–12pm)",
+        "Afternoon (12–4pm)",
+        "Evening (4pm–8pm)"
+      ]
+    },
+    {
+      "dataKey": "preferred_date",
+      "fieldType": "DATE",
+      "question": "📅 Please specify a preferred date (DD/MM/YYYY):",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 11
+    },
+    {
+      "dataKey": "urgency",
+      "fieldType": "DROPDOWN",
+      "question": "⚡ How urgent is your requirement?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 12,
+      "options": [
+        "Immediate",
+        "Within a week",
+        "Within a month",
+        "Just browsing"
+      ]
+    },
+    {
+      "dataKey": "service_category",
+      "fieldType": "DROPDOWN",
+      "question": "📋 Which service category are you interested in?",
+      "required": true,
+      "defaultEnabled": true,
+      "displayOrder": 13,
+      "options": [
+        "Consultation",
+        "Installation/Setup",
+        "Repair/Maintenance",
+        "Other"
+      ]
+    },
+    {
+      "dataKey": "source",
+      "fieldType": "DROPDOWN",
+      "question": "🔍 How did you hear about us?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 14,
+      "options": [
+        "Google/Search",
+        "Social Media",
+        "Friend/Referral",
+        "Advertisement"
+      ]
+    },
+    {
+      "dataKey": "specific_requirement",
+      "fieldType": "TEXTAREA",
+      "question": "📝 Please describe your specific requirement in detail:",
+      "required": false,
+      "defaultEnabled": true,
+      "displayOrder": 15
+    },
+    {
+      "dataKey": "custom_text_1",
+      "fieldType": "TEXT",
+      "question": "Custom Question 1:",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 16
+    },
+    {
+      "dataKey": "custom_text_2",
+      "fieldType": "TEXT",
+      "question": "Custom Question 2:",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 17
+    },
+    {
+      "dataKey": "custom_dropdown_1",
+      "fieldType": "DROPDOWN",
+      "question": "Custom Selection 1:",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 18,
+      "options": [
+        "Option A",
+        "Option B",
+        "Option C"
+      ]
+    },
+    {
+      "dataKey": "custom_dropdown_2",
+      "fieldType": "DROPDOWN",
+      "question": "Custom Selection 2:",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 19,
+      "options": [
+        "Option X",
+        "Option Y",
+        "Option Z"
+      ]
+    },
+    {
+      "dataKey": "vehicle",
+      "fieldType": "TEXT",
+      "question": "🚗 Which specific vehicle model are you booking/reserving?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 22,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ]
+    },
+    {
+      "dataKey": "booking_amount",
+      "fieldType": "DROPDOWN",
+      "question": "💰 What is your intended token/booking amount?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 23,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ],
+      "options": [
+        "₹10,000",
+        "₹25,000",
+        "₹50,000+"
+      ]
+    },
+    {
+      "dataKey": "vehicle_type",
+      "fieldType": "DROPDOWN",
+      "question": "🚗 Which type of vehicle are you interested in?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 24,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ],
+      "options": [
+        "Hatchback",
+        "Sedan",
+        "SUV",
+        "MUV / Van"
+      ]
+    },
+    {
+      "dataKey": "fuel_type",
+      "fieldType": "DROPDOWN",
+      "question": "⛽ Which fuel type do you prefer?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 25,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ],
+      "options": [
+        "Petrol",
+        "Diesel",
+        "CNG",
+        "Electric (EV)"
+      ]
+    },
+    {
+      "dataKey": "purchase_timeline",
+      "fieldType": "DROPDOWN",
+      "question": "📅 When are you planning to buy?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 26,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ],
+      "options": [
+        "Immediately",
+        "Within 1 month",
+        "1–3 months",
+        "Just exploring"
+      ]
+    },
+    {
+      "dataKey": "finance_needed",
+      "fieldType": "DROPDOWN",
+      "question": "🏦 Would you need financing / loan assistance?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 27,
+      "applicableNiches": [
+        "auto-used-car-dealers"
+      ],
+      "options": [
+        "Yes, need financing",
+        "No, I'll pay cash"
+      ]
+    },
+    {
+      "dataKey": "counseling_type",
+      "fieldType": "DROPDOWN",
+      "question": "🎓 Do you prefer an online or in-person counseling session?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 28,
+      "applicableNiches": [
+        "career-study-abroad-counselors"
+      ],
+      "options": [
+        "Online Video Call",
+        "In-Person Office Visit"
+      ]
+    },
+    {
+      "dataKey": "course_level",
+      "fieldType": "DROPDOWN",
+      "question": "📚 What level of course are you applying for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 32,
+      "applicableNiches": [
+        "career-study-abroad-counselors"
+      ],
+      "options": [
+        "Bachelors",
+        "Masters",
+        "PhD"
+      ]
+    },
+    {
+      "dataKey": "current_qualification",
+      "fieldType": "DROPDOWN",
+      "question": "🎒 What is your current highest qualification?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 33,
+      "applicableNiches": [
+        "career-study-abroad-counselors"
+      ],
+      "options": [
+        "12th / High School",
+        "Diploma",
+        "Bachelors Degree",
+        "Masters Degree"
+      ]
+    },
+    {
+      "dataKey": "intake",
+      "fieldType": "DROPDOWN",
+      "question": "📅 Which intake are you planning for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 34,
+      "applicableNiches": [
+        "career-study-abroad-counselors"
+      ],
+      "options": [
+        "Jan 2025",
+        "Sep 2025",
+        "Jan 2026",
+        "Sep 2026"
+      ]
+    },
+    {
+      "dataKey": "occasion",
+      "fieldType": "DROPDOWN",
+      "question": "💄 What is the occasion?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 47,
+      "applicableNiches": [
+        "freelance-makeup-artists-mua"
+      ],
+      "options": [
+        "Wedding",
+        "Party",
+        "Shoot",
+        "Engagement",
+        "Other"
+      ]
+    },
+    {
+      "dataKey": "trial_needed",
+      "fieldType": "DROPDOWN",
+      "question": "🪞 Would you like a trial session before the event?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 50,
+      "applicableNiches": [
+        "freelance-makeup-artists-mua"
+      ],
+      "options": [
+        "Yes, I want a trial",
+        "No trial needed"
+      ]
+    },
+    {
+      "dataKey": "meeting_focus",
+      "fieldType": "DROPDOWN",
+      "question": "💻 What is the main focus of our meeting?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 51,
+      "applicableNiches": [
+        "freelance-web-graphic-designers"
+      ],
+      "options": [
+        "New Website Discussion",
+        "Branding/Logo",
+        "UI/UX Review"
+      ]
+    },
+    {
+      "dataKey": "service",
+      "fieldType": "DROPDOWN",
+      "question": "🎨 Which design service are you officially booking?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 52,
+      "applicableNiches": [
+        "freelance-web-graphic-designers",
+        "interior-designers-architects",
+        "premium-salons-hair-clinics"
+      ],
+      "options": [
+        "Full Website Design",
+        "Logo & Branding Package",
+        "Hourly Retainer"
+      ]
+    },
+    {
+      "dataKey": "has_existing_brand",
+      "fieldType": "DROPDOWN",
+      "question": "🎨 Do you already have a brand identity (logo, colors, fonts)?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 55,
+      "applicableNiches": [
+        "freelance-web-graphic-designers"
+      ],
+      "options": [
+        "Yes, have guidelines",
+        "No, need branding"
+      ]
+    },
+    {
+      "dataKey": "deadline",
+      "fieldType": "DROPDOWN",
+      "question": "📅 What is your expected deadline or go-live date?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 56,
+      "applicableNiches": [
+        "freelance-web-graphic-designers"
+      ],
+      "options": [
+        "Urgent (within 1 week)",
+        "2–4 weeks",
+        "1–2 months",
+        "Flexible"
+      ]
+    },
+    {
+      "dataKey": "session_type",
+      "fieldType": "DROPDOWN",
+      "question": "🏋️ What type of session are we scheduling?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 57,
+      "applicableNiches": [
+        "gym-personal-fitness-trainers"
+      ],
+      "options": [
+        "Fitness Assessment",
+        "Facility Tour",
+        "Free Trial Session"
+      ]
+    },
+    {
+      "dataKey": "goal",
+      "fieldType": "DROPDOWN",
+      "question": "💪 What is your primary fitness goal?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 58,
+      "applicableNiches": [
+        "gym-personal-fitness-trainers"
+      ],
+      "options": [
+        "Weight Loss",
+        "Muscle Gain",
+        "General Fitness",
+        "Rehabilitation"
+      ]
+    },
+    {
+      "dataKey": "fitness_level",
+      "fieldType": "DROPDOWN",
+      "question": "📊 What is your current fitness level?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 59,
+      "applicableNiches": [
+        "gym-personal-fitness-trainers"
+      ],
+      "options": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ]
+    },
+    {
+      "dataKey": "preferred_slot",
+      "fieldType": "DROPDOWN",
+      "question": "📅 What time slot works best for you?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 60,
+      "applicableNiches": [
+        "gym-personal-fitness-trainers",
+        "yoga-meditation-instructors"
+      ],
+      "options": [
+        "Morning (6–10am)",
+        "Afternoon (12–4pm)",
+        "Evening (5–9pm)"
+      ]
+    },
+    {
+      "dataKey": "subject",
+      "fieldType": "DROPDOWN",
+      "question": "📖 Which subject or course package are you booking?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 66,
+      "applicableNiches": [
+        "independent-tutors"
+      ],
+      "options": [
+        "Math/Science Pack",
+        "Language Pack",
+        "Test Prep (SAT/ACT)"
+      ]
+    },
+    {
+      "dataKey": "class_level",
+      "fieldType": "DROPDOWN",
+      "question": "🎓 What is the student's class or grade level?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 67,
+      "applicableNiches": [
+        "independent-tutors"
+      ],
+      "options": [
+        "Class 1–5",
+        "Class 6–10",
+        "Class 11–12",
+        "College / University"
+      ]
+    },
+    {
+      "dataKey": "tutoring_mode",
+      "fieldType": "DROPDOWN",
+      "question": "🏠 How would you prefer the tutoring sessions?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 68,
+      "applicableNiches": [
+        "independent-tutors"
+      ],
+      "options": [
+        "Online",
+        "Home Visit",
+        "At Tutor's Place"
+      ]
+    },
+    {
+      "dataKey": "sessions_per_week",
+      "fieldType": "DROPDOWN",
+      "question": "📆 How many sessions per week are you looking for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 69,
+      "applicableNiches": [
+        "independent-tutors"
+      ],
+      "options": [
+        "1 session/week",
+        "2–3 sessions/week",
+        "Daily (5 days/week)"
+      ]
+    },
+    {
+      "dataKey": "policy_type",
+      "fieldType": "DROPDOWN",
+      "question": "🛡️ What type of insurance policy do you want to discuss?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 70,
+      "applicableNiches": [
+        "insurance-agents"
+      ],
+      "options": [
+        "Life Insurance",
+        "Health Insurance",
+        "Vehicle/Home"
+      ]
+    },
+    {
+      "dataKey": "action",
+      "fieldType": "DROPDOWN",
+      "question": "📝 Are you ready to book a policy issuance or renewal session?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 71,
+      "applicableNiches": [
+        "insurance-agents",
+        "property-brokers"
+      ],
+      "options": [
+        "New Policy Issuance",
+        "Policy Renewal"
+      ]
+    },
+    {
+      "dataKey": "coverage_amount",
+      "fieldType": "DROPDOWN",
+      "question": "💰 What coverage amount are you looking for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 72,
+      "applicableNiches": [
+        "insurance-agents"
+      ],
+      "options": [
+        "₹5L – ₹10L",
+        "₹10L – ₹50L",
+        "₹50L – ₹1Cr",
+        "Above ₹1Cr"
+      ]
+    },
+    {
+      "dataKey": "existing_policy",
+      "fieldType": "DROPDOWN",
+      "question": "📋 Do you currently have an existing insurance policy?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 73,
+      "applicableNiches": [
+        "insurance-agents"
+      ],
+      "options": [
+        "Renew / Upgrade",
+        "First Policy"
+      ]
+    },
+    {
+      "dataKey": "timeline",
+      "fieldType": "DROPDOWN",
+      "question": "📅 When are you planning to start?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 76,
+      "applicableNiches": [
+        "interior-designers-architects",
+        "property-brokers",
+        "solar-panel-smart-home-installers"
+      ],
+      "options": [
+        "Immediately",
+        "Within 1 month",
+        "1–3 months",
+        "Just planning"
+      ]
+    },
+    {
+      "dataKey": "course",
+      "fieldType": "DROPDOWN",
+      "question": "🎹 Which course or monthly package are you booking?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 77,
+      "applicableNiches": [
+        "music-art-classes"
+      ],
+      "options": [
+        "Beginner Course",
+        "Advanced Course",
+        "Weekend Hobby Class"
+      ]
+    },
+    {
+      "dataKey": "interest",
+      "fieldType": "DROPDOWN",
+      "question": "🎨 Which instrument or art form are you interested in?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 78,
+      "applicableNiches": [
+        "music-art-classes",
+        "premium-salons-hair-clinics",
+        "yoga-meditation-instructors"
+      ],
+      "options": [
+        "Guitar",
+        "Piano",
+        "Violin",
+        "Drums",
+        "Sketching",
+        "Painting"
+      ]
+    },
+    {
+      "dataKey": "skill_level",
+      "fieldType": "DROPDOWN",
+      "question": "📈 What is your current skill level?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 79,
+      "applicableNiches": [
+        "music-art-classes"
+      ],
+      "options": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ]
+    },
+    {
+      "dataKey": "student_age",
+      "fieldType": "DROPDOWN",
+      "question": "🎂 Who is the student?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 80,
+      "applicableNiches": [
+        "music-art-classes"
+      ],
+      "options": [
+        "Child (under 12)",
+        "Teenager (12–18)",
+        "Adult (18+)"
+      ]
+    },
+    {
+      "dataKey": "class_mode",
+      "fieldType": "DROPDOWN",
+      "question": "🏠 How would you like to attend the classes?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 81,
+      "applicableNiches": [
+        "music-art-classes"
+      ],
+      "options": [
+        "In-person",
+        "Online"
+      ]
+    },
+    {
+      "dataKey": "injury_duration",
+      "fieldType": "DROPDOWN",
+      "question": "⏳ How long have you been experiencing this issue?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 84,
+      "applicableNiches": [
+        "physiotherapy-chiropractic-centers"
+      ],
+      "options": [
+        "Less than a week",
+        "1–4 weeks",
+        "1–3 months",
+        "More than 3 months"
+      ]
+    },
+    {
+      "dataKey": "doctor_referral",
+      "fieldType": "DROPDOWN",
+      "question": "📄 Do you have a doctor's referral for this visit?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 85,
+      "applicableNiches": [
+        "physiotherapy-chiropractic-centers"
+      ],
+      "options": [
+        "Yes, have referral",
+        "No referral"
+      ]
+    },
+    {
+      "dataKey": "hair_length",
+      "fieldType": "DROPDOWN",
+      "question": "💇 What is your hair length? (helps us estimate time and pricing)",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 87,
+      "applicableNiches": [
+        "premium-salons-hair-clinics"
+      ],
+      "options": [
+        "Short",
+        "Medium",
+        "Long",
+        "Extra Long"
+      ]
+    },
+    {
+      "dataKey": "stylist_preference",
+      "fieldType": "DROPDOWN",
+      "question": "👩‍🎨 Do you have a preferred stylist?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 88,
+      "applicableNiches": [
+        "premium-salons-hair-clinics"
+      ],
+      "options": [
+        "No preference"
+      ]
+    },
+    {
+      "dataKey": "property_id",
+      "fieldType": "TEXT",
+      "question": "🏢 What is the property name or ID?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 96,
+      "applicableNiches": [
+        "property-brokers"
+      ]
+    },
+    {
+      "dataKey": "property_type",
+      "fieldType": "DROPDOWN",
+      "question": "🏘️ What type of property are you looking for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 98,
+      "applicableNiches": [
+        "property-brokers",
+        "solar-panel-smart-home-installers"
+      ],
+      "options": [
+        "Apartment / Flat",
+        "Villa / House",
+        "Plot / Land",
+        "Commercial Space"
+      ]
+    },
+    {
+      "dataKey": "bhk_preference",
+      "fieldType": "DROPDOWN",
+      "question": "🛏️ What is your BHK / size preference?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 99,
+      "applicableNiches": [
+        "property-brokers"
+      ],
+      "options": [
+        "1 BHK",
+        "2 BHK",
+        "3 BHK",
+        "4 BHK / Villa"
+      ]
+    },
+    {
+      "dataKey": "allergies",
+      "fieldType": "DROPDOWN",
+      "question": "⚠️ Do you have any known skin allergies or sensitivities we should be aware of?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 103,
+      "applicableNiches": [
+        "skin-aesthetic-clinics"
+      ],
+      "options": [
+        "No allergies",
+        "Yes, have allergies"
+      ]
+    },
+    {
+      "dataKey": "system",
+      "fieldType": "DROPDOWN",
+      "question": "🔋 Which installation package are you booking?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 105,
+      "applicableNiches": [
+        "solar-panel-smart-home-installers"
+      ],
+      "options": [
+        "Solar Panel System",
+        "Smart Home Automation",
+        "Battery Backup"
+      ]
+    },
+    {
+      "dataKey": "monthly_bill",
+      "fieldType": "DROPDOWN",
+      "question": "☀️ What is your average monthly electricity bill?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 107,
+      "applicableNiches": [
+        "solar-panel-smart-home-installers"
+      ],
+      "options": [
+        "Under ₹1,000",
+        "₹1,000 – ₹3,000",
+        "₹3,000 – ₹8,000",
+        "Above ₹8,000"
+      ]
+    },
+    {
+      "dataKey": "rooftop_area",
+      "fieldType": "DROPDOWN",
+      "question": "🏠 Approximate rooftop area available (in sqft)?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 108,
+      "applicableNiches": [
+        "solar-panel-smart-home-installers"
+      ],
+      "options": [
+        "Under 200 sqft",
+        "200–500 sqft",
+        "500–1000 sqft",
+        "Above 1000 sqft"
+      ]
+    },
+    {
+      "dataKey": "shoot",
+      "fieldType": "DROPDOWN",
+      "question": "📸 What type of photography are you looking for?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 110,
+      "applicableNiches": [
+        "wedding-portrait-photographers"
+      ],
+      "options": [
+        "Wedding",
+        "Portrait/Portfolio",
+        "Maternity",
+        "Corporate"
+      ]
+    },
+    {
+      "dataKey": "experience_level",
+      "fieldType": "DROPDOWN",
+      "question": "🌱 What is your experience level?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 117,
+      "applicableNiches": [
+        "yoga-meditation-instructors"
+      ],
+      "options": [
+        "Beginner",
+        "Intermediate",
+        "Advanced"
+      ]
+    },
+    {
+      "dataKey": "session_mode",
+      "fieldType": "DROPDOWN",
+      "question": "🏠 How would you like to attend?",
+      "required": false,
+      "defaultEnabled": false,
+      "displayOrder": 118,
+      "applicableNiches": [
+        "yoga-meditation-instructors"
+      ],
+      "options": [
+        "In-person",
+        "Online (Zoom)"
+      ]
+    }
+  ]
+}

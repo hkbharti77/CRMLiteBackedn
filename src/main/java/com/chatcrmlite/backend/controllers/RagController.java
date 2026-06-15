@@ -116,14 +116,70 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
-        List<Object[]> docs = repository.findDistinctDocumentsByTenantId(user.getId());
+        List<Object[]> docs = repository.findDocumentStatsByTenantId(user.getId());
         List<Map<String, Object>> response = docs.stream().map(d -> {
             Map<String, Object> map = new HashMap<>();
             map.put("documentId", d[0]);
             map.put("name", d[1]);
+            map.put("totalChunks", d[2]);
+            map.put("embeddingSize", 384);
+            map.put("vectorModel", "AllMiniLmL6V2Quantized");
             return map;
         }).collect(java.util.stream.Collectors.toList());
 
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Download extracted document chunks as a text file.
+     */
+    @GetMapping("/documents/{docId}/download")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadDocumentText(
+            @PathVariable UUID docId,
+            @AuthenticationPrincipal String email) {
+
+        if (email == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<com.chatcrmlite.backend.models.DocumentChunk> chunks = repository.findByDocumentIdAndTenantId(docId, user.getId());
+        
+        if (chunks.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        // Sort chunks by index just in case
+        chunks.sort(java.util.Comparator.comparing(c -> 
+            c.getMetadata().containsKey("chunk_index") ? Integer.parseInt(c.getMetadata().get("chunk_index").toString()) : 0
+        ));
+
+        StringBuilder sb = new StringBuilder();
+        String sourceName = "knowledge_document";
+        if (chunks.get(0).getMetadata().containsKey("source")) {
+            sourceName = chunks.get(0).getMetadata().get("source").toString();
+        }
+
+        sb.append("--- AI Extracted Text for Document: ").append(sourceName).append(" ---\n");
+        sb.append("Total AI Chunks: ").append(chunks.size()).append("\n");
+        sb.append("Vector DB Size: 384 dimensions (AllMiniLmL6V2Quantized)\n\n");
+
+        for (int i = 0; i < chunks.size(); i++) {
+            sb.append("--- CHUNK ").append(i + 1).append(" ---\n");
+            sb.append(chunks.get(i).getContent()).append("\n\n");
+        }
+
+        byte[] textBytes = sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(textBytes);
+
+        String filename = sourceName + ".txt";
+
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(org.springframework.http.MediaType.TEXT_PLAIN)
+                .contentLength(textBytes.length)
+                .body(resource);
     }
 }

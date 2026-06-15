@@ -34,6 +34,9 @@ public class WhatsAppFlowHandler {
                     .orElseThrow(() -> new RuntimeException("Contact not found"));
 
             String text = (String) context.getMetadata().get("text");
+            if (text == null) {
+                text = "";
+            }
             String type = (String) context.getMetadata().get("type");
             
             JsonNode root = objectMapper.readTree(context.getPayload());

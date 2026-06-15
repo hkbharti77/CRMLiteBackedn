@@ -8,6 +8,11 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
+
+import com.chatcrmlite.backend.dto.flow.FlowFieldConfig;
+import com.chatcrmlite.backend.services.FlowConfigService;
+import java.util.List;
+
 import java.util.Map;
 import java.util.Set;
 
@@ -28,6 +33,41 @@ public class FlowConfigController {
 
     @Autowired
     private FlowTemplateEngine templateEngine;
+
+    @Autowired
+    private FlowConfigService flowConfigService;
+
+    /**
+     * GET /api/v1/flow-config/fields
+     * Returns the list of available flow fields for the tenant, merged with their custom settings.
+     */
+    @GetMapping("/fields")
+    public ResponseEntity<List<FlowFieldConfig>> getFlowFields(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return ResponseEntity.ok(flowConfigService.getConfigurableFields(user, flowType));
+    }
+
+    /**
+     * POST /api/v1/flow-config/fields
+     * Saves the customized flow fields configuration.
+     */
+    @PostMapping("/fields")
+    public ResponseEntity<Map<String, String>> saveFlowFields(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType,
+            @RequestBody List<FlowFieldConfig> fields) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        flowConfigService.saveConfigurableFields(user, flowType, fields);
+        return ResponseEntity.ok(Map.of(
+                "status", "ok",
+                "message", "Flow fields configuration saved successfully."
+        ));
+    }
+
 
     // ════════════════════════════════════════════════════════════════════════
     //  Trigger Label Config

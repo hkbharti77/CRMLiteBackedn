@@ -88,7 +88,7 @@ public class NluEngine {
         for (char c : text.toCharArray()) uniqueChars.add(c);
         double entropy = (double) uniqueChars.size() / text.length();
         
-        return entropy < 0.35 || text.matches(".*(.)\\1{3,}.*");
+        return entropy < 0.20 || text.matches(".*(.)\\1{4,}.*");
     }
 
     private String fuzzyMatch(String word, Set<String> vocab) {

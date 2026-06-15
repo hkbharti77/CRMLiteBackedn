@@ -42,6 +42,9 @@ public class WhatsAppAiService {
                     .orElseThrow(() -> new RuntimeException("Contact not found"));
             
             String text = (String) context.getMetadata().get("text");
+            if (text == null) {
+                text = "";
+            }
             
             // Check if last response was AI for context boost
             PageRequest pageRequest = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "timestamp"));

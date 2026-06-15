@@ -27,10 +27,14 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
      * Ordered by: (vector_dist - 0.1 * LEAST(keyword_sim, 1.0)), vector_dist ASC
      * Note: We use native query for pgvector operators and trigram similarity
      */
-    @Query(value = "SELECT DISTINCT document_id, metadata->>'source' as source_name " +
+    /**
+     * Get document statistics including chunk count
+     */
+    @Query(value = "SELECT document_id, metadata->>'source' as source_name, COUNT(*) as chunk_count " +
                    "FROM document_chunks " +
-                   "WHERE tenant_id = :tenantId", nativeQuery = true)
-    List<Object[]> findDistinctDocumentsByTenantId(@Param("tenantId") UUID tenantId);
+                   "WHERE tenant_id = :tenantId " +
+                   "GROUP BY document_id, metadata->>'source'", nativeQuery = true)
+    List<Object[]> findDocumentStatsByTenantId(@Param("tenantId") UUID tenantId);
 
     @Query(value = "SELECT content FROM document_chunks " +
                    "WHERE tenant_id = :tenantId " +

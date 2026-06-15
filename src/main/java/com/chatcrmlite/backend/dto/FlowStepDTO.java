@@ -39,6 +39,20 @@ public class FlowStepDTO {
     @Builder.Default
     private List<String> options = new ArrayList<>();
 
+    private String fieldType;
+
+    @Builder.Default
+    private boolean required = false;
+
+    @Builder.Default
+    private boolean defaultEnabled = true;
+
+    private Integer displayOrder;
+
+    @JsonSetter(nulls = Nulls.AS_EMPTY)
+    @Builder.Default
+    private List<String> applicableNiches = new ArrayList<>();
+
     /**
      * FIX #11: Validates that options are provided when buttons or lists are enabled
      */

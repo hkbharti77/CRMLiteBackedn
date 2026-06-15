@@ -42,8 +42,8 @@ public class SemanticCacheService {
                 SELECT response_text, id
                 FROM semantic_cache
                 WHERE tenant_id = ?
-                  AND (embedding <=> ?::vector) < ?
-                ORDER BY (embedding <=> ?::vector) ASC
+                  AND (embedding <=> CAST(? AS vector)) < ?
+                ORDER BY (embedding <=> CAST(? AS vector)) ASC
                 LIMIT 1
                 """;
 
@@ -78,7 +78,7 @@ public class SemanticCacheService {
         
         String sql = """
                 INSERT INTO semantic_cache (tenant_id, query_text, embedding, response_text)
-                VALUES (?, ?, ?::vector, ?)
+                VALUES (?, ?, CAST(? AS vector), ?)
                 ON CONFLICT DO NOTHING
                 """;
 

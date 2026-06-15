@@ -5,11 +5,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 @Entity
 @Table(name = "contacts", uniqueConstraints = @UniqueConstraint(
         name = "uk_contact_waid_owner",
         columnNames = {"wa_id", "owner_id"}
 ))
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Contact extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
