@@ -18,7 +18,7 @@
 
 <!-- OTP Code Display -->
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#f3f4f6;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
   <tr>
     <td align="center">
       <table width="600" cellpadding="0" cellspacing="0" role="presentation"
@@ -27,67 +27,67 @@
           <td style="padding:0 36px 24px">
             
             <!-- OTP Code Box -->
-            <div style="background:#f0fdf4;border:2px solid #bbf7d0;border-radius:12px;
+            <div style="background:#ffffff;border:2px solid #008000;border-radius:12px;
                         padding:24px;text-align:center;margin:0 0 24px">
-              <p style="margin:0 0 8px;color:#166534;font-size:14px;font-weight:600;
+              <p style="margin:0 0 8px;color:#008000;font-size:14px;font-weight:600;
                         text-transform:uppercase;letter-spacing:0.5px">
                 Your Login Code
               </p>
               <div th:text="${otpCode}"
-                   style="font-size:32px;font-weight:700;color:#15803d;
+                   style="font-size:32px;font-weight:700;color:#000000;
                           letter-spacing:8px;font-family:monospace;
                           margin:8px 0;text-align:center">
                 123456
               </div>
-              <p style="margin:8px 0 0;color:#166534;font-size:13px">
+              <p style="margin:8px 0 0;color:#008000;font-size:13px">
                 Valid for <strong th:text="${expiryMinutes}">10</strong> minutes
               </p>
             </div>
 
             <!-- Login Details -->
-            <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;
+            <div style="background:#ffffff;border:1px solid #000000;border-radius:8px;
                         padding:16px 20px;margin:0 0 24px">
-              <p style="margin:0 0 8px;color:#475569;font-size:14px;font-weight:600">
+              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
                 📍 Login Attempt Details
               </p>
-              <table style="width:100%;font-size:13px;color:#64748b">
+              <table style="width:100%;font-size:13px;color:#000000">
                 <tr>
                   <td style="padding:2px 0;width:80px">Email:</td>
-                  <td style="padding:2px 0;color:#1e293b" th:text="${userEmail}">user@example.com</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${userEmail}">user@example.com</td>
                 </tr>
                 <tr>
                   <td style="padding:2px 0">Time:</td>
-                  <td style="padding:2px 0;color:#1e293b" th:text="${loginTime}">2026-05-09 14:30:15</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${loginTime}">2026-05-09 14:30:15</td>
                 </tr>
                 <tr th:if="${ipAddress}">
                   <td style="padding:2px 0">IP Address:</td>
-                  <td style="padding:2px 0;color:#1e293b" th:text="${ipAddress}">192.168.1.1</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${ipAddress}">192.168.1.1</td>
                 </tr>
                 <tr th:if="${userAgent}">
                   <td style="padding:2px 0">Device:</td>
-                  <td style="padding:2px 0;color:#1e293b" th:text="${userAgent}">Chrome Browser</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${userAgent}">Chrome Browser</td>
                 </tr>
               </table>
             </div>
 
             <!-- Security Notice -->
-            <div style="background:#fef2f2;border-left:4px solid #ef4444;
+            <div style="background:#ffffff;border-left:4px solid #ff0000;
                         padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
-              <p style="margin:0 0 8px;color:#dc2626;font-size:14px;font-weight:600">
+              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
                 🔒 Security Notice
               </p>
-              <p style="margin:0;color:#7f1d1d;font-size:13px;line-height:1.5">
+              <p style="margin:0;color:#000000;font-size:13px;line-height:1.5">
                 If you didn't attempt to log in, please secure your account immediately by changing your password.
               </p>
             </div>
 
             <!-- Quick Actions -->
-            <div style="background:#f0f9ff;border-left:4px solid #0ea5e9;
+            <div style="background:#ffffff;border-left:4px solid #000000;
                         padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
-              <p style="margin:0 0 8px;color:#0369a1;font-size:14px;font-weight:600">
+              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
                 ⚡ Quick Actions
               </p>
-              <ul style="margin:0;padding-left:16px;color:#075985;font-size:13px;line-height:1.6">
+              <ul style="margin:0;padding-left:16px;color:#000000;font-size:13px;line-height:1.6">
                 <li>Enter the code on the login page to access your account</li>
                 <li>The code will expire automatically after 10 minutes</li>
                 <li>Request a new code if this one expires</li>
@@ -95,7 +95,7 @@
             </div>
 
             <!-- Help Text -->
-            <p style="color:#6b7280;font-size:13px;line-height:1.5;margin:0">
+            <p style="color:#000000;font-size:13px;line-height:1.5;margin:0">
               <strong>Having trouble?</strong> Make sure you're entering the code on the same device 
               and browser where you initiated the login. Contact support if you need assistance.
             </p>

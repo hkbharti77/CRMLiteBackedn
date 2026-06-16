@@ -36,6 +36,8 @@ public class TicketRequest {
 
     private UUID assignedToId;
 
+    private Ticket.TicketSource source;
+
     public TicketRequest() {}
 
     public String getSubject() { return subject; }
@@ -56,4 +58,6 @@ public class TicketRequest {
     public void setCategory(String category) { this.category = category; }
     public UUID getAssignedToId() { return assignedToId; }
     public void setAssignedToId(UUID assignedToId) { this.assignedToId = assignedToId; }
+    public Ticket.TicketSource getSource() { return source; }
+    public void setSource(Ticket.TicketSource source) { this.source = source; }
 }

@@ -69,6 +69,33 @@ public class FlowConfigController {
     }
 
 
+    @GetMapping("/greeting")
+    public ResponseEntity<Map<String, String>> getFlowGreeting(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String greeting = flowConfigService.getFlowGreeting(user, flowType);
+        return ResponseEntity.ok(Map.of(
+                "greetingMessage", greeting != null ? greeting : ""
+        ));
+    }
+
+    @PostMapping("/greeting")
+    public ResponseEntity<Map<String, String>> saveFlowGreeting(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType,
+            @RequestBody Map<String, String> body) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String greetingMessage = body.get("greetingMessage");
+        flowConfigService.saveFlowGreeting(user, flowType, greetingMessage);
+        return ResponseEntity.ok(Map.of(
+                "status", "ok",
+                "message", "Flow greeting saved successfully."
+        ));
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     //  Trigger Label Config
     // ════════════════════════════════════════════════════════════════════════

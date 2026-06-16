@@ -8,6 +8,8 @@ import com.chatcrmlite.backend.models.ConversationState;
 import com.chatcrmlite.backend.models.TenantFlowConfig;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.TenantFlowConfigRepository;
+import com.chatcrmlite.backend.models.SupportFormConfig;
+import com.chatcrmlite.backend.repositories.SupportFormConfigRepository;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
@@ -25,12 +27,14 @@ public class FlowConfigService {
 
     private final ObjectMapper objectMapper;
     private final TenantFlowConfigRepository tenantFlowConfigRepository;
+    private final SupportFormConfigRepository supportFormConfigRepository;
 
     @Autowired
-    public FlowConfigService(ObjectMapper objectMapper, TenantFlowConfigRepository tenantFlowConfigRepository) {
+    public FlowConfigService(ObjectMapper objectMapper, TenantFlowConfigRepository tenantFlowConfigRepository, SupportFormConfigRepository supportFormConfigRepository) {
         this.objectMapper = objectMapper.copy()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.tenantFlowConfigRepository = tenantFlowConfigRepository;
+        this.supportFormConfigRepository = supportFormConfigRepository;
     }
 
     public FlowConfigDTO getFlowConfig(User user) {
@@ -59,9 +63,14 @@ public class FlowConfigService {
             flowTypeEnum = ConversationState.FlowType.BOOKING;
         } else if ("lead".equals(flowTypeStr)) {
             flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
+        } else if ("support".equals(flowTypeStr)) {
+            flowTypeEnum = ConversationState.FlowType.SUPPORT;
         }
 
         String masterSlug = "master-fields";
+        if (flowTypeEnum == ConversationState.FlowType.SUPPORT) {
+            masterSlug = "support";
+        }
         FlowConfigDTO config = loadFlow(masterSlug);
         
         if (config == null) {
@@ -85,6 +94,10 @@ public class FlowConfigService {
     }
 
     private FlowConfigDTO applyTenantConfiguration(User tenant, ConversationState.FlowType flowType, FlowConfigDTO masterConfig) {
+        if (flowType == ConversationState.FlowType.SUPPORT) {
+            return applySupportFormConfiguration(tenant, masterConfig);
+        }
+
         Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(tenant, flowType);
         
         List<FlowStepDTO> filteredSteps = new ArrayList<>();
@@ -104,6 +117,11 @@ public class FlowConfigService {
         TenantFlowConfig dbConfig = dbConfigOpt.get();
         try {
             TenantFlowConfigJson configJson = objectMapper.readValue(dbConfig.getConfigurationJson(), TenantFlowConfigJson.class);
+            
+            if (configJson != null && configJson.getGreetingMessage() != null) {
+                masterConfig.setGreetingMessage(configJson.getGreetingMessage());
+            }
+
             if (configJson == null || configJson.getFields() == null) {
                 // If invalid JSON, fallback to default behavior
                 for (FlowStepDTO step : masterConfig.getSteps()) {
@@ -161,6 +179,34 @@ public class FlowConfigService {
         return masterConfig;
     }
 
+    private FlowConfigDTO applySupportFormConfiguration(User tenant, FlowConfigDTO masterConfig) {
+        Optional<SupportFormConfig> dbConfigOpt = supportFormConfigRepository.findByOwner(tenant);
+        if (dbConfigOpt.isEmpty()) {
+            return masterConfig;
+        }
+        SupportFormConfig config = dbConfigOpt.get();
+        List<FlowStepDTO> steps = masterConfig.getSteps();
+        
+        for (FlowStepDTO step : steps) {
+            if ("phone".equals(step.getDataKey())) {
+                step.setRequired(config.isPhoneRequired());
+            } else if ("category".equals(step.getDataKey())) {
+                step.setRequired(config.isCategoryRequired());
+                String cats = config.getCategories();
+                if (cats != null && !cats.isBlank()) {
+                    List<String> options = Arrays.stream(cats.split(","))
+                            .map(String::trim).filter(s -> !s.isEmpty()).toList();
+                    if (!options.isEmpty()) {
+                        step.setOptions(options);
+                        step.setUsesButtons(true);
+                        step.setFieldType("DROPDOWN");
+                    }
+                }
+            }
+        }
+        return masterConfig;
+    }
+
     
     public List<FlowFieldConfig> getConfigurableFields(User user, String explicitSuffix) {
         String flowTypeStr = "";
@@ -184,9 +230,14 @@ public class FlowConfigService {
             flowTypeEnum = ConversationState.FlowType.BOOKING;
         } else if ("lead".equals(flowTypeStr)) {
             flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
+        } else if ("support".equals(flowTypeStr)) {
+            flowTypeEnum = ConversationState.FlowType.SUPPORT;
         }
 
         String masterSlug = "master-fields";
+        if (flowTypeEnum == ConversationState.FlowType.SUPPORT) {
+            masterSlug = "support";
+        }
         FlowConfigDTO masterConfig = loadFlow(masterSlug);
         if (masterConfig == null) {
             return Collections.emptyList();
@@ -267,31 +318,105 @@ public class FlowConfigService {
             flowTypeEnum = ConversationState.FlowType.BOOKING;
         } else if ("lead".equals(flowTypeStr)) {
             flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
+        } else if ("support".equals(flowTypeStr)) {
+            flowTypeEnum = ConversationState.FlowType.SUPPORT;
         }
 
         try {
-            TenantFlowConfigJson jsonConfig = new TenantFlowConfigJson(fields);
-            String jsonStr = objectMapper.writeValueAsString(jsonConfig);
-
             Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
             TenantFlowConfig dbConfig;
+            
+            TenantFlowConfigJson jsonConfig = new TenantFlowConfigJson();
+            jsonConfig.setFields(fields);
+
             if (dbConfigOpt.isPresent()) {
                 dbConfig = dbConfigOpt.get();
-                dbConfig.setConfigurationJson(jsonStr);
+                try {
+                    TenantFlowConfigJson existingJson = objectMapper.readValue(dbConfig.getConfigurationJson(), TenantFlowConfigJson.class);
+                    if (existingJson != null) {
+                        jsonConfig.setGreetingMessage(existingJson.getGreetingMessage());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse existing config", e);
+                }
+                dbConfig.setConfigurationJson(objectMapper.writeValueAsString(jsonConfig));
             } else {
                 dbConfig = TenantFlowConfig.builder()
                         .tenant(user)
                         .flowType(flowTypeEnum)
-                        .configurationJson(jsonStr)
+                        .configurationJson(objectMapper.writeValueAsString(jsonConfig))
                         .templateVersion(1)
                         .build();
             }
             tenantFlowConfigRepository.save(dbConfig);
-            log.info("Saved flow config for user: " + user.getId() + ", flowType: " + flowTypeEnum);
+            log.info("Saved configurable fields for user: {} flowType: {}", user.getEmail(), flowTypeEnum);
         } catch (Exception e) {
-            log.error("Failed to save configurable fields for user: " + user.getId(), e);
+            log.error("Error saving configurable fields", e);
             throw new RuntimeException("Failed to save configuration", e);
         }
+    }
+
+    public String getFlowGreeting(User user, String explicitSuffix) {
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
+        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
+        if (dbConfigOpt.isPresent()) {
+            try {
+                TenantFlowConfigJson configJson = objectMapper.readValue(dbConfigOpt.get().getConfigurationJson(), TenantFlowConfigJson.class);
+                return configJson != null ? configJson.getGreetingMessage() : null;
+            } catch (Exception e) {
+                log.error("Failed to parse config json", e);
+            }
+        }
+        return null; // or fetch default from master config
+    }
+
+    public void saveFlowGreeting(User user, String explicitSuffix, String greetingMessage) {
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
+        try {
+            Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
+            TenantFlowConfig dbConfig;
+            
+            TenantFlowConfigJson jsonConfig = new TenantFlowConfigJson();
+            if (dbConfigOpt.isPresent()) {
+                dbConfig = dbConfigOpt.get();
+                try {
+                    TenantFlowConfigJson existingJson = objectMapper.readValue(dbConfig.getConfigurationJson(), TenantFlowConfigJson.class);
+                    if (existingJson != null) {
+                        jsonConfig.setFields(existingJson.getFields());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to parse existing config", e);
+                }
+            } else {
+                dbConfig = TenantFlowConfig.builder()
+                        .tenant(user)
+                        .flowType(flowTypeEnum)
+                        .templateVersion(1)
+                        .build();
+            }
+            
+            jsonConfig.setGreetingMessage(greetingMessage);
+            dbConfig.setConfigurationJson(objectMapper.writeValueAsString(jsonConfig));
+            tenantFlowConfigRepository.save(dbConfig);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to save greeting message", e);
+        }
+    }
+
+    private ConversationState.FlowType resolveFlowTypeEnum(User user, String explicitSuffix) {
+        String flowTypeStr = "";
+        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
+            flowTypeStr = explicitSuffix.toLowerCase();
+        } else if (user != null) {
+            if (Boolean.TRUE.equals(user.getForceShowAppointment())) flowTypeStr = "appointment";
+            else if (Boolean.TRUE.equals(user.getForceShowBooking())) flowTypeStr = "booking";
+            else if (Boolean.TRUE.equals(user.getForceShowLeads())) flowTypeStr = "lead";
+        }
+        if ("appointment".equals(flowTypeStr)) return ConversationState.FlowType.APPOINTMENT;
+        if ("booking".equals(flowTypeStr)) return ConversationState.FlowType.BOOKING;
+        if ("lead".equals(flowTypeStr)) return ConversationState.FlowType.LEAD_CAPTURE;
+        if ("support".equals(flowTypeStr)) return ConversationState.FlowType.SUPPORT;
+        return ConversationState.FlowType.ENQUIRY;
     }
 
     private FlowConfigDTO loadFlow(String slug) {

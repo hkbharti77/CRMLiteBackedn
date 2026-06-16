@@ -50,6 +50,7 @@ public class WhatsAppConfigController {
         labels.put("TRUST", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.TRUST_LABEL);
         labels.put("OFFER", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.OFFER_LABEL);
         labels.put("ABOUT", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.ABOUT_LABEL);
+        labels.put("SUPPORT_FORM", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.SUPPORT_LABEL);
         return ResponseEntity.ok(labels);
     }
 

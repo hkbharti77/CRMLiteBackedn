@@ -1,46 +1,46 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head><meta charset="UTF-8"/><title th:text="${subject}">Lead Won</title></head>
-<body style="margin:0;padding:0;background:#f3f4f6;font-family:Arial,Helvetica,sans-serif">
+<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
 
 <div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
 
 <table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#f3f4f6;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
   <tr><td align="center">
     <table width="600" cellpadding="0" cellspacing="0" role="presentation"
            style="background:#ffffff;max-width:600px;width:100%">
       <tr><td style="padding:0 36px 24px">
 
-        <div style="background:linear-gradient(135deg,#f0fdf4,#dcfce7);border:1px solid #86efac;
+        <div style="background:#000000;border:1px solid #000000;
                     border-radius:8px;padding:16px;text-align:center;margin:0 0 20px">
-          <p style="margin:0;color:#166534;font-size:16px;font-weight:700">
-            &#127942; Lead Closed &mdash; Won!
+          <p style="margin:0;color:#008000;font-size:16px;font-weight:700">
+            &#127881; Lead Closed &mdash; Won!
           </p>
         </div>
 
         <table style="width:100%;border-collapse:collapse">
           <tr>
-            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
-                       font-size:13px;width:36%;border:1px solid #e5e7eb">Contact</td>
-            <td style="padding:9px 14px;color:#374151;font-size:13px;border:1px solid #e5e7eb">
+            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
+                       font-size:13px;width:36%;border:1px solid #000000">Contact</td>
+            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000">
               <span th:text="${contactName}">Name</span>
               &nbsp;&middot;&nbsp;
               <a th:href="'mailto:' + ${contactEmail}" th:text="${contactEmail}"
-                 style="color:#6366f1;text-decoration:none">email</a>
+                 style="color:#008000;text-decoration:none">email</a>
             </td>
           </tr>
           <tr th:if="${dealLabel != null}">
-            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
-                       font-size:13px;border:1px solid #e5e7eb">Deal</td>
-            <td style="padding:9px 14px;color:#374151;font-size:13px;border:1px solid #e5e7eb"
+            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
+                       font-size:13px;border:1px solid #000000">Deal</td>
+            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
                 th:text="${dealLabel}">Deal</td>
           </tr>
           <tr th:if="${dealValue != null}">
-            <td style="padding:9px 14px;background:#f9fafb;font-weight:600;color:#374151;
-                       font-size:13px;border:1px solid #e5e7eb">Value</td>
-            <td style="padding:9px 14px;color:#16a34a;font-size:15px;font-weight:700;
-                       border:1px solid #e5e7eb"
+            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
+                       font-size:13px;border:1px solid #000000">Value</td>
+            <td style="padding:9px 14px;color:#008000;font-size:15px;font-weight:700;
+                       border:1px solid #000000"
                 th:text="${currency + ' ' + dealValue}">INR 0</td>
           </tr>
         </table>

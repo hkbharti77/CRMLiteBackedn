@@ -11,5 +11,6 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TenantFlowConfigJson {
+    private String greetingMessage;
     private List<FlowFieldConfig> fields;
 }

@@ -57,15 +57,36 @@ public class FlowDefinitionLoader {
 
     public Optional<FlowMachineDef> resolveFlowMachineDef(User owner, String explicitSuffix) {
         // 1 & 2 — check DB first (tenant-scoped, then global)
-        for (ConversationState.FlowType type : ConversationState.FlowType.values()) {
+        ConversationState.FlowType targetType = null;
+        if (explicitSuffix != null) {
+            try {
+                targetType = ConversationState.FlowType.valueOf(explicitSuffix.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore if explicitSuffix doesn't map to a FlowType
+            }
+        }
+        
+        if (targetType != null) {
             Optional<FlowDefinition> dbDef = flowDefinitionRepository
-                    .findLatestActiveByTenantAndFlowType(owner, type);
+                    .findLatestActiveByTenantAndFlowType(owner, targetType);
             if (dbDef.isEmpty()) {
-                dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(type);
+                dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(targetType);
             }
             if (dbDef.isPresent()) {
-                log.debug("[FlowLoader] Using DB flow definition for owner={}", owner.getId());
+                log.debug("[FlowLoader] Using DB flow definition for owner={}, type={}", owner.getId(), targetType);
                 return Optional.of(parseDefinition(dbDef.get().getDefinitionJson()));
+            }
+        } else {
+            for (ConversationState.FlowType type : ConversationState.FlowType.values()) {
+                Optional<FlowDefinition> dbDef = flowDefinitionRepository
+                        .findLatestActiveByTenantAndFlowType(owner, type);
+                if (dbDef.isEmpty()) {
+                    dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(type);
+                }
+                if (dbDef.isPresent()) {
+                    log.debug("[FlowLoader] Using DB flow definition for owner={}", owner.getId());
+                    return Optional.of(parseDefinition(dbDef.get().getDefinitionJson()));
+                }
             }
         }
 
@@ -96,9 +117,14 @@ public class FlowDefinitionLoader {
             String stateName = "STATE_" + i;
             String nextState = (i < steps.size() - 1) ? "STATE_" + (i + 1) : "COMPLETE";
 
+            String questionText = step.getQuestion();
+            if (i == 0 && config.getGreetingMessage() != null && !config.getGreetingMessage().isBlank()) {
+                questionText = config.getGreetingMessage() + "\n\n" + questionText;
+            }
+
             StateDef state = StateDef.builder()
                     .type(StateDef.StateType.MESSAGE)
-                    .text(step.getQuestion())
+                    .text(questionText)
                     .saveInputAs(step.getDataKey())
                     .options(step.getOptions() != null && !step.getOptions().isEmpty()
                             ? step.getOptions() : null)

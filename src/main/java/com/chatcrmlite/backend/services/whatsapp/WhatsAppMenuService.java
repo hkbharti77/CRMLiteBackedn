@@ -241,6 +241,7 @@ public class WhatsAppMenuService {
         boolean isTrust = Boolean.TRUE.equals(config.getShowTrustButton());
         boolean isOffer = Boolean.TRUE.equals(config.getShowOfferButton());
         boolean isSos = Boolean.TRUE.equals(config.getShowSosButton());
+        boolean isSupportForm = Boolean.TRUE.equals(config.getShowSupportFormButton());
         boolean isAbout = Boolean.TRUE.equals(config.getShowAboutContact());
 
         if ("button".equals(menu.getType())) {
@@ -251,6 +252,9 @@ public class WhatsAppMenuService {
             }
             List<MenuDto.MenuRowDto> modifiableRows = new ArrayList<>(rows);
             
+            if (modifiableRows.size() < 3 && isSupportForm && modifiableRows.stream().noneMatch(r -> "trigger_flow_support".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("trigger_flow_support").title(SUPPORT_LABEL).build());
+            }
             if (modifiableRows.size() < 3 && isSos && modifiableRows.stream().noneMatch(r -> "get_support".equals(r.getId()))) {
                 modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).build());
             }
@@ -278,6 +282,9 @@ public class WhatsAppMenuService {
             }
             if (isSos) {
                 dynamicRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).description("Get help from our team").build());
+            }
+            if (isSupportForm) {
+                dynamicRows.add(MenuDto.MenuRowDto.builder().id("trigger_flow_support").title(SUPPORT_LABEL).description("Submit a support request").build());
             }
 
             if (!dynamicRows.isEmpty()) {

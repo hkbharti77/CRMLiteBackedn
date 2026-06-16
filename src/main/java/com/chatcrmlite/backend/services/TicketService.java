@@ -120,13 +120,14 @@ public class TicketService {
                 .priority(req.getPriority() != null ? req.getPriority() : Ticket.TicketPriority.MEDIUM)
                 .category(req.getCategory())
                 .assignedTo(assignedTo)
-                .source(Ticket.TicketSource.MANUAL)
+                .source(req.getSource() != null ? req.getSource() : Ticket.TicketSource.MANUAL)
                 .build();
 
         slaService.calculateSlaDeadlines(ticket);
         Ticket saved = ticketRepository.save(ticket);
-        logActivity(saved, owner, TicketActivity.ActivityType.CREATED, null, null, "Ticket created manually");
-        eventPublisher.publishEvent(new TicketCreatedEvent(this, saved, "MANUAL"));
+        String sourceStr = (req.getSource() != null ? req.getSource().name() : "MANUAL");
+        logActivity(saved, owner, TicketActivity.ActivityType.CREATED, null, null, "Ticket created (" + sourceStr + ")");
+        eventPublisher.publishEvent(new TicketCreatedEvent(this, saved, sourceStr));
         return saved;
     }
 

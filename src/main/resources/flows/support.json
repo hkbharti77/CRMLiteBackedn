@@ -1,0 +1,61 @@
+{
+  "flowType": "SUPPORT",
+  "greetingMessage": "Welcome to our Support channel! Please provide a few details so we can assist you better.",
+  "steps": [
+    {
+      "dataKey": "name",
+      "question": "👤 What is your name?",
+      "fieldType": "TEXT",
+      "defaultEnabled": true,
+      "required": true,
+      "usesButtons": false,
+      "dynamicSource": false,
+      "displayOrder": 1,
+      "applicableNiches": []
+    },
+    {
+      "dataKey": "email",
+      "question": "📧 Please provide your email address so our support team can reach you:",
+      "fieldType": "EMAIL",
+      "defaultEnabled": true,
+      "required": true,
+      "usesButtons": false,
+      "dynamicSource": false,
+      "displayOrder": 2,
+      "applicableNiches": []
+    },
+    {
+      "dataKey": "phone",
+      "question": "📱 What is your phone number?",
+      "fieldType": "TEXT",
+      "defaultEnabled": true,
+      "required": false,
+      "usesButtons": false,
+      "dynamicSource": false,
+      "displayOrder": 3,
+      "applicableNiches": []
+    },
+    {
+      "dataKey": "category",
+      "question": "🏷️ What category best describes your issue? (e.g., Billing, Technical, General)",
+      "fieldType": "TEXT",
+      "defaultEnabled": true,
+      "required": false,
+      "usesButtons": false,
+      "dynamicSource": false,
+      "displayOrder": 4,
+      "applicableNiches": []
+    },
+    {
+      "dataKey": "subject",
+      "question": "📝 Please provide a brief subject for your request:",
+      "fieldType": "TEXT",
+      "defaultEnabled": true,
+      "required": true,
+      "usesButtons": false,
+      "dynamicSource": false,
+      "displayOrder": 5,
+      "applicableNiches": []
+    }
+  ]
+}

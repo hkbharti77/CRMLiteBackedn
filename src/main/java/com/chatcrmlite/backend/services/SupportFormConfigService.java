@@ -195,14 +195,19 @@ public class SupportFormConfigService {
         if (categoriesRaw == null || categoriesRaw.isBlank()) {
             return;
         }
-        List<String> categories = parseCategories(categoriesRaw);
-        if (categories.isEmpty()) {
+        
+        List<String> rawList = Arrays.stream(categoriesRaw.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isBlank())
+                .toList();
+
+        if (rawList.isEmpty()) {
             throw new IllegalArgumentException("At least one category is required");
         }
-        if (categories.size() > 10) {
+        if (rawList.size() > 10) {
             throw new IllegalArgumentException("Maximum 10 categories allowed (WhatsApp limit)");
         }
-        for (String cat : categories) {
+        for (String cat : rawList) {
             if (cat.length() > 24) {
                 throw new IllegalArgumentException("Category name cannot exceed 24 characters: " + cat);
             }

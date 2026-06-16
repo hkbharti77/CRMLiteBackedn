@@ -93,7 +93,7 @@ public class ConversationState implements Serializable {
 
     // ── Flow Types ───────────────────────────────────────────────────────────
     public enum FlowType {
-        APPOINTMENT, BOOKING, ENQUIRY, LEAD_CAPTURE
+        APPOINTMENT, BOOKING, ENQUIRY, LEAD_CAPTURE, SUPPORT
     }
 
     public static ConversationStateBuilder builder() {

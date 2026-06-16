@@ -91,12 +91,13 @@ public class FlowStateMachine {
      *   4. Generic JSON file (resources/flows/generic.json)
      */
     public boolean startFlow(Contact contact, User owner, String initialMessage, String flowSuffix) {
-        // Try DB-backed definition first
-        Optional<FlowDefinition> dbDefOpt = findDbDefinitionForOwner(owner);
+        ConversationState.FlowType flowType = resolveFlowTypeForOwner(owner, flowSuffix);
+
+        // Try DB-backed definition first for THIS SPECIFIC flowType
+        Optional<FlowDefinition> dbDefOpt = definitionLoader.findLatestActiveDefinition(owner, flowType);
 
         FlowMachineDef machineDef;
         UUID flowDefinitionId = null;
-        ConversationState.FlowType flowType;
 
         if (dbDefOpt.isPresent()) {
             FlowDefinition def = dbDefOpt.get();
@@ -122,8 +123,7 @@ public class FlowStateMachine {
                 log.error("[StateMachine] Resolved flow definition is null for owner={}", owner.getId());
                 return false;
             }
-            // Derive flowType from the JSON config
-            flowType = resolveFlowTypeForOwner(owner, flowSuffix);
+            // flowType is already resolved
             log.debug("[StateMachine] Using JSON file flow for owner={}, flowType={}", owner.getId(), flowType);
         }
 
@@ -185,7 +185,7 @@ public class FlowStateMachine {
         if (state.getFlowDefinitionId() != null) {
             return definitionLoader.loadDefinition(state.getFlowDefinitionId());
         }
-        return definitionLoader.resolveFlowMachineDef(owner)
+        return definitionLoader.resolveFlowMachineDef(owner, state.getFlowType().name().toLowerCase())
                 .orElseThrow(() -> new IllegalStateException(
                         "Cannot reload flow definition for in-progress state, owner=" + owner.getId()));
     }
@@ -199,7 +199,23 @@ public class FlowStateMachine {
         
         // Save input if the state requires it
         if (currentStateDef.getSaveInputAs() != null) {
-            saveAnswer(state, currentStateDef.getSaveInputAs(), activeInput);
+            String field = currentStateDef.getSaveInputAs();
+            String errorMsg = validateInput(field, activeInput);
+            if (errorMsg != null) {
+                log.warn("[StateMachine] Validation failed for field {}: {}", field, errorMsg);
+                WhatsAppConfig config = configRepository.findByUserId(owner.getId()).orElse(null);
+                if (config != null) {
+                    try {
+                        outboundService.sendText(contact, "⚠️ " + errorMsg, config, owner);
+                    } catch (Exception e) {
+                        log.warn("[StateMachine] Could not send validation warning: {}", e.getMessage());
+                    }
+                }
+                // Resend the question
+                stateResolver.sendStateMessage(currentStateDef, contact, owner, 0);
+                return;
+            }
+            saveAnswer(state, field, activeInput);
         }
 
         // Build context for transitions
@@ -256,6 +272,38 @@ public class FlowStateMachine {
             log.debug("[StateMachine] State saved for contact={}, executing state={}", contact.getWaId(), nextStateName);
             executeState(state, machineDef, contact, owner);
         }
+    }
+
+    private String validateInput(String field, String input) {
+        if (input == null || input.trim().isEmpty()) {
+            return "Please provide a valid answer.";
+        }
+        String val = input.trim();
+        
+        if ("email".equalsIgnoreCase(field)) {
+            if (val.length() > 256) {
+                return "Email address is too long. Maximum allowed length is 256 characters.";
+            }
+            String emailRegex = "^[A-Za-z0-9+_.-]+@(.+)$";
+            if (!val.matches(emailRegex)) {
+                return "That doesn't look like a valid email address. Please enter a valid email (e.g., name@example.com).";
+            }
+        } else if ("phone".equalsIgnoreCase(field)) {
+            String phoneRegex = "^\\+?[0-9]{7,15}$";
+            // Strip spaces, dashes, parentheses to check digits
+            if (!val.replaceAll("[\\s\\-\\(\\)]", "").matches(phoneRegex)) {
+                return "That doesn't look like a valid phone number. Please enter a valid number (e.g., +1234567890).";
+            }
+        } else if ("name".equalsIgnoreCase(field)) {
+            if (val.length() < 2) {
+                return "Name is too short. Please enter your full name (minimum 2 characters).";
+            }
+            if (val.length() > 67) {
+                return "Name is too long. Maximum allowed length is 67 characters.";
+            }
+        }
+        
+        return null;
     }
 
     private void executeState(ConversationState state, FlowMachineDef machineDef, Contact contact, User owner) {
