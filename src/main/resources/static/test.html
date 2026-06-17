@@ -211,7 +211,7 @@
             // Inject fresh script with data-business-id
             const script = document.createElement('script');
             script.id = 'widget-script';
-            script.src = '/chat-widget.js';
+            script.src = '/chat-widget.js?t=' + new Date().getTime();
             script.setAttribute('data-business-id', businessId);
             document.body.appendChild(script);
         }

@@ -74,11 +74,28 @@ public class WhatsAppAiService {
                     context.getMetadata().put("pendingResponse", guardrail.getSuggestion());
                     context.getMetadata().put("responseType", "PLAIN");
                     break;
-                case MENU:
-                    context.getMetadata().put("responseType", "MENU");
-                    break;
                 case IGNORE:
-                    context.getMetadata().put("responseType", "NONE");
+                    String fallbackMsg = "We couldn't process your request. Please select an option from the menu below.";
+                    if ("abuse_throttled".equals(guardrail.getReason())) {
+                        String msg = config.getGuardrailMessageAbuse();
+                        if (msg != null && !msg.isBlank()) fallbackMsg = msg;
+                    } else {
+                        String msg = config.getGuardrailMessageGibberish();
+                        if (msg != null && !msg.isBlank()) fallbackMsg = msg;
+                    }
+                    context.getMetadata().put("pendingResponse", fallbackMsg);
+                    context.getMetadata().put("responseType", "MENU_OVERRIDE");
+                    break;
+                case MENU:
+                    if ("gibberish".equals(guardrail.getReason())) {
+                        String msg = config.getGuardrailMessageGibberish();
+                        if (msg != null && !msg.isBlank()) {
+                            context.getMetadata().put("pendingResponse", msg);
+                            context.getMetadata().put("responseType", "MENU_OVERRIDE");
+                            break;
+                        }
+                    }
+                    context.getMetadata().put("responseType", "MENU");
                     break;
             }
             log.info("🤖 [AI-Stage] Decision for {}: {}", context.getMessageId(), guardrail.getDecision());

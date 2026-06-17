@@ -62,7 +62,19 @@ public class WhatsAppFlowHandler {
                     flowStateMachine.resetFlow(contact);
                     context.getMetadata().put("responseType", "MENU");
                     log.info("🛑 User cancelled the active flow.");
-                    outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
+                    
+                    if (config.getFlowCancelMenuJson() != null && !config.getFlowCancelMenuJson().isBlank()) {
+                        try {
+                            com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
+                                    config.getFlowCancelMenuJson(), com.chatcrmlite.backend.dto.MenuDto.class);
+                            outboundService.sendInteractiveMenu(contact, menu, "🛑 Your form has been terminated.", config, owner);
+                        } catch (Exception e) {
+                            log.warn("Failed to parse configured cancel menu, falling back to text", e);
+                            outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
+                        }
+                    } else {
+                        outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
+                    }
                     return;
                 }
                 // Do not intercept other keywords if a flow is active. Let the flow validate the input.

@@ -40,5 +40,10 @@ public interface WhatsAppClient {
      * Sends a location message through the WhatsApp Business API.
      */
     String sendLocation(String to, double latitude, double longitude, String name, String address, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends a catalog message through the WhatsApp Business API.
+     */
+    String sendCatalogMessage(String to, String text, String accessToken, String phoneNumberId);
 }
 

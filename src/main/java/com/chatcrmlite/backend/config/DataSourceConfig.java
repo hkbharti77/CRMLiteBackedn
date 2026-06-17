@@ -6,6 +6,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.datasource.lookup.AbstractRoutingDataSource;
+import org.springframework.boot.autoconfigure.quartz.QuartzDataSource;
 
 import javax.sql.DataSource;
 import java.util.HashMap;
@@ -46,6 +47,12 @@ public class DataSourceConfig {
         routingDataSource.setTargetDataSources(dataSourceMap);
         routingDataSource.setDefaultTargetDataSource(writerDataSource());
         return routingDataSource;
+    }
+
+    @Bean
+    @QuartzDataSource
+    public DataSource quartzDataSource() {
+        return writerDataSource();
     }
 
     public enum DataSourceType {

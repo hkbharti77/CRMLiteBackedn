@@ -14,23 +14,4 @@ public interface AiProvider {
     double getCostPer1kTokens();
 }
 
-@Data @Builder
-class AiRequest {
-    private String prompt;
-    private String systemInstruction;
-    private double temperature;
-    private int maxTokens;
-    private UUID tenantId;
-    private TaskComplexity complexity;
-    
-    public enum TaskComplexity { LOW, MEDIUM, HIGH }
-}
 
-@Data @Builder
-class AiResponse {
-    private String content;
-    private int tokensUsed;
-    private long latencyMs;
-    private String provider;
-    private Map<String, Object> metadata;
-}

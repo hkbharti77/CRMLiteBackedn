@@ -308,5 +308,35 @@ public class MetaWhatsAppClient implements WhatsAppClient {
 
         return executeApiCallWithRetry(url, headers, body);
     }
+
+    @Override
+    public String sendCatalogMessage(String to, String text, String accessToken, String phoneNumberId) {
+        String url = String.format(META_URL, phoneNumberId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("to", to);
+        body.put("type", "interactive");
+
+        Map<String, Object> interactive = new HashMap<>();
+        interactive.put("type", "catalog_message");
+
+        Map<String, Object> bodyObj = new HashMap<>();
+        bodyObj.put("text", text != null && !text.isBlank() ? text : "Please check out our catalog below:");
+        interactive.put("body", bodyObj);
+
+        Map<String, Object> action = new HashMap<>();
+        action.put("name", "catalog_message");
+        
+        // We omit parameters (thumbnail_product_retailer_id) to use default
+        interactive.put("action", action);
+        body.put("interactive", interactive);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
 }
 

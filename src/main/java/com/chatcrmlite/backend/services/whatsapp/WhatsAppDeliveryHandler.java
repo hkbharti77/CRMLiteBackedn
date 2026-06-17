@@ -53,6 +53,9 @@ public class WhatsAppDeliveryHandler {
                 case "MENU":
                     menuService.sendTenantMenuToContact(contact, config);
                     break;
+                case "MENU_OVERRIDE":
+                    menuService.sendTenantMenuToContact(contact, config, pendingResponse);
+                    break;
                 case "FLOW_CONSUMED":
                 case "NONE":
                     break;

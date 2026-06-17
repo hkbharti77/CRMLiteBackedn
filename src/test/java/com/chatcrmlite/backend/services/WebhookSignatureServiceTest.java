@@ -3,6 +3,8 @@ package com.chatcrmlite.backend.services;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.util.ReflectionTestUtils;
+import org.mockito.Mock;
+import org.mockito.InjectMocks;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -13,18 +15,29 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class WebhookSignatureServiceTest {
 
+    @Mock
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository configRepository;
+
+    @InjectMocks
     private WebhookSignatureService service;
+
     private final String testSecret = "test_secret_12345";
+    private final String phoneId = "test-phone-id";
 
     @BeforeEach
     void setUp() {
-        service = new WebhookSignatureService();
-        ReflectionTestUtils.setField(service, "appSecret", testSecret);
+        org.mockito.MockitoAnnotations.openMocks(this);
     }
 
     @Test
     void testValidSignature() throws Exception {
-        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[]}";
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
+        
+        com.chatcrmlite.backend.models.WhatsAppConfig config = new com.chatcrmlite.backend.models.WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        org.mockito.Mockito.when(configRepository.findByPhoneNumberId(phoneId))
+                .thenReturn(java.util.Optional.of(config));
+
         String expectedSignature = calculateHmac(payload, testSecret);
         String header = "sha256=" + expectedSignature;
 
@@ -33,8 +46,13 @@ class WebhookSignatureServiceTest {
 
     @Test
     void testInvalidSignature() {
-        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[]}";
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
         String header = "sha256=invalid_signature_hex_code";
+
+        com.chatcrmlite.backend.models.WhatsAppConfig config = new com.chatcrmlite.backend.models.WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        org.mockito.Mockito.when(configRepository.findByPhoneNumberId(phoneId))
+                .thenReturn(java.util.Optional.of(config));
 
         assertFalse(service.verifySignature(payload, header), "Invalid signature should fail");
     }

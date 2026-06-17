@@ -48,7 +48,34 @@ public class WhatsAppMessageService {
         String body = (response != null && response.length() > 1024) ? response.substring(0, 1021) + "..." : response;
 
         List<MenuDto.MenuRowDto> buttons = new ArrayList<>();
-        buttons.add(MenuDto.MenuRowDto.builder().id("trigger_flow").title("Enquire Now").build());
+        String menuJson = config.getAiResponseMenuJson();
+        
+        if (menuJson != null && !menuJson.isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(menuJson);
+                com.fasterxml.jackson.databind.JsonNode rows = root.at("/sections/0/rows");
+                if (rows.isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode row : rows) {
+                        buttons.add(MenuDto.MenuRowDto.builder()
+                                .id(row.get("id").asText())
+                                .title(row.get("title").asText())
+                                .build());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Failed to parse aiResponseMenuJson, falling back to default.", e);
+            }
+        } else {
+            // Default backward compatibility if not configured
+            buttons.add(MenuDto.MenuRowDto.builder().id("trigger_flow").title("Enquire Now").build());
+        }
+
+        if (buttons.isEmpty()) {
+            // If the user configured the menu but removed all buttons, just send plain text
+            outboundService.sendText(contact, body, config, owner);
+            return;
+        }
 
         MenuDto menu = MenuDto.builder()
                 .type("button")

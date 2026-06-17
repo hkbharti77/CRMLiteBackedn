@@ -11,8 +11,12 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import com.chatcrmlite.backend.repositories.BusinessServiceRepository;
+import com.chatcrmlite.backend.models.BusinessService;
+
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -27,6 +31,10 @@ public class WhatsAppMenuService {
     private final WhatsAppOutboundService outboundService;
     private final FlowTemplateEngine templateEngine;
     private final ObjectMapper objectMapper;
+    private final BusinessServiceRepository businessServiceRepository;
+    
+    @org.springframework.beans.factory.annotation.Value("${app.public.url}")
+    private String appPublicUrl;
 
     public void sendGreetingWithMenu(Contact contact, WhatsAppConfig config, User owner, boolean isNewLead) {
         String customWelcome = config.getWelcomeMessage();
@@ -187,6 +195,74 @@ public class WhatsAppMenuService {
             return true;
         }
         if (handleCustomMessageTrigger(contact, config, owner, selectionId)) {
+            return true;
+        }
+        if ("view_services".equals(selectionId)) {
+            try {
+                List<BusinessService> services = businessServiceRepository.findByOwner(owner);
+                if (services.isEmpty()) {
+                    outboundService.sendText(contact, "We are currently updating our catalog. Please check back later!", config, owner);
+                } else {
+                    List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+                    for (int i = 0; i < services.size() && i < 10; i++) {
+                        BusinessService svc = services.get(i);
+                        String title = svc.getName() != null ? svc.getName() : "Service " + (i+1);
+                        if (title.length() > 24) title = title.substring(0, 24);
+                        
+                        String desc = svc.getDescription();
+                        if (desc != null && desc.length() > 70) desc = desc.substring(0, 67) + "...";
+                        
+                        rows.add(MenuDto.MenuRowDto.builder()
+                                .id("view_svc_" + svc.getId().toString())
+                                .title(title)
+                                .description(desc)
+                                .build());
+                    }
+                    
+                    MenuDto menu = MenuDto.builder()
+                            .type(rows.size() > 3 ? "list" : "button")
+                            .title(owner.getBusinessName() != null ? owner.getBusinessName() + " Catalog" : "Our Catalog")
+                            .bodyText("Please choose an item from our catalog to see more details \uD83D\uDC47")
+                            .button(rows.size() > 3 ? "View Catalog" : null)
+                            .sections(List.of(MenuDto.MenuSectionDto.builder()
+                                    .title("Products & Services")
+                                    .rows(rows).build()))
+                            .build();
+                            
+                    outboundService.sendInteractiveMenu(contact, menu, "Sent Catalog Menu", config, owner);
+                }
+            } catch (Exception e) {
+                log.error("Failed to send custom catalog menu", e);
+            }
+            return true;
+        }
+
+        if (selectionId.startsWith("view_svc_")) {
+            try {
+                String svcIdStr = selectionId.replace("view_svc_", "");
+                UUID svcId = UUID.fromString(svcIdStr);
+                businessServiceRepository.findByIdAndOwner(svcId, owner).ifPresentOrElse(svc -> {
+                    String caption = "*" + svc.getName() + "*\n\n" + (svc.getDescription() != null ? svc.getDescription() : "");
+                    String imageUrl = svc.getImageUrl();
+                    
+                    if (imageUrl != null && !imageUrl.isBlank()) {
+                        // Ensure WhatsApp can reach the image by replacing localhost with the public ngrok URL
+                        if (imageUrl.contains("localhost")) {
+                            int idx = imageUrl.indexOf("/public/images");
+                            if (idx != -1) {
+                                imageUrl = appPublicUrl + imageUrl.substring(idx);
+                            }
+                        }
+                        outboundService.sendImage(contact, imageUrl, caption, config, owner);
+                    } else {
+                        outboundService.sendText(contact, caption, config, owner);
+                    }
+                }, () -> {
+                    outboundService.sendText(contact, "Sorry, this item is no longer available.", config, owner);
+                });
+            } catch (Exception e) {
+                log.error("Failed to send service details", e);
+            }
             return true;
         }
         if ("get_support".equals(selectionId)) {

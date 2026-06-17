@@ -1,5 +1,22 @@
 (function () {
-    const API_BASE = 'http://localhost:8080/api/v1/public';
+    console.log("CRM Chat Widget Init Started...");
+    // alert("Chat Widget JS is executing!");
+    const script = document.currentScript || document.querySelector('script[data-business-id]');
+    const businessId = script
+        ? script.getAttribute('data-business-id')
+        : new URLSearchParams(window.location.search).get('businessId');
+
+    if (!businessId) return;
+
+    let API_BASE = 'http://localhost:8080/api/v1/public';
+    if (script && script.src) {
+        try {
+            const url = new URL(script.src, window.location.href);
+            API_BASE = `${url.origin}/api/v1/public`;
+        } catch (e) {
+            console.warn('Could not determine API_BASE, defaulting to localhost');
+        }
+    }
 
     // ── SVG Icons ─────────────────────────────────────────────────────────
     const ICONS = {
@@ -8,13 +25,6 @@
         send: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
         clear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`
     };
-
-    const script = document.currentScript || document.querySelector('script[data-business-id]');
-    const businessId = script
-        ? script.getAttribute('data-business-id')
-        : new URLSearchParams(window.location.search).get('businessId');
-
-    if (!businessId) return;
 
     const STORAGE_KEY = `crm_chat_history_${businessId}`;
 

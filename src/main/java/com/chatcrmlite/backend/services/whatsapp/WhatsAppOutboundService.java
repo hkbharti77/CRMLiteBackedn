@@ -70,6 +70,41 @@ public class WhatsAppOutboundService {
         }
     }
 
+    @Transactional
+    public Message sendCatalogMessage(Contact contact, String text, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendCatalogMessage(
+                    contact.getWaId(),
+                    text,
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, "Sent Catalog", metaMessageId, "CATALOG");
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send CATALOG reply to contact={} owner={}: {}",
+                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional
+    public Message sendImage(Contact contact, String imageUrl, String caption, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendImage(
+                    contact.getWaId(),
+                    imageUrl,
+                    caption,
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, caption != null ? caption : "Sent Image", metaMessageId, "IMAGE");
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send IMAGE reply to contact={} owner={}: {}",
+                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
     public String describeMenu(MenuDto menu) {
         String body = menu != null && menu.getBodyText() != null ? menu.getBodyText().trim() : "";
         List<String> optionTitles = menu == null ? List.of() : menu.getSections().stream()

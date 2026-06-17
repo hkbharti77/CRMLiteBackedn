@@ -355,7 +355,18 @@ public class FlowStateMachine {
 
         if (config != null && response.getConfirmationMessage() != null) {
             try {
-                outboundService.sendText(contact, response.getConfirmationMessage(), config, owner);
+                if (config.getFlowCompletionMenuJson() != null && !config.getFlowCompletionMenuJson().isBlank()) {
+                    try {
+                        com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
+                                config.getFlowCompletionMenuJson(), com.chatcrmlite.backend.dto.MenuDto.class);
+                        outboundService.sendInteractiveMenu(contact, menu, response.getConfirmationMessage(), config, owner);
+                    } catch (Exception e) {
+                        log.warn("[StateMachine] Failed to parse configured completion menu, falling back to text", e);
+                        outboundService.sendText(contact, response.getConfirmationMessage(), config, owner);
+                    }
+                } else {
+                    outboundService.sendText(contact, response.getConfirmationMessage(), config, owner);
+                }
             } catch (Exception e) {
                 log.warn("[StateMachine] Could not send confirmation to {}: {}", contact.getWaId(), e.getMessage());
             }

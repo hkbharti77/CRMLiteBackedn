@@ -91,6 +91,11 @@ public class WhatsAppConfigController {
         Boolean showSosButton    = (Boolean) body.get("showSosButton");
         String customSubMenusJson = (String) body.get("customSubMenusJson");
         String customMessagesJson = (String) body.get("customMessagesJson");
+        String flowCancelMenuJson = (String) body.get("flowCancelMenuJson");
+        String flowCompletionMenuJson = (String) body.get("flowCompletionMenuJson");
+        String aiResponseMenuJson = (String) body.get("aiResponseMenuJson");
+        String guardrailMessageAbuse = (String) body.get("guardrailMessageAbuse");
+        String guardrailMessageGibberish = (String) body.get("guardrailMessageGibberish");
 
         if (interactiveMenuJson != null && !interactiveMenuJson.isBlank()) {
             try {
@@ -117,6 +122,11 @@ public class WhatsAppConfigController {
         config.setReturningMessage(returningMessage);
         config.setCustomSubMenusJson(customSubMenusJson != null && !customSubMenusJson.isBlank() ? customSubMenusJson.trim() : null);
         config.setCustomMessagesJson(customMessagesJson != null && !customMessagesJson.isBlank() ? customMessagesJson.trim() : null);
+        config.setFlowCancelMenuJson(flowCancelMenuJson != null && !flowCancelMenuJson.isBlank() ? flowCancelMenuJson.trim() : null);
+        config.setFlowCompletionMenuJson(flowCompletionMenuJson != null && !flowCompletionMenuJson.isBlank() ? flowCompletionMenuJson.trim() : null);
+        config.setAiResponseMenuJson(aiResponseMenuJson != null && !aiResponseMenuJson.isBlank() ? aiResponseMenuJson.trim() : null);
+        config.setGuardrailMessageAbuse(guardrailMessageAbuse);
+        config.setGuardrailMessageGibberish(guardrailMessageGibberish);
         
         // Dynamic Buttons Data
         config.setReviewUrl(reviewUrl);
