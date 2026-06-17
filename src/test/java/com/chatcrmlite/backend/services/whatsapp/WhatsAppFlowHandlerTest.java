@@ -33,6 +33,9 @@ class WhatsAppFlowHandlerTest {
     @Mock
     private FlowStateMachine flowStateMachine;
 
+    @Mock
+    private WhatsAppOutboundService outboundService;
+
     private WhatsAppFlowHandler flowHandler;
     private User owner;
     private Contact contact;
@@ -43,7 +46,8 @@ class WhatsAppFlowHandlerTest {
                 whatsappConfigRepository,
                 contactRepository,
                 flowStateMachine,
-                new ObjectMapper()
+                new ObjectMapper(),
+                outboundService
         );
 
         Tenant tenant = Tenant.builder()

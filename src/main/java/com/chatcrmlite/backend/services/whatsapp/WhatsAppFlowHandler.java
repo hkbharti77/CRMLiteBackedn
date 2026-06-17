@@ -23,6 +23,7 @@ public class WhatsAppFlowHandler {
     private final ContactRepository contactRepository;
     private final FlowStateMachine flowStateMachine;
     private final ObjectMapper objectMapper;
+    private final WhatsAppOutboundService outboundService;
 
     @Transactional
     public void executeFlowLogic(ProcessingContext context) {
@@ -53,13 +54,27 @@ public class WhatsAppFlowHandler {
 
             // Keyword check (Greeting/Menu)
             String lower = text.trim().toLowerCase();
-            boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
-            boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
+            boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
+            boolean isCancel = lower.equals("cancel");
 
-            if ("text".equals(type) && (isGreeting || isNavCommand)) {
-                flowStateMachine.resetFlow(contact);
-                context.getMetadata().put("responseType", isGreeting ? "GREETING" : "MENU");
-                return;
+            if (hasActiveFlow) {
+                if (isCancel) {
+                    flowStateMachine.resetFlow(contact);
+                    context.getMetadata().put("responseType", "MENU");
+                    log.info("🛑 User cancelled the active flow.");
+                    outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
+                    return;
+                }
+                // Do not intercept other keywords if a flow is active. Let the flow validate the input.
+            } else {
+                boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
+                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
+
+                if ("text".equals(type) && (isGreeting || isNavCommand)) {
+                    flowStateMachine.resetFlow(contact);
+                    context.getMetadata().put("responseType", isGreeting ? "GREETING" : "MENU");
+                    return;
+                }
             }
 
             // Flow Engine execution
