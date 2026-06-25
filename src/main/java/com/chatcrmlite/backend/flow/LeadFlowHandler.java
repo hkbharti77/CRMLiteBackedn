@@ -38,6 +38,7 @@ public class LeadFlowHandler implements FlowHandler {
     private final ContactRepository contactRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ReferenceNumberService referenceNumberService;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     // ── Keys that represent the primary "interest" for a lead label ─────────
     // Checked in priority order — first match wins
@@ -93,6 +94,7 @@ public class LeadFlowHandler implements FlowHandler {
             String dealLabel = extractDealLabel(data);
 
             // ── 4. Create the lead ──────────────────────────────────────────
+            quotaEnforcerService.verifyLeadQuota(context.getOwner().getTenant().getId());
             String leadNumber = referenceNumberService.generate(context.getOwner(), ReferenceNumberService.EntityType.LEAD);
             Lead lead = Lead.builder()
                     .contact(context.getContact())

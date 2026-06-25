@@ -43,6 +43,9 @@ public class UserController {
     private PasswordEncoder passwordEncoder;
 
     @Autowired
+    private com.chatcrmlite.backend.services.EmailService emailService;
+
+    @Autowired
     private LeadRepository leadRepository;
 
     @Autowired
@@ -50,6 +53,9 @@ public class UserController {
 
     @Autowired
     private MessageRepository messageRepository;
+
+    @Autowired
+    private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @GetMapping("/me")
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal String email) {
@@ -59,6 +65,7 @@ public class UserController {
     }
 
     @PutMapping("/me")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> updateCurrentUser(
             @AuthenticationPrincipal String email,
             @RequestBody UpdateUserRequest request) {
@@ -68,23 +75,96 @@ public class UserController {
         
         if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
         if (request.getPhone() != null) user.setPhone(request.getPhone());
-        if (request.getBusinessName() != null) user.setBusinessName(request.getBusinessName());
-        if (request.getBusinessType() != null) user.setBusinessType(request.getBusinessType());
-        if (request.getBusinessSubType() != null) user.setBusinessSubType(request.getBusinessSubType());
-        if (request.getAddress() != null) user.setAddress(request.getAddress());
-        if (request.getAboutUs() != null) user.setAboutUs(request.getAboutUs());
-        if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
-        if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
-        if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
         
-        // Manual module overrides
-        if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
-        if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
-        if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
+        if (user.getRole() == User.Role.OWNER) {
+            if (request.getBusinessName() != null) user.setBusinessName(request.getBusinessName());
+            if (request.getBusinessType() != null) user.setBusinessType(request.getBusinessType());
+            if (request.getBusinessSubType() != null) user.setBusinessSubType(request.getBusinessSubType());
+            if (request.getAddress() != null) user.setAddress(request.getAddress());
+            if (request.getAboutUs() != null) user.setAboutUs(request.getAboutUs());
+            if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
+            if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
+            if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
+            
+            // Manual module overrides
+            if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
+            if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
+            if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
+        }
 
         userRepository.save(user);
 
         return ResponseEntity.ok(UserProfileDto.from(user));
+    }
+
+    @PostMapping("/staff")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> createStaffUser(
+            @AuthenticationPrincipal String callerEmail,
+            @RequestBody CreateStaffRequest request) {
+        
+        if (request.getEmail() == null || request.getEmail().isBlank()) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Email is required."));
+        }
+        if (request.getDisplayName() == null || request.getDisplayName().isBlank()) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Display name is required."));
+        }
+        if (request.getRole() == null || request.getRole().isBlank()) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Role is required."));
+        }
+
+        User.Role targetRole;
+        try {
+            targetRole = User.Role.valueOf(request.getRole().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Invalid role. Must be ADMIN or AGENT."));
+        }
+
+        if (targetRole == User.Role.OWNER) {
+            return ResponseEntity.badRequest().body(new MessageResponse("Cannot create a tenant owner."));
+        }
+
+        User caller = userRepository.findByEmail(callerEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+
+        // Enforce employee seat limits
+        quotaEnforcerService.verifyEmployeeSeatQuota(caller.getTenant().getId());
+
+        // Admin role enforcement: Admin can only create AGENT, not ADMIN
+        if (caller.getRole() == User.Role.ADMIN && targetRole == User.Role.ADMIN) {
+            return ResponseEntity.status(403).body(new MessageResponse("Admins are only authorized to create Agents."));
+        }
+
+        // Check if email already exists in system
+        if (userRepository.findByEmail(request.getEmail().trim().toLowerCase()).isPresent()) {
+            return ResponseEntity.badRequest().body(new MessageResponse("User with this email already exists."));
+        }
+
+        User staffUser = User.builder()
+                .email(request.getEmail().trim().toLowerCase())
+                .displayName(request.getDisplayName().trim())
+                .phone(request.getPhone() != null ? request.getPhone().trim() : null)
+                .role(targetRole)
+                .tenant(caller.getTenant())
+                .accountStatus(User.AccountStatus.ACTIVE)
+                .onboardingCompleted(true) // Automatically complete onboarding for new staff members
+                .build();
+
+        userRepository.save(staffUser);
+
+        try {
+            emailService.sendStaffWelcomeEmail(
+                staffUser.getEmail(),
+                staffUser.getDisplayName(),
+                caller.getTenant().getBusinessName(),
+                staffUser.getRole().name()
+            );
+        } catch (Exception e) {
+            System.err.println("Failed to send welcome email to staff: " + e.getMessage());
+        }
+
+        return ResponseEntity.ok(UserProfileDto.from(staffUser));
     }
 
     @GetMapping("/me/security-dashboard")
@@ -173,6 +253,34 @@ public class UserController {
                 .contacts(contacts)
                 .messages(messages)
                 .build());
+    }
+
+    @GetMapping("/tenant-staff")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<?> getTenantStaff(@AuthenticationPrincipal String email) {
+        User caller = userRepository.findByEmail(email).orElseThrow();
+        List<User> staff = userRepository.findAllByTenant(caller.getTenant());
+        return ResponseEntity.ok(staff.stream().map(UserProfileDto::from).collect(Collectors.toList()));
+    }
+
+    @DeleteMapping("/staff/{staffId}")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<?> deleteStaffUser(@AuthenticationPrincipal String email, @PathVariable UUID staffId) {
+        User caller = userRepository.findByEmail(email).orElseThrow();
+        securityService.deleteStaffUser(caller, staffId);
+        return ResponseEntity.ok("Staff member permanently deleted");
+    }
+
+    @PatchMapping("/staff/{staffId}/status")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    public ResponseEntity<?> updateStaffStatus(
+            @AuthenticationPrincipal String email,
+            @PathVariable UUID staffId,
+            @RequestParam User.AccountStatus status,
+            @RequestParam(required = false) String reason) {
+        User caller = userRepository.findByEmail(email).orElseThrow();
+        securityService.updateStaffStatus(caller, staffId, status, reason);
+        return ResponseEntity.ok("Staff member status updated to: " + status);
     }
 
     // ─── DTOS ─────────────────────────────────────────────────────────────
@@ -364,6 +472,8 @@ public class UserController {
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
+        private String role;
+        private String accountStatus;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -396,6 +506,10 @@ public class UserController {
         public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
         public Boolean getForceShowLeads() { return forceShowLeads; }
         public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+        public String getRole() { return role; }
+        public void setRole(String role) { this.role = role; }
+        public String getAccountStatus() { return accountStatus; }
+        public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
 
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
@@ -414,7 +528,32 @@ public class UserController {
             dto.setForceShowBooking(user.getForceShowBooking());
             dto.setForceShowAppointment(user.getForceShowAppointment());
             dto.setForceShowLeads(user.getForceShowLeads());
+            dto.setRole(user.getRole() != null ? user.getRole().name() : null);
+            dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
             return dto;
         }
     }
+
+    public static class CreateStaffRequest {
+        private String email;
+        private String displayName;
+        private String role;
+        private String phone;
+
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        public String getRole() { return role; }
+        public void setRole(String role) { this.role = role; }
+        public String getPhone() { return phone; }
+        public void setPhone(String phone) { this.phone = phone; }
+    }
+
+    public static class MessageResponse {
+        private String message;
+        public MessageResponse(String message) { this.message = message; }
+        public String getMessage() { return message; }
+    }
 }
+

@@ -57,17 +57,17 @@ public class FlowStepDTO {
      * FIX #11: Validates that options are provided when buttons or lists are enabled
      */
     public void validate() {
-        if ((usesButtons || usesList) && (options == null || options.isEmpty())) {
+        if (!dynamicSource && (usesButtons || usesList) && (options == null || options.isEmpty())) {
             throw new IllegalArgumentException(
                 "Options must be provided when usesButtons or usesList is true for step: " + dataKey);
         }
         
-        if (usesButtons && options.size() > 3) {
+        if (!dynamicSource && usesButtons && options != null && options.size() > 3) {
             throw new IllegalArgumentException(
                 "Button options limited to 3 items (WhatsApp limit) for step: " + dataKey);
         }
         
-        if (usesList && options.size() > 10) {
+        if (!dynamicSource && usesList && options != null && options.size() > 10) {
             throw new IllegalArgumentException(
                 "List options limited to 10 items (WhatsApp limit) for step: " + dataKey);
         }

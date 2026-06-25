@@ -21,6 +21,14 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
            "WHERE l.status = :status AND l.owner = :owner " +
            "ORDER BY l.lastActivity DESC")
     List<Lead> findAllByStatusAndOwner(@Param("status") Lead.LeadStatus status, @Param("owner") User owner);
+
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.status = :status AND l.owner = :owner " +
+           "ORDER BY l.lastActivity DESC")
+    Page<Lead> findAllByStatusAndOwnerPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, Pageable pageable);
+
     List<Lead> findAllByOwnerAndDeletedTrue(User owner);
 
     /** All leads for a contact (multiple leads per contact supported) — eager-load tags */
@@ -91,6 +99,9 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner")
     long countByOwner(@Param("owner") User owner);
 
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.status = :status AND l.owner = :owner")
+    long countByStatusAndOwner(@Param("status") Lead.LeadStatus status, @Param("owner") User owner);
+
     /** Count leads created today for a specific owner (for reference number generation) */
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner AND CAST(l.createdAt AS date) = CAST(CURRENT_TIMESTAMP AS date)")
     long countByOwnerAndToday(@Param("owner") User owner);
@@ -98,4 +109,36 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     /** Count leads created today with a specific date prefix (for reference number generation) */
     @Query(value = "SELECT COUNT(l) FROM leads l WHERE l.owner_id = :ownerId AND l.lead_number LIKE :datePrefix || '%'", nativeQuery = true)
     long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
+
+    // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
+
+    /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "ORDER BY l.lastActivity DESC")
+    Page<Lead> findAllPaged(Pageable pageable);
+
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.status = :status " +
+           "ORDER BY l.lastActivity DESC")
+    Page<Lead> findAllByStatusPaged(@Param("status") Lead.LeadStatus status, Pageable pageable);
+
+    @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
+           "COALESCE(SUM(l.dealValue), 0), " +
+           "COALESCE(SUM(CASE WHEN l.paymentStatus = 'PAID' THEN l.dealValue ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN l.dealValue ELSE 0 END), 0), " +
+           "COUNT(CASE WHEN l.dealValue IS NOT NULL THEN 1 END), " +
+           "COUNT(CASE WHEN l.paymentStatus = 'PAID' THEN 1 END), " +
+           "COUNT(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN 1 END), " +
+           "'INR') " +
+           "FROM Lead l")
+    com.chatcrmlite.backend.dto.RevenueReportDTO calculateTenantRevenueReport();
+
+    long countByStatus(Lead.LeadStatus status);
+
+    @Query("SELECT COUNT(l) FROM Lead l WHERE l.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
 }

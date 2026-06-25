@@ -36,6 +36,7 @@ public class CustomEmailService {
     private final ContactRepository     contactRepository;
     private final JavaMailSender        mailSender;
     private final TemplateEngine        templateEngine;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @Value("${spring.mail.username}")
     private String fromAddress;
@@ -44,11 +45,17 @@ public class CustomEmailService {
     public CustomEmailService(CustomEmailRepository customEmailRepository,
                              ContactRepository contactRepository,
                              JavaMailSender mailSender,
-                             TemplateEngine templateEngine) {
+                             TemplateEngine templateEngine,
+                             com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService) {
         this.customEmailRepository = customEmailRepository;
         this.contactRepository = contactRepository;
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
+        this.quotaEnforcerService = quotaEnforcerService;
+    }
+
+    private boolean isAdmin(User user) {
+        return user != null && (user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT);
     }
 
     @Transactional
@@ -68,6 +75,10 @@ public class CustomEmailService {
 
     @Transactional
     public CustomEmailDTO send(User owner, CustomEmailRequest req) {
+        List<String> recipients = resolveRecipients(owner, req);
+        // Verify email quota
+        quotaEnforcerService.verifyEmailCampaignQuota(owner.getTenant().getId(), recipients.size());
+
         CustomEmail campaign = CustomEmail.builder()
                 .owner(owner)
                 .subject(req.getSubject().trim())
@@ -80,7 +91,6 @@ public class CustomEmailService {
                 .build();
         CustomEmail saved = customEmailRepository.save(campaign);
 
-        List<String> recipients = resolveRecipients(owner, req);
         log.info("[CustomEmail] Campaign {} — {} recipients resolved for owner={}",
                 saved.getId(), recipients.size(), owner.getId());
 
@@ -91,6 +101,12 @@ public class CustomEmailService {
 
     @Transactional(readOnly = true)
     public Page<CustomEmailDTO> getHistory(User owner, Pageable pageable) {
+        if (isAdmin(owner)) {
+            if (owner.getTenant() != null) {
+                return customEmailRepository.findByTenantIdOrderByCreatedAtDesc(owner.getTenant().getId(), pageable).map(this::toDTO);
+            }
+            return customEmailRepository.findAllByOrderByCreatedAtDesc(pageable).map(this::toDTO);
+        }
         return customEmailRepository
                 .findAllByOwnerOrderByCreatedAtDesc(owner, pageable)
                 .map(this::toDTO);
@@ -99,7 +115,7 @@ public class CustomEmailService {
     @Transactional(readOnly = true)
     public CustomEmailDTO getById(UUID id, User owner) {
         return customEmailRepository.findById(id)
-                .filter(e -> e.getOwner().getId().equals(owner.getId()))
+                .filter(e -> e.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .map(this::toDTO)
                 .orElseThrow(() -> new RuntimeException("Campaign not found"));
     }

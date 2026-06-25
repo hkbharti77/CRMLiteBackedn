@@ -28,4 +28,12 @@ public interface ContactRepository extends JpaRepository<Contact, UUID> {
      */
     @Query("SELECT c FROM Contact c LEFT JOIN FETCH c.tags WHERE c.id = :id")
     Optional<Contact> findByIdWithTags(@Param("id") UUID id);
+
+    /**
+     * Fetch all contacts for the active tenant with tags eagerly loaded.
+     * Filtered automatically by Hibernate tenantFilter.
+     */
+    @Query("SELECT DISTINCT c FROM Contact c LEFT JOIN FETCH c.tags")
+    List<Contact> findAllWithTags();
 }
+

@@ -21,7 +21,7 @@ public class User implements Serializable {
 
     private String password;
 
-    @ManyToOne(fetch = FetchType.EAGER, cascade = CascadeType.ALL)
+    @ManyToOne(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinColumn(name = "tenant_id", nullable = false)
     @com.fasterxml.jackson.annotation.JsonIgnore
     private Tenant tenant;

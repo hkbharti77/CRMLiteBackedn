@@ -49,7 +49,12 @@ public class ActivityLogService {
 
     @Transactional(readOnly = true)
     public List<ActivityLogDTO> getOwnerFeed(User owner) {
-        List<ActivityLog> logs = activityLogRepository.findByOwnerOrderByCreatedAtDesc(owner);
+        List<ActivityLog> logs;
+        if (owner.getTenant() != null) {
+            logs = activityLogRepository.findByTenantIdOrderByCreatedAtDesc(owner.getTenant().getId());
+        } else {
+            logs = activityLogRepository.findByOwnerOrderByCreatedAtDesc(owner);
+        }
         return logs.stream()
                 .map(ActivityLogDTO::fromEntity)
                 .collect(Collectors.toList());

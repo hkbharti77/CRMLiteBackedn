@@ -52,4 +52,31 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     // Count appointments created today with a specific date prefix (for reference number generation)
     @Query(value = "SELECT COUNT(a) FROM appointments a WHERE a.owner_id = :ownerId AND a.reference_number LIKE :datePrefix || '%'", nativeQuery = true)
     long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
+
+    // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c ORDER BY a.appointmentDateTime ASC")
+    List<Appointment> findAllOrderByAppointmentDateTimeAsc();
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE c.id = :contactId ORDER BY a.appointmentDateTime ASC")
+    List<Appointment> findByContact_IdOrderByAppointmentDateTimeAsc(@Param("contactId") UUID contactId);
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE a.appointmentDateTime BETWEEN :start AND :end AND a.status = :status")
+    List<Appointment> findByAppointmentDateTimeBetweenAndStatus(
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("status") Appointment.AppointmentStatus status);
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE a.appointmentDateTime > :after AND a.status = :status ORDER BY a.appointmentDateTime ASC")
+    List<Appointment> findByAppointmentDateTimeAfterAndStatusOrderByAppointmentDateTimeAsc(
+            @Param("after") LocalDateTime after,
+            @Param("status") Appointment.AppointmentStatus status);
+
+    long countByAppointmentDateTimeBetweenAndStatus(
+            LocalDateTime start,
+            LocalDateTime end,
+            Appointment.AppointmentStatus status);
+
+    @Query("SELECT COUNT(a) FROM Appointment a WHERE a.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
 }

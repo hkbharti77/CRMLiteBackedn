@@ -36,14 +36,25 @@ public class TicketService {
     @Autowired private SlaService slaService;
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private ReferenceNumberService referenceNumberService;
+    @Autowired private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+
+    private boolean isAdmin(User user) {
+        return user != null && (user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT);
+    }
 
     @Transactional
     public Ticket submitSupportRequest(User owner, SupportRequest req) {
+        quotaEnforcerService.verifyTicketQuota(owner.getTenant().getId());
         String email = req.getEmail().trim().toLowerCase();
         String subject = req.getSubject().trim();
 
         LocalDateTime since = LocalDateTime.now().minusMinutes(DUPLICATE_DETECTION_WINDOW_MINUTES);
-        List<Ticket> duplicates = ticketRepository.findPotentialDuplicates(owner, email, subject, since);
+        List<Ticket> duplicates;
+        if (isAdmin(owner)) {
+            duplicates = ticketRepository.findPotentialDuplicatesTenantWide(email, subject, since);
+        } else {
+            duplicates = ticketRepository.findPotentialDuplicates(owner, email, subject, since);
+        }
         if (!duplicates.isEmpty()) {
             log.warn("[TicketService] Duplicate ticket detected: email={} subject={}", email, subject);
             throw new DuplicateTicketException("A similar ticket was submitted recently. Please wait before resubmitting.");
@@ -91,10 +102,11 @@ public class TicketService {
 
     @Transactional
     public Ticket createTicket(User owner, TicketRequest req) {
+        quotaEnforcerService.verifyTicketQuota(owner.getTenant().getId());
         Contact contact = null;
         if (req.getContactId() != null) {
             contact = contactRepository.findById(req.getContactId())
-                    .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                    .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                     .orElseThrow(() -> new RuntimeException("Contact not found"));
         }
 
@@ -133,17 +145,29 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public Page<TicketDTO> getAllTickets(User owner, Pageable pageable) {
+        if (isAdmin(owner)) {
+            return ticketRepository.findAllActivePaged(pageable).map(this::toDTO);
+        }
         return ticketRepository.findAllByOwnerActivePaged(owner, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
     public Page<TicketDTO> getTicketsByStatus(User owner, Ticket.TicketStatus status, Pageable pageable) {
+        if (isAdmin(owner)) {
+            return ticketRepository.findAllByStatusPaged(status, pageable).map(this::toDTO);
+        }
         return ticketRepository.findAllByOwnerAndStatusPaged(owner, status, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
     public Page<TicketDTO> searchTickets(User owner, String query, Pageable pageable) {
-        return ticketRepository.searchTickets(owner, query, pageable).map(this::toDTO);
+        if (isAdmin(owner)) {
+            UUID tenantId = com.chatcrmlite.backend.security.TenantContext.getTenantId();
+            if (tenantId != null) {
+                return ticketRepository.searchTicketsFtsTenantWide(tenantId, query, pageable).map(this::toDTO);
+            }
+        }
+        return ticketRepository.searchTicketsFts(owner.getId(), query, pageable).map(this::toDTO);
     }
 
     @Transactional(readOnly = true)
@@ -155,7 +179,7 @@ public class TicketService {
     @Transactional(readOnly = true)
     public TicketDTO getTicketByNumber(String ticketNumber, User owner) {
         Ticket ticket = ticketRepository.findByTicketNumber(ticketNumber)
-                .filter(t -> t.getOwner().getId().equals(owner.getId()))
+                .filter(t -> t.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
         return toDTO(ticket);
     }
@@ -236,6 +260,9 @@ public class TicketService {
 
     @Transactional(readOnly = true)
     public long countOpenTickets(User owner) {
+        if (isAdmin(owner)) {
+            return ticketRepository.countByStatusAndDeletedFalse(Ticket.TicketStatus.OPEN);
+        }
         return ticketRepository.countByOwnerAndStatusAndDeletedFalse(owner, Ticket.TicketStatus.OPEN);
     }
 
@@ -247,7 +274,12 @@ public class TicketService {
 
     @Transactional
     public void checkSlaBreaches(User owner) {
-        List<Ticket> candidates = ticketRepository.findSlaBreachCandidates(owner, LocalDateTime.now());
+        List<Ticket> candidates;
+        if (isAdmin(owner)) {
+            candidates = ticketRepository.findSlaBreachCandidatesTenantWide(LocalDateTime.now());
+        } else {
+            candidates = ticketRepository.findSlaBreachCandidates(owner, LocalDateTime.now());
+        }
         for (Ticket ticket : candidates) {
             if (slaService.isSlaBreached(ticket)) {
                 ticket.setSlaBreached(true);
@@ -260,7 +292,7 @@ public class TicketService {
 
     private Ticket getOwnedTicket(UUID id, User owner) {
         return ticketRepository.findByIdActive(id)
-                .filter(t -> t.getOwner().getId().equals(owner.getId()))
+                .filter(t -> t.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Ticket not found"));
     }
 

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head><meta charset="UTF-8"/></head>
+<body>
+
+<div th:replace="~{email/base :: header(
+      heading  = ${heading},
+      greeting = ${greeting}, 
+      intro    = ${intro})}">
+</div>
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+             style="background:#ffffff;max-width:600px;width:100%">
+        <tr>
+          <td style="padding:0 36px 24px">
+
+            <div style="background:#ffffff;border:1px solid #E2E8F0;border-radius:8px;
+                        padding:16px 20px;margin:0 0 24px">
+              <p style="margin:0 0 8px;color:#0F172A;font-size:14px;font-weight:600">
+                📝 Status Update Details
+              </p>
+              <table style="width:100%;font-size:13px;color:#334155">
+                <tr>
+                  <td style="padding:4px 0;width:100px;font-weight:600">Business:</td>
+                  <td style="padding:4px 0;color:#0F172A" th:text="${businessName}">My Company</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;font-weight:600">New Status:</td>
+                  <td style="padding:4px 0;font-weight:600;color:#DC2626" th:text="${status}">Blocked</td>
+                </tr>
+                <tr>
+                  <td style="padding:4px 0;vertical-align:top;font-weight:600">Reason:</td>
+                  <td style="padding:4px 0;color:#0F172A" th:text="${reason}">Violation of terms.</td>
+                </tr>
+              </table>
+            </div>
+
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div th:replace="~{email/base :: footer(
+      footerNote = ${footerNote},
+      ctaLabel   = null,
+      ctaUrl     = null)}">
+</div>
+
+</body>
+</html>

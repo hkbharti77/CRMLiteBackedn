@@ -27,13 +27,22 @@ public class ContactService {
     @Autowired
     private TagService tagService;
 
+    private boolean isAdmin(User user) {
+        return user != null && (user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT);
+    }
+
     /**
      * Get all contacts for a user as DTOs.
      * Eagerly loads tags to prevent LazyInitializationException.
      */
     @Transactional(readOnly = true)
     public List<ContactDTO> getContactsByUser(User user) {
-        List<Contact> contacts = contactRepository.findAllByOwnerWithTags(user);
+        List<Contact> contacts;
+        if (isAdmin(user)) {
+            contacts = contactRepository.findAllWithTags();
+        } else {
+            contacts = contactRepository.findAllByOwnerWithTags(user);
+        }
         return contacts.stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
@@ -46,14 +55,14 @@ public class ContactService {
     @Transactional(readOnly = true)
     public ContactDTO getContactById(UUID contactId, User owner) {
         Contact contact = contactRepository.findByIdWithTags(contactId)
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
         return toDTO(contact);
     }
 
     public List<MessageDTO> getChatMessages(UUID contactId, User owner) {
         Contact contact = contactRepository.findById(contactId)
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
         
         return messageRepository.findAllByContactOrderByTimestampAsc(contact).stream()
@@ -74,7 +83,7 @@ public class ContactService {
     @Transactional
     public void updateTags(UUID contactId, List<String> tagNames, User owner) {
         Contact contact = contactRepository.findById(contactId)
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
         
         List<com.chatcrmlite.backend.models.Tag> resolvedTags = 

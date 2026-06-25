@@ -7,9 +7,16 @@ import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.ArrayList;
+import com.chatcrmlite.backend.dto.WidgetCtaDTO;
+import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class NicheThemeService {
+
+    @Autowired
+    private FlowTemplateEngine templateEngine;
 
     private static final Map<String, NicheTheme> THEMES = new HashMap<>();
 
@@ -67,6 +74,37 @@ public class NicheThemeService {
                 ? config.getWelcomeMessage() 
                 : "Hello! How can I help you today?";
 
+        if (welcome != null && welcome.contains("{{business}}")) {
+            String bName = user.getBusinessName() != null ? user.getBusinessName() : "our business";
+            welcome = welcome.replace("{{business}}", bName);
+        }
+
+        List<WidgetCtaDTO> ctaButtons = new ArrayList<>();
+        boolean hasAppointment = Boolean.TRUE.equals(user.getForceShowAppointment());
+        boolean hasBooking = Boolean.TRUE.equals(user.getForceShowBooking());
+        boolean hasLead = Boolean.TRUE.equals(user.getForceShowLeads());
+
+        FlowTemplateEngine.FlowBlueprint blueprint = templateEngine.getBlueprint(user.getBusinessSubType());
+        if (blueprint != null) {
+            com.chatcrmlite.backend.models.ConversationState.FlowType primaryFlow = blueprint.getFlowType();
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.APPOINTMENT) hasAppointment = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.BOOKING) hasBooking = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
+        }
+
+        if (hasAppointment) {
+            ctaButtons.add(new WidgetCtaDTO(templateEngine.getTriggerButtonLabel(user, "appointment"), "APPOINTMENT"));
+        }
+        if (hasBooking) {
+            ctaButtons.add(new WidgetCtaDTO(templateEngine.getTriggerButtonLabel(user, "booking"), "BOOKING"));
+        }
+        if (hasLead) {
+            ctaButtons.add(new WidgetCtaDTO(templateEngine.getTriggerButtonLabel(user, "lead"), "LEAD"));
+        }
+        if (config != null && Boolean.TRUE.equals(config.getShowSupportFormButton())) {
+            ctaButtons.add(new WidgetCtaDTO("🎫 Get Support", "SUPPORT"));
+        }
+
         return ThemeConfigDTO.builder()
                 .primaryColor(theme.primary)
                 .secondaryColor(theme.secondary)
@@ -78,6 +116,7 @@ public class NicheThemeService {
                 .welcomeMessage(welcome)
                 .businessSubType(slug)
                 .logoUrl(user.getLogoUrl())
+                .ctaButtons(ctaButtons)
                 .build();
     }
 

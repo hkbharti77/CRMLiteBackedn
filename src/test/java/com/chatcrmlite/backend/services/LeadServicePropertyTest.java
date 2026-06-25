@@ -346,7 +346,7 @@ public class LeadServicePropertyTest {
         }
 
         // Act: Get all leads for the owner
-        List<Lead> allLeads = leadService.getLeadsByUser(owner);
+        List<Lead> allLeads = leadService.getLeadsByUserPaged(owner, 0, 100, null).getContent();
 
         // Assert: All leads have valid contact references
         for (Lead lead : allLeads) {

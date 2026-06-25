@@ -37,6 +37,10 @@ public class LeadServiceImpl implements LeadService {
     private final LeadEnquiryService leadEnquiryService;
     private final ApplicationEventPublisher eventPublisher;
 
+    private boolean isAdmin(User user) {
+        return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
+    }
+
     @Override
     public Lead getLeadById(UUID leadId, User owner) {
         return findOwnedLead(leadId, owner);
@@ -44,9 +48,10 @@ public class LeadServiceImpl implements LeadService {
 
     private Lead findOwnedLead(UUID leadId, User owner) {
         return leadRepository.findById(leadId)
-                .filter(l -> l.getOwner().getId().equals(owner.getId()))
+                .filter(l -> l.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Lead not found"));
     }
+
 
     @Override
     public void validateLeadCreation(Contact contact, User owner, String enquiryType) {
@@ -58,7 +63,12 @@ public class LeadServiceImpl implements LeadService {
     public List<Lead> getLeadsByContactId(UUID contactId, User owner) {
         Contact contact = contactRepository.findById(contactId)
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
-        List<Lead> leads = leadRepository.findAllByContactAndOwnerOptimized(contact, owner);
+        List<Lead> leads;
+        if (isAdmin(owner)) {
+            leads = leadRepository.findAllByContact(contact);
+        } else {
+            leads = leadRepository.findAllByContactAndOwnerOptimized(contact, owner);
+        }
         // Initialize lazy relationships to avoid LazyInitializationException outside transaction
         leads.forEach(lead -> {
             lead.getContact().getTags().size();  // Force load lazy collection
@@ -72,7 +82,7 @@ public class LeadServiceImpl implements LeadService {
         Contact contact = contactRepository.findById(contactId)
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
         Lead lead = leadRepository.findAllByContact(contact).stream()
-                .filter(l -> l.getOwner().getId().equals(owner.getId()))
+                .filter(l -> isAdmin(owner) || l.getOwner().getId().equals(owner.getId()))
                 .max(java.util.Comparator.comparing(Lead::getCreatedAt))
                 .orElseThrow(() -> new RuntimeException("No lead found for this contact"));
         // Initialize lazy relationships to avoid LazyInitializationException outside transaction
@@ -91,30 +101,45 @@ public class LeadServiceImpl implements LeadService {
                 Lead.LeadStatus.CLOSED_WON,
                 Lead.LeadStatus.CLOSED_LOST);
         
-        return leadRepository.countByContactAndOwnerAndStatusNotIn(contact, owner, excludedStatuses);
+        if (isAdmin(owner)) {
+            return leadRepository.findAllByContact(contact).stream()
+                    .filter(l -> !excludedStatuses.contains(l.getStatus()))
+                    .count();
+        } else {
+            return leadRepository.countByContactAndOwnerAndStatusNotIn(contact, owner, excludedStatuses);
+        }
     }
 
     @Override
-    public Page<Lead> getLeadsByUserPaged(User user, int page, int size) {
+    public long getTotalLeadCount(User owner) {
+        if (isAdmin(owner)) {
+            return leadRepository.count();
+        }
+        return leadRepository.countByOwner(owner);
+    }
+
+    @Override
+    public long getLeadCountByStatus(Lead.LeadStatus status, User owner) {
+        if (isAdmin(owner)) {
+            return leadRepository.countByStatus(status);
+        }
+        return leadRepository.countByStatusAndOwner(status, owner);
+    }
+
+    @Override
+    public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastActivity"));
-        return leadRepository.findAllByOwnerPaged(user, pageable);
-    }
-
-    @Override
-    @Cacheable(value = "leadsByUser", key = "#user.id")
-    public List<Lead> getLeadsByUser(User user) {
-        return leadRepository.findAllByOwnerWithContactAndTags(user);
-    }
-
-    @Override
-    @Cacheable(value = "leadsByStatus", key = "#status + '_' + #user.id")
-    public List<Lead> getLeadsByStatus(Lead.LeadStatus status, User user) {
-        List<Lead> leads = leadRepository.findAllByStatusAndOwner(status, user);
-        // Initialize lazy relationships to avoid LazyInitializationException outside transaction
-        leads.forEach(lead -> {
-            lead.getContact().getTags().size();  // Force load lazy collection
-        });
-        return leads;
+        if (isAdmin(user)) {
+            if (status != null) {
+                return leadRepository.findAllByStatusPaged(status, pageable);
+            }
+            return leadRepository.findAllPaged(pageable);
+        } else {
+            if (status != null) {
+                return leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+            }
+            return leadRepository.findAllByOwnerPaged(user, pageable);
+        }
     }
 
     @Override
@@ -182,6 +207,9 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Cacheable(value = "revenueReport", key = "#owner.id")
     public RevenueReportDTO getRevenueReport(User owner) {
+        if (isAdmin(owner)) {
+            return leadRepository.calculateTenantRevenueReport();
+        }
         return leadRepository.calculateRevenueReport(owner);
     }
 

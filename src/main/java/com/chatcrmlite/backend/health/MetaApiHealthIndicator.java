@@ -34,6 +34,14 @@ public class MetaApiHealthIndicator implements HealthIndicator {
                     .withDetail("url", META_HEALTH_URL)
                     .withDetail("latency_ms", latencyMs)
                     .build();
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            // Receiving an HTTP error (like 400 Bad Request) means we successfully reached Meta's servers
+            long latencyMs = System.currentTimeMillis() - System.currentTimeMillis(); // Note: adjusted logic to maintain start variable scope or context as per requirement
+            return Health.up()
+                    .withDetail("url", META_HEALTH_URL)
+                    .withDetail("latency_ms", "N/A")
+                    .withDetail("note", "Reached with " + e.getStatusCode())
+                    .build();
         } catch (Exception e) {
             log.warn("[Health] Meta Graph API unreachable: {}", e.getMessage());
             return Health.down()

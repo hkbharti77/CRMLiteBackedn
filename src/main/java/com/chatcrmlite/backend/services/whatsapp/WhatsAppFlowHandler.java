@@ -60,7 +60,7 @@ public class WhatsAppFlowHandler {
             if (hasActiveFlow) {
                 if (isCancel) {
                     flowStateMachine.resetFlow(contact);
-                    context.getMetadata().put("responseType", "MENU");
+                    context.getMetadata().put("responseType", "NONE");
                     log.info("🛑 User cancelled the active flow.");
                     
                     if (config.getFlowCancelMenuJson() != null && !config.getFlowCancelMenuJson().isBlank()) {

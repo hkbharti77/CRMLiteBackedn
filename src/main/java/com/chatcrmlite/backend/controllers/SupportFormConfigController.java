@@ -5,6 +5,7 @@ import com.chatcrmlite.backend.models.SupportFormConfig;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.SupportFormConfigService;
+import com.chatcrmlite.backend.services.FlowConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -31,6 +32,9 @@ public class SupportFormConfigController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private FlowConfigService flowConfigService;
 
     private User getAuthenticatedUser() {
         String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -259,6 +263,9 @@ public class SupportFormConfigController {
                description = "Reset support form configuration to default values")
     public ResponseEntity<SupportFormConfigResponse> resetConfig() {
         User user = getAuthenticatedUser();
+        
+        // Reset support flow fields configuration to default values
+        flowConfigService.deleteFlowConfig(user, "support");
         
         SupportFormConfig defaultConfig = SupportFormConfig.builder()
                 .formTitle("Get Support")

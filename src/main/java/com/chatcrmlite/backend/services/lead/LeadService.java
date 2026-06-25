@@ -18,9 +18,9 @@ public interface LeadService {
     List<Lead> getLeadsByContactId(UUID contactId, User owner);
     Lead getLatestLeadByContactId(UUID contactId, User owner);
     long getActiveLeadCountByContactId(UUID contactId, User owner);
-    Page<Lead> getLeadsByUserPaged(User user, int page, int size);
-    List<Lead> getLeadsByUser(User user);
-    List<Lead> getLeadsByStatus(Lead.LeadStatus status, User user);
+    long getTotalLeadCount(User owner);
+    long getLeadCountByStatus(Lead.LeadStatus status, User owner);
+    Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status);
     Lead updateStatus(UUID leadId, Lead.LeadStatus status, User owner);
     EnquiryDTO addEnquiry(UUID leadId, EnquiryRequest req, User owner);
     EnquiryDTO updateEnquiry(UUID leadId, String enquiryId, EnquiryRequest req, User owner);

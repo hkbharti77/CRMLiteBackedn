@@ -57,6 +57,57 @@
 
 ## 🏗️ Architecture
 
+### Detailed System Design
+
+```mermaid
+graph TD
+    subgraph External Clients
+        App[📱 CRMLite React Native App]
+        WhatsApp[💬 Meta WhatsApp API]
+    end
+
+    subgraph API Gateway & Controllers
+        REST[🎮 REST Controllers]
+        WS[🔌 WebSocket Server]
+        Webhook[🔗 WhatsAppWebhookController]
+    end
+
+    subgraph Core Services
+        WAService[⚙️ WhatsAppService]
+        FlowService[🔄 WhatsAppFlowService]
+        RAG[🧠 RagGuardrailService]
+        Auth[🔐 Authentication Service]
+    end
+
+    subgraph Data & State
+        DB[(🗄️ PostgreSQL)]
+        Redis[(⚡ Redis Cache)]
+        VectorDB[(🕸️ Vector Storage)]
+    end
+
+    App <-->|REST| REST
+    App <-->|WebSockets| WS
+    WhatsApp -->|Incoming Webhooks| Webhook
+    
+    REST --> Auth
+    REST --> WAService
+    WS --> WAService
+    Webhook --> WAService
+    
+    WAService -->|Branch 1: Stateful Flow| FlowService
+    WAService -->|Branch 2: AI/RAG Fallback| RAG
+    WAService -->|Branch 3: Manual Chat| DB
+    
+    FlowService <--> DB
+    RAG <--> VectorDB
+    WAService <--> Redis
+    WAService <--> DB
+    
+    WAService -->|Send Messages| WhatsApp
+```
+
+### Backend Architecture
+
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    API Gateway / Load Balancer               │

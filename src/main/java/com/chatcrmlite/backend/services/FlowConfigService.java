@@ -16,6 +16,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.InputStream;
 import java.util.*;
@@ -41,6 +42,7 @@ public class FlowConfigService {
         return getFlowConfig(user, null);
     }
 
+    @Transactional
     public FlowConfigDTO getFlowConfig(User user, String explicitSuffix) {
         String flowTypeStr = "";
         ConversationState.FlowType flowTypeEnum = ConversationState.FlowType.ENQUIRY;
@@ -67,23 +69,27 @@ public class FlowConfigService {
             flowTypeEnum = ConversationState.FlowType.SUPPORT;
         }
 
-        String masterSlug = "master-fields";
-        if (flowTypeEnum == ConversationState.FlowType.SUPPORT) {
-            masterSlug = "support";
+        // ── SUPPORT FLOW: DB is the primary source of truth ──────────────────
+        // On first access for this tenant, auto-seed from support.json.
+        // Subsequent accesses use the tenant's own DB row (which they can edit).
+        if (flowTypeEnum == ConversationState.FlowType.SUPPORT && user != null) {
+            return getOrSeedSupportFlowConfig(user);
         }
+
+        // ── Non-SUPPORT flows: load from classpath JSON ───────────────────────
+        String masterSlug = "master-fields";
         FlowConfigDTO config = loadFlow(masterSlug);
-        
+
         if (config == null) {
             log.warn("[FlowConfigService] No master flow found for '{}', falling back to generic", masterSlug);
             config = loadFlow("generic");
         }
-        
+
         if (config == null) {
             log.error("[FlowConfigService] generic.json missing from classpath — returning empty config");
             return FlowConfigDTO.builder().flowType("ENQUIRY").build();
         }
 
-        // Set the flowType based on the resolved enum
         config.setFlowType(flowTypeEnum.name());
 
         if (user != null) {
@@ -93,9 +99,156 @@ public class FlowConfigService {
         return config;
     }
 
+    /**
+     * Returns the SUPPORT flow config for the given tenant from DB.
+     * If no DB row exists yet, seeds one from {@code support.json} and saves it.
+     * This makes the DB the single source of truth for SUPPORT steps while
+     * keeping the JSON file as a fallback seed/template.
+     */
+    private FlowConfigDTO getOrSeedSupportFlowConfig(User user) {
+        Optional<TenantFlowConfig> dbRowOpt =
+                tenantFlowConfigRepository.findByTenantAndFlowType(user, ConversationState.FlowType.SUPPORT);
+
+        if (dbRowOpt.isPresent()) {
+            TenantFlowConfig row = dbRowOpt.get();
+            try {
+                TenantFlowConfigJson configJson = objectMapper.readValue(row.getConfigurationJson(), TenantFlowConfigJson.class);
+                if (configJson != null && configJson.getFields() != null && !configJson.getFields().isEmpty()) {
+                    // DB row exists and has fields — build config from tenant's stored steps
+                    return buildSupportConfigFromDbRow(row);
+                }
+                
+                // Row exists but has no fields (e.g. greeting saved first) — seed fields into the existing row
+                log.info("[FlowConfigService] SUPPORT flow config exists for tenant={} but has no fields — seeding fields", user.getId());
+                FlowConfigDTO jsonConfig = loadFlow("support");
+                if (jsonConfig != null) {
+                    List<FlowFieldConfig> fields = stepsToFieldConfigs(jsonConfig.getSteps());
+                    if (configJson == null) {
+                        configJson = new TenantFlowConfigJson();
+                    }
+                    configJson.setFields(fields);
+                    row.setConfigurationJson(objectMapper.writeValueAsString(configJson));
+                    tenantFlowConfigRepository.save(row);
+                    return buildSupportConfigFromDbRow(row);
+                }
+            } catch (Exception e) {
+                log.error("[FlowConfigService] Failed to check/seed fields in existing SUPPORT row for tenant={}: {}",
+                        user.getId(), e.getMessage());
+            }
+            return buildSupportConfigFromDbRow(row);
+        }
+
+        // No DB row yet — seed from support.json and persist
+        log.info("[FlowConfigService] No SUPPORT flow config in DB for tenant={} — seeding from support.json", user.getId());
+        FlowConfigDTO jsonConfig = loadFlow("support");
+        if (jsonConfig == null) {
+            log.error("[FlowConfigService] support.json missing — returning minimal SUPPORT config for tenant={}", user.getId());
+            return FlowConfigDTO.builder().flowType("SUPPORT").steps(Collections.emptyList()).build();
+        }
+
+        // Convert steps → FlowFieldConfig list for storage
+        List<FlowFieldConfig> fields = stepsToFieldConfigs(jsonConfig.getSteps());
+
+        TenantFlowConfigJson jsonWrapper = TenantFlowConfigJson.builder()
+                .greetingMessage(jsonConfig.getGreetingMessage())
+                .fields(fields)
+                .build();
+
+        try {
+            TenantFlowConfig newRow = TenantFlowConfig.builder()
+                    .tenant(user)
+                    .flowType(ConversationState.FlowType.SUPPORT)
+                    .configurationJson(objectMapper.writeValueAsString(jsonWrapper))
+                    .templateVersion(1)
+                    .build();
+            tenantFlowConfigRepository.save(newRow);
+            log.info("[FlowConfigService] Seeded SUPPORT flow ({} steps) to DB for tenant={}",
+                    fields.size(), user.getId());
+        } catch (Exception e) {
+            log.error("[FlowConfigService] Failed to seed SUPPORT flow to DB for tenant={}: {}",
+                    user.getId(), e.getMessage());
+        }
+
+        // Return the JSON-backed config directly (seeded version)
+        jsonConfig.setFlowType("SUPPORT");
+        return jsonConfig;
+    }
+
+    /**
+     * Builds a FlowConfigDTO from a tenant's persisted TenantFlowConfig DB row.
+     * Only enabled steps are included, sorted by their configured order.
+     */
+    private FlowConfigDTO buildSupportConfigFromDbRow(TenantFlowConfig row) {
+        try {
+            TenantFlowConfigJson configJson = objectMapper.readValue(row.getConfigurationJson(), TenantFlowConfigJson.class);
+            if (configJson == null || configJson.getFields() == null) {
+                log.warn("[FlowConfigService] SUPPORT DB row for tenant={} has null/empty fields", row.getTenant().getId());
+                return FlowConfigDTO.builder().flowType("SUPPORT").steps(Collections.emptyList()).build();
+            }
+
+            List<FlowStepDTO> steps = configJson.getFields().stream()
+                    .filter(FlowFieldConfig::isEnabled)
+                    .sorted(Comparator.comparingInt(FlowFieldConfig::getOrder))
+                    .map(this::fieldConfigToStep)
+                    .collect(Collectors.toList());
+
+            return FlowConfigDTO.builder()
+                    .flowType("SUPPORT")
+                    .greetingMessage(configJson.getGreetingMessage())
+                    .steps(steps)
+                    .build();
+        } catch (Exception e) {
+            log.error("[FlowConfigService] Failed to parse SUPPORT flow config from DB for tenant={}: {}",
+                    row.getTenant().getId(), e.getMessage());
+            return FlowConfigDTO.builder().flowType("SUPPORT").steps(Collections.emptyList()).build();
+        }
+    }
+
+    /**
+     * Converts a FlowFieldConfig (DB storage format) → FlowStepDTO (runtime format).
+     */
+    private FlowStepDTO fieldConfigToStep(FlowFieldConfig fc) {
+        boolean usesButtons = fc.getOptions() != null && !fc.getOptions().isEmpty()
+                && ("DROPDOWN".equalsIgnoreCase(fc.getFieldType()) || "BUTTON".equalsIgnoreCase(fc.getFieldType()));
+        return FlowStepDTO.builder()
+                .dataKey(fc.getKey())
+                .question(fc.getLabel() != null ? fc.getLabel() : fc.getKey())
+                .fieldType(fc.getFieldType())
+                .required(fc.isRequired())
+                .defaultEnabled(fc.isEnabled())
+                .displayOrder(fc.getOrder())
+                .options(fc.getOptions() != null ? fc.getOptions() : new ArrayList<>())
+                .usesButtons(usesButtons)
+                .dynamicSource(false)
+                .applicableNiches(new ArrayList<>())
+                .build();
+    }
+
+    /**
+     * Converts FlowStepDTO list (JSON/runtime format) → FlowFieldConfig list (DB storage format).
+     */
+    private List<FlowFieldConfig> stepsToFieldConfigs(List<FlowStepDTO> steps) {
+        if (steps == null) return new ArrayList<>();
+        List<FlowFieldConfig> result = new ArrayList<>();
+        for (int i = 0; i < steps.size(); i++) {
+            FlowStepDTO step = steps.get(i);
+            result.add(FlowFieldConfig.builder()
+                    .key(step.getDataKey())
+                    .label(step.getQuestion())
+                    .fieldType(step.getFieldType())
+                    .required(step.isRequired())
+                    .enabled(step.isDefaultEnabled())
+                    .order(step.getDisplayOrder() != null ? step.getDisplayOrder() : i)
+                    .options(step.getOptions())
+                    .build());
+        }
+        return result;
+    }
+
     private FlowConfigDTO applyTenantConfiguration(User tenant, ConversationState.FlowType flowType, FlowConfigDTO masterConfig) {
+        // SUPPORT is now handled entirely by getOrSeedSupportFlowConfig() — never reaches here.
         if (flowType == ConversationState.FlowType.SUPPORT) {
-            return applySupportFormConfiguration(tenant, masterConfig);
+            return masterConfig;
         }
 
         Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(tenant, flowType);
@@ -234,11 +387,52 @@ public class FlowConfigService {
             flowTypeEnum = ConversationState.FlowType.SUPPORT;
         }
 
-        String masterSlug = "master-fields";
+        // ── SUPPORT FLOW: DB is primary — auto-seed if needed ─────────────────
         if (flowTypeEnum == ConversationState.FlowType.SUPPORT) {
-            masterSlug = "support";
+            Optional<TenantFlowConfig> dbRowOpt =
+                    tenantFlowConfigRepository.findByTenantAndFlowType(user, ConversationState.FlowType.SUPPORT);
+
+            if (dbRowOpt.isPresent()) {
+                // Return all fields (enabled + disabled) sorted by order for the edit UI
+                try {
+                    TenantFlowConfigJson configJson = objectMapper.readValue(
+                            dbRowOpt.get().getConfigurationJson(), TenantFlowConfigJson.class);
+                    if (configJson != null && configJson.getFields() != null && !configJson.getFields().isEmpty()) {
+                        List<FlowFieldConfig> sorted = new ArrayList<>(configJson.getFields());
+                        sorted.sort(Comparator.comparingInt(FlowFieldConfig::getOrder));
+                        return sorted;
+                    }
+                } catch (Exception e) {
+                    log.error("[FlowConfigService] Failed to parse SUPPORT config for tenant={}: {}",
+                            user.getId(), e.getMessage());
+                }
+            }
+
+            // No DB row — trigger auto-seed by calling getOrSeedSupportFlowConfig,
+            // then return the seeded fields
+            log.info("[FlowConfigService] Auto-seeding SUPPORT fields for tenant={}", user.getId());
+            getOrSeedSupportFlowConfig(user);
+
+            // Re-fetch after seed
+            return tenantFlowConfigRepository.findByTenantAndFlowType(user, ConversationState.FlowType.SUPPORT)
+                    .map(row -> {
+                        try {
+                            TenantFlowConfigJson cfg = objectMapper.readValue(row.getConfigurationJson(), TenantFlowConfigJson.class);
+                            if (cfg != null && cfg.getFields() != null) {
+                                List<FlowFieldConfig> sorted = new ArrayList<>(cfg.getFields());
+                                sorted.sort(Comparator.comparingInt(FlowFieldConfig::getOrder));
+                                return sorted;
+                            }
+                        } catch (Exception e) {
+                            log.error("[FlowConfigService] Parse error after seed for tenant={}", user.getId(), e);
+                        }
+                        return Collections.<FlowFieldConfig>emptyList();
+                    })
+                    .orElse(Collections.emptyList());
         }
-        FlowConfigDTO masterConfig = loadFlow(masterSlug);
+
+        // ── Non-SUPPORT flows: load from master JSON + DB overrides ───────────
+        FlowConfigDTO masterConfig = loadFlow("master-fields");
         if (masterConfig == null) {
             return Collections.emptyList();
         }
@@ -262,22 +456,19 @@ public class FlowConfigService {
 
         int defaultOrder = 0;
         for (FlowStepDTO step : masterConfig.getSteps()) {
-            // Only include fields that are applicable to this tenant's subcategory
             if (step.getApplicableNiches() != null && !step.getApplicableNiches().isEmpty()) {
                 String subCat = user.getBusinessSubType();
                 if (subCat == null || !step.getApplicableNiches().contains(subCat)) {
-                    continue; // Skip if not applicable
+                    continue;
                 }
             }
 
             FlowFieldConfig fc = dbFieldMap.get(step.getDataKey());
             if (fc != null) {
-                // If it exists in DB, use its settings but copy non-editable properties from master just in case
                 fc.setFieldType(step.getFieldType());
                 fc.setOptions(step.getOptions());
                 result.add(fc);
             } else {
-                // Otherwise create a new config based on master defaults
                 result.add(FlowFieldConfig.builder()
                         .key(step.getDataKey())
                         .enabled(step.isDefaultEnabled())
@@ -291,12 +482,15 @@ public class FlowConfigService {
             defaultOrder++;
         }
 
-        // Sort by order
         result.sort(Comparator.comparingInt(FlowFieldConfig::getOrder));
         return result;
     }
 
     public void saveConfigurableFields(User user, String explicitSuffix, List<FlowFieldConfig> fields) {
+        if (fields == null || fields.isEmpty()) {
+            log.warn("[FlowConfigService] Attempted to save empty flow fields for user={}, ignoring", user != null ? user.getEmail() : "unknown");
+            return;
+        }
         String flowTypeStr = "";
         ConversationState.FlowType flowTypeEnum = ConversationState.FlowType.ENQUIRY;
 
@@ -401,6 +595,13 @@ public class FlowConfigService {
         } catch (Exception e) {
             throw new RuntimeException("Failed to save greeting message", e);
         }
+    }
+
+    @Transactional
+    public void deleteFlowConfig(User user, String explicitSuffix) {
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
+        tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum)
+                .ifPresent(tenantFlowConfigRepository::delete);
     }
 
     private ConversationState.FlowType resolveFlowTypeEnum(User user, String explicitSuffix) {

@@ -36,6 +36,7 @@ public class BookingController {
 
     /** GET /api/v1/bookings — all bookings */
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<BookingDTO>> getAll() {
         return ResponseEntity.ok(bookingService.getAllBookings(getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
@@ -43,6 +44,7 @@ public class BookingController {
 
     /** GET /api/v1/bookings/contact/{contactId} — bookings for a contact */
     @GetMapping("/contact/{contactId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<BookingDTO>> getForContact(@PathVariable UUID contactId) {
         return ResponseEntity.ok(bookingService.getBookingsForContact(contactId, getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
@@ -50,6 +52,7 @@ public class BookingController {
 
     /** GET /api/v1/bookings/status/{status} */
     @GetMapping("/status/{status}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<BookingDTO>> getByStatus(@PathVariable Booking.BookingStatus status) {
         return ResponseEntity.ok(bookingService.getBookingsByStatus(status, getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
@@ -85,6 +88,11 @@ public class BookingController {
                 .status(b.getStatus().name())
                 .createdAt(b.getCreatedAt())
                 .updatedAt(b.getUpdatedAt())
+                .ownerName(b.getOwner() != null ? 
+                        (b.getOwner().getDisplayName() != null && !b.getOwner().getDisplayName().isBlank() 
+                            ? b.getOwner().getDisplayName() 
+                            : b.getOwner().getEmail()) 
+                        : "Unknown")
                 .build();
     }
 }

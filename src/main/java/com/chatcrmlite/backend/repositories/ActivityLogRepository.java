@@ -64,4 +64,8 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, UUID> 
      * Count all activities for an owner — for analytics dashboards.
      */
     long countByOwner(User owner);
+
+    @Query("SELECT a FROM ActivityLog a WHERE a.owner.tenant.id = :tenantId ORDER BY a.createdAt DESC")
+    List<ActivityLog> findByTenantIdOrderByCreatedAtDesc(@Param("tenantId") UUID tenantId);
 }
+

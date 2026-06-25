@@ -54,8 +54,13 @@ public class LeadMetricsService {
         times.removeIf(t -> t.isBefore(LocalDateTime.now().minusHours(1)));
     }
 
-    public Map<String, Object> getLeadsPerContactDistribution() {
-        List<Lead> allLeads = leadRepository.findAll();
+    public Map<String, Object> getLeadsPerContactDistribution(com.chatcrmlite.backend.models.User user) {
+        List<Lead> allLeads;
+        if (user == null || user.getRole() == com.chatcrmlite.backend.models.User.Role.ADMIN || user.getRole() == com.chatcrmlite.backend.models.User.Role.OWNER || user.getRole() == com.chatcrmlite.backend.models.User.Role.AGENT) {
+            allLeads = leadRepository.findAll();
+        } else {
+            allLeads = leadRepository.findAllByOwner(user);
+        }
 
         Map<UUID, Long> countByContact = allLeads.stream()
                 .collect(Collectors.groupingBy(
@@ -101,7 +106,7 @@ public class LeadMetricsService {
     @SchedulerLock(name = "LeadMetricsService_logPeriodicMetrics", lockAtMostFor = "25m", lockAtLeastFor = "10m")
     public void logPeriodicMetrics() {
         try {
-            Map<String, Object> dist = getLeadsPerContactDistribution();
+            Map<String, Object> dist = getLeadsPerContactDistribution(null);
             log.info("[Lead-Metrics] Distribution snapshot: totalLeads={}, totalContacts={}, " +
                      "with1Lead={}, with2Leads={}, with3Leads={}, withMore={}, max={}, avg={}",
                     dist.get("totalLeads"), dist.get("totalContacts"),

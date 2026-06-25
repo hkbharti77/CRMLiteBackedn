@@ -10,6 +10,8 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
+    
+    java.util.List<User> findAllByTenant(com.chatcrmlite.backend.models.Tenant tenant);
 
     /**
      * Fetches user with tenant eagerly loaded to avoid LazyInitializationException.
@@ -35,4 +37,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
      */
     @Query(value = "SELECT EXISTS(SELECT 1 FROM tenants t JOIN app_users u ON t.id = u.tenant_id WHERE UPPER(SUBSTRING(t.business_name, 1, 4)) = :prefix AND u.id != :userId)", nativeQuery = true)
     boolean existsByBusinessNamePrefixAndNotId(@Param("prefix") String prefix, @Param("userId") UUID userId);
+
+    @Query("SELECT COUNT(u) FROM User u WHERE u.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
 }

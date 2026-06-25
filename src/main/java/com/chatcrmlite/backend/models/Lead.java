@@ -43,6 +43,7 @@ public class Lead extends BaseTenantEntity {
 
     /** Relational replacement for the enquiries JSON blob (AP-1). */
     @OneToMany(mappedBy = "lead", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    @org.hibernate.annotations.BatchSize(size = 20)
     @com.fasterxml.jackson.annotation.JsonIgnore
     private List<LeadEnquiry> enquiryList = new ArrayList<>();
 

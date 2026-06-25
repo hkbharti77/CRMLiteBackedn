@@ -13,4 +13,8 @@ public interface UserSessionRepository extends JpaRepository<UserSession, UUID> 
     List<UserSession> findByUserAndStatus(User user, String status);
     Optional<UserSession> findByTokenId(String tokenId);
     List<UserSession> findByUser(User user);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM UserSession s WHERE s.user = :user")
+    void deleteByUser(@org.springframework.data.repository.query.Param("user") User user);
 }

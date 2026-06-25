@@ -70,7 +70,8 @@
     bottom: 84px;
     right: 0;
     width: 380px;
-    height: 560px;
+    height: calc(100vh - 120px);
+    max-height: 560px;
     background: var(--bg-color);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -144,6 +145,12 @@
     display: flex;
     flex-direction: column;
     gap: 12px;
+}
+
+.chat-messages::after {
+    content: '';
+    min-height: 10px;
+    flex-shrink: 0;
 }
 
 .message {
@@ -230,12 +237,16 @@
 }
 
 .chat-input-container {
-    padding: 20px;
-    background: rgba(255, 255, 255, 0.5);
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    padding: 16px 20px;
+    background: #ffffff;
+    box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.08);
     display: flex;
     gap: 12px;
     align-items: center;
+    position: relative;
+    z-index: 10;
+    border-bottom-left-radius: 24px;
+    border-bottom-right-radius: 24px;
 }
 
 .chat-input {
@@ -346,3 +357,62 @@
     }
 }
 
+/* Custom Confirmation Overlay */
+.chat-confirm-overlay {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: rgba(255, 255, 255, 0.75);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+}
+
+.chat-confirm-overlay.active {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.chat-confirm-box {
+    background: white;
+    padding: 24px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+    width: 80%;
+    text-align: center;
+    transform: scale(0.95) translateY(10px);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    border: 1px solid var(--glass-border);
+}
+
+.chat-confirm-overlay.active .chat-confirm-box {
+    transform: scale(1) translateY(0);
+}
+
+.chat-confirm-box h4 {
+    margin: 0 0 8px 0;
+    font-size: 16px;
+    color: var(--secondary-color);
+}
+
+.chat-confirm-box p {
+    margin: 0 0 20px 0;
+    font-size: 13px;
+    color: #64748b;
+}
+
+.chat-confirm-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+}
+
+.chat-confirm-actions .flow-btn {
+    flex: 1;
+    padding: 8px 12px;
+}

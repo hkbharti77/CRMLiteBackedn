@@ -62,6 +62,7 @@ services:
     image: pgvector/pgvector:0.7.0-pg17   # PINNED — do not use :latest
     container_name: crmlite_db
     restart: unless-stopped
+    command: ["postgres", "-c", "max_connections=500", "-c", "shared_buffers=256MB"]
     environment:
       POSTGRES_DB: chatcrmdb
       POSTGRES_USER: ${DB_USERNAME}
@@ -81,7 +82,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 512M
+          memory: 1G
 
   # ── Redis ────────────────────────────────────────────────────────────────────
   redis:

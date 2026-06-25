@@ -31,6 +31,11 @@ public class BookingService {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private ReferenceNumberService referenceNumberService;
+    @Autowired private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+
+    private boolean isAdmin(User user) {
+        return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
+    }
 
     public Map<String, String> parseCollectedData(String json) {
         try {
@@ -49,9 +54,10 @@ public class BookingService {
     @Transactional
     public Booking createBooking(BookingRequest req, User owner) {
         Contact contact = contactRepository.findById(req.getContactId())
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
+                .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Contact not found or access denied"));
 
+        quotaEnforcerService.verifyBookingQuota(owner.getTenant().getId());
         String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.BOOKING);
         Booking booking = Booking.builder()
                 .referenceNumber(referenceNumber)
@@ -70,6 +76,7 @@ public class BookingService {
     @Transactional
     public Booking bookFromFlow(Contact contact, User owner, String service,
                                 String preferredSlot, Map<String, String> flowData) {
+        quotaEnforcerService.verifyBookingQuota(owner.getTenant().getId());
         String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.BOOKING);
         Booking booking = Booking.builder()
                 .referenceNumber(referenceNumber)
@@ -86,16 +93,25 @@ public class BookingService {
 
     @Transactional(readOnly = true)
     public List<Booking> getAllBookings(User owner) {
+        if (isAdmin(owner)) {
+            return bookingRepository.findAllOrderByCreatedAtDesc();
+        }
         return bookingRepository.findByOwner_IdOrderByCreatedAtDesc(owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Booking> getBookingsForContact(UUID contactId, User owner) {
+        if (isAdmin(owner)) {
+            return bookingRepository.findByContact_IdOrderByCreatedAtDesc(contactId);
+        }
         return bookingRepository.findByContact_IdAndOwner_IdOrderByCreatedAtDesc(contactId, owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Booking> getBookingsByStatus(Booking.BookingStatus status, User owner) {
+        if (isAdmin(owner)) {
+            return bookingRepository.findByStatus(status);
+        }
         return bookingRepository.findByOwner_IdAndStatus(owner.getId(), status);
     }
 
@@ -128,7 +144,7 @@ public class BookingService {
 
     private Booking getOwned(UUID id, User owner) {
         return bookingRepository.findByIdWithContact(id)
-                .filter(b -> b.getOwner().getId().equals(owner.getId()))
+                .filter(b -> b.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Booking not found or access denied"));
     }
 }

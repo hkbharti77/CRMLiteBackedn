@@ -120,11 +120,11 @@ public class SecurityConfig {
                 .contentSecurityPolicy(csp -> csp
                     .policyDirectives(
                         "default-src 'self'; " +
-                        "script-src 'self'; " +
-                        "style-src 'self' 'unsafe-inline'; " +
+                        "script-src 'self' 'unsafe-inline'; " +
+                        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
                         "img-src 'self' data: https:; " +
-                        "font-src 'self'; " +
-                        "connect-src 'self'; " +
+                        "font-src 'self' https://fonts.gstatic.com; " +
+                        "connect-src 'self' *; " +
                         "frame-ancestors 'none'; " +
                         "form-action 'self'; " +
                         "base-uri 'self';"
@@ -165,6 +165,17 @@ public class SecurityConfig {
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        
+        // Public API CORS (Widget, Webhooks) - Allow All Origins
+        CorsConfiguration publicConfig = new CorsConfiguration();
+        publicConfig.setAllowedOriginPatterns(java.util.Collections.singletonList("*"));
+        publicConfig.setAllowedMethods(Arrays.asList("GET", "POST", "OPTIONS"));
+        publicConfig.setAllowedHeaders(Arrays.asList("Content-Type", "Accept", "Origin"));
+        publicConfig.setAllowCredentials(false);
+        publicConfig.setMaxAge(3600L);
+        source.registerCorsConfiguration("/api/v1/public/**", publicConfig);
+        
+        // Private API CORS - Restricted Origins
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }

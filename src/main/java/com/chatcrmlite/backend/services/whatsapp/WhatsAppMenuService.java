@@ -33,6 +33,10 @@ public class WhatsAppMenuService {
     private final ObjectMapper objectMapper;
     private final BusinessServiceRepository businessServiceRepository;
     
+    @org.springframework.beans.factory.annotation.Autowired
+    @org.springframework.context.annotation.Lazy
+    private WhatsAppMessageService messageService;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url}")
     private String appPublicUrl;
 
@@ -253,9 +257,9 @@ public class WhatsAppMenuService {
                                 imageUrl = appPublicUrl + imageUrl.substring(idx);
                             }
                         }
-                        outboundService.sendImage(contact, imageUrl, caption, config, owner);
+                        messageService.sendInteractiveAiResponse(contact, caption, imageUrl, config, owner);
                     } else {
-                        outboundService.sendText(contact, caption, config, owner);
+                        messageService.sendInteractiveAiResponse(contact, caption, null, config, owner);
                     }
                 }, () -> {
                     outboundService.sendText(contact, "Sorry, this item is no longer available.", config, owner);

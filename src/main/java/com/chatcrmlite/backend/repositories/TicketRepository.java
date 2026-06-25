@@ -115,4 +115,50 @@ public interface TicketRepository extends JpaRepository<Ticket, UUID> {
     // Count tickets created today with a specific date prefix (for reference number generation)
     @Query(value = "SELECT COUNT(t) FROM tickets t WHERE t.owner_id = :ownerId AND t.reference_number LIKE :datePrefix || '%'", nativeQuery = true)
     long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
+
+    // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter for non-native queries) ──
+
+    @Query("SELECT t FROM Ticket t LEFT JOIN FETCH t.contact LEFT JOIN FETCH t.assignedTo " +
+           "WHERE t.deleted = false ORDER BY t.createdAt DESC")
+    Page<Ticket> findAllActivePaged(Pageable pageable);
+
+    @Query("SELECT t FROM Ticket t LEFT JOIN FETCH t.contact LEFT JOIN FETCH t.assignedTo " +
+           "WHERE t.status = :status AND t.deleted = false ORDER BY t.createdAt DESC")
+    Page<Ticket> findAllByStatusPaged(@Param("status") Ticket.TicketStatus status, Pageable pageable);
+
+    @Query(value = """
+            SELECT t.* FROM tickets t
+            WHERE t.tenant_id = :tenantId
+              AND t.deleted = false
+              AND t.search_vector @@ plainto_tsquery('english', :query)
+            ORDER BY ts_rank(t.search_vector, plainto_tsquery('english', :query)) DESC,
+                     t.created_at DESC
+            """, nativeQuery = true)
+    Page<Ticket> searchTicketsFtsTenantWide(@Param("tenantId") UUID tenantId,
+                                            @Param("query") String query,
+                                            Pageable pageable);
+
+    @Query("SELECT t FROM Ticket t WHERE " +
+           "t.submitterEmail = :email " +
+           "AND LOWER(t.subject) = LOWER(:subject) " +
+           "AND t.createdAt > :since " +
+           "AND t.deleted = false")
+    List<Ticket> findPotentialDuplicatesTenantWide(@Param("email") String email,
+                                         @Param("subject") String subject,
+                                         @Param("since") LocalDateTime since);
+
+    @Query("SELECT t FROM Ticket t WHERE " +
+           "t.deleted = false " +
+           "AND t.slaBreached = false " +
+           "AND (t.firstResponseDueAt < :now OR t.resolutionDueAt < :now)")
+    List<Ticket> findSlaBreachCandidatesTenantWide(@Param("now") LocalDateTime now);
+
+    long countByStatusAndDeletedFalse(Ticket.TicketStatus status);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE Ticket t SET t.assignedTo = null WHERE t.assignedTo = :user")
+    void nullifyAssignedTo(@org.springframework.data.repository.query.Param("user") User user);
+
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.tenant.id = :tenantId AND t.deleted = false")
+    long countActiveByTenantId(@Param("tenantId") UUID tenantId);
 }

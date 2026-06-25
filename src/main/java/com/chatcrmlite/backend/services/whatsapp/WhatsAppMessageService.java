@@ -100,7 +100,7 @@ public class WhatsAppMessageService {
         WhatsAppConfig config = whatsappConfigRepository.findByUserId(owner.getId())
                 .orElseThrow(() -> new RuntimeException("WhatsApp config not found"));
 
-        outboundService.sendText(contact, text, config, owner);
+        sendInteractiveAiResponse(contact, text, null, config, owner);
     }
 
     public void sendTenantMenu(UUID contactId, User owner) {

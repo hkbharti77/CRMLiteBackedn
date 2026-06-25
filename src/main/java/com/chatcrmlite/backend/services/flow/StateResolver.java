@@ -8,6 +8,8 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.BusinessServiceRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.services.SupportFormConfigService;
+import com.chatcrmlite.backend.dto.SupportFormConfigDTO;
 import com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -26,6 +28,7 @@ public class StateResolver {
     private final WhatsAppOutboundService outboundService;
     private final WhatsAppConfigRepository configRepository;
     private final BusinessServiceRepository businessServiceRepository;
+    private final SupportFormConfigService supportFormConfigService;
 
     public void sendStateMessage(StateDef stateDef, Contact contact, User owner, int pageIndex) {
         // FIX #22: Validate pageIndex
@@ -52,7 +55,11 @@ public class StateResolver {
         }
 
         if (stateDef.isDynamicOptions()) {
-            sendDynamicList(stateDef, contact, owner, config, pageIndex);
+            if ("category".equals(stateDef.getSaveInputAs())) {
+                sendDynamicCategoriesList(stateDef, contact, owner, config);
+            } else {
+                sendDynamicList(stateDef, contact, owner, config, pageIndex);
+            }
             return;
         }
 
@@ -65,6 +72,42 @@ public class StateResolver {
         } else {
             // Plain text
             outboundService.sendText(contact, stateDef.getText(), config, owner);
+        }
+    }
+
+    private void sendDynamicCategoriesList(StateDef stateDef, Contact contact, User owner, WhatsAppConfig config) {
+        SupportFormConfigDTO supportConfig = supportFormConfigService.getPublicConfig(owner.getId(), owner);
+        List<String> categories = supportConfig.getCategories();
+
+        if (categories == null || categories.isEmpty()) {
+            // Fallback
+            sendFallbackText(stateDef, contact, owner, config);
+            return;
+        }
+
+        List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+        for (int i = 0; i < Math.min(categories.size(), 10); i++) {
+            String title = categories.get(i);
+            if (title == null || title.isBlank()) continue;
+            if (title.length() > 24) title = title.substring(0, 24);
+            rows.add(MenuDto.MenuRowDto.builder()
+                    .id(title) // Use the title itself as the ID to save it directly
+                    .title(title)
+                    .build());
+        }
+
+        MenuDto menu = MenuDto.builder()
+                .type(rows.size() > 3 ? "list" : "button")
+                .bodyText(stateDef.getText())
+                .button(rows.size() > 3 ? "Select Category" : null)
+                .sections(List.of(MenuDto.MenuSectionDto.builder().rows(rows).build()))
+                .build();
+
+        try {
+            outboundService.sendInteractiveMenu(contact, menu, config, owner);
+        } catch (Exception e) {
+            log.error("[StateResolver] Failed to send categories menu to contact={}: {}", contact.getWaId(), e.getMessage(), e);
+            sendFallbackText(stateDef, contact, owner, config);
         }
     }
 

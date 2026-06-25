@@ -16,10 +16,11 @@ public class BookingDTO {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String ownerName;
 
     public BookingDTO() {}
 
-    public BookingDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, String service, String preferredSlot, Map<String, String> collectedData, String status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public BookingDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, String service, String preferredSlot, Map<String, String> collectedData, String status, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contactName = contactName;
@@ -31,6 +32,7 @@ public class BookingDTO {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.ownerName = ownerName;
     }
 
     public UUID getId() { return id; }
@@ -55,6 +57,8 @@ public class BookingDTO {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public String getOwnerName() { return ownerName; }
+    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
 
     public static BookingDTOBuilder builder() {
         return new BookingDTOBuilder();
@@ -72,6 +76,7 @@ public class BookingDTO {
         private String status;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        private String ownerName;
 
         public BookingDTOBuilder id(UUID id) { this.id = id; return this; }
         public BookingDTOBuilder referenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; return this; }
@@ -84,9 +89,10 @@ public class BookingDTO {
         public BookingDTOBuilder status(String status) { this.status = status; return this; }
         public BookingDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public BookingDTOBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
+        public BookingDTOBuilder ownerName(String ownerName) { this.ownerName = ownerName; return this; }
 
         public BookingDTO build() {
-            return new BookingDTO(id, referenceNumber, contactName, contactWaId, contactId, service, preferredSlot, collectedData, status, createdAt, updatedAt);
+            return new BookingDTO(id, referenceNumber, contactName, contactWaId, contactId, service, preferredSlot, collectedData, status, createdAt, updatedAt, ownerName);
         }
     }
 }

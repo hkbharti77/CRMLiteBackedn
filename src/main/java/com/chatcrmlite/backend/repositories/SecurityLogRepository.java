@@ -11,4 +11,8 @@ import java.util.UUID;
 public interface SecurityLogRepository extends JpaRepository<SecurityLog, UUID> {
     List<SecurityLog> findByUserOrderByTimestampDesc(User user);
     List<SecurityLog> findByUserAndActionOrderByTimestampDesc(User user, SecurityLog.LogAction action);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM SecurityLog s WHERE s.user = :user")
+    void deleteByUser(@org.springframework.data.repository.query.Param("user") User user);
 }

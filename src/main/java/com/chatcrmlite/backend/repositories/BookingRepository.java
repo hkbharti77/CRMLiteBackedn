@@ -29,4 +29,18 @@ public interface BookingRepository extends JpaRepository<Booking, UUID> {
     // Count bookings created today with a specific date prefix (for reference number generation)
     @Query(value = "SELECT COUNT(b) FROM bookings b WHERE b.owner_id = :ownerId AND b.reference_number LIKE :datePrefix || '%'", nativeQuery = true)
     long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
+
+    // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
+
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c ORDER BY b.createdAt DESC")
+    List<Booking> findAllOrderByCreatedAtDesc();
+
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE c.id = :contactId ORDER BY b.createdAt DESC")
+    List<Booking> findByContact_IdOrderByCreatedAtDesc(@Param("contactId") UUID contactId);
+
+    @Query("SELECT b FROM Booking b JOIN FETCH b.contact c WHERE b.status = :status")
+    List<Booking> findByStatus(@Param("status") Booking.BookingStatus status);
+
+    @Query("SELECT COUNT(b) FROM Booking b WHERE b.owner.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
 }

@@ -21,9 +21,9 @@
     // ── SVG Icons ─────────────────────────────────────────────────────────
     const ICONS = {
         chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
-        close: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
+        close: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
         send: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
-        clear: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>`
+        clear: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="12" y1="9" x2="12" y2="15"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>`
     };
 
     const STORAGE_KEY = `crm_chat_history_${businessId}`;
@@ -39,6 +39,8 @@
     function clearHistory() { localStorage.removeItem(STORAGE_KEY); }
 
     let chatHistory = loadHistory();
+    // Temporary cleanup for users who have the old {{business}} text cached in their browsers
+    chatHistory = chatHistory.filter(m => !m.text.includes('{{business}}'));
 
     let theme = {
         primaryColor: '#3b82f6',
@@ -154,6 +156,20 @@
             this._messages.scrollTop = this._messages.scrollHeight;
         },
 
+        // ── Support Flow Steps — mirrors support.json exactly ────────────────
+        // Step order, dataKeys and greeting text must stay in sync with
+        // /flows/support.json and FlowDefinitionLoader.buildMachineDefFromSteps()
+        _supportSteps() {
+            return [
+                { key: "name",     q: "👤 What is your full name?",                                                                         type: "text" },
+                { key: "email",    q: "📧 Please provide your email address so our support team can reach you:",                             type: "text" },
+                { key: "phone",    q: "📱 What is your phone number?",                                                                      type: "text" },
+                { key: "category", q: "🏷️ What category best describes your issue? (e.g., Billing, Technical, General)",                  type: "buttons" },
+                { key: "subject",  q: "📝 Please provide a brief subject for your request:",                                               type: "text" },
+                { key: "message",  q: "💬 Tell us more about the issue. Please provide details:",                                          type: "text" }
+            ];
+        },
+
         startSupportFlow() {
             this._addUserBubble('🎫 Open Support Ticket');
             this.mode = 'support';
@@ -163,13 +179,7 @@
         },
 
         async renderSupportStep(index) {
-            const steps = [
-                { q: "What is your full name?", key: "name" },
-                { q: "And your email address?", key: "email" },
-                { q: "Which category best describes your issue?", key: "category", type: "buttons" },
-                { q: "Please provide a short subject for your ticket.", key: "subject" },
-                { q: "Tell us more about the issue. Please provide details.", key: "message" }
-            ];
+            const steps = this._supportSteps();
 
             if (index >= steps.length) {
                 this.submitTicket();
@@ -178,11 +188,25 @@
 
             const step = steps[index];
             this.currentStep = index;
-            this._addBotBubble(step.q);
+
+            // ── Mirror backend: greeting + first question in ONE single bubble ──
+            // Exactly as FlowDefinitionLoader.buildMachineDefFromSteps() does:
+            //   if (i == 0 && greetingMessage != null)
+            //       questionText = greetingMessage + "\n\n" + questionText;
+            let greetingMsg = (this.supportConfig && this.supportConfig.greetingMessage)
+                ? this.supportConfig.greetingMessage
+                : 'Welcome to our Support channel! Please provide a few details so we can assist you better.';
+
+            const bubbleText = (index === 0)
+                ? greetingMsg + '\n\n' + step.q   // ONE bubble — greeting + question merged
+                : step.q;                          // subsequent steps — question only
+
+            this._addBotBubble(bubbleText);
 
             if (step.type === 'buttons') {
                 this._setInputEnabled(false);
-                const categories = (this.supportConfig && this.supportConfig.categories) || ["General", "Billing", "Technical"];
+                // Always load categories live from the API (mirrors StateResolver.sendDynamicCategoriesList)
+                const categories = await this._loadSupportCategories();
                 this._renderButtons(categories, (val) => {
                     this.collectedData[step.key] = val;
                     this._addUserBubble(val);
@@ -193,6 +217,26 @@
                 this._input.placeholder = 'Type here...';
                 this._input.focus();
             }
+        },
+
+        // Load categories from the public support config API
+        // Mirrors SupportFormConfigService.getPublicConfig() + parseCategories()
+        async _loadSupportCategories() {
+            // Use already-loaded config first
+            if (this.supportConfig && this.supportConfig.categories && this.supportConfig.categories.length > 0) {
+                return this.supportConfig.categories;
+            }
+            try {
+                const res = await fetch(`${API_BASE}/support/config/${businessId}`);
+                if (res.ok) {
+                    const cfg = await res.json();
+                    this.supportConfig = cfg;
+                    if (cfg.categories && cfg.categories.length > 0) return cfg.categories;
+                }
+            } catch (e) {
+                console.warn('CRM Chat: Could not load support categories', e);
+            }
+            return ['General', 'Billing', 'Technical'];
         },
 
         async renderStep(index) {
@@ -258,7 +302,12 @@
             }
 
             if (this.mode === 'support') {
-                this.collectedData[["name","email","category","subject","message"][this.currentStep]] = text;
+                // Use the step definition array for the correct dataKey — mirrors backend saveAnswer()
+                const steps = this._supportSteps();
+                const step = steps[this.currentStep];
+                if (step) {
+                    this.collectedData[step.key] = text;
+                }
                 this._addUserBubble(text);
                 this._input.value = '';
                 this.renderSupportStep(this.currentStep + 1);
@@ -321,20 +370,59 @@
         },
 
         async submitTicket() {
+            // ── Validate required fields before hitting the backend ─────────
+            // Mirrors SupportRequest @NotBlank constraints exactly:
+            //   name, email, subject, message → required
+            //   phone, category               → optional
+            const d = this.collectedData;
+            const missing = [];
+            if (!d.name    || !d.name.trim())    missing.push('name');
+            if (!d.email   || !d.email.trim())   missing.push('email address');
+            if (!d.subject || !d.subject.trim()) missing.push('subject');
+            if (!d.message || !d.message.trim()) missing.push('issue description');
+
+            if (missing.length > 0) {
+                this._addBotBubble(`⚠️ Please provide your ${missing.join(', ')} before submitting.`);
+                // Re-send the flow from the first missing field
+                this.mode = 'support';
+                const stepKeys = this._supportSteps().map(s => s.key);
+                const firstMissingStep = stepKeys.findIndex(k => !d[k] || !d[k].trim());
+                this.renderSupportStep(firstMissingStep >= 0 ? firstMissingStep : 0);
+                return;
+            }
+
+            // ── Build payload matching SupportRequest exactly ───────────────
+            // Optional fields: send null instead of empty string so @Size doesn't
+            // fail and the backend treats them as absent
+            const payload = {
+                name:     d.name.trim(),
+                email:    d.email.trim(),
+                subject:  d.subject.trim(),
+                message:  d.message.trim(),
+                phone:    (d.phone    && d.phone.trim())    ? d.phone.trim()    : null,
+                category: (d.category && d.category.trim()) ? d.category.trim() : null
+            };
+
             this.mode = 'submitting';
             this._setInputEnabled(false);
             this._setTyping(true);
+
+            // DEBUG: log the exact payload being sent — check browser DevTools Console
+            console.log('[CRM Support] Submitting payload:', JSON.stringify(payload, null, 2));
 
             try {
                 const res = await fetch(`${API_BASE}/support/${businessId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(this.collectedData)
+                    body: JSON.stringify(payload)
                 });
                 this._setTyping(false);
                 const data = await res.json();
 
-                if (res.ok) {
+                // DEBUG: log exact server response
+                if (!res.ok) console.error('[CRM Support] Server error response:', res.status, JSON.stringify(data));
+
+                if (res.ok || res.status === 201) {
                     this.mode = 'rag';
                     this._addBotBubble(data.message || '✅ Support ticket created successfully!');
                     if (data.ticketNumber) {
@@ -345,13 +433,28 @@
                         this._setInputEnabled(true);
                         this._input.placeholder = 'Ask me anything...';
                     }, 1000);
+                } else if (res.status === 400) {
+                    // Backend @Valid validation error — show the error message
+                    const errMsg = data.error || data.message
+                        || (data.errors && Object.values(data.errors).join(', '))
+                        || 'Some required fields are missing. Please check your inputs.';
+                    this._addBotBubble(`⚠️ ${errMsg}`);
+                    this.mode = 'support';
+                    this._setInputEnabled(true);
+                } else if (res.status === 429) {
+                    this._addBotBubble('⚠️ Too many requests. Please wait a moment and try again.');
+                    this.mode = 'rag';
+                    this._setInputEnabled(true);
                 } else {
-                    this._addBotBubble(`⚠️ ${data.error || 'Failed to create ticket.'}`);
+                    this._addBotBubble(`⚠️ ${data.error || 'Failed to create ticket. Please try again.'}`);
+                    this.mode = 'support';
                     this._setInputEnabled(true);
                 }
             } catch (e) {
                 this._setTyping(false);
-                this._addBotBubble('⚠️ Connection error. Please try again.');
+                this._addBotBubble('⚠️ Connection error. Please check your connection and try again.');
+                this.mode = 'support';
+                this._setInputEnabled(true);
             }
         },
 
@@ -374,25 +477,44 @@
             this._messages.innerHTML = '';
             this._addBotBubble(theme.welcomeMessage);
             this._setInputEnabled(true);
-            this._showSupportOptions();
+            this._showDynamicCTAs();
         },
 
-        _showSupportOptions() {
-            if (this.supportConfig && this.supportConfig.enabled) {
+        _showDynamicCTAs() {
+            if (theme.ctaButtons && theme.ctaButtons.length > 0) {
                 const container = document.createElement('div');
                 container.className = 'flow-buttons';
-                const supportBtn = document.createElement('button');
-                supportBtn.className = 'flow-btn';
-                supportBtn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px;';
-                supportBtn.textContent = '🎫 Get Support';
-                supportBtn.onclick = () => this.startSupportFlow();
-                container.appendChild(supportBtn);
+                theme.ctaButtons.forEach(btnConfig => {
+                    const btn = document.createElement('button');
+                    btn.className = 'flow-btn';
+                    btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin-right: 5px; margin-bottom: 5px;';
+                    btn.textContent = btnConfig.label;
+                    btn.onclick = () => {
+                        container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                        if (btnConfig.action === 'SUPPORT') {
+                            this.startSupportFlow();
+                        } else {
+                            if (this.config && this.config.steps && this.config.steps.length > 0) {
+                                this._addUserBubble(btnConfig.label);
+                                this.mode = 'flow';
+                                this._setInputEnabled(false);
+                                this.renderStep(0);
+                            } else {
+                                // Fallback to RAG if no form is configured
+                                this._input.value = btnConfig.label;
+                                document.getElementById('chat-send').click();
+                            }
+                        }
+                    };
+                    container.appendChild(btn);
+                });
                 this._messages.appendChild(container);
                 this._messages.scrollTop = this._messages.scrollHeight;
             }
         },
 
         _addBotBubble(text) {
+            if (!text || String(text).trim() === '') text = "Hello! How can I help you today?";
             const entry = { text, sender: 'bot', time: Date.now() };
             chatHistory.push(entry);
             saveHistory(chatHistory);
@@ -466,11 +588,12 @@
 
     function _renderMessageBubble(entry, container) {
         if (!container) return;
+        if (!entry || !entry.text) return;
         const msgDiv = document.createElement('div');
         msgDiv.className = `message ${entry.sender}`;
 
         const textSpan = document.createElement('span');
-        textSpan.innerHTML = entry.text.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+        textSpan.innerHTML = String(entry.text).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';
@@ -499,7 +622,7 @@
                         <span class="chat-header-title">${theme.businessName}</span>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
-                        <button id="chat-clear" title="Clear chat" style="background:none;border:none;color:white;cursor:pointer;opacity:0.8;display:flex;">${ICONS.clear}</button>
+                        <button id="chat-clear" title="New thread" style="background:none;border:none;color:white;cursor:pointer;opacity:0.8;display:flex;">${ICONS.clear}</button>
                         <button id="chat-close" style="background:none;border:none;color:white;cursor:pointer;display:flex;">${ICONS.close}</button>
                     </div>
                 </div>
@@ -512,6 +635,16 @@
                 <div class="chat-input-container">
                     <input type="text" id="chat-input" class="chat-input" placeholder="Loading..." autocomplete="off" disabled>
                     <button id="chat-send" class="send-btn" disabled>${ICONS.send}</button>
+                </div>
+                <div class="chat-confirm-overlay" id="chat-confirm-overlay">
+                    <div class="chat-confirm-box">
+                        <h4>Restart Chat</h4>
+                        <p>Are you sure you want to start a new conversation? This will clear current messages.</p>
+                        <div class="chat-confirm-actions">
+                            <button id="chat-confirm-cancel" class="flow-btn">Cancel</button>
+                            <button id="chat-confirm-ok" class="flow-btn selected">Start New</button>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -541,7 +674,16 @@
         };
 
         document.getElementById('chat-clear').onclick = () => {
-            if (confirm('Clear conversation?')) flowEngine.restart();
+            document.getElementById('chat-confirm-overlay').classList.add('active');
+        };
+
+        document.getElementById('chat-confirm-cancel').onclick = () => {
+            document.getElementById('chat-confirm-overlay').classList.remove('active');
+        };
+
+        document.getElementById('chat-confirm-ok').onclick = () => {
+            document.getElementById('chat-confirm-overlay').classList.remove('active');
+            flowEngine.restart();
         };
 
         const sendMessage = async () => {
@@ -607,9 +749,12 @@
             // Load history or welcome
             if (chatHistory.length > 0) {
                 chatHistory.forEach(m => _renderMessageBubble(m, messages));
+                flowEngine._showDynamicCTAs();
             } else {
-                flowEngine._addBotBubble(theme.welcomeMessage);
-                flowEngine._showSupportOptions();
+                let wm = theme.welcomeMessage;
+                if (!wm || String(wm).trim() === '') wm = 'Hello! How can I help you today?';
+                flowEngine._addBotBubble(wm);
+                flowEngine._showDynamicCTAs();
             }
             
             input.placeholder = 'Ask me anything...';

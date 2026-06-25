@@ -480,6 +480,60 @@ public class EmailService {
                 "booking-owner", ctx);
     }
 
+    // ── Staff Welcome Emails ──────────────────────────────────────────────────
+
+    public void sendStaffWelcomeEmail(String toEmail, String displayName, String businessName, String role) {
+        Context ctx = new Context();
+        ctx.setVariable("heading",       "Welcome to the Team!");
+        ctx.setVariable("greeting",      "Hi " + displayName + ",");
+        ctx.setVariable("intro",         "Your account has been created by your business administrator for " + businessName + ". You have been registered as a " + role + ".");
+        ctx.setVariable("footerNote",    "Please use your email address to log in. You will receive a secure 6-digit verification code (OTP) each time you log in.");
+        ctx.setVariable("ctaLabel",      "Log In Now");
+        ctx.setVariable("ctaUrl",        System.getenv("FRONTEND_URL") != null ? System.getenv("FRONTEND_URL") : "http://localhost:8081"); 
+        
+        ctx.setVariable("businessName",  businessName);
+        ctx.setVariable("role",          role);
+
+        sendTemplate(toEmail, "Welcome to " + businessName + " on " + BRAND,
+                "welcome-staff", ctx);
+    }
+
+    // ── Staff Status Change Emails ────────────────────────────────────────────
+
+    public void sendStaffStatusChangeEmail(String toEmail, String employeeName, String businessName, boolean isBlocked, String reason) {
+        Context ctx = new Context();
+        String actionText = isBlocked ? "Blocked" : "Unblocked";
+        ctx.setVariable("heading",       "Account " + actionText);
+        ctx.setVariable("greeting",      "Hi " + employeeName + ",");
+        ctx.setVariable("intro",         "Your staff account for " + businessName + " has been " + actionText.toLowerCase() + " by your administrator.");
+        ctx.setVariable("footerNote",    "If you think this is a mistake, please contact your workspace owner.");
+        
+        ctx.setVariable("reason",        reason != null && !reason.isBlank() ? reason : "No reason specified.");
+        ctx.setVariable("businessName",  businessName);
+        ctx.setVariable("status",        actionText);
+
+        sendTemplate(toEmail, "Your account has been " + actionText.toLowerCase() + " - " + businessName,
+                "staff-status-update-email", ctx);
+    }
+
+    public void sendOwnerStaffStatusNotification(String ownerEmail, String ownerName, String employeeName, String employeeEmail, boolean isBlocked, String reason) {
+        Context ctx = new Context();
+        String actionText = isBlocked ? "Blocked" : "Unblocked";
+        ctx.setVariable("heading",       "Staff Account " + actionText);
+        ctx.setVariable("greeting",      "Hi " + ownerName + ",");
+        ctx.setVariable("intro",         "The staff account for " + employeeName + " (" + employeeEmail + ") has been " + actionText.toLowerCase() + ".");
+        ctx.setVariable("footerNote",    "This is an automated notification of user status changes in your workspace.");
+        
+        ctx.setVariable("reason",        reason != null && !reason.isBlank() ? reason : "No reason specified.");
+        ctx.setVariable("employeeName",  employeeName);
+        ctx.setVariable("employeeEmail", employeeEmail);
+        ctx.setVariable("status",        actionText);
+
+        sendTemplate(ownerEmail, "Notice: Staff account " + actionText.toLowerCase() + " - " + employeeName,
+                "staff-status-owner-notification", ctx);
+    }
+
+
     // ── Helpers ────────────────────────────────────────────────────────────
 
     private String statusMessage(String status) {

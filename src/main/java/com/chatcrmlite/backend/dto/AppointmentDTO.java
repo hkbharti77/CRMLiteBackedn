@@ -21,10 +21,11 @@ public class AppointmentDTO implements Serializable {
     private String status;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    private String ownerName;
 
     public AppointmentDTO() {}
 
-    public AppointmentDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, LocalDateTime appointmentDateTime, String title, Map<String, String> collectedData, String meetingLink, String status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public AppointmentDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, LocalDateTime appointmentDateTime, String title, Map<String, String> collectedData, String meetingLink, String status, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contactName = contactName;
@@ -37,6 +38,7 @@ public class AppointmentDTO implements Serializable {
         this.status = status;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
+        this.ownerName = ownerName;
     }
 
     public UUID getId() { return id; }
@@ -63,6 +65,8 @@ public class AppointmentDTO implements Serializable {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public String getOwnerName() { return ownerName; }
+    public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
 
     public static AppointmentDTOBuilder builder() {
         return new AppointmentDTOBuilder();
@@ -81,6 +85,7 @@ public class AppointmentDTO implements Serializable {
         private String status;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
+        private String ownerName;
 
         public AppointmentDTOBuilder id(UUID id) { this.id = id; return this; }
         public AppointmentDTOBuilder referenceNumber(String referenceNumber) { this.referenceNumber = referenceNumber; return this; }
@@ -94,9 +99,10 @@ public class AppointmentDTO implements Serializable {
         public AppointmentDTOBuilder status(String status) { this.status = status; return this; }
         public AppointmentDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public AppointmentDTOBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
+        public AppointmentDTOBuilder ownerName(String ownerName) { this.ownerName = ownerName; return this; }
 
         public AppointmentDTO build() {
-            return new AppointmentDTO(id, referenceNumber, contactName, contactWaId, contactId, appointmentDateTime, title, collectedData, meetingLink, status, createdAt, updatedAt);
+            return new AppointmentDTO(id, referenceNumber, contactName, contactWaId, contactId, appointmentDateTime, title, collectedData, meetingLink, status, createdAt, updatedAt, ownerName);
         }
     }
 }

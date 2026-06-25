@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head><meta charset="UTF-8"/></head>
+<body>
+
+<div th:replace="~{email/base :: header(
+      heading  = ${heading},
+      greeting = ${greeting}, 
+      intro    = ${intro})}">
+</div>
+
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
+       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+  <tr>
+    <td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
+             style="background:#ffffff;max-width:600px;width:100%">
+        <tr>
+          <td style="padding:0 36px 24px">
+
+            <div style="background:#ffffff;border:1px solid #000000;border-radius:8px;
+                        padding:16px 20px;margin:0 0 24px">
+              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
+                🏢 Account Details
+              </p>
+              <table style="width:100%;font-size:13px;color:#000000">
+                <tr>
+                  <td style="padding:2px 0;width:80px">Business:</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${businessName}">My Company</td>
+                </tr>
+                <tr>
+                  <td style="padding:2px 0">Role:</td>
+                  <td style="padding:2px 0;color:#000000" th:text="${role}">Agent</td>
+                </tr>
+              </table>
+            </div>
+
+            <div style="background:#ffffff;border-left:4px solid #008000;
+                        padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
+              <p style="margin:0 0 8px;color:#008000;font-size:14px;font-weight:600">
+                ⚡ How to Log In
+              </p>
+              <ul style="margin:0;padding-left:16px;color:#000000;font-size:13px;line-height:1.6">
+                <li>Go to the ChatCRM Lite application</li>
+                <li>Enter your email address in the login form</li>
+                <li>A 6-digit verification code (OTP) will be sent to your email</li>
+                <li>Enter the code to access your workspace directly</li>
+              </ul>
+            </div>
+
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div th:replace="~{email/base :: footer(
+      footerNote = ${footerNote},
+      ctaLabel   = ${ctaLabel},
+      ctaUrl     = ${ctaUrl})}">
+</div>
+
+</body>
+</html>

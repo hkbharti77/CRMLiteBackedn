@@ -35,6 +35,7 @@ public class PublicSubmissionService {
     @Autowired private BookingService bookingService;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private ApplicationEventPublisher eventPublisher;
+    @Autowired private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @Transactional
     public void submitLead(User owner, Map<String, String> data) {
@@ -62,7 +63,9 @@ public class PublicSubmissionService {
         String title = firstNonBlank(clean, "treatment", "service", "consultation_type");
         if (title == null) title = "Web Appointment";
 
-        appointmentService.bookFromFlow(contact, owner, title, clean, null);
+        LocalDateTime apptTime = parseDateTime(firstNonBlank(clean, "date_time", "preferred_slot", "event_date"));
+
+        appointmentService.bookFromFlow(contact, owner, title, clean, apptTime);
         log.info("[PublicSubmission] Appointment created for contact={} owner={}", contact.getId(), owner.getId());
     }
 
@@ -144,6 +147,9 @@ public class PublicSubmissionService {
             enquiriesJson = "[]";
         }
 
+        // Verify lead quota
+        quotaEnforcerService.verifyLeadQuota(owner.getTenant().getId());
+
         Lead lead = Lead.builder()
                 .contact(contact)
                 .owner(owner)
@@ -160,5 +166,18 @@ public class PublicSubmissionService {
             if (val != null && !val.isBlank()) return val;
         }
         return null;
+    }
+
+    private LocalDateTime parseDateTime(String raw) {
+        LocalDateTime fallback = LocalDateTime.now().plusDays(1)
+                .withHour(10).withMinute(0).withSecond(0).withNano(0);
+        if (raw == null || raw.isBlank()) return fallback;
+        try {
+            return LocalDateTime.parse(raw);
+        } catch (Exception ignored) {}
+        try {
+            return java.time.LocalDate.parse(raw).atTime(10, 0);
+        } catch (Exception ignored) {}
+        return fallback;
     }
 }

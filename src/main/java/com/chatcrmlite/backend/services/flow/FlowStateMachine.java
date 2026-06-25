@@ -55,8 +55,13 @@ public class FlowStateMachine {
             // Pagination handling for dynamic lists
             if (isInteractiveSelection && selectionId != null && selectionId.startsWith("flow_page_")) {
                 int nextPg = Integer.parseInt(selectionId.replace("flow_page_", ""));
-                FlowMachineDef machineDef = loadMachineDefForState(state, owner);
-                StateDef currentStateDef = machineDef.getStates().get(state.getCurrentState());
+                Optional<FlowMachineDef> machineDefOpt = loadMachineDefForState(state, owner);
+                if (machineDefOpt.isEmpty()) {
+                    log.error("[StateMachine] Cannot paginate — flow definition missing for contact={}, owner={}",
+                            contact.getWaId(), owner.getId());
+                    return false;
+                }
+                StateDef currentStateDef = machineDefOpt.get().getStates().get(state.getCurrentState());
                 log.debug("[StateMachine] Pagination request for state={}, page={}", state.getCurrentState(), nextPg);
                 stateResolver.sendStateMessage(currentStateDef, contact, owner, nextPg);
                 return true;
@@ -180,18 +185,32 @@ public class FlowStateMachine {
      * Loads the FlowMachineDef for an in-progress conversation state.
      * If the state has a DB-backed flowDefinitionId, loads from DB.
      * Otherwise re-resolves from JSON files (for flows started before DB rows existed).
+     * Returns empty Optional if no definition can be found (instead of throwing).
      */
-    private FlowMachineDef loadMachineDefForState(ConversationState state, User owner) {
+    private Optional<FlowMachineDef> loadMachineDefForState(ConversationState state, User owner) {
         if (state.getFlowDefinitionId() != null) {
-            return definitionLoader.loadDefinition(state.getFlowDefinitionId());
+            try {
+                return Optional.ofNullable(definitionLoader.loadDefinition(state.getFlowDefinitionId()));
+            } catch (Exception e) {
+                log.error("[StateMachine] Failed to load DB flow definition id={} for owner={}: {}",
+                        state.getFlowDefinitionId(), owner.getId(), e.getMessage());
+                return Optional.empty();
+            }
         }
-        return definitionLoader.resolveFlowMachineDef(owner, state.getFlowType().name().toLowerCase())
-                .orElseThrow(() -> new IllegalStateException(
-                        "Cannot reload flow definition for in-progress state, owner=" + owner.getId()));
+        return definitionLoader.resolveFlowMachineDef(owner, state.getFlowType().name().toLowerCase());
     }
 
     private void advanceFlow(ConversationState state, Contact contact, User owner, String input, String selectionId) {
-        FlowMachineDef machineDef = loadMachineDefForState(state, owner);
+        Optional<FlowMachineDef> machineDefOpt = loadMachineDefForState(state, owner);
+        if (machineDefOpt.isEmpty()) {
+            log.error("[StateMachine] Flow definition missing for in-progress state. contact={}, owner={}, flowType={}",
+                    contact.getWaId(), owner.getId(), state.getFlowType());
+            // Clean up the orphaned state so the user isn't stuck forever
+            stateRepository.delete(state);
+            log.warn("[StateMachine] Orphaned ConversationState deleted for contact={} to unblock flow", contact.getWaId());
+            return;
+        }
+        FlowMachineDef machineDef = machineDefOpt.get();
         StateDef currentStateDef = machineDef.getStates().get(state.getCurrentState());
 
         // Use selectionId if interactive, otherwise plain text input

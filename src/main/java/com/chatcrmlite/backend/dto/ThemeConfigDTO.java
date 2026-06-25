@@ -1,5 +1,7 @@
 package com.chatcrmlite.backend.dto;
 
+import java.util.List;
+
 public class ThemeConfigDTO {
     private String primaryColor;
     private String secondaryColor;
@@ -11,10 +13,11 @@ public class ThemeConfigDTO {
     private String welcomeMessage;
     private String businessSubType;
     private String logoUrl;
+    private List<WidgetCtaDTO> ctaButtons;
 
     public ThemeConfigDTO() {}
 
-    public ThemeConfigDTO(String primaryColor, String secondaryColor, String accentColor, String backgroundColor, String fontFamily, String nicheIcon, String businessName, String welcomeMessage, String businessSubType, String logoUrl) {
+    public ThemeConfigDTO(String primaryColor, String secondaryColor, String accentColor, String backgroundColor, String fontFamily, String nicheIcon, String businessName, String welcomeMessage, String businessSubType, String logoUrl, List<WidgetCtaDTO> ctaButtons) {
         this.primaryColor = primaryColor;
         this.secondaryColor = secondaryColor;
         this.accentColor = accentColor;
@@ -25,6 +28,7 @@ public class ThemeConfigDTO {
         this.welcomeMessage = welcomeMessage;
         this.businessSubType = businessSubType;
         this.logoUrl = logoUrl;
+        this.ctaButtons = ctaButtons;
     }
 
     public String getPrimaryColor() { return primaryColor; }
@@ -47,6 +51,8 @@ public class ThemeConfigDTO {
     public void setBusinessSubType(String businessSubType) { this.businessSubType = businessSubType; }
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public List<WidgetCtaDTO> getCtaButtons() { return ctaButtons; }
+    public void setCtaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -63,6 +69,7 @@ public class ThemeConfigDTO {
         private String welcomeMessage;
         private String businessSubType;
         private String logoUrl;
+        private List<WidgetCtaDTO> ctaButtons;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -74,9 +81,10 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder welcomeMessage(String welcomeMessage) { this.welcomeMessage = welcomeMessage; return this; }
         public ThemeConfigDTOBuilder businessSubType(String businessSubType) { this.businessSubType = businessSubType; return this; }
         public ThemeConfigDTOBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
+        public ThemeConfigDTOBuilder ctaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; return this; }
 
         public ThemeConfigDTO build() {
-            return new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, businessSubType, logoUrl);
+            return new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, businessSubType, logoUrl, ctaButtons);
         }
     }
 }

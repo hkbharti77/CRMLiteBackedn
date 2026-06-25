@@ -40,6 +40,9 @@ public class WhatsAppConfigController {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+
     @Value("${app.public.url:}")
     private String publicAppUrl;
 
@@ -71,6 +74,9 @@ public class WhatsAppConfigController {
         
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+
+        // Enforce WhatsApp integration plan limits
+        quotaEnforcerService.verifyWhatsAppIntegrationAllowed(user.getTenant().getId());
 
         String phoneNumberId = (String) body.get("phoneNumberId");
         String wabaId = (String) body.get("wabaId");

@@ -26,17 +26,15 @@ public class DashboardAggregateService {
     @Transactional(readOnly = true)
     public DashboardAggregateResponse getDashboardData(User user) {
         // 1. Leads
-        List<Lead> leads = leadService.getLeadsByUser(user);
-        long totalLeads = leads.size();
-        long closedLeads = leads.stream()
-                .filter(l -> l.getStatus() == Lead.LeadStatus.CLOSED_WON || l.getStatus() == Lead.LeadStatus.CLOSED_LOST)
-                .count();
+        long totalLeads = leadService.getTotalLeadCount(user);
+        long wonCount = leadService.getLeadCountByStatus(Lead.LeadStatus.CLOSED_WON, user);
+        long lostCount = leadService.getLeadCountByStatus(Lead.LeadStatus.CLOSED_LOST, user);
+        long closedLeads = wonCount + lostCount;
 
         // Pipeline Distribution
-        long newCount = leads.stream().filter(l -> l.getStatus() == Lead.LeadStatus.NEW).count();
-        long interestedCount = leads.stream().filter(l -> l.getStatus() == Lead.LeadStatus.INTERESTED).count();
-        long followUpCount = leads.stream().filter(l -> l.getStatus() == Lead.LeadStatus.FOLLOW_UP).count();
-        long wonCount = leads.stream().filter(l -> l.getStatus() == Lead.LeadStatus.CLOSED_WON).count();
+        long newCount = leadService.getLeadCountByStatus(Lead.LeadStatus.NEW, user);
+        long interestedCount = leadService.getLeadCountByStatus(Lead.LeadStatus.INTERESTED, user);
+        long followUpCount = leadService.getLeadCountByStatus(Lead.LeadStatus.FOLLOW_UP, user);
 
         List<DashboardAggregateResponse.PipelineStageCount> pipeline = List.of(
                 new DashboardAggregateResponse.PipelineStageCount("New", newCount, "#94A3B8"),

@@ -8,6 +8,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.BusinessServiceRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.services.SupportFormConfigService;
 import com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -37,6 +38,9 @@ class StateResolverOutboundTest {
     @Mock
     private BusinessServiceRepository businessServiceRepository;
 
+    @Mock
+    private SupportFormConfigService supportFormConfigService;
+
     private StateResolver stateResolver;
     private User owner;
     private Contact contact;
@@ -44,7 +48,7 @@ class StateResolverOutboundTest {
 
     @BeforeEach
     void setUp() {
-        stateResolver = new StateResolver(outboundService, configRepository, businessServiceRepository);
+        stateResolver = new StateResolver(outboundService, configRepository, businessServiceRepository, supportFormConfigService);
 
         Tenant tenant = Tenant.builder()
                 .id(UUID.randomUUID())

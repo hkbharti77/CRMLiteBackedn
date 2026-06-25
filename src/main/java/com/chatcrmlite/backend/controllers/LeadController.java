@@ -38,22 +38,15 @@ public class LeadController {
 
     // ── Lead Queries ───────────────────────────────────────────────────────
 
-    @GetMapping
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<LeadDTO>> getLeads() {
-        User user = getAuthenticatedUser();
-        return ResponseEntity.ok(leadService.getLeadsByUser(user)
-                .stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
-    }
-
-    /** GET /api/v1/leads/paged?page=0&size=20 — paginated for large datasets */
+    /** GET /api/v1/leads/paged?page=0&size=20&status=NEW — paginated for large datasets */
     @GetMapping("/paged")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getLeadsPaged(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Lead.LeadStatus status) {
         User user = getAuthenticatedUser();
-        var pagedResult = leadService.getLeadsByUserPaged(user, page, size);
+        var pagedResult = leadService.getLeadsByUserPaged(user, page, size, status);
         return ResponseEntity.ok(java.util.Map.of(
                 "content",       pagedResult.getContent().stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()),
                 "totalElements", pagedResult.getTotalElements(),
@@ -61,14 +54,6 @@ public class LeadController {
                 "page",          pagedResult.getNumber(),
                 "size",          pagedResult.getSize()
         ));
-    }
-
-    @GetMapping("/status/{status}")
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
-        User user = getAuthenticatedUser();
-        return ResponseEntity.ok(leadService.getLeadsByStatus(status, user)
-                .stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
     /** GET /api/v1/leads/contact/{contactId} — ALL leads for a contact */
@@ -162,7 +147,7 @@ public class LeadController {
     /** GET /api/v1/leads/metrics/distribution — leads-per-contact stats */
     @GetMapping("/metrics/distribution")
     public ResponseEntity<?> getLeadsDistribution() {
-        return ResponseEntity.ok(leadMetricsService.getLeadsPerContactDistribution());
+        return ResponseEntity.ok(leadMetricsService.getLeadsPerContactDistribution(getAuthenticatedUser()));
     }
 
     /** GET /api/v1/leads/metrics/performance — API response time summary */
@@ -191,7 +176,14 @@ public class LeadController {
                         .source(lead.getContact().getSource())
                         .build())
                 .status(lead.getStatus())
-                .enquiries(leadService.getEnquiries(lead.getId(), owner))
+                .enquiries(lead.getEnquiryList().stream().map(e -> EnquiryDTO.builder()
+                        .id(e.getId().toString())
+                        .type(e.getType())
+                        .message(e.getMessage())
+                        .source(e.getSource())
+                        .status(e.getStatus())
+                        .createdAt(e.getCreatedAt() != null ? e.getCreatedAt().toString() : null)
+                        .build()).collect(Collectors.toList()))
                 .createdAt(createdAt)
                 .lastActivity(lead.getLastActivity())
                 .dealValue(lead.getDealValue())
@@ -200,6 +192,11 @@ public class LeadController {
                 .dealLabel(lead.getDealLabel())
                 .isNew(isNew)
                 .createdAtHuman(createdAtHuman)
+                .ownerName(lead.getOwner() != null ? 
+                        (lead.getOwner().getDisplayName() != null && !lead.getOwner().getDisplayName().isBlank() 
+                            ? lead.getOwner().getDisplayName() 
+                            : lead.getOwner().getEmail()) 
+                        : "Unknown")
                 .build();
     }
 

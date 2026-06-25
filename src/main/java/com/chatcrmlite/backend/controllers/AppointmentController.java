@@ -34,12 +34,14 @@ public class AppointmentController {
     }
 
     @GetMapping
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentDTO>> getAll() {
         return ResponseEntity.ok(appointmentService.getAllAppointments(getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
     }
 
     @GetMapping("/today")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentDTO>> getToday() {
         return ResponseEntity.ok(appointmentService.getTodayAppointments(getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
@@ -51,6 +53,7 @@ public class AppointmentController {
     }
 
     @GetMapping("/contact/{contactId}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<AppointmentDTO>> getForContact(@PathVariable UUID contactId) {
         return ResponseEntity.ok(appointmentService.getAppointmentsForContact(contactId, getAuthenticatedUser())
                 .stream().map(this::toDTO).collect(Collectors.toList()));
@@ -84,6 +87,11 @@ public class AppointmentController {
                 .status(a.getStatus().name())
                 .createdAt(a.getCreatedAt())
                 .updatedAt(a.getUpdatedAt())
+                .ownerName(a.getOwner() != null ? 
+                        (a.getOwner().getDisplayName() != null && !a.getOwner().getDisplayName().isBlank() 
+                            ? a.getOwner().getDisplayName() 
+                            : a.getOwner().getEmail()) 
+                        : "Unknown")
                 .build();
     }
 }
