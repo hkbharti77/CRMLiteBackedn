@@ -43,9 +43,12 @@ public class SubscriptionPlan implements Serializable {
     @Column(name = "has_custom_widget", nullable = false)
     private boolean hasCustomWidget = false;
 
+    @Column(name = "has_rag_llm", nullable = false)
+    private boolean hasRagLlm = true;
+
     public SubscriptionPlan() {}
 
-    public SubscriptionPlan(String id, String name, BigDecimal priceMonthly, BigDecimal priceYearly, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasCustomWidget) {
+    public SubscriptionPlan(String id, String name, BigDecimal priceMonthly, BigDecimal priceYearly, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasCustomWidget, boolean hasRagLlm) {
         this.id = id;
         this.name = name;
         this.priceMonthly = priceMonthly;
@@ -57,6 +60,7 @@ public class SubscriptionPlan implements Serializable {
         this.emailLimit = emailLimit;
         this.hasWhatsapp = hasWhatsapp;
         this.hasCustomWidget = hasCustomWidget;
+        this.hasRagLlm = hasRagLlm;
     }
 
     public String getId() { return id; }
@@ -92,6 +96,9 @@ public class SubscriptionPlan implements Serializable {
     public boolean isHasCustomWidget() { return hasCustomWidget; }
     public void setHasCustomWidget(boolean hasCustomWidget) { this.hasCustomWidget = hasCustomWidget; }
 
+    public boolean isHasRagLlm() { return hasRagLlm; }
+    public void setHasRagLlm(boolean hasRagLlm) { this.hasRagLlm = hasRagLlm; }
+
     public static SubscriptionPlanBuilder builder() {
         return new SubscriptionPlanBuilder();
     }
@@ -108,6 +115,7 @@ public class SubscriptionPlan implements Serializable {
         private int emailLimit;
         private boolean hasWhatsapp;
         private boolean hasCustomWidget;
+        private boolean hasRagLlm = true;
 
         public SubscriptionPlanBuilder id(String id) { this.id = id; return this; }
         public SubscriptionPlanBuilder name(String name) { this.name = name; return this; }
@@ -120,9 +128,10 @@ public class SubscriptionPlan implements Serializable {
         public SubscriptionPlanBuilder emailLimit(int emailLimit) { this.emailLimit = emailLimit; return this; }
         public SubscriptionPlanBuilder hasWhatsapp(boolean hasWhatsapp) { this.hasWhatsapp = hasWhatsapp; return this; }
         public SubscriptionPlanBuilder hasCustomWidget(boolean hasCustomWidget) { this.hasCustomWidget = hasCustomWidget; return this; }
+        public SubscriptionPlanBuilder hasRagLlm(boolean hasRagLlm) { this.hasRagLlm = hasRagLlm; return this; }
 
         public SubscriptionPlan build() {
-            return new SubscriptionPlan(id, name, priceMonthly, priceYearly, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasCustomWidget);
+            return new SubscriptionPlan(id, name, priceMonthly, priceYearly, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasCustomWidget, hasRagLlm);
         }
     }
 }

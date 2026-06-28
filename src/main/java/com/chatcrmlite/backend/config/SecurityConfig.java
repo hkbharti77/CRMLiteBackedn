@@ -87,7 +87,8 @@ public class SecurityConfig {
                     "/whatsapp/**",
                     "/ws/**",
                     "/uploads/**",
-                    "/public/**"
+                    "/public/**",
+                    "/error"
                 ).permitAll()
                 // Swagger — gated: only allowed if the request comes from localhost
                 // In a true production deploy, remove these lines or add IP-based restriction

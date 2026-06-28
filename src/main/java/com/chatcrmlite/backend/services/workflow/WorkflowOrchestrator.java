@@ -21,6 +21,7 @@ public class WorkflowOrchestrator {
     private final WorkflowStateTracker tracker;
     private final MeterRegistry meterRegistry;
     private final com.chatcrmlite.backend.services.whatsapp.WhatsAppIngressService whatsappIngressService;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @Transactional
     public void startWorkflow(String messageId, String waId, UUID tenantId, String payload) {
@@ -45,8 +46,23 @@ public class WorkflowOrchestrator {
 
         // Route to flow worker if:
         //   1. The message is an interactive selection (button/list tap), OR
-        //   2. The contact is currently mid-flow (free-text reply during a flow step)
-        if ("interactive".equals(type) || hasActiveFlow) {
+        //   2. The contact is currently mid-flow (free-text reply during a flow step), OR
+        //   3. The tenant's plan does not support AI (RAG LLM).
+        boolean routeToFlow = "interactive".equals(type) || hasActiveFlow;
+        
+        if (!routeToFlow) {
+            try {
+                com.chatcrmlite.backend.models.TenantSubscription sub = quotaEnforcerService.getActiveSubscription(tenantId);
+                if (sub != null && !sub.getPlan().isHasRagLlm()) {
+                    routeToFlow = true;
+                    log.info("Tenant {} plan does not support RAG LLM. Routing to menu/flow.", tenantId);
+                }
+            } catch (Exception e) {
+                log.warn("Failed to check subscription for RAG LLM, defaulting to AI if applicable", e);
+            }
+        }
+
+        if (routeToFlow) {
             router.routeToFlow(context);
         } else {
             router.routeToAi(context);

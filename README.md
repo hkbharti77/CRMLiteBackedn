@@ -476,5 +476,10 @@ git push origin feature/your-feature
 
 </div>
 
-### Recent Updates
-- Added Human-Readable Contact IDs with Tenant-specific prefixes.
+### Recent Updates & Features
+- **Multi-tier Subscription System**: Implemented FREE, MIN, PRO, and ENTERPRISE plans with dynamic quota enforcement (limits on emails, leads, bookings, and WhatsApp usage).
+- **Automated Plan Lifecycle**: Backend automatically downgrades expired subscriptions to the FREE tier, allowing users to smoothly renew or upgrade without getting locked out.
+- **Custom Widget Branding (White-labeling)**: PRO and ENTERPRISE plans unlock custom UI branding (custom colors, logo URL), while FREE/MIN plans display a default "Powered by CRMLite" watermark in the frontend widget.
+- **Google Calendar Integration**: Seamless sync for appointments and bookings with Google Calendar.
+- **Dynamic Multi-Flow WhatsApp Menus**: Support for interactive and dynamic routing based on custom fields, merging Leads, Appointments, and Support modules concurrently.
+- **AI Fallback & Dashboard Enhancements**: AI takes over when human agents are unavailable, configurable via the dashboard.

@@ -84,9 +84,16 @@ public class QuotaEnforcerService {
             
             // Check if period end has passed
             if (sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
-                log.error("❌ Subscription for tenant {} is expired (status: {}, end: {})", 
+                log.warn("Subscription for tenant {} is expired (status: {}, end: {}). Auto-downgrading to FREE.", 
                         tenantId, sub.getStatus(), sub.getCurrentPeriodEnd());
-                throw new SubscriptionExpiredException("Your CRMLite subscription is inactive or has expired. Please upgrade or update your payment details.");
+                
+                SubscriptionPlan freePlan = subscriptionPlanRepository.findById("FREE").orElseThrow();
+                sub.setPlan(freePlan);
+                sub.setStatus(SubscriptionStatus.FREE_TRIAL);
+                sub.setBillingCycle(TenantSubscription.BillingCycle.MONTHLY);
+                sub.setCurrentPeriodStart(LocalDateTime.now());
+                sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
+                sub = tenantSubscriptionRepository.save(sub);
             }
         }
 

@@ -789,7 +789,7 @@
             <div class="chat-panel" id="chat-panel">
                 <div class="chat-header">
                     <div class="chat-header-info">
-                        <div class="niche-icon-wrap">${theme.nicheIcon}</div>
+                        <div class="niche-icon-wrap" id="chat-header-icon">${theme.nicheIcon}</div>
                         <span class="chat-header-title">${theme.businessName}</span>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
@@ -906,7 +906,21 @@
                 theme = { ...theme, ...t };
                 document.documentElement.style.setProperty('--primary-color', theme.primaryColor);
                 document.querySelector('.chat-header-title').textContent = theme.businessName;
-                document.querySelector('.niche-icon-wrap').textContent = theme.nicheIcon;
+                
+                const iconWrap = document.getElementById('chat-header-icon');
+                if (theme.logoUrl) {
+                    iconWrap.innerHTML = `<img src="${theme.logoUrl}" alt="Logo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                    iconWrap.style.background = 'transparent';
+                } else {
+                    iconWrap.textContent = theme.nicheIcon;
+                }
+
+                if (theme.showWatermark) {
+                    const watermark = document.createElement('div');
+                    watermark.style.cssText = 'text-align:center; font-size:10px; color:#94a3b8; padding:4px 0; background:var(--background-color); border-top:1px solid #f1f5f9;';
+                    watermark.textContent = '⚡ Powered by CRMLite';
+                    document.querySelector('.chat-input-container').insertAdjacentElement('afterend', watermark);
+                }
             }
 
             if (fRes.ok) {

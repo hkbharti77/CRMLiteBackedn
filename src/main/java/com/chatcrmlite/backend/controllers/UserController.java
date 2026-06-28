@@ -86,6 +86,8 @@ public class UserController {
             if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
             if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
             if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
+            if (request.getPrimaryColor() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
+            if (request.getSecondaryColor() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
             
             // Manual module overrides
             if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
@@ -425,6 +427,8 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String primaryColor;
+        private String secondaryColor;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
@@ -450,6 +454,10 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getPrimaryColor() { return primaryColor; }
+        public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
+        public String getSecondaryColor() { return secondaryColor; }
+        public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
@@ -471,6 +479,8 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String primaryColor;
+        private String secondaryColor;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
@@ -502,6 +512,10 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getPrimaryColor() { return primaryColor; }
+        public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
+        public String getSecondaryColor() { return secondaryColor; }
+        public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
@@ -527,6 +541,8 @@ public class UserController {
             dto.setLatitude(user.getLatitude());
             dto.setLongitude(user.getLongitude());
             dto.setLogoUrl(user.getLogoUrl());
+            dto.setPrimaryColor(user.getTenant() != null ? user.getTenant().getPrimaryColor() : null);
+            dto.setSecondaryColor(user.getTenant() != null ? user.getTenant().getSecondaryColor() : null);
             dto.setForceShowBooking(user.getForceShowBooking());
             dto.setForceShowAppointment(user.getForceShowAppointment());
             dto.setForceShowLeads(user.getForceShowLeads());

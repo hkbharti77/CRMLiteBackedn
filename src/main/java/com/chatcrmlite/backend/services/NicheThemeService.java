@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.services;
 import com.chatcrmlite.backend.dto.ThemeConfigDTO;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import org.springframework.stereotype.Service;
 
 import java.util.HashMap;
@@ -14,6 +15,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
 public class NicheThemeService {
+    
+    private final QuotaEnforcerService quotaEnforcerService;
+
+    public NicheThemeService(QuotaEnforcerService quotaEnforcerService) {
+        this.quotaEnforcerService = quotaEnforcerService;
+    }
 
     @Autowired
     private FlowTemplateEngine templateEngine;
@@ -105,9 +112,25 @@ public class NicheThemeService {
             ctaButtons.add(new WidgetCtaDTO("🎫 Get Support", "SUPPORT"));
         }
 
+        boolean allowBranding = quotaEnforcerService.isCustomWidgetBrandingAllowed(user.getId());
+        String finalLogoUrl = allowBranding ? user.getLogoUrl() : null;
+        boolean showWatermark = !allowBranding;
+
+        String finalPrimary = theme.primary;
+        String finalSecondary = theme.secondary;
+        
+        if (allowBranding && user.getTenant() != null) {
+            if (user.getTenant().getPrimaryColor() != null && !user.getTenant().getPrimaryColor().isBlank()) {
+                finalPrimary = user.getTenant().getPrimaryColor();
+            }
+            if (user.getTenant().getSecondaryColor() != null && !user.getTenant().getSecondaryColor().isBlank()) {
+                finalSecondary = user.getTenant().getSecondaryColor();
+            }
+        }
+
         return ThemeConfigDTO.builder()
-                .primaryColor(theme.primary)
-                .secondaryColor(theme.secondary)
+                .primaryColor(finalPrimary)
+                .secondaryColor(finalSecondary)
                 .accentColor(theme.accent)
                 .backgroundColor("#FFFFFF")
                 .fontFamily(theme.font)
@@ -115,7 +138,8 @@ public class NicheThemeService {
                 .businessName(user.getBusinessName() != null ? user.getBusinessName() : "Assistant")
                 .welcomeMessage(welcome)
                 .businessSubType(slug)
-                .logoUrl(user.getLogoUrl())
+                .logoUrl(finalLogoUrl)
+                .showWatermark(showWatermark)
                 .ctaButtons(ctaButtons)
                 .build();
     }

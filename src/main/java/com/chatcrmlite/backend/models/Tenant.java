@@ -31,6 +31,12 @@ public class Tenant implements Serializable {
     private Double longitude;
     private String logoUrl;
 
+    @Column(name = "primary_color", length = 20)
+    private String primaryColor;
+
+    @Column(name = "secondary_color", length = 20)
+    private String secondaryColor;
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private User.PlanType planType = User.PlanType.FREE;
@@ -111,6 +117,12 @@ public class Tenant implements Serializable {
 
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+
+    public String getPrimaryColor() { return primaryColor; }
+    public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
+
+    public String getSecondaryColor() { return secondaryColor; }
+    public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
 
     public User.PlanType getPlanType() { return planType; }
     public void setPlanType(User.PlanType planType) { this.planType = planType; }

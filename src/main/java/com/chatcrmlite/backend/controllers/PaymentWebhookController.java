@@ -20,6 +20,8 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -127,9 +129,45 @@ public class PaymentWebhookController {
                 .orElseThrow(() -> new RuntimeException("Subscription plan not found: " + planId));
 
         BigDecimal price = billingCycleStr.equalsIgnoreCase("YEARLY") ? plan.getPriceYearly() : plan.getPriceMonthly();
+        
+        // --- PRORATION LOGIC ---
+        try {
+            TenantSubscription currentSub = quotaEnforcerService.getActiveSubscription(tenantId);
+            if (currentSub != null && currentSub.getStatus() == SubscriptionStatus.ACTIVE && !"FREE".equalsIgnoreCase(currentSub.getPlan().getId())) {
+                LocalDateTime start = currentSub.getCurrentPeriodStart();
+                LocalDateTime end = currentSub.getCurrentPeriodEnd();
+                LocalDateTime now = LocalDateTime.now();
+
+                if (now.isBefore(end)) {
+                    long totalDays = Duration.between(start, end).toDays();
+                    if (totalDays > 0) {
+                        long remainingDays = Duration.between(now, end).toDays();
+                        BigDecimal currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
+                                currentSub.getPlan().getPriceYearly() : currentSub.getPlan().getPriceMonthly();
+
+                        BigDecimal unusedValue = currentPlanPrice
+                                .divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP)
+                                .multiply(BigDecimal.valueOf(remainingDays));
+
+                        log.info("📊 Proration calculated - totalDays: {}, remainingDays: {}, currentPlanPrice: {}, unusedValue: {}", 
+                                totalDays, remainingDays, currentPlanPrice, unusedValue);
+
+                        price = price.subtract(unusedValue);
+                        if (price.compareTo(BigDecimal.ONE) < 0) {
+                            price = BigDecimal.ONE; // Minimum transaction amount
+                            log.info("📊 Final price clamped to minimum amount: {}", price);
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Could not calculate proration for tenant {}: {}", tenantId, e.getMessage());
+        }
+        // --- END PRORATION LOGIC ---
+
         String currency = "INR"; // Default currency
 
-        log.info("💰 Initiating checkout for tenant: {}, plan: {}, gateway: {}", tenantId, planId, gatewayStr);
+        log.info("💰 Initiating checkout for tenant: {}, plan: {}, gateway: {}, finalPrice: {}", tenantId, planId, gatewayStr, price);
 
         try {
             if (gatewayStr.equalsIgnoreCase("STRIPE")) {
