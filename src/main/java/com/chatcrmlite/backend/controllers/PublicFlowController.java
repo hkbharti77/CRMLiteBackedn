@@ -49,11 +49,14 @@ public class PublicFlowController {
     // ── Flow Config ────────────────────────────────────────────────────────
 
     @GetMapping("/flow/{businessId}")
-    public ResponseEntity<FlowConfigDTO> getFlowConfig(@PathVariable UUID businessId) {
+    public ResponseEntity<FlowConfigDTO> getFlowConfig(
+            @PathVariable UUID businessId,
+            @RequestParam(required = false) String type) {
         return userRepository.findById(businessId)
-                .map(user -> ResponseEntity.ok(flowConfigService.getFlowConfig(user)))
+                .map(user -> ResponseEntity.ok(flowConfigService.getFlowConfig(user, type)))
                 .orElse(ResponseEntity.notFound().build());
     }
+
 
     // ── Trigger Config (for widget smart form suggestion) ─────────────────
 

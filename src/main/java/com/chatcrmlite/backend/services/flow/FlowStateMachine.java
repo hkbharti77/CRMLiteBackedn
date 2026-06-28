@@ -234,7 +234,9 @@ public class FlowStateMachine {
                 stateResolver.sendStateMessage(currentStateDef, contact, owner, 0);
                 return;
             }
-            saveAnswer(state, field, activeInput);
+            boolean isInteractiveSelection = (selectionId != null && !selectionId.isEmpty());
+            // Use human-readable input instead of internal option ID for interactive selections
+            saveAnswer(state, field, (isInteractiveSelection && input != null && !input.isBlank()) ? input : activeInput);
         }
 
         // Build context for transitions

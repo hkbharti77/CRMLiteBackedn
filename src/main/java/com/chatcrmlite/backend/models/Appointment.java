@@ -25,7 +25,7 @@ public class Appointment extends BaseTenantEntity {
     private String referenceNumber;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "contact_id", nullable = false)
+    @JoinColumn(name = "contact_id", nullable = true)
     private Contact contact;
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -43,6 +43,9 @@ public class Appointment extends BaseTenantEntity {
     @Column(name = "collected_data", columnDefinition = "jsonb")
     private String collectedData = "{}";
 
+    @Column(name = "source", length = 50)
+    private String source = "MANUAL";
+
     private String meetingLink;
 
     @Enumerated(EnumType.STRING)
@@ -54,7 +57,7 @@ public class Appointment extends BaseTenantEntity {
 
     public Appointment() {}
 
-    public Appointment(UUID id, String referenceNumber, Contact contact, User owner, LocalDateTime appointmentDateTime, String title, String collectedData, String meetingLink, AppointmentStatus status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public Appointment(UUID id, String referenceNumber, Contact contact, User owner, LocalDateTime appointmentDateTime, String title, String collectedData, String meetingLink, AppointmentStatus status, String source, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contact = contact;
@@ -63,6 +66,7 @@ public class Appointment extends BaseTenantEntity {
         this.title = title;
         this.collectedData = collectedData != null ? collectedData : "{}";
         this.meetingLink = meetingLink;
+        this.source = source != null ? source : "MANUAL";
         this.status = status != null ? status : AppointmentStatus.SCHEDULED;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.updatedAt = updatedAt;
@@ -93,6 +97,8 @@ public class Appointment extends BaseTenantEntity {
     public void setCollectedData(String collectedData) { this.collectedData = collectedData; }
     public String getMeetingLink() { return meetingLink; }
     public void setMeetingLink(String meetingLink) { this.meetingLink = meetingLink; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public AppointmentStatus getStatus() { return status; }
     public void setStatus(AppointmentStatus status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -113,6 +119,7 @@ public class Appointment extends BaseTenantEntity {
         private String title;
         private String collectedData = "{}";
         private String meetingLink;
+        private String source = "MANUAL";
         private AppointmentStatus status = AppointmentStatus.SCHEDULED;
         private LocalDateTime createdAt = LocalDateTime.now();
         private LocalDateTime updatedAt;
@@ -125,12 +132,13 @@ public class Appointment extends BaseTenantEntity {
         public AppointmentBuilder title(String title) { this.title = title; return this; }
         public AppointmentBuilder collectedData(String collectedData) { this.collectedData = collectedData; return this; }
         public AppointmentBuilder meetingLink(String meetingLink) { this.meetingLink = meetingLink; return this; }
+        public AppointmentBuilder source(String source) { this.source = source; return this; }
         public AppointmentBuilder status(AppointmentStatus status) { this.status = status; return this; }
         public AppointmentBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public AppointmentBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
         public Appointment build() {
-            return new Appointment(id, referenceNumber, contact, owner, appointmentDateTime, title, collectedData, meetingLink, status, createdAt, updatedAt);
+            return new Appointment(id, referenceNumber, contact, owner, appointmentDateTime, title, collectedData, meetingLink, status, source, createdAt, updatedAt);
         }
     }
 }

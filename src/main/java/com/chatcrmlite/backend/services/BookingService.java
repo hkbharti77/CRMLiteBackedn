@@ -32,6 +32,7 @@ public class BookingService {
     @Autowired private ApplicationEventPublisher eventPublisher;
     @Autowired private ReferenceNumberService referenceNumberService;
     @Autowired private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    @Autowired private com.chatcrmlite.backend.services.FlowConfigService flowConfigService;
 
     private boolean isAdmin(User user) {
         return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
@@ -66,6 +67,7 @@ public class BookingService {
                 .service(req.getService())
                 .preferredSlot(req.getPreferredSlot())
                 .collectedData("{}")
+                .source(req.getSource() != null ? req.getSource() : "MANUAL")
                 .build();
 
         Booking saved = bookingRepository.save(booking);
@@ -75,16 +77,44 @@ public class BookingService {
 
     @Transactional
     public Booking bookFromFlow(Contact contact, User owner, String service,
-                                String preferredSlot, Map<String, String> flowData) {
+                                String preferredSlot, Map<String, String> flowData, String source) {
         quotaEnforcerService.verifyBookingQuota(owner.getTenant().getId());
         String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.BOOKING);
+        
+        // Fetch dynamic labels to replace raw keys
+        Map<String, String> resolvedData = new HashMap<>();
+        try {
+            List<com.chatcrmlite.backend.dto.flow.FlowFieldConfig> configs = 
+                    flowConfigService.getConfigurableFields(owner, "booking");
+            Map<String, String> keyToLabel = new HashMap<>();
+            for (com.chatcrmlite.backend.dto.flow.FlowFieldConfig cfg : configs) {
+                if (cfg.getLabel() != null && !cfg.getLabel().isBlank()) {
+                    keyToLabel.put(cfg.getKey(), cfg.getLabel());
+                }
+            }
+            java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "service", "preferredSlot", "preferred_slot");
+            for (Map.Entry<String, String> entry : flowData.entrySet()) {
+                if (fixedKeys.contains(entry.getKey())) continue;
+                String displayLabel = keyToLabel.getOrDefault(entry.getKey(), entry.getKey());
+                resolvedData.put(displayLabel, entry.getValue());
+            }
+        } catch (Exception e) {
+            java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "service", "preferredSlot", "preferred_slot");
+            for (Map.Entry<String, String> entry : flowData.entrySet()) {
+                if (!fixedKeys.contains(entry.getKey())) {
+                    resolvedData.put(entry.getKey(), entry.getValue());
+                }
+            }
+        }
+
         Booking booking = Booking.builder()
                 .referenceNumber(referenceNumber)
                 .contact(contact)
                 .owner(owner)
                 .service(service)
                 .preferredSlot(preferredSlot)
-                .collectedData(serialize(flowData))
+                .collectedData(serialize(resolvedData))
+                .source(source != null ? source : "MANUAL")
                 .build();
         Booking saved = bookingRepository.save(booking);
         eventPublisher.publishEvent(new BookingConfirmedEvent(this, saved, "FLOW"));

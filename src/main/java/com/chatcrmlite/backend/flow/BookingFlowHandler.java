@@ -69,7 +69,8 @@ public class BookingFlowHandler implements FlowHandler {
                     context.getOwner(),
                     service,
                     slot,
-                    data
+                    data,
+                    "WHATSAPP"
             );
 
             log.info("[BookingFlowHandler] Booking {} created for contact {} via FLOW",

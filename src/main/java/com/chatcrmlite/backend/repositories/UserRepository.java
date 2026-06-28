@@ -13,6 +13,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     
     java.util.List<User> findAllByTenant(com.chatcrmlite.backend.models.Tenant tenant);
 
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.tenant WHERE u.tenant = :tenant")
+    java.util.List<User> findAllByTenantWithTenant(@Param("tenant") com.chatcrmlite.backend.models.Tenant tenant);
+
     /**
      * Fetches user with tenant eagerly loaded to avoid LazyInitializationException.
      * Use this method when you need to access tenant properties outside a transaction.

@@ -60,7 +60,8 @@ public class AppointmentFlowHandler implements FlowHandler {
                     context.getOwner(),
                     title,
                     data,
-                    apptTime
+                    apptTime,
+                    "WHATSAPP"
             );
 
             log.info("[AppointmentFlowHandler] Appointment {} created for contact {} via FLOW",

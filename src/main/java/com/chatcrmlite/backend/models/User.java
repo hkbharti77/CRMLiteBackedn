@@ -48,11 +48,15 @@ public class User implements Serializable {
     @Transient
     private WhatsAppConfig whatsappConfig;
 
+    private String googleAccessToken;
+    private String googleRefreshToken;
+    private LocalDateTime googleTokenExpiry;
+
     private LocalDateTime createdAt;
 
     public User() {}
 
-    public User(UUID id, String email, String password, Tenant tenant, LocalDateTime consentAt, String displayName, String phone, Role role, AccountStatus accountStatus, Set<String> ipWhitelist, Boolean biometricsEnabled, Boolean loginAlertsEnabled, WhatsAppConfig whatsappConfig, LocalDateTime createdAt) {
+    public User(UUID id, String email, String password, Tenant tenant, LocalDateTime consentAt, String displayName, String phone, Role role, AccountStatus accountStatus, Set<String> ipWhitelist, Boolean biometricsEnabled, Boolean loginAlertsEnabled, WhatsAppConfig whatsappConfig, String googleAccessToken, String googleRefreshToken, LocalDateTime googleTokenExpiry, LocalDateTime createdAt) {
         this.id = id;
         this.email = email;
         this.password = password;
@@ -66,6 +70,9 @@ public class User implements Serializable {
         this.biometricsEnabled = biometricsEnabled;
         this.loginAlertsEnabled = loginAlertsEnabled;
         this.whatsappConfig = whatsappConfig;
+        this.googleAccessToken = googleAccessToken;
+        this.googleRefreshToken = googleRefreshToken;
+        this.googleTokenExpiry = googleTokenExpiry;
         this.createdAt = createdAt;
     }
 
@@ -149,6 +156,15 @@ public class User implements Serializable {
         }
     }
 
+    public String getGoogleAccessToken() { return googleAccessToken; }
+    public void setGoogleAccessToken(String googleAccessToken) { this.googleAccessToken = googleAccessToken; }
+
+    public String getGoogleRefreshToken() { return googleRefreshToken; }
+    public void setGoogleRefreshToken(String googleRefreshToken) { this.googleRefreshToken = googleRefreshToken; }
+
+    public LocalDateTime getGoogleTokenExpiry() { return googleTokenExpiry; }
+    public void setGoogleTokenExpiry(LocalDateTime googleTokenExpiry) { this.googleTokenExpiry = googleTokenExpiry; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -197,6 +213,9 @@ public class User implements Serializable {
         private Boolean biometricsEnabled = false;
         private Boolean loginAlertsEnabled = false;
         private WhatsAppConfig whatsappConfig;
+        private String googleAccessToken;
+        private String googleRefreshToken;
+        private LocalDateTime googleTokenExpiry;
         private LocalDateTime createdAt;
 
         // Support backward compatible builder fields
@@ -219,6 +238,9 @@ public class User implements Serializable {
         public UserBuilder biometricsEnabled(Boolean biometricsEnabled) { this.biometricsEnabled = biometricsEnabled; return this; }
         public UserBuilder loginAlertsEnabled(Boolean loginAlertsEnabled) { this.loginAlertsEnabled = loginAlertsEnabled; return this; }
         public UserBuilder whatsappConfig(WhatsAppConfig whatsappConfig) { this.whatsappConfig = whatsappConfig; return this; }
+        public UserBuilder googleAccessToken(String googleAccessToken) { this.googleAccessToken = googleAccessToken; return this; }
+        public UserBuilder googleRefreshToken(String googleRefreshToken) { this.googleRefreshToken = googleRefreshToken; return this; }
+        public UserBuilder googleTokenExpiry(LocalDateTime googleTokenExpiry) { this.googleTokenExpiry = googleTokenExpiry; return this; }
         public UserBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public UserBuilder businessName(String businessName) { this.businessName = businessName; return this; }
@@ -238,7 +260,7 @@ public class User implements Serializable {
                         .onboardingCompleted(onboardingCompleted != null && onboardingCompleted)
                         .build();
             }
-            return new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, createdAt);
+            return new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, googleAccessToken, googleRefreshToken, googleTokenExpiry, createdAt);
         }
     }
 }

@@ -37,6 +37,9 @@ public class Booking {
     @Column(name = "collected_data", columnDefinition = "text")
     private String collectedData = "{}";
 
+    @Column(name = "source", length = 50)
+    private String source = "MANUAL";
+
     @Enumerated(EnumType.STRING)
     private BookingStatus status = BookingStatus.CONFIRMED;
 
@@ -46,7 +49,7 @@ public class Booking {
 
     public Booking() {}
 
-    public Booking(UUID id, String referenceNumber, Contact contact, User owner, String service, String preferredSlot, String collectedData, BookingStatus status, LocalDateTime createdAt, LocalDateTime updatedAt) {
+    public Booking(UUID id, String referenceNumber, Contact contact, User owner, String service, String preferredSlot, String collectedData, String source, BookingStatus status, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contact = contact;
@@ -54,6 +57,7 @@ public class Booking {
         this.service = service;
         this.preferredSlot = preferredSlot;
         this.collectedData = collectedData != null ? collectedData : "{}";
+        this.source = source != null ? source : "MANUAL";
         this.status = status != null ? status : BookingStatus.CONFIRMED;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.updatedAt = updatedAt;
@@ -82,6 +86,8 @@ public class Booking {
     public void setPreferredSlot(String preferredSlot) { this.preferredSlot = preferredSlot; }
     public String getCollectedData() { return collectedData; }
     public void setCollectedData(String collectedData) { this.collectedData = collectedData; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public BookingStatus getStatus() { return status; }
     public void setStatus(BookingStatus status) { this.status = status; }
     public LocalDateTime getCreatedAt() { return createdAt; }
@@ -101,6 +107,7 @@ public class Booking {
         private String service;
         private String preferredSlot;
         private String collectedData = "{}";
+        private String source = "MANUAL";
         private BookingStatus status = BookingStatus.CONFIRMED;
         private LocalDateTime createdAt = LocalDateTime.now();
         private LocalDateTime updatedAt;
@@ -112,12 +119,13 @@ public class Booking {
         public BookingBuilder service(String service) { this.service = service; return this; }
         public BookingBuilder preferredSlot(String preferredSlot) { this.preferredSlot = preferredSlot; return this; }
         public BookingBuilder collectedData(String collectedData) { this.collectedData = collectedData; return this; }
+        public BookingBuilder source(String source) { this.source = source; return this; }
         public BookingBuilder status(BookingStatus status) { this.status = status; return this; }
         public BookingBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public BookingBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
         public Booking build() {
-            return new Booking(id, referenceNumber, contact, owner, service, preferredSlot, collectedData, status, createdAt, updatedAt);
+            return new Booking(id, referenceNumber, contact, owner, service, preferredSlot, collectedData, source, status, createdAt, updatedAt);
         }
     }
 }

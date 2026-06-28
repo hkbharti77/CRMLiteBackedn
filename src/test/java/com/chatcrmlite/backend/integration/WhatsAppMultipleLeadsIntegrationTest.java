@@ -151,7 +151,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
                         .build();
                 leadRepository.save(lead);
 
-                leadService.appendEnquiryToLead(lead, text, "CHAT", "WhatsApp Ingress");
+                leadService.appendEnquiryToLead(lead, text, "CHAT", "WhatsApp Ingress", null);
             }
         }
     }

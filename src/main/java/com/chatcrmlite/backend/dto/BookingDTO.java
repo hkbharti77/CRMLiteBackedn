@@ -17,10 +17,11 @@ public class BookingDTO {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String ownerName;
+    private String source;
 
     public BookingDTO() {}
 
-    public BookingDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, String service, String preferredSlot, Map<String, String> collectedData, String status, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
+    public BookingDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, String service, String preferredSlot, Map<String, String> collectedData, String status, String source, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contactName = contactName;
@@ -30,6 +31,7 @@ public class BookingDTO {
         this.preferredSlot = preferredSlot;
         this.collectedData = collectedData;
         this.status = status;
+        this.source = source;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.ownerName = ownerName;
@@ -53,6 +55,8 @@ public class BookingDTO {
     public void setCollectedData(Map<String, String> collectedData) { this.collectedData = collectedData; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
@@ -74,6 +78,7 @@ public class BookingDTO {
         private String preferredSlot;
         private Map<String, String> collectedData;
         private String status;
+        private String source;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private String ownerName;
@@ -87,12 +92,13 @@ public class BookingDTO {
         public BookingDTOBuilder preferredSlot(String preferredSlot) { this.preferredSlot = preferredSlot; return this; }
         public BookingDTOBuilder collectedData(Map<String, String> collectedData) { this.collectedData = collectedData; return this; }
         public BookingDTOBuilder status(String status) { this.status = status; return this; }
+        public BookingDTOBuilder source(String source) { this.source = source; return this; }
         public BookingDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public BookingDTOBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
         public BookingDTOBuilder ownerName(String ownerName) { this.ownerName = ownerName; return this; }
 
         public BookingDTO build() {
-            return new BookingDTO(id, referenceNumber, contactName, contactWaId, contactId, service, preferredSlot, collectedData, status, createdAt, updatedAt, ownerName);
+            return new BookingDTO(id, referenceNumber, contactName, contactWaId, contactId, service, preferredSlot, collectedData, status, source, createdAt, updatedAt, ownerName);
         }
     }
 }

@@ -475,3 +475,6 @@ git push origin feature/your-feature
 **Happy Coding!** 🚀
 
 </div>
+
+### Recent Updates
+- Added Human-Readable Contact IDs with Tenant-specific prefixes.

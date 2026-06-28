@@ -58,8 +58,9 @@ public class UserController {
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @GetMapping("/me")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailWithTenant(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         return ResponseEntity.ok(UserProfileDto.from(user));
     }
@@ -76,7 +77,7 @@ public class UserController {
         if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
         if (request.getPhone() != null) user.setPhone(request.getPhone());
         
-        if (user.getRole() == User.Role.OWNER) {
+        if (user.getRole() == User.Role.OWNER || user.getRole() == User.Role.ADMIN) {
             if (request.getBusinessName() != null) user.setBusinessName(request.getBusinessName());
             if (request.getBusinessType() != null) user.setBusinessType(request.getBusinessType());
             if (request.getBusinessSubType() != null) user.setBusinessSubType(request.getBusinessSubType());
@@ -257,9 +258,10 @@ public class UserController {
 
     @GetMapping("/tenant-staff")
     @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getTenantStaff(@AuthenticationPrincipal String email) {
-        User caller = userRepository.findByEmail(email).orElseThrow();
-        List<User> staff = userRepository.findAllByTenant(caller.getTenant());
+        User caller = userRepository.findByEmailWithTenant(email).orElseThrow();
+        List<User> staff = userRepository.findAllByTenantWithTenant(caller.getTenant());
         return ResponseEntity.ok(staff.stream().map(UserProfileDto::from).collect(Collectors.toList()));
     }
 

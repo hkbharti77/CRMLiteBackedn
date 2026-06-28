@@ -112,7 +112,7 @@ public class LeadFlowHandler implements FlowHandler {
                     ? "WhatsApp Lead Capture Flow"
                     : "WhatsApp Enquiry Flow";
 
-            leadService.appendEnquiryToLead(lead, summary, "FLOW", source);
+            leadService.appendEnquiryToLead(lead, summary, "FLOW", source, data);
 
             // Publish event so EmailNotificationListener sends owner notification
             eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "FLOW"));

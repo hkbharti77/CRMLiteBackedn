@@ -177,7 +177,17 @@ public class EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
             // SECURITY: 'from' is injected from env — never hardcoded
             helper.setFrom(from);
-            helper.setTo(to);
+            
+            if (to.contains(",")) {
+                String[] emails = java.util.Arrays.stream(to.split(","))
+                        .map(String::trim)
+                        .filter(e -> !e.isBlank())
+                        .toArray(String[]::new);
+                helper.setTo(emails);
+            } else {
+                helper.setTo(to.trim());
+            }
+
             helper.setSubject(subject);
             helper.setText(html, true);
             mailSender.send(mime);

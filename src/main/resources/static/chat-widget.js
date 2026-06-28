@@ -170,12 +170,95 @@
             ];
         },
 
+        _validateFieldInput(fieldType, key, value) {
+            const val = value.trim();
+            const lowerKey = key.toLowerCase();
+            const isNameField = lowerKey === 'name' || lowerKey.endsWith('_name') || lowerKey.startsWith('name_');
+
+            if (isNameField) {
+                if (val.length < 2) return 'Name must be at least 2 characters long.';
+                if (val.length > 255) return 'Name must not exceed 255 characters.';
+            }
+            if (fieldType === 'EMAIL' || lowerKey === 'email') {
+                if (val !== '') {
+                    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+                    if (!emailRegex.test(val)) return 'Please enter a valid email address.';
+                    if (val.length > 255) return 'Email must not exceed 255 characters.';
+                }
+            }
+            if (fieldType === 'PHONE' || lowerKey === 'phone' || lowerKey === 'mobile') {
+                if (val !== '') {
+                    // Extract only digits to check length (standard E.164 without separators is 10-15 digits)
+                    const digits = val.replace(/\D/g, '');
+                    if (digits.length < 10 || digits.length > 15) {
+                        return 'Phone number must contain between 10 and 15 digits.';
+                    }
+                    // Reject repeating/dummy sequences (e.g., 0000000000, 9999999999)
+                    if (/^(\d)\1+$/.test(digits)) {
+                        return 'Please enter a valid active phone number.';
+                    }
+                    // General format check allowing optional leading + and typical separators
+                    const phoneRegex = /^\+?[0-9\s\-()]+$/;
+                    if (!phoneRegex.test(val)) {
+                        return 'Please enter a valid phone number format.';
+                    }
+                }
+            }
+            if (key === 'subject') {
+                if (val.length < 3) return 'Subject must be at least 3 characters long.';
+                if (val.length > 255) return 'Subject must not exceed 255 characters.';
+            }
+            if (key === 'message') {
+                if (val.length < 10) return 'Please describe your issue in more detail (at least 10 characters).';
+                if (val.length > 5000) return 'Message must not exceed 5000 characters.';
+            }
+            return null;
+        },
+
         startSupportFlow() {
             this._addUserBubble('🎫 Open Support Ticket');
             this.mode = 'support';
             this.currentStep = 0;
             this.collectedData = {};
             this.renderSupportStep(0);
+        },
+
+        async startFlow(actionType, label) {
+            this._addUserBubble(label);
+            this.mode = 'submitting';
+            this._setInputEnabled(false);
+            this._setTyping(true);
+
+            let typeParam = actionType.toLowerCase();
+            if (typeParam === 'lead_capture') typeParam = 'lead';
+
+            try {
+                const res = await fetch(`${API_BASE}/flow/${businessId}?type=${typeParam}`);
+                this._setTyping(false);
+                if (res.ok) {
+                    const flow = await res.json();
+                    if (flow && flow.steps && flow.steps.length > 0) {
+                        this.config = flow;
+                        this.currentStep = 0;
+                        this.collectedData = {};
+                        this.mode = 'flow';
+                        this.renderStep(0);
+                    } else {
+                        this._addBotBubble('⚠️ This form is not configured yet.');
+                        this._setInputEnabled(true);
+                        this.mode = 'rag';
+                    }
+                } else {
+                    this._addBotBubble('⚠️ Failed to load flow config.');
+                    this._setInputEnabled(true);
+                    this.mode = 'rag';
+                }
+            } catch (e) {
+                this._setTyping(false);
+                this._addBotBubble('⚠️ Connection error. Please try again.');
+                this._setInputEnabled(true);
+                this.mode = 'rag';
+            }
         },
 
         async renderSupportStep(index) {
@@ -207,8 +290,17 @@
                 this._setInputEnabled(false);
                 // Always load categories live from the API (mirrors StateResolver.sendDynamicCategoriesList)
                 const categories = await this._loadSupportCategories();
-                this._renderButtons(categories, (val) => {
-                    this.collectedData[step.key] = val;
+                const isOptional = !this.supportConfig || this.supportConfig.categoryRequired === false;
+                const options = [...categories];
+                if (isOptional) {
+                    options.push('Skip');
+                }
+                this._renderButtons(options, (val) => {
+                    if (val === 'Skip') {
+                        this.collectedData[step.key] = '';
+                    } else {
+                        this.collectedData[step.key] = val;
+                    }
                     this._addUserBubble(val);
                     this.renderSupportStep(index + 1);
                 });
@@ -216,6 +308,15 @@
                 this._setInputEnabled(true);
                 this._input.placeholder = 'Type here...';
                 this._input.focus();
+
+                // For optional phone step, render a Skip button
+                if (step.key === 'phone' && (!this.supportConfig || this.supportConfig.phoneRequired === false)) {
+                    this._renderButtons(['Skip'], (val) => {
+                        this.collectedData[step.key] = '';
+                        this._addUserBubble('Skip');
+                        this.renderSupportStep(index + 1);
+                    });
+                }
             }
         },
 
@@ -248,11 +349,21 @@
             this.mode = 'flow';
             this.currentStep = index;
 
-            this._addBotBubble(step.question);
+            let bubbleText = step.question;
+            if (index === 0 && this.config.greetingMessage && this.config.greetingMessage.trim() !== '') {
+                bubbleText = this.config.greetingMessage + '\n\n' + step.question;
+            }
 
-            if (step.usesButtons) {
+            this._addBotBubble(bubbleText);
+
+            const hasOptions = step.usesButtons || step.usesList || step.fieldType === 'DROPDOWN' || step.dynamicSource || (step.options && step.options.length > 0);
+            if (hasOptions) {
                 this._setInputEnabled(false);
-                const options = await this.resolveOptions(step);
+                const resolvedOptions = await this.resolveOptions(step);
+                const options = [...resolvedOptions];
+                if (!step.required) {
+                    options.push('Skip');
+                }
                 this._renderButtons(options, (selected) => {
                     this.recordAnswer(step.dataKey, selected);
                     this.advance();
@@ -261,6 +372,13 @@
                 this._setInputEnabled(true);
                 this._input.placeholder = 'Type here...';
                 this._input.focus();
+
+                if (!step.required) {
+                    this._renderButtons(['Skip'], (val) => {
+                        this.recordAnswer(step.dataKey, val);
+                        this.advance();
+                    });
+                }
             }
         },
 
@@ -281,8 +399,14 @@
         },
 
         recordAnswer(dataKey, value) {
-            this.collectedData[dataKey] = value.trim();
-            this._addUserBubble(value);
+            const val = value ? value.trim() : '';
+            if (val.toLowerCase() === 'skip' || val === '') {
+                this.collectedData[dataKey] = '';
+                this._addUserBubble('Skip');
+            } else {
+                this.collectedData[dataKey] = val;
+                this._addUserBubble(value);
+            }
         },
 
         advance() {
@@ -296,16 +420,32 @@
 
         handleFreeTextInput(rawValue) {
             const text = rawValue.trim();
-            if (!text) {
-                this._showValidationError('Please enter a response.');
-                return;
-            }
 
             if (this.mode === 'support') {
                 // Use the step definition array for the correct dataKey — mirrors backend saveAnswer()
                 const steps = this._supportSteps();
                 const step = steps[this.currentStep];
                 if (step) {
+                    if (!text) {
+                        const isOptional = (step.key === 'phone' && (!this.supportConfig || this.supportConfig.phoneRequired === false)) ||
+                                           (step.key === 'category' && (!this.supportConfig || this.supportConfig.categoryRequired === false));
+                        if (isOptional) {
+                            this.collectedData[step.key] = '';
+                            this._addUserBubble('Skip');
+                            this._input.value = '';
+                            this.renderSupportStep(this.currentStep + 1);
+                            return;
+                        } else {
+                            this._showValidationError('Please enter a response.');
+                            return;
+                        }
+                    }
+
+                    const validationError = this._validateFieldInput(step.type, step.key, text);
+                    if (validationError) {
+                        this._showValidationError(validationError);
+                        return;
+                    }
                     this.collectedData[step.key] = text;
                 }
                 this._addUserBubble(text);
@@ -318,19 +458,48 @@
                 const step = this.config.steps[this.currentStep];
                 if (!step) return;
 
-                // If this step uses buttons but user typed instead, validate against options
-                if (step.usesButtons && step.options && step.options.length > 0) {
-                    const match = step.options.find(
-                        opt => opt.toLowerCase() === text.toLowerCase()
-                    );
-                    if (!match) {
-                        this._showValidationError(
-                            `Please choose one of: ${step.options.join(', ')}`
-                        );
+                if (!text) {
+                    if (!step.required) {
+                        this.recordAnswer(step.dataKey, '');
+                        this._input.value = '';
+                        this.advance();
+                        return;
+                    } else {
+                        this._showValidationError('Please enter a response.');
                         return;
                     }
-                    this.recordAnswer(step.dataKey, match);
+                }
+
+                // If this step has options but user typed instead, validate against options
+                const hasOptions = step.usesButtons || step.usesList || step.fieldType === 'DROPDOWN' || step.dynamicSource || (step.options && step.options.length > 0);
+                if (hasOptions) {
+                    const validOptions = step.dynamicSource ? (this.servicesCache || []) : (step.options || []);
+                    if (validOptions.length > 0) {
+                        const match = validOptions.find(
+                            opt => opt.toLowerCase() === text.toLowerCase()
+                        );
+                        if (!match) {
+                            if (!step.required && text.toLowerCase() === 'skip') {
+                                this.recordAnswer(step.dataKey, 'Skip');
+                                this._input.value = '';
+                                this.advance();
+                                return;
+                            }
+                            this._showValidationError(
+                                `Please choose one of: ${validOptions.join(', ')}`
+                            );
+                            return;
+                        }
+                        this.recordAnswer(step.dataKey, match);
+                    } else {
+                        this.recordAnswer(step.dataKey, text);
+                    }
                 } else {
+                    const validationError = this._validateFieldInput(step.fieldType, step.dataKey, text);
+                    if (validationError) {
+                        this._showValidationError(validationError);
+                        return;
+                    }
                     this.recordAnswer(step.dataKey, text);
                 }
 
@@ -493,6 +662,8 @@
                         container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
                         if (btnConfig.action === 'SUPPORT') {
                             this.startSupportFlow();
+                        } else if (btnConfig.action === 'APPOINTMENT' || btnConfig.action === 'BOOKING' || btnConfig.action === 'LEAD') {
+                            this.startFlow(btnConfig.action, btnConfig.label);
                         } else {
                             if (this.config && this.config.steps && this.config.steps.length > 0) {
                                 this._addUserBubble(btnConfig.label);
@@ -688,12 +859,13 @@
 
         const sendMessage = async () => {
             const val = input.value.trim();
-            if (!val) return;
 
             if (flowEngine.mode === 'flow' || flowEngine.mode === 'support') {
                 flowEngine.handleFreeTextInput(val);
                 return;
             }
+
+            if (!val) return;
 
             flowEngine._addUserBubble(val);
             input.value = '';

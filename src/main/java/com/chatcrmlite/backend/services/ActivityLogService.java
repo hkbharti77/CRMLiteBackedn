@@ -192,7 +192,7 @@ public class ActivityLogService {
                     .summary(summary)
                     .payload(payload)
                     .build();
-            activityLogRepository.save(activityLog);
+            activityLogRepository.saveAndFlush(activityLog);
         } catch (Exception ex) {
             // Never let logging break the main business flow
             log.warn("[ActivityLog] Failed to write log for entity {}:{} — {}", entityType, entityId, ex.getMessage());

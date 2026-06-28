@@ -102,10 +102,11 @@ public class ContactService {
                 .id(c.getId())
                 .waId(c.getWaId())
                 .name(c.getName())
+                .email(c.getEmail())
+                .source(c.getSource())
                 .tags(c.getTags().stream()
                         .map(Tag::getName)
                         .collect(Collectors.toList()))
-                .source(c.getSource())
                 .build();
     }
 }

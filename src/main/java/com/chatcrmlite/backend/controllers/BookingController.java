@@ -86,6 +86,7 @@ public class BookingController {
                 .preferredSlot(b.getPreferredSlot())
                 .collectedData(bookingService.parseCollectedData(b.getCollectedData()))
                 .status(b.getStatus().name())
+                .source(b.getSource())
                 .createdAt(b.getCreatedAt())
                 .updatedAt(b.getUpdatedAt())
                 .ownerName(b.getOwner() != null ? 

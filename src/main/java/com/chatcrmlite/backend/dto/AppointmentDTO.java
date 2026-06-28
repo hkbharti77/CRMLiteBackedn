@@ -22,10 +22,11 @@ public class AppointmentDTO implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private String ownerName;
+    private String source;
 
     public AppointmentDTO() {}
 
-    public AppointmentDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, LocalDateTime appointmentDateTime, String title, Map<String, String> collectedData, String meetingLink, String status, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
+    public AppointmentDTO(UUID id, String referenceNumber, String contactName, String contactWaId, UUID contactId, LocalDateTime appointmentDateTime, String title, Map<String, String> collectedData, String meetingLink, String status, String source, LocalDateTime createdAt, LocalDateTime updatedAt, String ownerName) {
         this.id = id;
         this.referenceNumber = referenceNumber;
         this.contactName = contactName;
@@ -36,6 +37,7 @@ public class AppointmentDTO implements Serializable {
         this.collectedData = collectedData;
         this.meetingLink = meetingLink;
         this.status = status;
+        this.source = source;
         this.createdAt = createdAt;
         this.updatedAt = updatedAt;
         this.ownerName = ownerName;
@@ -61,6 +63,8 @@ public class AppointmentDTO implements Serializable {
     public void setMeetingLink(String meetingLink) { this.meetingLink = meetingLink; }
     public String getStatus() { return status; }
     public void setStatus(String status) { this.status = status; }
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
@@ -83,6 +87,7 @@ public class AppointmentDTO implements Serializable {
         private Map<String, String> collectedData;
         private String meetingLink;
         private String status;
+        private String source;
         private LocalDateTime createdAt;
         private LocalDateTime updatedAt;
         private String ownerName;
@@ -97,12 +102,13 @@ public class AppointmentDTO implements Serializable {
         public AppointmentDTOBuilder collectedData(Map<String, String> collectedData) { this.collectedData = collectedData; return this; }
         public AppointmentDTOBuilder meetingLink(String meetingLink) { this.meetingLink = meetingLink; return this; }
         public AppointmentDTOBuilder status(String status) { this.status = status; return this; }
+        public AppointmentDTOBuilder source(String source) { this.source = source; return this; }
         public AppointmentDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public AppointmentDTOBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
         public AppointmentDTOBuilder ownerName(String ownerName) { this.ownerName = ownerName; return this; }
 
         public AppointmentDTO build() {
-            return new AppointmentDTO(id, referenceNumber, contactName, contactWaId, contactId, appointmentDateTime, title, collectedData, meetingLink, status, createdAt, updatedAt, ownerName);
+            return new AppointmentDTO(id, referenceNumber, contactName, contactWaId, contactId, appointmentDateTime, title, collectedData, meetingLink, status, source, createdAt, updatedAt, ownerName);
         }
     }
 }

@@ -10,9 +10,11 @@ import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import com.chatcrmlite.backend.services.lead.LeadEnquiryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import com.chatcrmlite.backend.services.ReferenceNumberService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -29,13 +31,24 @@ public class PublicSubmissionService {
     private static final int MAX_VALUE_LENGTH = 500;
     private static final String WEB_WAID_PREFIX = "web:";
 
-    @Autowired private ContactRepository contactRepository;
-    @Autowired private LeadRepository leadRepository;
-    @Autowired private AppointmentService appointmentService;
-    @Autowired private BookingService bookingService;
-    @Autowired private ObjectMapper objectMapper;
-    @Autowired private ApplicationEventPublisher eventPublisher;
-    @Autowired private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    @Autowired
+    private ContactRepository contactRepository;
+    @Autowired
+    private LeadRepository leadRepository;
+    @Autowired
+    private AppointmentService appointmentService;
+    @Autowired
+    private BookingService bookingService;
+    @Autowired
+    private LeadEnquiryService leadEnquiryService;
+    @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
+    private ApplicationEventPublisher eventPublisher;
+    @Autowired
+    private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    @Autowired
+    private ReferenceNumberService referenceNumberService;
 
     @Transactional
     public void submitLead(User owner, Map<String, String> data) {
@@ -61,11 +74,12 @@ public class PublicSubmissionService {
         Contact contact = findOrCreateContact(owner, clean);
 
         String title = firstNonBlank(clean, "treatment", "service", "consultation_type");
-        if (title == null) title = "Web Appointment";
+        if (title == null)
+            title = "Web Appointment";
 
         LocalDateTime apptTime = parseDateTime(firstNonBlank(clean, "date_time", "preferred_slot", "event_date"));
 
-        appointmentService.bookFromFlow(contact, owner, title, clean, apptTime);
+        appointmentService.bookFromFlow(contact, owner, title, clean, apptTime, "WEB_BOT");
         log.info("[PublicSubmission] Appointment created for contact={} owner={}", contact.getId(), owner.getId());
     }
 
@@ -75,11 +89,12 @@ public class PublicSubmissionService {
         Contact contact = findOrCreateContact(owner, clean);
 
         String service = firstNonBlank(clean, "service", "occasion", "shoot_type", "class_type", "goal");
-        if (service == null) service = "Web Booking";
+        if (service == null)
+            service = "Web Booking";
 
         String preferredSlot = firstNonBlank(clean, "date_time", "preferred_slot", "event_date");
 
-        bookingService.bookFromFlow(contact, owner, service, preferredSlot, clean);
+        bookingService.bookFromFlow(contact, owner, service, preferredSlot, clean, "WEB_BOT");
         log.info("[PublicSubmission] Booking created for contact={} owner={}", contact.getId(), owner.getId());
     }
 
@@ -108,7 +123,8 @@ public class PublicSubmissionService {
     }
 
     Map<String, String> sanitize(Map<String, String> data) {
-        if (data == null) return new HashMap<>();
+        if (data == null)
+            return new HashMap<>();
         Map<String, String> result = new HashMap<>(data.size());
         for (Map.Entry<String, String> entry : data.entrySet()) {
             String value = entry.getValue();
@@ -122,44 +138,24 @@ public class PublicSubmissionService {
 
     private Lead createLeadRecord(Contact contact, User owner,
                                    Map<String, String> data, Lead.LeadStatus status) {
-        StringBuilder summary = new StringBuilder("Web widget submission:\n");
-        data.forEach((k, v) -> {
-            if (v != null && !v.isBlank()) {
-                summary.append("• ").append(k).append(": ").append(v).append("\n");
-            }
-        });
-
-        EnquiryDTO enquiry = EnquiryDTO.builder()
-                .id(UUID.randomUUID().toString())
-                .type("WEB_WIDGET")
-                .message(summary.toString().trim())
-                .source("web-widget")
-                .status("OPEN")
-                .createdAt(LocalDateTime.now().toString())
-                .build();
-
-        String enquiriesJson;
-        try {
-            List<EnquiryDTO> list = new ArrayList<>();
-            list.add(enquiry);
-            enquiriesJson = objectMapper.writeValueAsString(list);
-        } catch (Exception e) {
-            enquiriesJson = "[]";
-        }
-
         // Verify lead quota
         quotaEnforcerService.verifyLeadQuota(owner.getTenant().getId());
 
+        String leadNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.LEAD);
+
         Lead lead = Lead.builder()
+                .leadNumber(leadNumber)
                 .contact(contact)
                 .owner(owner)
                 .status(status)
-                .enquiries(enquiriesJson)
                 .build();
 
-        return leadRepository.save(lead);
-    }
+        Lead savedLead = leadRepository.save(lead);
+        
+        leadEnquiryService.appendEnquiry(savedLead, "Lead submitted via Web Widget.", "WEB_WIDGET", "web-widget", data);
 
+        return savedLead;
+    }
     private String firstNonBlank(Map<String, String> data, String... keys) {
         for (String key : keys) {
             String val = data.get(key);

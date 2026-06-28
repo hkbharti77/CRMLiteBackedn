@@ -39,6 +39,7 @@ public class MessageController {
 
         List<Contact> contacts = contactRepository.findAll().stream()
                 .filter(c -> c.getOwner() != null && c.getOwner().getId().equals(user.getId()))
+                .filter(c -> c.getWaId() != null && !c.getWaId().startsWith("web:"))
                 .collect(Collectors.toList());
 
         List<Map<String, Object>> chatList = contacts.stream().map(contact -> {

@@ -8,6 +8,7 @@ import com.chatcrmlite.backend.event.LeadStatusChangedEvent;
 import com.chatcrmlite.backend.models.Lead;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.Contact;
+import com.chatcrmlite.backend.models.LeadEnquiry;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ import java.util.UUID;
 @Slf4j
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class LeadServiceImpl implements LeadService {
 
     private final LeadRepository leadRepository;
@@ -43,13 +45,76 @@ public class LeadServiceImpl implements LeadService {
 
     @Override
     public Lead getLeadById(UUID leadId, User owner) {
-        return findOwnedLead(leadId, owner);
+        Lead lead = findOwnedLead(leadId, owner);
+        initializeLead(lead);
+        return lead;
     }
 
     private Lead findOwnedLead(UUID leadId, User owner) {
-        return leadRepository.findById(leadId)
-                .filter(l -> l.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
+        Lead lead = leadRepository.findByIdWithOwnerAndTenant(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead not found"));
+        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+            throw new RuntimeException("Lead not found");
+        }
+        return lead;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Lead getLeadByLeadNumber(String leadNumber, User owner) {
+        Lead lead = leadRepository.findByLeadNumber(leadNumber)
+                .orElseThrow(() -> new RuntimeException("Lead not found with number: " + leadNumber));
+        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+            throw new RuntimeException("Lead not found");
+        }
+        initializeLead(lead);
+        return lead;
+    }
+
+    public static void initializeLead(Lead lead) {
+        if (lead == null) return;
+        if (lead.getContact() != null) {
+            lead.getContact().getId();
+            lead.getContact().getWaId();
+            lead.getContact().getName();
+            lead.getContact().getSource();
+            if (lead.getContact().getTags() != null) {
+                lead.getContact().getTags().size();
+            }
+        }
+        if (lead.getOwner() != null) {
+            lead.getOwner().getId();
+            lead.getOwner().getDisplayName();
+            lead.getOwner().getEmail();
+            if (lead.getOwner().getTenant() != null) {
+                lead.getOwner().getTenant().getId();
+            }
+        }
+        if (lead.getEnquiryList() != null) {
+            lead.getEnquiryList().size();
+            lead.getEnquiryList().forEach(e -> {
+                e.getId();
+                e.getType();
+                e.getMessage();
+                e.getSource();
+                e.getStatus();
+                e.getCreatedAt();
+            });
+        }
+    }
+
+    public static List<Lead> initializeLeads(List<Lead> leads) {
+        if (leads != null) {
+            leads.forEach(LeadServiceImpl::initializeLead);
+        }
+        return leads;
+    }
+
+    public static Page<Lead> initializeLeads(Page<Lead> leads) {
+        if (leads != null) {
+            leads.forEach(LeadServiceImpl::initializeLead);
+        }
+        return leads;
     }
 
 
@@ -70,9 +135,7 @@ public class LeadServiceImpl implements LeadService {
             leads = leadRepository.findAllByContactAndOwnerOptimized(contact, owner);
         }
         // Initialize lazy relationships to avoid LazyInitializationException outside transaction
-        leads.forEach(lead -> {
-            lead.getContact().getTags().size();  // Force load lazy collection
-        });
+        initializeLeads(leads);
         return leads;
     }
 
@@ -86,7 +149,7 @@ public class LeadServiceImpl implements LeadService {
                 .max(java.util.Comparator.comparing(Lead::getCreatedAt))
                 .orElseThrow(() -> new RuntimeException("No lead found for this contact"));
         // Initialize lazy relationships to avoid LazyInitializationException outside transaction
-        lead.getContact().getTags().size();  // Force load lazy collection
+        initializeLead(lead);
         return lead;
     }
 
@@ -129,17 +192,22 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastActivity"));
+        Page<Lead> result;
         if (isAdmin(user)) {
             if (status != null) {
-                return leadRepository.findAllByStatusPaged(status, pageable);
+                result = leadRepository.findAllByStatusPaged(status, pageable);
+            } else {
+                result = leadRepository.findAllPaged(pageable);
             }
-            return leadRepository.findAllPaged(pageable);
         } else {
             if (status != null) {
-                return leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+                result = leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+            } else {
+                result = leadRepository.findAllByOwnerPaged(user, pageable);
             }
-            return leadRepository.findAllByOwnerPaged(user, pageable);
         }
+        initializeLeads(result);
+        return result;
     }
 
     @Override
@@ -156,6 +224,7 @@ public class LeadServiceImpl implements LeadService {
         lead.setStatus(status);
         lead.setLastActivity(LocalDateTime.now());
         Lead savedLead = leadRepository.save(lead);
+        initializeLead(savedLead);
         
         eventPublisher.publishEvent(new LeadStatusChangedEvent(this, savedLead, oldStatus, status));
         
@@ -201,7 +270,9 @@ public class LeadServiceImpl implements LeadService {
             lead.setPaymentStatus(Lead.PaymentStatus.valueOf(dto.getPaymentStatus()));
         }
         lead.setLastActivity(LocalDateTime.now());
-        return leadRepository.save(lead);
+        Lead saved = leadRepository.save(lead);
+        initializeLead(saved);
+        return saved;
     }
 
     @Override
@@ -215,7 +286,7 @@ public class LeadServiceImpl implements LeadService {
 
     @Override
     @Transactional
-    public void appendEnquiryToLead(Lead lead, String message, String type, String source) {
-        leadEnquiryService.appendEnquiry(lead, message, type, source);
+    public void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData) {
+        leadEnquiryService.appendEnquiry(lead, message, type, source, collectedData);
     }
 }

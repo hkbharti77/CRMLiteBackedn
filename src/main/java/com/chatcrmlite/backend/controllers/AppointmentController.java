@@ -6,12 +6,14 @@ import com.chatcrmlite.backend.models.Appointment;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.AppointmentService;
+import com.chatcrmlite.backend.services.GoogleCalendarService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -21,6 +23,7 @@ public class AppointmentController {
 
     @Autowired private AppointmentService appointmentService;
     @Autowired private UserRepository userRepository;
+    @Autowired private GoogleCalendarService googleCalendarService;
 
     private User getAuthenticatedUser() {
         String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -74,17 +77,40 @@ public class AppointmentController {
         return ResponseEntity.ok(toDTO(appointmentService.markNoShow(id, getAuthenticatedUser())));
     }
 
+    /**
+     * Generates a Google Meet link for an appointment and saves it.
+     * Requires the user to have connected their Google account.
+     */
+    @PostMapping("/{id}/generate-meet-link")
+    public ResponseEntity<Map<String, String>> generateMeetLink(
+            @PathVariable UUID id,
+            @RequestParam(required = false, defaultValue = "60") Integer durationMinutes) {
+        try {
+            User owner = getAuthenticatedUser();
+            String meetLink = appointmentService.generateAndSaveMeetLink(id, owner, googleCalendarService, durationMinutes);
+            return ResponseEntity.ok(Map.of("meetLink", meetLink));
+        } catch (IllegalStateException e) {
+            // Google not connected
+            return ResponseEntity.badRequest()
+                    .body(Map.of("error", e.getMessage(), "code", "GOOGLE_NOT_CONNECTED"));
+        } catch (Exception e) {
+            return ResponseEntity.internalServerError()
+                    .body(Map.of("error", "Failed to generate Meet link: " + e.getMessage()));
+        }
+    }
+
     private AppointmentDTO toDTO(Appointment a) {
         return AppointmentDTO.builder()
                 .id(a.getId())
-                .contactName(a.getContact().getName())
-                .contactWaId(a.getContact().getWaId())
-                .contactId(a.getContact().getId())
+                .contactName(a.getContact() != null ? a.getContact().getName() : null)
+                .contactWaId(a.getContact() != null ? a.getContact().getWaId() : null)
+                .contactId(a.getContact() != null ? a.getContact().getId() : null)
                 .appointmentDateTime(a.getAppointmentDateTime())
                 .title(a.getTitle())
                 .collectedData(appointmentService.parseCollectedData(a.getCollectedData()))
                 .meetingLink(a.getMeetingLink())
                 .status(a.getStatus().name())
+                .source(a.getSource())
                 .createdAt(a.getCreatedAt())
                 .updatedAt(a.getUpdatedAt())
                 .ownerName(a.getOwner() != null ? 

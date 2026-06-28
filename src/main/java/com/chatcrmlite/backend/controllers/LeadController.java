@@ -56,6 +56,21 @@ public class LeadController {
         ));
     }
 
+    @GetMapping("/{id}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<LeadDTO> getLead(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.getLeadById(id, user), user));
+    }
+
+    /** GET /api/v1/leads/by-number/{leadNumber} — get lead by leadNumber */
+    @GetMapping("/by-number/{leadNumber}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<LeadDTO> getLeadByNumber(@PathVariable String leadNumber) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.getLeadByLeadNumber(leadNumber, user), user));
+    }
+
     /** GET /api/v1/leads/contact/{contactId} — ALL leads for a contact */
     @GetMapping("/contact/{contactId}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -74,6 +89,7 @@ public class LeadController {
     }
 
     @GetMapping("/revenue")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<RevenueReportDTO> getRevenueReport() {
         return ResponseEntity.ok(leadService.getRevenueReport(getAuthenticatedUser()));
     }
@@ -91,10 +107,19 @@ public class LeadController {
 
     // ── Enquiry CRUD ───────────────────────────────────────────────────────
 
-    /** GET /api/v1/leads/{id}/enquiries — list all enquiries */
     @GetMapping("/{id}/enquiries")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<EnquiryDTO>> getEnquiries(@PathVariable UUID id) {
         return ResponseEntity.ok(leadService.getEnquiries(id, getAuthenticatedUser()));
+    }
+
+    /** GET /api/v1/leads/by-number/{leadNumber}/enquiries — list all enquiries by leadNumber */
+    @GetMapping("/by-number/{leadNumber}/enquiries")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<EnquiryDTO>> getEnquiriesByNumber(@PathVariable String leadNumber) {
+        User user = getAuthenticatedUser();
+        Lead lead = leadService.getLeadByLeadNumber(leadNumber, user);
+        return ResponseEntity.ok(leadService.getEnquiries(lead.getId(), user));
     }
 
     /** POST /api/v1/leads/{id}/enquiries — add a new enquiry */
@@ -146,6 +171,7 @@ public class LeadController {
 
     /** GET /api/v1/leads/metrics/distribution — leads-per-contact stats */
     @GetMapping("/metrics/distribution")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getLeadsDistribution() {
         return ResponseEntity.ok(leadMetricsService.getLeadsPerContactDistribution(getAuthenticatedUser()));
     }
@@ -163,13 +189,31 @@ public class LeadController {
         boolean isNew = createdAt != null && createdAt.isAfter(LocalDateTime.now().minusHours(24));
         String createdAtHuman = formatRelativeTime(createdAt);
 
+        // Extract latest phone and email from enquiries if available
+        String latestPhone = null;
+        String latestEmail = lead.getContact().getEmail();
+        for (int i = lead.getEnquiryList().size() - 1; i >= 0; i--) {
+            var enq = lead.getEnquiryList().get(i);
+            if (enq.getPhone() != null && !enq.getPhone().isBlank()) latestPhone = enq.getPhone();
+            if (enq.getEmail() != null && !enq.getEmail().isBlank()) latestEmail = enq.getEmail();
+            if (latestPhone != null && latestEmail != null && !latestEmail.equals(lead.getContact().getEmail())) break;
+        }
+
+        // Fallback for leadNumber if it's null (for old leads)
+        String finalLeadNumber = lead.getLeadNumber();
+        if (finalLeadNumber == null || finalLeadNumber.isBlank()) {
+            finalLeadNumber = "L-" + lead.getId().toString().substring(0, 6).toUpperCase();
+        }
+
         return LeadDTO.builder()
                 .id(lead.getId())
-                .leadNumber(lead.getLeadNumber())
+                .leadNumber(finalLeadNumber)
                 .contact(ContactDTO.builder()
                         .id(lead.getContact().getId())
                         .waId(lead.getContact().getWaId())
                         .name(lead.getContact().getName())
+                        .email(latestEmail)
+                        .phone(latestPhone)
                         .tags(lead.getContact().getTags().stream()
                                 .map(Tag::getName)
                                 .collect(Collectors.toList()))
@@ -182,6 +226,15 @@ public class LeadController {
                         .message(e.getMessage())
                         .source(e.getSource())
                         .status(e.getStatus())
+                        .name(e.getName())
+                        .email(e.getEmail())
+                        .phone(e.getPhone())
+                        .company(e.getCompany())
+                        .serviceCategory(e.getServiceCategory())
+                        .requirement(e.getRequirement())
+                        .budget(e.getBudget())
+                        .city(e.getCity())
+                        .country(e.getCountry())
                         .createdAt(e.getCreatedAt() != null ? e.getCreatedAt().toString() : null)
                         .build()).collect(Collectors.toList()))
                 .createdAt(createdAt)

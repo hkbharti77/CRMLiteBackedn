@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.exceptions;
 import com.chatcrmlite.backend.controllers.PublicFlowController;
 import com.chatcrmlite.backend.controllers.PublicSupportController;
 import com.chatcrmlite.backend.services.TicketService;
+import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.validation.ConstraintViolationException;
@@ -57,6 +58,20 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Map<String, Object>> handleInvalidSubmission(
             PublicFlowController.InvalidSubmissionException ex) {
         return errorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
+    }
+
+    // ── Billing & Quotas ──────────────────────────────────────────────────────
+
+    @ExceptionHandler(QuotaEnforcerService.QuotaExceededException.class)
+    public ResponseEntity<Map<String, Object>> handleQuotaExceeded(
+            QuotaEnforcerService.QuotaExceededException ex) {
+        return errorResponse(HttpStatus.PAYMENT_REQUIRED, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(QuotaEnforcerService.SubscriptionExpiredException.class)
+    public ResponseEntity<Map<String, Object>> handleSubscriptionExpired(
+            QuotaEnforcerService.SubscriptionExpiredException ex) {
+        return errorResponse(HttpStatus.PAYMENT_REQUIRED, ex.getMessage(), null);
     }
 
     // ── Validation ────────────────────────────────────────────────────────────

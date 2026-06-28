@@ -29,13 +29,18 @@ public class FlowConfigService {
     private final ObjectMapper objectMapper;
     private final TenantFlowConfigRepository tenantFlowConfigRepository;
     private final SupportFormConfigRepository supportFormConfigRepository;
+    private final FlowTemplateEngine flowTemplateEngine;
 
     @Autowired
-    public FlowConfigService(ObjectMapper objectMapper, TenantFlowConfigRepository tenantFlowConfigRepository, SupportFormConfigRepository supportFormConfigRepository) {
+    public FlowConfigService(ObjectMapper objectMapper, 
+                             TenantFlowConfigRepository tenantFlowConfigRepository, 
+                             SupportFormConfigRepository supportFormConfigRepository,
+                             FlowTemplateEngine flowTemplateEngine) {
         this.objectMapper = objectMapper.copy()
                 .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
         this.tenantFlowConfigRepository = tenantFlowConfigRepository;
         this.supportFormConfigRepository = supportFormConfigRepository;
+        this.flowTemplateEngine = flowTemplateEngine;
     }
 
     public FlowConfigDTO getFlowConfig(User user) {
@@ -44,56 +49,48 @@ public class FlowConfigService {
 
     @Transactional
     public FlowConfigDTO getFlowConfig(User user, String explicitSuffix) {
-        String flowTypeStr = "";
-        ConversationState.FlowType flowTypeEnum = ConversationState.FlowType.ENQUIRY;
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
 
-        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
-            flowTypeStr = explicitSuffix.toLowerCase();
-        } else if (user != null) {
-            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
-                flowTypeStr = "appointment";
-            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
-                flowTypeStr = "booking";
-            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
-                flowTypeStr = "lead";
-            }
-        }
-
-        if ("appointment".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.APPOINTMENT;
-        } else if ("booking".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.BOOKING;
-        } else if ("lead".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
-        } else if ("support".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.SUPPORT;
-        }
+        FlowConfigDTO config;
 
         // ── SUPPORT FLOW: DB is the primary source of truth ──────────────────
         // On first access for this tenant, auto-seed from support.json.
         // Subsequent accesses use the tenant's own DB row (which they can edit).
         if (flowTypeEnum == ConversationState.FlowType.SUPPORT && user != null) {
-            return getOrSeedSupportFlowConfig(user);
+            config = getOrSeedSupportFlowConfig(user);
+        } else {
+            // ── Non-SUPPORT flows: load from classpath JSON ───────────────────────
+            String masterSlug = "master-fields";
+            config = loadFlow(masterSlug);
+
+            if (config == null) {
+                log.warn("[FlowConfigService] No master flow found for '{}', falling back to generic", masterSlug);
+                config = loadFlow("generic");
+            }
+
+            if (config == null) {
+                log.error("[FlowConfigService] generic.json missing from classpath — returning empty config");
+                return FlowConfigDTO.builder().flowType("ENQUIRY").build();
+            }
+
+            config.setFlowType(flowTypeEnum.name());
+
+            if (user != null) {
+                config = applyTenantConfiguration(user, flowTypeEnum, config);
+            }
         }
 
-        // ── Non-SUPPORT flows: load from classpath JSON ───────────────────────
-        String masterSlug = "master-fields";
-        FlowConfigDTO config = loadFlow(masterSlug);
-
-        if (config == null) {
-            log.warn("[FlowConfigService] No master flow found for '{}', falling back to generic", masterSlug);
-            config = loadFlow("generic");
-        }
-
-        if (config == null) {
-            log.error("[FlowConfigService] generic.json missing from classpath — returning empty config");
-            return FlowConfigDTO.builder().flowType("ENQUIRY").build();
-        }
-
-        config.setFlowType(flowTypeEnum.name());
-
-        if (user != null) {
-            config = applyTenantConfiguration(user, flowTypeEnum, config);
+        // Post-process to resolve dynamic option sources
+        if (config != null && config.getSteps() != null) {
+            for (FlowStepDTO step : config.getSteps()) {
+                boolean isDynamicKey = "category".equals(step.getDataKey()) || "service".equals(step.getDataKey())
+                        || "services".equals(step.getDataKey()) || "service_type".equals(step.getDataKey());
+                
+                if (isDynamicKey) {
+                    step.setDynamicSource(true);
+                    step.setUsesButtons(true);
+                }
+            }
         }
 
         return config;
@@ -251,7 +248,7 @@ public class FlowConfigService {
             return masterConfig;
         }
 
-        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(tenant, flowType);
+        Optional<TenantFlowConfig> dbConfigOpt = findDbConfigWithFallback(tenant, flowType);
         
         List<FlowStepDTO> filteredSteps = new ArrayList<>();
 
@@ -293,34 +290,44 @@ public class FlowConfigService {
             for (FlowStepDTO step : masterConfig.getSteps()) {
                 FlowFieldConfig fieldConfig = fieldConfigMap.get(step.getDataKey());
                 
-                // If the field is not in the configuration or is explicitly disabled, skip it.
-                if (fieldConfig == null || !fieldConfig.isEnabled()) {
+                // If the field is not in the configuration, fallback to defaultEnabled.
+                // If it is in the configuration, respect its enabled status.
+                if (fieldConfig == null) {
+                    if (!step.isDefaultEnabled()) {
+                        continue;
+                    }
+                } else if (!fieldConfig.isEnabled()) {
                     continue;
                 }
 
-                // Override required property
-                step.setRequired(fieldConfig.isRequired());
+                if (fieldConfig != null) {
+                    // Override required property
+                    step.setRequired(fieldConfig.isRequired());
 
-                // Apply custom label if present
-                if (fieldConfig.getLabel() != null && !fieldConfig.getLabel().isBlank()) {
-                    step.setQuestion(fieldConfig.getLabel());
-                }
+                    // Apply custom label if present
+                    if (fieldConfig.getLabel() != null && !fieldConfig.getLabel().isBlank()) {
+                        step.setQuestion(fieldConfig.getLabel());
+                    }
 
-                // Apply custom options if it's a dropdown and options are present
-                if ("DROPDOWN".equalsIgnoreCase(step.getFieldType()) || step.isUsesButtons()) {
-                    if (fieldConfig.getOptions() != null && !fieldConfig.getOptions().isEmpty()) {
-                        step.setOptions(fieldConfig.getOptions());
-                        step.setUsesButtons(true);
+                    // Apply custom options if it's a dropdown and options are present
+                    if ("DROPDOWN".equalsIgnoreCase(step.getFieldType()) || step.isUsesButtons()) {
+                        if (fieldConfig.getOptions() != null && !fieldConfig.getOptions().isEmpty()) {
+                            step.setOptions(fieldConfig.getOptions());
+                            step.setUsesButtons(true);
+                        }
                     }
                 }
 
                 filteredSteps.add(step);
             }
 
-            // Sort steps based on the configured order
+            // Sort steps based on the configured order, or fallback to displayOrder if not in config
             filteredSteps.sort(Comparator.comparingInt(s -> {
                 FlowFieldConfig fc = fieldConfigMap.get(s.getDataKey());
-                return fc != null ? fc.getOrder() : 999;
+                if (fc != null) {
+                    return fc.getOrder();
+                }
+                return s.getDisplayOrder() != null ? s.getDisplayOrder() : 999;
             }));
 
             masterConfig.setSteps(filteredSteps);
@@ -362,30 +369,7 @@ public class FlowConfigService {
 
     
     public List<FlowFieldConfig> getConfigurableFields(User user, String explicitSuffix) {
-        String flowTypeStr = "";
-        ConversationState.FlowType flowTypeEnum = ConversationState.FlowType.ENQUIRY;
-
-        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
-            flowTypeStr = explicitSuffix.toLowerCase();
-        } else if (user != null) {
-            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
-                flowTypeStr = "appointment";
-            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
-                flowTypeStr = "booking";
-            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
-                flowTypeStr = "lead";
-            }
-        }
-
-        if ("appointment".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.APPOINTMENT;
-        } else if ("booking".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.BOOKING;
-        } else if ("lead".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
-        } else if ("support".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.SUPPORT;
-        }
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
 
         // ── SUPPORT FLOW: DB is primary — auto-seed if needed ─────────────────
         if (flowTypeEnum == ConversationState.FlowType.SUPPORT) {
@@ -438,7 +422,7 @@ public class FlowConfigService {
         }
 
         List<FlowFieldConfig> result = new ArrayList<>();
-        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
+        Optional<TenantFlowConfig> dbConfigOpt = findDbConfigWithFallback(user, flowTypeEnum);
         Map<String, FlowFieldConfig> dbFieldMap = new HashMap<>();
 
         if (dbConfigOpt.isPresent()) {
@@ -486,35 +470,13 @@ public class FlowConfigService {
         return result;
     }
 
+    @Transactional
     public void saveConfigurableFields(User user, String explicitSuffix, List<FlowFieldConfig> fields) {
         if (fields == null || fields.isEmpty()) {
             log.warn("[FlowConfigService] Attempted to save empty flow fields for user={}, ignoring", user != null ? user.getEmail() : "unknown");
             return;
         }
-        String flowTypeStr = "";
-        ConversationState.FlowType flowTypeEnum = ConversationState.FlowType.ENQUIRY;
-
-        if (explicitSuffix != null && !explicitSuffix.isBlank()) {
-            flowTypeStr = explicitSuffix.toLowerCase();
-        } else if (user != null) {
-            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
-                flowTypeStr = "appointment";
-            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
-                flowTypeStr = "booking";
-            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
-                flowTypeStr = "lead";
-            }
-        }
-
-        if ("appointment".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.APPOINTMENT;
-        } else if ("booking".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.BOOKING;
-        } else if ("lead".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.LEAD_CAPTURE;
-        } else if ("support".equals(flowTypeStr)) {
-            flowTypeEnum = ConversationState.FlowType.SUPPORT;
-        }
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
 
         try {
             Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
@@ -552,7 +514,7 @@ public class FlowConfigService {
 
     public String getFlowGreeting(User user, String explicitSuffix) {
         ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
-        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
+        Optional<TenantFlowConfig> dbConfigOpt = findDbConfigWithFallback(user, flowTypeEnum);
         if (dbConfigOpt.isPresent()) {
             try {
                 TenantFlowConfigJson configJson = objectMapper.readValue(dbConfigOpt.get().getConfigurationJson(), TenantFlowConfigJson.class);
@@ -564,6 +526,7 @@ public class FlowConfigService {
         return null; // or fetch default from master config
     }
 
+    @Transactional
     public void saveFlowGreeting(User user, String explicitSuffix, String greetingMessage) {
         ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
         try {
@@ -605,18 +568,32 @@ public class FlowConfigService {
     }
 
     private ConversationState.FlowType resolveFlowTypeEnum(User user, String explicitSuffix) {
-        String flowTypeStr = "";
         if (explicitSuffix != null && !explicitSuffix.isBlank()) {
-            flowTypeStr = explicitSuffix.toLowerCase();
-        } else if (user != null) {
-            if (Boolean.TRUE.equals(user.getForceShowAppointment())) flowTypeStr = "appointment";
-            else if (Boolean.TRUE.equals(user.getForceShowBooking())) flowTypeStr = "booking";
-            else if (Boolean.TRUE.equals(user.getForceShowLeads())) flowTypeStr = "lead";
+            String flowTypeStr = explicitSuffix.toLowerCase();
+            if ("appointment".equals(flowTypeStr)) return ConversationState.FlowType.APPOINTMENT;
+            if ("booking".equals(flowTypeStr)) return ConversationState.FlowType.BOOKING;
+            if ("lead".equals(flowTypeStr) || "lead_capture".equals(flowTypeStr)) return ConversationState.FlowType.LEAD_CAPTURE;
+            if ("support".equals(flowTypeStr)) return ConversationState.FlowType.SUPPORT;
+            
+            try {
+                return ConversationState.FlowType.valueOf(explicitSuffix.toUpperCase());
+            } catch (IllegalArgumentException e) {
+                // Ignore and fall through to ENQUIRY
+            }
+            return ConversationState.FlowType.ENQUIRY;
         }
-        if ("appointment".equals(flowTypeStr)) return ConversationState.FlowType.APPOINTMENT;
-        if ("booking".equals(flowTypeStr)) return ConversationState.FlowType.BOOKING;
-        if ("lead".equals(flowTypeStr)) return ConversationState.FlowType.LEAD_CAPTURE;
-        if ("support".equals(flowTypeStr)) return ConversationState.FlowType.SUPPORT;
+        
+        if (user != null) {
+            if (Boolean.TRUE.equals(user.getForceShowAppointment())) return ConversationState.FlowType.APPOINTMENT;
+            if (Boolean.TRUE.equals(user.getForceShowBooking())) return ConversationState.FlowType.BOOKING;
+            if (Boolean.TRUE.equals(user.getForceShowLeads())) return ConversationState.FlowType.LEAD_CAPTURE;
+            
+            FlowTemplateEngine.FlowBlueprint blueprint = flowTemplateEngine.getBlueprint(user.getBusinessSubType());
+            if (blueprint != null && blueprint.getFlowType() != null) {
+                return blueprint.getFlowType();
+            }
+        }
+        
         return ConversationState.FlowType.ENQUIRY;
     }
 
@@ -635,6 +612,21 @@ public class FlowConfigService {
             log.error("[FlowConfigService] Failed to parse flow '{}': {}", slug, e.getMessage());
             return null;
         }
+    }
+
+    private Optional<TenantFlowConfig> findDbConfigWithFallback(User user, ConversationState.FlowType flowType) {
+        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowType);
+        
+        // Backward compatibility: If the current resolved flow type has no config, 
+        // fall back to ENQUIRY since older versions always saved UI configs to ENQUIRY.
+        if (dbConfigOpt.isEmpty() && flowType != ConversationState.FlowType.ENQUIRY) {
+            Optional<TenantFlowConfig> fallbackOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, ConversationState.FlowType.ENQUIRY);
+            if (fallbackOpt.isPresent()) {
+                log.info("[FlowConfigService] Falling back to ENQUIRY config for tenant={} since {} is empty", user.getId(), flowType);
+                return fallbackOpt;
+            }
+        }
+        return dbConfigOpt;
     }
 }
 

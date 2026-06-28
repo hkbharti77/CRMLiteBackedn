@@ -13,6 +13,14 @@ import java.util.UUID;
 import org.springframework.data.repository.query.Param;
 
 public interface LeadRepository extends JpaRepository<Lead, UUID> {
+    @Query("SELECT DISTINCT l FROM Lead l " +
+           "LEFT JOIN FETCH l.owner o " +
+           "LEFT JOIN FETCH o.tenant " +
+           "WHERE l.id = :id")
+    Optional<Lead> findByIdWithOwnerAndTenant(@Param("id") UUID id);
+    
+    Optional<Lead> findByLeadNumber(String leadNumber);
+
     List<Lead> findAllByOwner(User owner);
     /** Optimized: fetch leads by status with contact and tags eagerly to avoid lazy initialization */
     @Query("SELECT DISTINCT l FROM Lead l " +

@@ -14,6 +14,7 @@ import java.util.UUID;
 
 public interface LeadService {
     Lead getLeadById(UUID leadId, User owner);
+    Lead getLeadByLeadNumber(String leadNumber, User owner);
     void validateLeadCreation(Contact contact, User owner, String enquiryType);
     List<Lead> getLeadsByContactId(UUID contactId, User owner);
     Lead getLatestLeadByContactId(UUID contactId, User owner);
@@ -28,5 +29,5 @@ public interface LeadService {
     List<EnquiryDTO> getEnquiries(UUID leadId, User owner);
     Lead updateDealInfo(UUID leadId, DealUpdateDTO dto, User owner);
     RevenueReportDTO getRevenueReport(User owner);
-    void appendEnquiryToLead(Lead lead, String message, String type, String source);
+    void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData);
 }

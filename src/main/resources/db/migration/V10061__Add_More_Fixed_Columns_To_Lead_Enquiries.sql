@@ -1,0 +1,6 @@
+ALTER TABLE lead_enquiries
+ADD COLUMN age VARCHAR(255),
+ADD COLUMN gender VARCHAR(255),
+ADD COLUMN address TEXT,
+ADD COLUMN pincode VARCHAR(255),
+ADD COLUMN preferred_date VARCHAR(255);

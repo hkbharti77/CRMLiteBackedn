@@ -51,7 +51,7 @@ public class ReferenceNumberService {
         public String getCode() { return code; }
     }
 
-    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyyyMMdd");
+    private static final DateTimeFormatter DATE_FMT = DateTimeFormatter.ofPattern("yyMMdd");
 
     private final UserRepository userRepository;
     private final LeadRepository leadRepository;
@@ -66,8 +66,12 @@ public class ReferenceNumberService {
     public synchronized String generate(User owner, EntityType type) {
         String prefix = resolveUniquePrefix(owner);
         String date   = LocalDate.now().format(DATE_FMT);
-        long   seq    = countTodayForType(owner, type) + 1;
-        String ref    = String.format("%s-%s-%s-%04d", prefix, type.getCode(), date, seq);
+        
+        // e.g. GYAN-L250627-
+        String searchPrefix = String.format("%s-%s%s-", prefix, type.getCode(), date);
+        
+        long   seq    = countTodayForType(owner, type, searchPrefix) + 1;
+        String ref    = String.format("%s%04d", searchPrefix, seq);
         log.debug("[RefNum] Generated {} for owner={}", ref, owner.getId());
         return ref;
     }
@@ -117,15 +121,12 @@ public class ReferenceNumberService {
 
     // ── Per-day sequence counts ────────────────────────────────────────────
 
-    private long countTodayForType(User owner, EntityType type) {
-        LocalDate today = LocalDate.now();
-        String dateStr = today.format(DATE_FMT);
-
+    private long countTodayForType(User owner, EntityType type, String searchPrefix) {
         return switch (type) {
-            case LEAD        -> leadRepository.countByOwnerAndDatePrefix(owner.getId(), dateStr);
-            case APPOINTMENT -> appointmentRepository.countByOwnerAndDatePrefix(owner.getId(), dateStr);
-            case BOOKING     -> bookingRepository.countByOwnerAndDatePrefix(owner.getId(), dateStr);
-            case TICKET      -> ticketRepository.countByOwnerAndDatePrefix(owner.getId(), dateStr);
+            case LEAD        -> leadRepository.countByOwnerAndDatePrefix(owner.getId(), searchPrefix);
+            case APPOINTMENT -> appointmentRepository.countByOwnerAndDatePrefix(owner.getId(), searchPrefix);
+            case BOOKING     -> bookingRepository.countByOwnerAndDatePrefix(owner.getId(), searchPrefix);
+            case TICKET      -> ticketRepository.countByOwnerAndDatePrefix(owner.getId(), searchPrefix);
         };
     }
 }
