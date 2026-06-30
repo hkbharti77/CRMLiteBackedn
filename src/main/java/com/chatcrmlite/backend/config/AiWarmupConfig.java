@@ -1,6 +1,6 @@
 package com.chatcrmlite.backend.config;
 
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -18,6 +18,9 @@ public class AiWarmupConfig {
      */
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private EmbeddingModel embeddingModel;
 
     @EventListener(ApplicationReadyEvent.class)
     public void warmUp() {
@@ -50,9 +53,8 @@ public class AiWarmupConfig {
         }
 
         try {
-            AllMiniLmL6V2QuantizedEmbeddingModel model = new AllMiniLmL6V2QuantizedEmbeddingModel();
-            // Run a dummy embedding to force model loading into memory
-            model.embed("Hello world to warm up the sentence transformer model");
+            // Run a dummy embedding to verify the model is reachable
+            embeddingModel.embed("Hello world to warm up the sentence transformer model");
             log.info("[AI-Warmup] Embedding model ready.");
         } catch (Exception e) {
             log.error("[AI-Warmup] Failed to warm up model: {}", e.getMessage());

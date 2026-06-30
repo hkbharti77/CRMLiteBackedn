@@ -3,7 +3,7 @@ package com.chatcrmlite.backend.services;
 import com.chatcrmlite.backend.models.DocumentChunk;
 import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
+
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
