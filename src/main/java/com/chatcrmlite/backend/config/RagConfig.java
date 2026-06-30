@@ -2,7 +2,7 @@ package com.chatcrmlite.backend.config;
 
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
+import dev.langchain4j.model.googleai.GoogleAiEmbeddingModel;
 import dev.langchain4j.model.googleai.GoogleAiGeminiChatModel;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -18,13 +18,18 @@ public class RagConfig {
     private String modelName;
 
     /**
-     * Local ONNX embedding model — no API key required.
-     * Produces 384-dimensional vectors compatible with the document_chunks schema.
+     * Gemini API-based embedding model — zero local RAM cost.
+     * Replaces the local ONNX model which consumed 150MB+ of native memory
+     * and crashed the 512MB Render Free Tier server.
+     * Produces 768-dimensional vectors (text-embedding-004).
      */
     @Bean
     @org.springframework.context.annotation.Profile("!test")
     public EmbeddingModel embeddingModel() {
-        return new AllMiniLmL6V2QuantizedEmbeddingModel();
+        return GoogleAiEmbeddingModel.builder()
+                .apiKey(geminiApiKey)
+                .modelName("text-embedding-004")
+                .build();
     }
 
     @Bean
@@ -33,7 +38,7 @@ public class RagConfig {
         return new EmbeddingModel() {
             @Override
             public dev.langchain4j.model.output.Response<dev.langchain4j.data.embedding.Embedding> embed(dev.langchain4j.data.segment.TextSegment textSegment) {
-                float[] vector = new float[384];
+                float[] vector = new float[768]; // matches Gemini text-embedding-004 dimensions
                 return dev.langchain4j.model.output.Response.from(dev.langchain4j.data.embedding.Embedding.from(vector));
             }
 
@@ -41,7 +46,7 @@ public class RagConfig {
             public dev.langchain4j.model.output.Response<java.util.List<dev.langchain4j.data.embedding.Embedding>> embedAll(java.util.List<dev.langchain4j.data.segment.TextSegment> textSegments) {
                 java.util.List<dev.langchain4j.data.embedding.Embedding> embeddings = new java.util.ArrayList<>();
                 for (dev.langchain4j.data.segment.TextSegment segment : textSegments) {
-                    embeddings.add(dev.langchain4j.data.embedding.Embedding.from(new float[384]));
+                    embeddings.add(dev.langchain4j.data.embedding.Embedding.from(new float[768]));
                 }
                 return dev.langchain4j.model.output.Response.from(embeddings);
             }
