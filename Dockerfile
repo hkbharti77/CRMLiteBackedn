@@ -29,9 +29,8 @@ COPY --from=builder ${DEPENDENCY}/BOOT-INF/lib     ./lib
 COPY --from=builder ${DEPENDENCY}/META-INF          ./META-INF
 COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes  .
 
-# Health check (hits actuator liveness endpoint)
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget -qO- http://localhost:${PORT:-8080}/actuator/health/liveness | grep -q '"status":"UP"' || exit 1
+# Removed Docker HEALTHCHECK because Render does its own TCP health checks,
+# and Docker's healthcheck was killing the container before it could finish booting on 0.1 CPU.
 
 EXPOSE 8080
 
