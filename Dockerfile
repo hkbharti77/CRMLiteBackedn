@@ -48,4 +48,4 @@ ENTRYPOINT ["java", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE:prod}", \
   "-cp", ".:lib/*", \
-  "com.chatcrmlite.backend.BackendApplication"]
+  "com.chatcrmlite.backend.ChatCrmBackendApplication"]
