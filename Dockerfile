@@ -15,10 +15,10 @@ RUN --mount=type=cache,target=/root/.m2 \
     jar -xf ../*.jar
 
 # ── Stage 2: Runtime (distroless for minimal attack surface) ──────────────────
-FROM eclipse-temurin:17-jre-alpine AS runtime
+FROM eclipse-temurin:17-jre-jammy AS runtime
 
 # Security: run as non-root user
-RUN addgroup -S crmlite && adduser -S crmlite -G crmlite
+RUN addgroup --system crmlite && adduser --system --ingroup crmlite crmlite
 USER crmlite
 
 WORKDIR /app
