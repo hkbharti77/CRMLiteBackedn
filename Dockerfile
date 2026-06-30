@@ -9,7 +9,7 @@ RUN --mount=type=cache,target=/root/.m2 \
 
 COPY src ./src
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml package -DskipTests -B -q && \
+    mvn -f pom.xml package -Dmaven.test.skip=true -B -q && \
     mkdir -p target/dependency && \
     cd target/dependency && \
     jar -xf ../*.jar
