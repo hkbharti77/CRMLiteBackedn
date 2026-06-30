@@ -35,15 +35,16 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
 
 EXPOSE 8080
 
-# JVM flags optimized for containers:
-#   UseContainerSupport: respects cgroup memory limits
-#   MaxRAMPercentage:    use up to 75% of container RAM for heap
-#   G1GC:               low-latency GC for web apps
-#   ExitOnOutOfMemoryError: crash fast instead of limping
+# JVM flags optimized for 512MB containers:
+#   UseSerialGC: uses minimal memory footprint compared to G1GC
+#   MaxMetaspaceSize: caps class metadata memory
+#   Xss256k: reduces thread stack size
 ENTRYPOINT ["java", \
   "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=75.0", \
-  "-XX:+UseG1GC", \
+  "-XX:MaxRAMPercentage=60.0", \
+  "-XX:+UseSerialGC", \
+  "-XX:MaxMetaspaceSize=128m", \
+  "-Xss256k", \
   "-XX:+ExitOnOutOfMemoryError", \
   "-Djava.security.egd=file:/dev/./urandom", \
   "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE:prod}", \
