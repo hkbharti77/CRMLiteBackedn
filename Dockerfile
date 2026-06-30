@@ -31,7 +31,7 @@ COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes  .
 
 # Health check (hits actuator liveness endpoint)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD wget -qO- http://localhost:8080/actuator/health/liveness | grep -q '"status":"UP"' || exit 1
+  CMD wget -qO- http://localhost:${PORT:-8080}/actuator/health/liveness | grep -q '"status":"UP"' || exit 1
 
 EXPOSE 8080
 
