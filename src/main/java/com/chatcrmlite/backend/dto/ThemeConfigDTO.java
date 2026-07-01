@@ -15,10 +15,12 @@ public class ThemeConfigDTO {
     private String logoUrl;
     private Boolean showWatermark;
     private List<WidgetCtaDTO> ctaButtons;
+    private List<MenuSectionDTO> menuSections;
+    private String aboutUs;
 
     public ThemeConfigDTO() {}
 
-    public ThemeConfigDTO(String primaryColor, String secondaryColor, String accentColor, String backgroundColor, String fontFamily, String nicheIcon, String businessName, String welcomeMessage, String businessSubType, String logoUrl, Boolean showWatermark, List<WidgetCtaDTO> ctaButtons) {
+    public ThemeConfigDTO(String primaryColor, String secondaryColor, String accentColor, String backgroundColor, String fontFamily, String nicheIcon, String businessName, String welcomeMessage, String businessSubType, String logoUrl, Boolean showWatermark, List<WidgetCtaDTO> ctaButtons, List<MenuSectionDTO> menuSections, String aboutUs) {
         this.primaryColor = primaryColor;
         this.secondaryColor = secondaryColor;
         this.accentColor = accentColor;
@@ -31,6 +33,8 @@ public class ThemeConfigDTO {
         this.logoUrl = logoUrl;
         this.showWatermark = showWatermark;
         this.ctaButtons = ctaButtons;
+        this.menuSections = menuSections;
+        this.aboutUs = aboutUs;
     }
 
     public String getPrimaryColor() { return primaryColor; }
@@ -57,6 +61,10 @@ public class ThemeConfigDTO {
     public void setShowWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; }
     public List<WidgetCtaDTO> getCtaButtons() { return ctaButtons; }
     public void setCtaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; }
+    public List<MenuSectionDTO> getMenuSections() { return menuSections; }
+    public void setMenuSections(List<MenuSectionDTO> menuSections) { this.menuSections = menuSections; }
+    public String getAboutUs() { return aboutUs; }
+    public void setAboutUs(String aboutUs) { this.aboutUs = aboutUs; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -75,6 +83,8 @@ public class ThemeConfigDTO {
         private String logoUrl;
         private Boolean showWatermark;
         private List<WidgetCtaDTO> ctaButtons;
+        private List<MenuSectionDTO> menuSections;
+        private String aboutUs;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -88,9 +98,11 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
         public ThemeConfigDTOBuilder showWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; return this; }
         public ThemeConfigDTOBuilder ctaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; return this; }
+        public ThemeConfigDTOBuilder menuSections(List<MenuSectionDTO> menuSections) { this.menuSections = menuSections; return this; }
+        public ThemeConfigDTOBuilder aboutUs(String aboutUs) { this.aboutUs = aboutUs; return this; }
 
         public ThemeConfigDTO build() {
-            return new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, businessSubType, logoUrl, showWatermark, ctaButtons);
+            return new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs);
         }
     }
 }

@@ -1,0 +1,2 @@
+﻿id,tenant_id,plan_id,status,billing_cycle,current_period_start,current_period_end,stripe_subscription_id,razorpay_subscription_id
+1d26b270-3526-4de1-903e-294a9e715d46,9431bdc0-7a42-4f5e-a86a-fc2b174f08bf,PRO,ACTIVE,MONTHLY,2026-06-28 09:55:55.566478,2026-07-28 09:55:55.566478,,order_T6v1A9RLlW9E28

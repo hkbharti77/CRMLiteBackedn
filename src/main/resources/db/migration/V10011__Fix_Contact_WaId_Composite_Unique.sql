@@ -14,5 +14,14 @@ DROP INDEX IF EXISTS contacts_wa_id_key;
 
 -- Step 2: Add the composite unique constraint on (wa_id, owner_id)
 -- This enforces: same phone number is unique per tenant, not globally
-ALTER TABLE contacts
-    ADD CONSTRAINT uk_contact_waid_owner UNIQUE (wa_id, owner_id);
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'uk_contact_waid_owner'
+          AND conrelid = 'contacts'::regclass
+    ) THEN
+        ALTER TABLE contacts
+            ADD CONSTRAINT uk_contact_waid_owner UNIQUE (wa_id, owner_id);
+    END IF;
+END $$;

@@ -1,7 +1,7 @@
 package com.chatcrmlite.backend.services;
 
 import dev.langchain4j.model.embedding.EmbeddingModel;
-
+import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;

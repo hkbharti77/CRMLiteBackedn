@@ -46,8 +46,8 @@ class QuotaEnforcerServiceTest {
         MockitoAnnotations.openMocks(this);
         tenantId = UUID.randomUUID();
 
-        freePlan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false);
-        proPlan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true);
+        freePlan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false, false);
+        proPlan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true, true);
 
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);

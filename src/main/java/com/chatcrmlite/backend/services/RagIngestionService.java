@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.services;
 import com.chatcrmlite.backend.models.DocumentChunk;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.io.RandomAccessReadBuffer;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
@@ -108,7 +109,7 @@ public class RagIngestionService {
 
         try (InputStream is = file.getInputStream()) {
             if (filename.endsWith(".pdf")) {
-                try (PDDocument doc = Loader.loadPDF(is.readAllBytes())) {
+                try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(is.readAllBytes()))) {
                     return new PDFTextStripper().getText(doc);
                 }
             } else if (filename.endsWith(".docx")) {

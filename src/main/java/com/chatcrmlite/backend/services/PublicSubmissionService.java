@@ -1,6 +1,5 @@
 package com.chatcrmlite.backend.services;
 
-import com.chatcrmlite.backend.dto.EnquiryDTO;
 import com.chatcrmlite.backend.event.LeadCreatedEvent;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.Lead;
@@ -14,15 +13,11 @@ import com.chatcrmlite.backend.services.lead.LeadEnquiryService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import com.chatcrmlite.backend.services.ReferenceNumberService;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 public class PublicSubmissionService {

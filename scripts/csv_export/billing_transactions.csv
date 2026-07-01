@@ -1,0 +1,2 @@
+﻿id,tenant_id,amount,currency,status,payment_gateway,gateway_transaction_id,created_at
+5aa710d8-28a9-435d-a931-6abbbb0a015f,9431bdc0-7a42-4f5e-a86a-fc2b174f08bf,2999.00,INR,SUCCESS,RAZORPAY,mock_tx_1782620755474,2026-06-28 09:55:49.480227

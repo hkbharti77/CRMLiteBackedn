@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.services.tenant;
 
 import com.chatcrmlite.backend.models.SubscriptionPlan;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.TenantSubscription;
 import com.chatcrmlite.backend.models.TenantSubscription.SubscriptionStatus;
 import com.chatcrmlite.backend.repositories.*;
@@ -18,6 +19,7 @@ public class QuotaEnforcerService {
 
     private final TenantSubscriptionRepository tenantSubscriptionRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final LeadRepository leadRepository;
     private final BookingRepository bookingRepository;
@@ -45,10 +47,20 @@ public class QuotaEnforcerService {
         TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId).orElse(null);
 
         if (sub == null) {
+            // Guard: verify tenant exists in DB before attempting to insert subscription.
+            // A missing tenant row would violate the FK constraint on tenant_subscriptions.
+            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+            if (tenant == null) {
+                log.warn("⚠️ Cannot initialize FREE plan — tenant {} does not exist in the tenants table. " +
+                         "The tenant may not have been fully registered yet.", tenantId);
+                throw new IllegalStateException(
+                        "Tenant not found: " + tenantId + ". Cannot initialize subscription.");
+            }
+
             log.info("ℹ️ No subscription found for tenant: {}. Initializing FREE plan.", tenantId);
             SubscriptionPlan freePlan = subscriptionPlanRepository.findById("FREE")
                     .orElseGet(() -> {
-                        // Fallback fallback if DB not seeded yet
+                        // Fallback if DB not seeded yet
                         SubscriptionPlan plan = new SubscriptionPlan();
                         plan.setId("FREE");
                         plan.setName("Free Starter Pack");
@@ -61,9 +73,6 @@ public class QuotaEnforcerService {
                         plan.setHasCustomWidget(false);
                         return subscriptionPlanRepository.save(plan);
                     });
-
-            com.chatcrmlite.backend.models.Tenant tenant = new com.chatcrmlite.backend.models.Tenant();
-            tenant.setId(tenantId);
 
             sub = TenantSubscription.builder()
                     .plan(freePlan)

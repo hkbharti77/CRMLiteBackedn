@@ -90,8 +90,6 @@ public class PublicFlowController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
-    // ── Services (for dynamicSource steps) ────────────────────────────────
-
     @GetMapping("/services/{businessId}")
     public ResponseEntity<List<String>> getServices(@PathVariable UUID businessId) {
         return userRepository.findById(businessId)
@@ -101,6 +99,26 @@ public class PublicFlowController {
                             .map(s -> s.getName())
                             .toList();
                     return ResponseEntity.ok(names);
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    // ── Catalog (for Widget Services Menu) ──────────────────────────────────
+    @GetMapping("/catalog/{businessId}")
+    public ResponseEntity<List<com.chatcrmlite.backend.dto.BusinessServiceDTO>> getCatalog(@PathVariable UUID businessId) {
+        return userRepository.findById(businessId)
+                .map(user -> {
+                    List<com.chatcrmlite.backend.dto.BusinessServiceDTO> dtos = businessServiceRepository.findByOwner(user)
+                            .stream()
+                            .map(s -> com.chatcrmlite.backend.dto.BusinessServiceDTO.builder()
+                                    .id(s.getId())
+                                    .name(s.getName())
+                                    .description(s.getDescription())
+                                    .hasImage(s.getImageData() != null && s.getImageData().length > 0)
+                                    .imageUrl(s.getImageUrl())
+                                    .build())
+                            .toList();
+                    return ResponseEntity.ok(dtos);
                 })
                 .orElse(ResponseEntity.notFound().build());
     }

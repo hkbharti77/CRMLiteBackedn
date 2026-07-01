@@ -20,10 +20,18 @@
 
     // ── SVG Icons ─────────────────────────────────────────────────────────
     const ICONS = {
+        menu: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>`,
+        calendar: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>`,
+        briefcase: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>`,
+        info: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>`,
+        settings: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>`,
+        doc: `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>`,
         chat: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>`,
         close: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`,
         send: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>`,
-        clear: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="12" y1="9" x2="12" y2="15"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>`
+        clear: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><line x1="12" y1="9" x2="12" y2="15"></line><line x1="9" y1="12" x2="15" y2="12"></line></svg>`,
+        zoomIn: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 3 21 3 21 9"></polyline><polyline points="9 21 3 21 3 15"></polyline><line x1="21" y1="3" x2="14" y2="10"></line><line x1="3" y1="21" x2="10" y2="14"></line></svg>`,
+        zoomOut: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 14 10 14 10 20"></polyline><polyline points="20 10 14 10 14 4"></polyline><line x1="10" y1="14" x2="3" y2="21"></line><line x1="21" y1="3" x2="14" y2="10"></line></svg>`
     };
 
     const STORAGE_KEY = `crm_chat_history_${businessId}`;
@@ -259,6 +267,109 @@
                 this._setInputEnabled(true);
                 this.mode = 'rag';
             }
+        },
+
+        async startCatalogFlow() {
+            this._addUserBubble('View Services/Products');
+            this.mode = 'catalog';
+            this._setInputEnabled(false);
+            this._setTyping(true);
+
+            try {
+                const res = await fetch(`${API_BASE}/catalog/${businessId}`);
+                this._setTyping(false);
+                if (res.ok) {
+                    const catalog = await res.json();
+                    if (catalog && catalog.length > 0) {
+                        this._addBotBubble('Here is our catalog:');
+                        this._renderCatalog(catalog);
+                    } else {
+                        this._addBotBubble('Our catalog is currently empty.');
+                        this._setInputEnabled(true);
+                        this.mode = 'rag';
+                    }
+                } else {
+                    this._addBotBubble('⚠️ Failed to load catalog.');
+                    this._setInputEnabled(true);
+                    this.mode = 'rag';
+                }
+            } catch (e) {
+                this._setTyping(false);
+                this._addBotBubble('⚠️ Connection error. Please try again.');
+                this._setInputEnabled(true);
+                this.mode = 'rag';
+            }
+        },
+
+        _renderCatalog(catalog) {
+            const container = document.createElement('div');
+            container.className = 'catalog-container';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '10px';
+            container.style.marginTop = '10px';
+
+            catalog.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'catalog-card';
+                card.style.border = '1px solid #e2e8f0';
+                card.style.borderRadius = '8px';
+                card.style.padding = '12px';
+                card.style.background = '#f8fafc';
+                card.style.cursor = 'pointer';
+
+                let imgHtml = '';
+                if (item.hasImage) {
+                    imgHtml = `<img src="/public/images/${item.id}" alt="${item.name}" style="width:100%;height:120px;object-fit:cover;border-radius:4px;margin-bottom:8px;">`;
+                }
+
+                card.innerHTML = `
+                    ${imgHtml}
+                    <div style="font-weight:600;color:#1e293b;font-size:14px;margin-bottom:4px;">${item.name}</div>
+                    <div style="color:#64748b;font-size:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${item.description || ''}</div>
+                `;
+
+                card.onclick = () => this._showCatalogDetails(item);
+                container.appendChild(card);
+            });
+
+            this._messages.appendChild(container);
+            this._messages.scrollTop = this._messages.scrollHeight;
+            this._setInputEnabled(true);
+            this.mode = 'rag';
+        },
+
+        _showCatalogDetails(item) {
+            this._addUserBubble(`Tell me more about ${item.name}`);
+            
+            const container = document.createElement('div');
+            container.className = 'catalog-details message bot';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            
+            let imgHtml = '';
+            if (item.hasImage) {
+                imgHtml = `<img src="/public/images/${item.id}" alt="${item.name}" style="width:100%;max-height:200px;object-fit:cover;border-radius:8px;margin-bottom:12px;">`;
+            }
+
+            container.innerHTML = `
+                ${imgHtml}
+                <div style="font-weight:600;font-size:16px;margin-bottom:8px;color:#1e293b;">${item.name}</div>
+                <div style="font-size:14px;color:#475569;white-space:pre-wrap;line-height:1.5;">${item.description || 'No additional details available.'}</div>
+            `;
+
+            this._messages.appendChild(container);
+            this._messages.scrollTop = this._messages.scrollHeight;
+        },
+
+        startAboutFlow(aboutUsText) {
+            this._addUserBubble('About Us');
+            if (aboutUsText && aboutUsText.trim() !== '') {
+                this._addBotBubble(aboutUsText);
+            } else {
+                this._addBotBubble('Information about our business is coming soon!');
+            }
+            this.mode = 'rag';
         },
 
         async renderSupportStep(index) {
@@ -793,6 +904,7 @@
                         <span class="chat-header-title">${theme.businessName}</span>
                     </div>
                     <div style="display:flex; gap:12px; align-items:center;">
+                        <button id="chat-zoom" title="Zoom" style="background:none;border:none;color:white;cursor:pointer;opacity:0.8;display:flex;">${ICONS.zoomIn}</button>
                         <button id="chat-clear" title="New thread" style="background:none;border:none;color:white;cursor:pointer;opacity:0.8;display:flex;">${ICONS.clear}</button>
                         <button id="chat-close" style="background:none;border:none;color:white;cursor:pointer;display:flex;">${ICONS.close}</button>
                     </div>
@@ -804,6 +916,7 @@
                     </div>
                 </div>
                 <div class="chat-input-container">
+                    <button id="chat-menu" class="chat-menu-btn" title="Menu" style="background:none;border:none;color:#64748b;cursor:pointer;padding:8px 0 8px 8px;display:flex;align-items:center;justify-content:center;">${ICONS.menu}</button>
                     <input type="text" id="chat-input" class="chat-input" placeholder="Loading..." autocomplete="off" disabled>
                     <button id="chat-send" class="send-btn" disabled>${ICONS.send}</button>
                 </div>
@@ -817,6 +930,16 @@
                         </div>
                     </div>
                 </div>
+                <div class="chat-menu-overlay" id="chat-menu-overlay">
+                    <div class="chat-header" style="border-radius: 24px 24px 0 0;">
+                        <div class="chat-header-info">
+                            <div class="niche-icon-wrap">${theme.nicheIcon}</div>
+                            <span class="chat-header-title">${theme.businessName}</span>
+                        </div>
+                        <button id="chat-menu-close" style="background:none;border:none;color:white;cursor:pointer;display:flex;opacity:0.8;">${ICONS.close}</button>
+                    </div>
+                    <div class="chat-menu-body" id="chat-menu-body"></div>
+                </div>
             </div>
         `;
 
@@ -827,7 +950,69 @@
 
         flowEngine.attachToDOM(messages, input, document.getElementById('chat-send'), document.getElementById('typing'));
 
-        // Event listeners
+        const menuOverlay = document.getElementById('chat-menu-overlay');
+        const menuBody = document.getElementById('chat-menu-body');
+
+        function renderMenuOverlay() {
+            menuBody.innerHTML = ''; // Clear previous content
+            if (theme.menuSections && theme.menuSections.length > 0) {
+                theme.menuSections.forEach(section => {
+                    const sectionEl = document.createElement('div');
+                    sectionEl.className = 'menu-section';
+                    
+                    const titleEl = document.createElement('div');
+                    titleEl.className = 'menu-section-title';
+                    titleEl.textContent = section.title;
+                    sectionEl.appendChild(titleEl);
+
+                    const gridEl = document.createElement('div');
+                    gridEl.className = 'menu-cards-grid';
+
+                    section.cards.forEach(card => {
+                        const cardEl = document.createElement('div');
+                        cardEl.className = 'menu-card';
+                        cardEl.innerHTML = `
+                            <div class="menu-card-icon">${ICONS[card.icon] || ICONS.briefcase}</div>
+                            <div class="menu-card-title">${card.title}</div>
+                            <div class="menu-card-subtitle">${card.subtitle}</div>
+                        `;
+                        
+                        cardEl.onclick = () => {
+                            menuOverlay.classList.remove('active');
+                            if (card.actionType === 'FLOW') {
+                                flowEngine.startFlow(card.actionPayload, card.title);
+                            } else if (card.actionType === 'SUPPORT') {
+                                flowEngine.startSupportFlow();
+                            } else if (card.actionType === 'CATALOG') {
+                                flowEngine.startCatalogFlow();
+                            } else if (card.actionType === 'ABOUT') {
+                                flowEngine.startAboutFlow(theme.aboutUs);
+                            } else if (card.actionType === 'LINK') {
+                                window.open(card.actionPayload, '_blank');
+                            }
+                        };
+                        
+                        gridEl.appendChild(cardEl);
+                    });
+                    
+                    sectionEl.appendChild(gridEl);
+                    menuBody.appendChild(sectionEl);
+                });
+            } else {
+                menuBody.innerHTML = '<div style="padding:20px;text-align:center;color:#64748b;font-size:14px;">No options available.</div>';
+            }
+        }
+        
+        // Initial render (will show "No options" until fetch completes)
+        renderMenuOverlay();
+
+        document.getElementById('chat-menu').onclick = () => {
+            menuOverlay.classList.add('active');
+        };
+        document.getElementById('chat-menu-close').onclick = () => {
+            menuOverlay.classList.remove('active');
+        };
+
         toggle.onclick = () => {
             panel.classList.toggle('open');
             if (panel.classList.contains('open')) {
@@ -855,6 +1040,17 @@
         document.getElementById('chat-confirm-ok').onclick = () => {
             document.getElementById('chat-confirm-overlay').classList.remove('active');
             flowEngine.restart();
+        };
+
+        // Zoom toggle
+        const zoomBtn = document.getElementById('chat-zoom');
+        let isZoomed = false;
+        zoomBtn.onclick = () => {
+            isZoomed = !isZoomed;
+            panel.classList.toggle('zoomed', isZoomed);
+            zoomBtn.innerHTML = isZoomed ? ICONS.zoomOut : ICONS.zoomIn;
+            zoomBtn.title = isZoomed ? 'Zoom Out' : 'Zoom In';
+            messages.scrollTop = messages.scrollHeight;
         };
 
         const sendMessage = async () => {
@@ -905,15 +1101,22 @@
                 const t = await tRes.json();
                 theme = { ...theme, ...t };
                 document.documentElement.style.setProperty('--primary-color', theme.primaryColor);
-                document.querySelector('.chat-header-title').textContent = theme.businessName;
                 
-                const iconWrap = document.getElementById('chat-header-icon');
-                if (theme.logoUrl) {
-                    iconWrap.innerHTML = `<img src="${theme.logoUrl}" alt="Logo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
-                    iconWrap.style.background = 'transparent';
-                } else {
-                    iconWrap.textContent = theme.nicheIcon;
-                }
+                document.querySelectorAll('.chat-header-title').forEach(el => {
+                    el.textContent = theme.businessName;
+                });
+                
+                document.querySelectorAll('.niche-icon-wrap').forEach(iconWrap => {
+                    if (theme.logoUrl) {
+                        iconWrap.innerHTML = `<img src="${theme.logoUrl}" alt="Logo" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">`;
+                        iconWrap.style.background = 'transparent';
+                    } else {
+                        iconWrap.textContent = theme.nicheIcon;
+                    }
+                });
+
+                // Render dynamic menu cards after theme is loaded
+                renderMenuOverlay();
 
                 if (theme.showWatermark) {
                     const watermark = document.createElement('div');

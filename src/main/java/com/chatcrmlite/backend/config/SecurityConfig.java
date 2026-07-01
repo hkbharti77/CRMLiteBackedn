@@ -176,6 +176,7 @@ public class SecurityConfig {
         publicConfig.setAllowCredentials(false);
         publicConfig.setMaxAge(3600L);
         source.registerCorsConfiguration("/api/v1/public/**", publicConfig);
+        source.registerCorsConfiguration("/public/**", publicConfig);
         
         // Private API CORS - Restricted Origins
         source.registerCorsConfiguration("/**", configuration);
