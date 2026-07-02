@@ -12,6 +12,7 @@ import java.util.UUID;
 public interface CustomMenuCardRepository extends JpaRepository<CustomMenuCard, UUID> {
 
     /** Returns all cards for a tenant in display order (lowest number first). */
+    List<CustomMenuCard> findByTenantAndSectionOrderByDisplayOrderAsc(Tenant tenant, String section);
     List<CustomMenuCard> findByTenantOrderByDisplayOrderAsc(Tenant tenant);
 
     /** Returns only cards for a specific section (e.g. "SERVICES"). */

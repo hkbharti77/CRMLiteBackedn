@@ -199,30 +199,7 @@ public class NicheThemeService {
             }
         } else {
             // Fall back to niche-based default cards
-            switch (slug) {
-                case "real-estate", "property-brokers" ->
-                    serviceCards.add(new MenuCardDTO("Property Listings", "View our properties", "home", "CATALOG", "services"));
-                case "dental-clinics" ->
-                    serviceCards.add(new MenuCardDTO("Dental Services", "View our treatments", "briefcase", "CATALOG", "services"));
-                case "auto-used-car-dealers" ->
-                    serviceCards.add(new MenuCardDTO("View Inventory", "Browse used cars", "briefcase", "CATALOG", "services"));
-                case "freelance-web-graphic-designers" ->
-                    serviceCards.add(new MenuCardDTO("Portfolio", "View past work", "briefcase", "CATALOG", "services"));
-                case "retail" ->
-                    serviceCards.add(new MenuCardDTO("Product Catalog", "Browse products", "briefcase", "CATALOG", "services"));
-                case "premium-salons-hair-clinics", "freelance-makeup-artists-mua" ->
-                    serviceCards.add(new MenuCardDTO("Service Menu", "View all services", "briefcase", "CATALOG", "services"));
-                case "yoga-meditation-instructors", "music-art-classes" ->
-                    serviceCards.add(new MenuCardDTO("View Classes", "See our schedule", "calendar", "CATALOG", "services"));
-                case "premium-tour-travel-operators", "event-wedding-planners" ->
-                    serviceCards.add(new MenuCardDTO("View Packages", "Explore our offers", "briefcase", "CATALOG", "services"));
-                case "solar-panel-smart-home-installers" ->
-                    serviceCards.add(new MenuCardDTO("Our Products", "See what we install", "briefcase", "CATALOG", "services"));
-                default ->
-                    serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
-            }
-            // Always add About Us for all niches in the default case
-            serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
+            serviceCards.addAll(getDefaultServiceCards(slug));
         }
 
         sections.add(new MenuSectionDTO("SERVICES", serviceCards));
@@ -234,6 +211,35 @@ public class NicheThemeService {
         sections.add(new MenuSectionDTO("RESOURCES", resourceCards));
 
         return sections;
+    }
+
+    public List<MenuCardDTO> getDefaultServiceCards(String slug) {
+        List<MenuCardDTO> serviceCards = new ArrayList<>();
+        switch (slug) {
+            case "real-estate", "property-brokers" ->
+                serviceCards.add(new MenuCardDTO("Property Listings", "View our properties", "home", "CATALOG", "services"));
+            case "dental-clinics" ->
+                serviceCards.add(new MenuCardDTO("Dental Services", "View our treatments", "briefcase", "CATALOG", "services"));
+            case "auto-used-car-dealers" ->
+                serviceCards.add(new MenuCardDTO("View Inventory", "Browse used cars", "briefcase", "CATALOG", "services"));
+            case "freelance-web-graphic-designers" ->
+                serviceCards.add(new MenuCardDTO("Portfolio", "View past work", "briefcase", "CATALOG", "services"));
+            case "retail" ->
+                serviceCards.add(new MenuCardDTO("Product Catalog", "Browse products", "briefcase", "CATALOG", "services"));
+            case "premium-salons-hair-clinics", "freelance-makeup-artists-mua" ->
+                serviceCards.add(new MenuCardDTO("Service Menu", "View all services", "briefcase", "CATALOG", "services"));
+            case "yoga-meditation-instructors", "music-art-classes" ->
+                serviceCards.add(new MenuCardDTO("View Classes", "See our schedule", "calendar", "CATALOG", "services"));
+            case "premium-tour-travel-operators", "event-wedding-planners" ->
+                serviceCards.add(new MenuCardDTO("View Packages", "Explore our offers", "briefcase", "CATALOG", "services"));
+            case "solar-panel-smart-home-installers" ->
+                serviceCards.add(new MenuCardDTO("Our Products", "See what we install", "briefcase", "CATALOG", "services"));
+            default ->
+                serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
+        }
+        // Always add About Us for all niches in the default case
+        serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
+        return serviceCards;
     }
 
     private record NicheTheme(String primary, String secondary, String accent, String font, String icon) {}

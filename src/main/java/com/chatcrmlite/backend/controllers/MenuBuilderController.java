@@ -6,6 +6,8 @@ import com.chatcrmlite.backend.models.CustomMenuCard;
 import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.CustomMenuCardRepository;
+import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.services.NicheThemeService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -34,33 +36,55 @@ public class MenuBuilderController {
     @Autowired
     private CustomMenuCardRepository menuCardRepository;
 
+    @Autowired
+    private UserRepository userRepository;
+
+    @Autowired
+    private NicheThemeService nicheThemeService;
+
     // ── GET — fetch current custom cards ─────────────────────────────────────
 
     @GetMapping
-    public ResponseEntity<List<MenuCardDTO>> getMenuCards(
-            @AuthenticationPrincipal User user) {
+    public ResponseEntity<Map<String, Object>> getMenuCards(
+            @AuthenticationPrincipal String email) {
 
+        User user = userRepository.findByEmailWithTenant(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
         Tenant tenant = user.getTenant();
         if (tenant == null) {
             return ResponseEntity.badRequest().build();
         }
 
         List<MenuCardDTO> cards = menuCardRepository
-                .findByTenantOrderByDisplayOrderAsc(tenant)
+                .findByTenantAndSectionOrderByDisplayOrderAsc(tenant, "SERVICES")
                 .stream()
                 .map(this::toDTO)
                 .collect(Collectors.toList());
 
-        return ResponseEntity.ok(cards);
+        Map<String, Object> response = new java.util.HashMap<>();
+        if (cards.isEmpty()) {
+            String slug = (user.getBusinessSubType() != null && !user.getBusinessSubType().isBlank()) 
+                            ? user.getBusinessSubType() 
+                            : "retail";
+            cards = nicheThemeService.getDefaultServiceCards(slug);
+            response.put("isCustom", false);
+        } else {
+            response.put("isCustom", true);
+        }
+        
+        response.put("cards", cards);
+        return ResponseEntity.ok(response);
     }
 
     // ── POST — bulk-replace cards ─────────────────────────────────────────────
 
     @PostMapping
     public ResponseEntity<Map<String, Object>> saveMenuCards(
-            @AuthenticationPrincipal User user,
+            @AuthenticationPrincipal String email,
             @Valid @RequestBody List<MenuCardRequest> requests) {
 
+        User user = userRepository.findByEmailWithTenant(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
         Tenant tenant = user.getTenant();
         if (tenant == null) {
             return ResponseEntity.badRequest().body(Map.of("error", "Tenant not found"));
@@ -95,8 +119,10 @@ public class MenuBuilderController {
 
     @DeleteMapping
     public ResponseEntity<Map<String, String>> resetMenuCards(
-            @AuthenticationPrincipal User user) {
+            @AuthenticationPrincipal String email) {
 
+        User user = userRepository.findByEmailWithTenant(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
         Tenant tenant = user.getTenant();
         if (tenant == null) {
             return ResponseEntity.badRequest().build();
