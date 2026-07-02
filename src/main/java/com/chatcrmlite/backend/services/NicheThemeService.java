@@ -1,8 +1,11 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.dto.ThemeConfigDTO;
+import com.chatcrmlite.backend.models.CustomMenuCard;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.repositories.CustomMenuCardRepository;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import org.springframework.stereotype.Service;
 
@@ -27,6 +30,9 @@ public class NicheThemeService {
 
     @Autowired
     private FlowTemplateEngine templateEngine;
+
+    @Autowired
+    private CustomMenuCardRepository customMenuCardRepository;
 
     private static final Map<String, NicheTheme> THEMES = new HashMap<>();
 
@@ -172,37 +178,53 @@ public class NicheThemeService {
             sections.add(new MenuSectionDTO("CONNECT", connectCards));
         }
 
-        // 2. SERVICES SECTION (Niche-based)
+        // 2. SERVICES SECTION
+        // Priority: tenant's custom cards > niche defaults
+        Tenant tenant = user.getTenant();
         List<MenuCardDTO> serviceCards = new ArrayList<>();
-        switch (slug) {
-            case "real-estate":
-                serviceCards.add(new MenuCardDTO("Property Listings", "View our properties", "home", "CATALOG", "properties"));
-                serviceCards.add(new MenuCardDTO("Consultation", "Talk to an agent", "user", "CATALOG", "consult"));
-                break;
-            case "dental-clinics":
-                serviceCards.add(new MenuCardDTO("Dental Services", "View our treatments", "briefcase", "CATALOG", "services"));
-                serviceCards.add(new MenuCardDTO("Teeth Whitening", "Special offers", "info", "CATALOG", "offers"));
-                break;
-            case "auto-used-car-dealers":
-                serviceCards.add(new MenuCardDTO("View Inventory", "Browse used cars", "briefcase", "CATALOG", "inventory"));
-                serviceCards.add(new MenuCardDTO("Finance Options", "Apply for loan", "info", "CATALOG", "finance"));
-                break;
-            case "freelance-web-graphic-designers":
-                serviceCards.add(new MenuCardDTO("Portfolio", "View past work", "briefcase", "CATALOG", "portfolio"));
-                serviceCards.add(new MenuCardDTO("Design Packages", "See our pricing", "info", "CATALOG", "pricing"));
-                break;
-            case "retail":
-                serviceCards.add(new MenuCardDTO("Product Catalog", "Browse products", "shopping-cart", "CATALOG", "products"));
-                serviceCards.add(new MenuCardDTO("Current Deals", "Today's offers", "tag", "CATALOG", "deals"));
-                break;
-            default:
-                serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
-                break;
+
+        boolean hasCustomCards = tenant != null && customMenuCardRepository.existsByTenant(tenant);
+
+        if (hasCustomCards) {
+            // Use tenant's custom-built cards
+            List<CustomMenuCard> customCards = customMenuCardRepository
+                    .findByTenantAndSectionOrderByDisplayOrderAsc(tenant, "SERVICES");
+            for (CustomMenuCard c : customCards) {
+                serviceCards.add(new MenuCardDTO(c.getTitle(), c.getSubtitle(), c.getIcon(), c.getActionType(), c.getActionPayload()));
+            }
+            // Always append About Us if the tenant hasn't added it themselves
+            boolean hasAbout = customCards.stream().anyMatch(c -> "ABOUT".equals(c.getActionType()));
+            if (!hasAbout) {
+                serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
+            }
+        } else {
+            // Fall back to niche-based default cards
+            switch (slug) {
+                case "real-estate", "property-brokers" ->
+                    serviceCards.add(new MenuCardDTO("Property Listings", "View our properties", "home", "CATALOG", "services"));
+                case "dental-clinics" ->
+                    serviceCards.add(new MenuCardDTO("Dental Services", "View our treatments", "briefcase", "CATALOG", "services"));
+                case "auto-used-car-dealers" ->
+                    serviceCards.add(new MenuCardDTO("View Inventory", "Browse used cars", "briefcase", "CATALOG", "services"));
+                case "freelance-web-graphic-designers" ->
+                    serviceCards.add(new MenuCardDTO("Portfolio", "View past work", "briefcase", "CATALOG", "services"));
+                case "retail" ->
+                    serviceCards.add(new MenuCardDTO("Product Catalog", "Browse products", "briefcase", "CATALOG", "services"));
+                case "premium-salons-hair-clinics", "freelance-makeup-artists-mua" ->
+                    serviceCards.add(new MenuCardDTO("Service Menu", "View all services", "briefcase", "CATALOG", "services"));
+                case "yoga-meditation-instructors", "music-art-classes" ->
+                    serviceCards.add(new MenuCardDTO("View Classes", "See our schedule", "calendar", "CATALOG", "services"));
+                case "premium-tour-travel-operators", "event-wedding-planners" ->
+                    serviceCards.add(new MenuCardDTO("View Packages", "Explore our offers", "briefcase", "CATALOG", "services"));
+                case "solar-panel-smart-home-installers" ->
+                    serviceCards.add(new MenuCardDTO("Our Products", "See what we install", "briefcase", "CATALOG", "services"));
+                default ->
+                    serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
+            }
+            // Always add About Us for all niches in the default case
+            serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
         }
 
-        // Add "About Us" for ALL tenants
-        serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
-        
         sections.add(new MenuSectionDTO("SERVICES", serviceCards));
 
         // 3. RESOURCES SECTION
