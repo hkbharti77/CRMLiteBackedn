@@ -24,8 +24,9 @@ public class AiWarmupConfig {
         TenantContext.setAdminMode(true);
         try {
             log.info("[AI-Warmup] Initializing and fixing DB constraints...");
+            jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
             jdbcTemplate.execute("ALTER TABLE document_chunks DROP CONSTRAINT IF EXISTS content_length_limit");
-            log.info("[AI-Warmup] Successfully dropped content_length_limit constraint.");
+            log.info("[AI-Warmup] Successfully dropped content_length_limit constraint and initialized pg_trgm.");
             
             // ENSURE business_services TABLE EXISTS (Critical Fallback)
             jdbcTemplate.execute(

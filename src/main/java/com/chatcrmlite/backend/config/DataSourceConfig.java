@@ -38,21 +38,23 @@ public class DataSourceConfig {
 
     @Bean
     @Primary
-    public DataSource dataSource() {
+    public DataSource dataSource(
+            @org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource,
+            @org.springframework.beans.factory.annotation.Qualifier("readerDataSource") DataSource readerDataSource) {
         RoutingDataSource routingDataSource = new RoutingDataSource();
         Map<Object, Object> dataSourceMap = new HashMap<>();
-        dataSourceMap.put(DataSourceType.WRITER, writerDataSource());
-        dataSourceMap.put(DataSourceType.READER, readerDataSource());
+        dataSourceMap.put(DataSourceType.WRITER, writerDataSource);
+        dataSourceMap.put(DataSourceType.READER, readerDataSource);
         
         routingDataSource.setTargetDataSources(dataSourceMap);
-        routingDataSource.setDefaultTargetDataSource(writerDataSource());
+        routingDataSource.setDefaultTargetDataSource(writerDataSource);
         return routingDataSource;
     }
 
     @Bean
     @QuartzDataSource
-    public DataSource quartzDataSource() {
-        return writerDataSource();
+    public DataSource quartzDataSource(@org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource) {
+        return writerDataSource;
     }
 
     public enum DataSourceType {

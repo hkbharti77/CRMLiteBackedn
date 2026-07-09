@@ -41,6 +41,12 @@ public interface WhatsAppConfigRepository extends JpaRepository<WhatsAppConfig, 
     @Query("SELECT u.id FROM WhatsAppConfig w JOIN w.tenant t JOIN t.users u WHERE w.phoneNumberId = :phoneNumberId AND u.role = 'OWNER'")
     Optional<UUID> findOwnerIdByPhoneNumberId(@Param("phoneNumberId") String phoneNumberId);
 
+    /**
+     * Returns just the tenant ID for a given phone number ID.
+     */
+    @Query("SELECT t.id FROM WhatsAppConfig w JOIN w.tenant t WHERE w.phoneNumberId = :phoneNumberId")
+    Optional<UUID> findTenantIdByPhoneNumberId(@Param("phoneNumberId") String phoneNumberId);
+
     @Cacheable(value = "whatsapp_verify_tokens", key = "#verifyToken")
     boolean existsByVerifyToken(String verifyToken);
 

@@ -34,6 +34,12 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<String> findPlanTypeByUserId(@Param("userId") UUID userId);
 
     /**
+     * Fetches the plan type directly using the tenant ID.
+     */
+    @Query(value = "SELECT plan_type FROM tenants WHERE id = :tenantId", nativeQuery = true)
+    Optional<String> findPlanTypeByTenantId(@Param("tenantId") UUID tenantId);
+
+    /**
      * Check if another tenant (not this one) uses the same 4-character business name prefix.
      * Used for collision detection in reference number generation.
      * Returns true if collision exists, false otherwise.
@@ -43,4 +49,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT COUNT(u) FROM User u WHERE u.tenant.id = :tenantId")
     long countByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Query(value = "SELECT id FROM app_users WHERE tenant_id = :tenantId LIMIT 1", nativeQuery = true)
+    Optional<UUID> findFirstUserIdByTenantId(@Param("tenantId") UUID tenantId);
 }

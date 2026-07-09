@@ -1,5 +1,4 @@
 CREATE EXTENSION IF NOT EXISTS vector;
-DROP TABLE IF EXISTS document_chunks CASCADE;
 
 -- ShedLock table: required for distributed scheduled task locking
 CREATE TABLE IF NOT EXISTS shedlock (

@@ -160,6 +160,8 @@ public class GuardrailServiceImpl implements GuardrailService {
         // If the user explicitly asks for the menu or intents strictly dictate it, return MENU
         if (intents.contains("menu")) return Decision.MENU;
         
+        if (intents.contains("greeting")) return Decision.GREETING;
+        
         // Otherwise, trust the RAG LLM to handle the query and respond
         return Decision.CALL_AI;
     }

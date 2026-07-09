@@ -13,6 +13,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -46,6 +48,7 @@ public class PaymentWebhookController {
     private final TicketRepository ticketRepository;
     private final CustomEmailRepository customEmailRepository;
     private final ObjectMapper objectMapper;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${razorpay.webhook.secret}")
     private String razorpayWebhookSecret;
@@ -381,6 +384,7 @@ public class PaymentWebhookController {
         if (razorpaySubId != null) sub.setRazorpaySubscriptionId(razorpaySubId);
 
         tenantSubscriptionRepository.save(sub);
+        eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         log.info("✅ Tenant {} subscription updated to plan: {} until {}", tenantId, planId, sub.getCurrentPeriodEnd());
     }
 

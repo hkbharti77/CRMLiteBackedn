@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.config;
 
 import com.chatcrmlite.backend.security.AuthTokenFilter;
+import com.chatcrmlite.backend.security.PlatformAuthFilter;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,6 +53,11 @@ public class SecurityConfig {
     }
 
     @Bean
+    public PlatformAuthFilter platformAuthFilter() {
+        return new PlatformAuthFilter();
+    }
+
+    @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder(12); // cost factor 12 — adequate for 2024+ hardware
     }
@@ -61,7 +67,35 @@ public class SecurityConfig {
         return authConfig.getAuthenticationManager();
     }
 
+    /**
+     * Security filter chain for the PLATFORM (Super Admin) routes.
+     * Applies BEFORE the tenant filter chain (higher @Order = higher priority).
+     *
+     * - Only covers /api/v1/platform/**
+     * - Uses PlatformAuthFilter (HttpOnly cookie, platform JWT claim)
+     * - Requires ROLE_PLATFORM_ADMIN for all platform routes
+     * - /api/v1/platform/auth/login is the only public endpoint
+     */
     @Bean
+    @org.springframework.core.annotation.Order(1)
+    public SecurityFilterChain platformFilterChain(HttpSecurity http) throws Exception {
+        http
+            .securityMatcher("/api/v1/platform/**")
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            .csrf(csrf -> csrf.disable())
+            .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/api/v1/platform/auth/login").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
+                .anyRequest().hasRole("PLATFORM_ADMIN")
+            )
+            .addFilterBefore(platformAuthFilter(), UsernamePasswordAuthenticationFilter.class);
+        return http.build();
+    }
+
+    /** Tenant + public filter chain (existing — unchanged). */
+    @Bean
+    @org.springframework.core.annotation.Order(2)
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
             // ── CORS ─────────────────────────────────────────────────────────────
@@ -154,7 +188,12 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        List<String> origins = Arrays.asList(allowedOrigins.split(","));
+        // Merge allowed origins: env var + always include the owner panel origin
+        String rawOrigins = allowedOrigins + ",http://localhost:3001";
+        List<String> origins = Arrays.stream(rawOrigins.split(","))
+            .map(String::trim)
+            .distinct()
+            .toList();
 
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(origins);

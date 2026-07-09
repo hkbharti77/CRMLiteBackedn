@@ -30,4 +30,5 @@ public interface LeadService {
     Lead updateDealInfo(UUID leadId, DealUpdateDTO dto, User owner);
     RevenueReportDTO getRevenueReport(User owner);
     void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData);
+    Lead rescoreLead(UUID leadId, User owner);
 }

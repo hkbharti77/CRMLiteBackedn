@@ -58,6 +58,10 @@ public class WorkflowOrchestrator {
                     log.info("Tenant {} plan does not support RAG LLM. Routing to menu/flow.", tenantId);
                 }
             } catch (Exception e) {
+                if (e instanceof IllegalStateException && e.getMessage().contains("Tenant not found")) {
+                    log.warn("Aborting workflow: Tenant {} not found in database.", tenantId);
+                    return;
+                }
                 log.warn("Failed to check subscription for RAG LLM, defaulting to AI if applicable", e);
             }
         }

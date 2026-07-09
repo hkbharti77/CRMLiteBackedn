@@ -15,9 +15,6 @@ public interface CustomMenuCardRepository extends JpaRepository<CustomMenuCard, 
     List<CustomMenuCard> findByTenantAndSectionOrderByDisplayOrderAsc(Tenant tenant, String section);
     List<CustomMenuCard> findByTenantOrderByDisplayOrderAsc(Tenant tenant);
 
-    /** Returns only cards for a specific section (e.g. "SERVICES"). */
-    List<CustomMenuCard> findByTenantAndSectionOrderByDisplayOrderAsc(Tenant tenant, String section);
-
     /** Check whether a tenant has ANY custom cards at all. */
     boolean existsByTenant(Tenant tenant);
 

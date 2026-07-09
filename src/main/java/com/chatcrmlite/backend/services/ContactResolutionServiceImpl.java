@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import org.springframework.dao.DataIntegrityViolationException;
+
 import java.util.Optional;
 
 @Slf4j
@@ -36,7 +38,13 @@ public class ContactResolutionServiceImpl implements ContactResolutionService {
                 .source("WhatsApp")
                 .owner(owner)
                 .build();
-        return contactRepository.save(newContact);
+        try {
+            return contactRepository.save(newContact);
+        } catch (DataIntegrityViolationException e) {
+            log.warn("Race condition during contact creation for waId {}, fetching existing...", waId);
+            return contactRepository.findByWaIdAndOwner(waId, owner)
+                    .orElseThrow(() -> new RuntimeException("Contact creation failed and not found: " + waId));
+        }
     }
 
     @Override

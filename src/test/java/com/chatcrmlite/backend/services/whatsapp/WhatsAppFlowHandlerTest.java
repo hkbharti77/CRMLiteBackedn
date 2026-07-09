@@ -73,7 +73,7 @@ class WhatsAppFlowHandlerTest {
                 .accessToken("token")
                 .phoneNumberId("phone-id")
                 .build();
-        when(whatsappConfigRepository.findByUserId(owner.getId())).thenReturn(Optional.of(config));
+        when(whatsappConfigRepository.findByTenantId(owner.getId())).thenReturn(Optional.of(config));
         when(contactRepository.findByWaIdAndOwner("919900000000", owner)).thenReturn(Optional.of(contact));
         when(flowStateMachine.processFlow(contact, owner, "Need a website", null, false)).thenReturn(true);
 

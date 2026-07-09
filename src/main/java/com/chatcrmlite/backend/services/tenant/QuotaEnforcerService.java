@@ -7,8 +7,9 @@ import com.chatcrmlite.backend.models.TenantSubscription.SubscriptionStatus;
 import com.chatcrmlite.backend.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -26,6 +27,7 @@ public class QuotaEnforcerService {
     private final AppointmentRepository appointmentRepository;
     private final TicketRepository ticketRepository;
     private final CustomEmailRepository customEmailRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public static class QuotaExceededException extends RuntimeException {
         public QuotaExceededException(String message) {
@@ -64,6 +66,8 @@ public class QuotaEnforcerService {
                         SubscriptionPlan plan = new SubscriptionPlan();
                         plan.setId("FREE");
                         plan.setName("Free Starter Pack");
+                        plan.setPriceMonthly(java.math.BigDecimal.ZERO);
+                        plan.setPriceYearly(java.math.BigDecimal.ZERO);
                         plan.setEmployeeLimit(1);
                         plan.setPrimaryResourceLimit(100);
                         plan.setSecondaryResourceLimit(15);
@@ -84,6 +88,7 @@ public class QuotaEnforcerService {
                     .build();
 
             sub = tenantSubscriptionRepository.save(sub);
+            eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         }
 
         // Validate subscription status
@@ -103,6 +108,7 @@ public class QuotaEnforcerService {
                 sub.setCurrentPeriodStart(LocalDateTime.now());
                 sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
                 sub = tenantSubscriptionRepository.save(sub);
+                eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
             }
         }
 

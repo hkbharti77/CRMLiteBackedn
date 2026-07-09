@@ -14,16 +14,18 @@ public class TenantWorkerPoolManager {
     private final com.github.benmanes.caffeine.cache.Cache<String, ThreadPoolTaskExecutor> poolCache;
     private final TenantTierService tierService;
 
-    public TenantWorkerPoolManager(TenantTierService tierService) {
+    public TenantWorkerPoolManager(TenantTierService tierService, io.micrometer.core.instrument.MeterRegistry meterRegistry) {
         this.tierService = tierService;
         this.poolCache = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
                 .expireAfterAccess(java.time.Duration.ofHours(2))
+                .recordStats()
                 .removalListener((key, value, cause) -> {
                     if (value instanceof ThreadPoolTaskExecutor executor) {
                         executor.shutdown();
                     }
                 })
                 .build();
+        io.micrometer.core.instrument.binder.cache.CaffeineCacheMetrics.monitor(meterRegistry, poolCache, "tenant_worker_pool");
     }
 
     public Executor getExecutor(UUID tenantId) {

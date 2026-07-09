@@ -406,7 +406,12 @@
                 if (isOptional) {
                     options.push('Skip');
                 }
+                options.push('Cancel');
                 this._renderButtons(options, (val) => {
+                    if (val === 'Cancel') {
+                        this.handleFreeTextInput('Cancel');
+                        return;
+                    }
                     if (val === 'Skip') {
                         this.collectedData[step.key] = '';
                     } else {
@@ -420,14 +425,22 @@
                 this._input.placeholder = 'Type here...';
                 this._input.focus();
 
+                const btnOpts = [];
                 // For optional phone step, render a Skip button
                 if (step.key === 'phone' && (!this.supportConfig || this.supportConfig.phoneRequired === false)) {
-                    this._renderButtons(['Skip'], (val) => {
-                        this.collectedData[step.key] = '';
-                        this._addUserBubble('Skip');
-                        this.renderSupportStep(index + 1);
-                    });
+                    btnOpts.push('Skip');
                 }
+                btnOpts.push('Cancel');
+                
+                this._renderButtons(btnOpts, (val) => {
+                    if (val === 'Cancel') {
+                        this.handleFreeTextInput('Cancel');
+                        return;
+                    }
+                    this.collectedData[step.key] = '';
+                    this._addUserBubble('Skip');
+                    this.renderSupportStep(index + 1);
+                });
             }
         },
 
@@ -475,7 +488,12 @@
                 if (!step.required) {
                     options.push('Skip');
                 }
+                options.push('Cancel');
                 this._renderButtons(options, (selected) => {
+                    if (selected === 'Cancel') {
+                        this.handleFreeTextInput('Cancel');
+                        return;
+                    }
                     this.recordAnswer(step.dataKey, selected);
                     this.advance();
                 }, true);
@@ -484,12 +502,20 @@
                 this._input.placeholder = 'Type here...';
                 this._input.focus();
 
+                const btnOpts = [];
                 if (!step.required) {
-                    this._renderButtons(['Skip'], (val) => {
-                        this.recordAnswer(step.dataKey, val);
-                        this.advance();
-                    });
+                    btnOpts.push('Skip');
                 }
+                btnOpts.push('Cancel');
+
+                this._renderButtons(btnOpts, (val) => {
+                    if (val === 'Cancel') {
+                        this.handleFreeTextInput('Cancel');
+                        return;
+                    }
+                    this.recordAnswer(step.dataKey, val);
+                    this.advance();
+                });
             }
         },
 
@@ -531,6 +557,20 @@
 
         handleFreeTextInput(rawValue) {
             const text = rawValue.trim();
+
+            if (text.toLowerCase() === 'cancel') {
+                this._addUserBubble(rawValue);
+                this.mode = 'rag';
+                this._setInputEnabled(true);
+                this._input.placeholder = 'Ask me anything...';
+                this._input.value = '';
+                // Remove any visible flow buttons from the screen
+                const activeButtons = this._messages.querySelectorAll('.flow-buttons:last-child');
+                activeButtons.forEach(b => b.style.display = 'none');
+                
+                this._renderCustomMenu(theme.flowCancelMenuJson, 'Form cancelled.');
+                return;
+            }
 
             if (this.mode === 'support') {
                 // Use the step definition array for the correct dataKey — mirrors backend saveAnswer()
@@ -638,7 +678,12 @@
                 this._setTyping(false);
                 if (res.ok) {
                     const body = await res.json();
-                    this.showConfirmation(body.message || '✅ Thank you! We\'ll be in touch.');
+                    this.mode = 'rag';
+                    setTimeout(() => {
+                        this._setInputEnabled(true);
+                        this._input.placeholder = 'Ask me anything...';
+                        this._renderCustomMenu(theme.flowCompletionMenuJson, body.message || '✅ Thank you! We\'ll be in touch.');
+                    }, 800);
                 } else {
                     this._addBotBubble('⚠️ Submission failed. Please try again later.');
                     this._setInputEnabled(true);
@@ -704,14 +749,13 @@
 
                 if (res.ok || res.status === 201) {
                     this.mode = 'rag';
-                    this._addBotBubble(data.message || '✅ Support ticket created successfully!');
                     if (data.ticketNumber) {
                         this._addBotBubble(`Your Ticket Number: **#${data.ticketNumber}**`);
                     }
                     setTimeout(() => {
-                        this._addBotBubble('Feel free to ask me anything else!');
                         this._setInputEnabled(true);
                         this._input.placeholder = 'Ask me anything...';
+                        this._renderCustomMenu(theme.flowCompletionMenuJson, data.message || '✅ Support ticket created successfully!');
                     }, 1000);
                 } else if (res.status === 400) {
                     // Backend @Valid validation error — show the error message
@@ -745,6 +789,7 @@
                 this._addBotBubble('💬 Feel free to ask me anything else!');
                 this._setInputEnabled(true);
                 this._input.placeholder = 'Ask me anything...';
+                this._showDynamicCTAs();
             }, 800);
         },
 
@@ -795,6 +840,57 @@
             }
         },
 
+        _handleMenuAction(id, title) {
+            if (id === 'trigger_flow_lead') {
+                this.startFlow('LEAD', title);
+            } else if (id === 'trigger_flow_appointment') {
+                this.startFlow('APPOINTMENT', title);
+            } else if (id === 'trigger_flow_booking') {
+                this.startFlow('BOOKING', title);
+            } else {
+                this._addUserBubble(title);
+                this._input.value = title;
+                document.getElementById('chat-send').click();
+            }
+        },
+
+        _renderCustomMenu(jsonString, defaultMessage) {
+            try {
+                if (jsonString) {
+                    const parsed = JSON.parse(jsonString);
+                    if (parsed && parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows && parsed.sections[0].rows.length > 0) {
+                        if (parsed.bodyText) {
+                            this._addBotBubble(parsed.bodyText);
+                        }
+                        const container = document.createElement('div');
+                        container.className = 'flow-buttons';
+                        
+                        parsed.sections[0].rows.forEach(btnConfig => {
+                            const btn = document.createElement('button');
+                            btn.className = 'flow-btn';
+                            btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin-right: 5px; margin-bottom: 5px;';
+                            btn.textContent = btnConfig.title;
+                            btn.onclick = () => {
+                                container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                                this._handleMenuAction(btnConfig.id, btnConfig.title);
+                            };
+                            container.appendChild(btn);
+                        });
+                        this._messages.appendChild(container);
+                        this._messages.scrollTop = this._messages.scrollHeight;
+                        return;
+                    }
+                }
+            } catch (e) {
+                console.warn('Failed to parse custom menu JSON', e);
+            }
+            
+            if (defaultMessage) {
+                this._addBotBubble(defaultMessage);
+            }
+            this._showDynamicCTAs();
+        },
+
         _addBotBubble(text) {
             if (!text || String(text).trim() === '') text = "Hello! How can I help you today?";
             const entry = { text, sender: 'bot', time: Date.now() };
@@ -817,6 +913,9 @@
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.className = 'flow-btn';
+                if (opt === 'Cancel') {
+                    btn.style.cssText = 'background:transparent; border:1px solid #ef4444; color:#ef4444; margin-top:4px;';
+                }
                 btn.textContent = opt;
                 btn.onclick = () => {
                     container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
@@ -888,6 +987,11 @@
     }
 
     async function bootstrap() {
+        const existingWidget = document.getElementById('crm-chat-widget');
+        if (existingWidget) {
+            existingWidget.remove();
+        }
+
         // Build basic structure
         const widgetWrap = document.createElement('div');
         widgetWrap.id = 'crm-chat-widget';
@@ -1070,18 +1174,35 @@
             const triggered = flowEngine.evaluateTrigger(val);
 
             try {
+                // Determine if this is a returning user: they have messages in history before this interaction
+                // Or if we track wasReturningUser flag. Wait, let's just use chatHistory.length.
+                // If they have > 2 messages (e.g. initial bot greeting + their first message = 2).
+                // If it's > 2, they've been here a while. Or we can check if they had history loaded.
+                const isReturning = chatHistory.length > 2;
+                
                 const res = await fetch(`${API_BASE}/chat/${businessId}`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ message: val })
+                    body: JSON.stringify({ message: val, isReturning: String(isReturning) })
                 });
                 const data = await res.json();
+                
+                // Update CTAs dynamically if the backend provided a fresh list
+                if (data.ctaButtons !== undefined) {
+                    theme.ctaButtons = data.ctaButtons;
+                }
+
                 flowEngine._setTyping(false);
                 flowEngine._addBotBubble(data.response || "I'm sorry, I couldn't understand that.");
-                if (triggered) setTimeout(() => flowEngine._suggestForm(), 600);
+                if (triggered) {
+                    setTimeout(() => flowEngine._suggestForm(), 600);
+                } else {
+                    setTimeout(() => flowEngine._renderCustomMenu(theme.aiResponseMenuJson, null), 500);
+                }
             } catch (e) {
                 flowEngine._setTyping(false);
                 flowEngine._addBotBubble("Connection lost. Please try again.");
+                setTimeout(() => flowEngine._renderCustomMenu(theme.aiResponseMenuJson, null), 500);
             }
         };
 
@@ -1122,7 +1243,7 @@
                     const watermark = document.createElement('div');
                     watermark.style.cssText = 'text-align:center; font-size:10px; color:#94a3b8; padding:4px 0; background:var(--background-color); border-top:1px solid #f1f5f9;';
                     watermark.textContent = '⚡ Powered by CRMLite';
-                    document.querySelector('.chat-input-container').insertAdjacentElement('afterend', watermark);
+                    widgetWrap.querySelector('.chat-input-container').insertAdjacentElement('afterend', watermark);
                 }
             }
 

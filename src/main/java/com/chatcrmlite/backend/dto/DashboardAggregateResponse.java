@@ -21,6 +21,7 @@ public class DashboardAggregateResponse {
     private RevenueReportDTO revenueReport;
     private List<ActivityLogDTO> recentActivity;
     private List<DashboardMeetingDTO> todayMeetingsList;
+    private List<DashboardMeetingDTO> upcomingMeetingsList;
 
     @Data
     @Builder
@@ -39,10 +40,15 @@ public class DashboardAggregateResponse {
     public static class DashboardMeetingDTO {
         private String id;
         private String title;
+        /** ISO date string, e.g. "2026-07-08" */
         private String date;
+        /** ISO time string, e.g. "14:30:00" */
         private String time;
+        /** Full ISO datetime for sorting, e.g. "2026-07-08T14:30:00" */
+        private String dateTime;
         private String contactName;
         private String status;
+        private String meetingLink;
         private boolean isBooking;
     }
 }

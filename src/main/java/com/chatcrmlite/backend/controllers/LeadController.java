@@ -56,6 +56,14 @@ public class LeadController {
         ));
     }
 
+    @GetMapping("/status/{status}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
+        User user = getAuthenticatedUser();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status).getContent();
+        return ResponseEntity.ok(leads.stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
+    }
+
     @GetMapping("/{id}")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<LeadDTO> getLead(@PathVariable UUID id) {
@@ -104,6 +112,14 @@ public class LeadController {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, user), user));
     }
+
+    @PostMapping("/{id}/rescore")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<LeadDTO> rescoreLead(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.rescoreLead(id, user), user));
+    }
+
 
     // ── Enquiry CRUD ───────────────────────────────────────────────────────
 
@@ -250,6 +266,7 @@ public class LeadController {
                             ? lead.getOwner().getDisplayName() 
                             : lead.getOwner().getEmail()) 
                         : "Unknown")
+                .score(lead.getScore())
                 .build();
     }
 

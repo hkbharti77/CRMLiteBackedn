@@ -75,6 +75,12 @@ public class Lead extends BaseTenantEntity {
     private String currency = "INR";
     private String dealLabel;
 
+    @Column(name = "score")
+    private Integer score = 0;
+
+    @Column(name = "interest_category")
+    private String interestCategory;
+
     @Version
     private Long version;
 
@@ -121,6 +127,8 @@ public class Lead extends BaseTenantEntity {
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public String getCurrency() { return currency; }
     public String getDealLabel() { return dealLabel; }
+    public Integer getScore() { return score; }
+    public String getInterestCategory() { return interestCategory; }
     public Long getVersion() { return version; }
 
     public void setId(UUID id) { this.id = id; }
@@ -138,6 +146,8 @@ public class Lead extends BaseTenantEntity {
     public void setPaymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; }
     public void setCurrency(String currency) { this.currency = currency; }
     public void setDealLabel(String dealLabel) { this.dealLabel = dealLabel; }
+    public void setScore(Integer score) { this.score = score; }
+    public void setInterestCategory(String interestCategory) { this.interestCategory = interestCategory; }
     public void setVersion(Long version) { this.version = version; }
     @com.fasterxml.jackson.annotation.JsonIgnore
     public List<LeadEnquiry> getEnquiryList() { return enquiryList; }
@@ -160,6 +170,8 @@ public class Lead extends BaseTenantEntity {
         private PaymentStatus paymentStatus = PaymentStatus.NONE;
         private String currency = "INR";
         private String dealLabel;
+        private Integer score = 0;
+        private String interestCategory;
         private Long version;
 
         public LeadBuilder id(UUID id) { this.id = id; return this; }
@@ -176,10 +188,15 @@ public class Lead extends BaseTenantEntity {
         public LeadBuilder paymentStatus(PaymentStatus paymentStatus) { this.paymentStatus = paymentStatus; return this; }
         public LeadBuilder currency(String currency) { this.currency = currency; return this; }
         public LeadBuilder dealLabel(String dealLabel) { this.dealLabel = dealLabel; return this; }
+        public LeadBuilder score(Integer score) { this.score = score; return this; }
+        public LeadBuilder interestCategory(String interestCategory) { this.interestCategory = interestCategory; return this; }
         public LeadBuilder version(Long version) { this.version = version; return this; }
 
         public Lead build() {
-            return new Lead(id, leadNumber, contact, status, enquiries, deleted, tags, createdAt, lastActivity, owner, dealValue, paymentStatus, currency, dealLabel, version);
+            Lead lead = new Lead(id, leadNumber, contact, status, enquiries, deleted, tags, createdAt, lastActivity, owner, dealValue, paymentStatus, currency, dealLabel, version);
+            lead.setScore(this.score);
+            lead.setInterestCategory(this.interestCategory);
+            return lead;
         }
     }
 }

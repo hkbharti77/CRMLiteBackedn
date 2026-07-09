@@ -50,9 +50,19 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(file, user.getId());
-
         UUID docId = UUID.randomUUID();
+        byte[] fileBytes;
+        try {
+            fileBytes = file.getBytes();
+        } catch (java.io.IOException e) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Failed to read file: " + e.getMessage());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(
+                fileBytes, file.getOriginalFilename(), user.getId(), docId);
+
         activeTasks.put(docId, task);
 
         Map<String, Object> response = new HashMap<>();

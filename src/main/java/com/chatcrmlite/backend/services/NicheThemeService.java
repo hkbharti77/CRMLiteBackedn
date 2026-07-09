@@ -90,9 +90,18 @@ public class NicheThemeService {
                 ? config.getWelcomeMessage() 
                 : "Hello! How can I help you today?";
 
+        String returning = (config != null && config.getReturningMessage() != null)
+                ? config.getReturningMessage()
+                : "Welcome back! How can we assist you today?";
+
+        String bName = user.getBusinessName() != null ? user.getBusinessName() : "our business";
+        
         if (welcome != null && welcome.contains("{{business}}")) {
-            String bName = user.getBusinessName() != null ? user.getBusinessName() : "our business";
             welcome = welcome.replace("{{business}}", bName);
+        }
+        
+        if (returning != null && returning.contains("{{business}}")) {
+            returning = returning.replace("{{business}}", bName);
         }
 
         List<WidgetCtaDTO> ctaButtons = new ArrayList<>();
@@ -148,12 +157,16 @@ public class NicheThemeService {
                 .nicheIcon(theme.icon)
                 .businessName(user.getBusinessName() != null ? user.getBusinessName() : "Assistant")
                 .welcomeMessage(welcome)
+                .returningMessage(returning)
                 .businessSubType(slug)
                 .logoUrl(finalLogoUrl)
                 .showWatermark(showWatermark)
                 .ctaButtons(ctaButtons)
                 .menuSections(menuSections)
-                .aboutUs(user.getAboutUs())
+                .aboutUs(config != null && Boolean.TRUE.equals(config.getShowAboutContact()) ? user.getAboutUs() : null)
+                .aiResponseMenuJson(config != null ? config.getAiResponseMenuJson() : null)
+                .flowCancelMenuJson(config != null ? config.getFlowCancelMenuJson() : null)
+                .flowCompletionMenuJson(config != null ? config.getFlowCompletionMenuJson() : null)
                 .build();
     }
 
@@ -237,6 +250,11 @@ public class NicheThemeService {
             default ->
                 serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
         }
+        
+        // Add common cards for the custom menu
+        serviceCards.add(new MenuCardDTO("Special Offers", "View current deals", "tag", "LINK", "#offers"));
+        serviceCards.add(new MenuCardDTO("FAQs", "Common questions", "info", "LINK", "#faqs"));
+        
         // Always add About Us for all niches in the default case
         serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
         return serviceCards;

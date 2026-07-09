@@ -1,0 +1,3 @@
+ALTER TABLE leads ADD COLUMN score INTEGER DEFAULT 0;
+ALTER TABLE leads ADD COLUMN interest_category VARCHAR(100);
+ALTER TABLE leads ADD COLUMN last_score_calculated_at TIMESTAMP;

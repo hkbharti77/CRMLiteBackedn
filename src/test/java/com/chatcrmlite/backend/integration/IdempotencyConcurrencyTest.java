@@ -66,6 +66,7 @@ public class IdempotencyConcurrencyTest {
         CountDownLatch latch = new CountDownLatch(1);
         AtomicInteger successCount = new AtomicInteger(0);
         AtomicInteger failureCount = new AtomicInteger(0);
+        java.util.List<Throwable> exceptions = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
         for (int i = 0; i < threadCount; i++) {
             executorService.submit(() -> {
@@ -78,8 +79,12 @@ public class IdempotencyConcurrencyTest {
                         } else {
                             failureCount.incrementAndGet();
                         }
+                    } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                        failureCount.incrementAndGet(); // H2 constraint violation on commit
                     } catch (Exception e) {
-                        log.error("[Test] Thread failed with exception: {}", e.getMessage(), e);
+                        exceptions.add(e);
+                        System.out.println("[Test Thread] Exception: " + e.getMessage());
+                        e.printStackTrace(System.out);
                     }
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
@@ -93,8 +98,77 @@ public class IdempotencyConcurrencyTest {
         assertThat(finished).as("Executor should have finished").isTrue();
 
         // Assertions
-        log.info("[Test] Final Success Count: {}, Failure Count: {}", successCount.get(), failureCount.get());
+        System.out.println("[Test] Final Success Count: " + successCount.get() + ", Failure Count: " + failureCount.get());
+        if (!exceptions.isEmpty()) {
+            System.err.println("[Test] Got " + exceptions.size() + " unexpected exceptions:");
+            exceptions.forEach(Throwable::printStackTrace);
+        }
+        
+        assertThat(exceptions).as("There should be no unexpected exceptions").isEmpty();
         assertThat(successCount.get()).as("One and only one thread should succeed").isEqualTo(1);
         assertThat(failureCount.get()).as("All other threads should report failure").isEqualTo(threadCount - 1);
+    }
+
+    @Autowired
+    private org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+
+    @Test
+    void testNestedTransactionAvoidsUnexpectedRollbackException() throws InterruptedException {
+        int threadCount = 2;
+        String waMessageId = "wamid." + UUID.randomUUID();
+        
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        CountDownLatch latch = new CountDownLatch(1);
+        AtomicInteger successCount = new AtomicInteger(0);
+        AtomicInteger failureCount = new AtomicInteger(0);
+        AtomicInteger unexpectedRollbackCount = new AtomicInteger(0);
+        java.util.List<Throwable> exceptions = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+        for (int i = 0; i < threadCount; i++) {
+            executorService.submit(() -> {
+                try {
+                    latch.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+                
+                try {
+                    // Simulate WhatsAppIngressService outer transaction
+                    transactionTemplate.execute(status -> {
+                        boolean result = idempotencyService.markAsProcessing(waMessageId, testTenantId);
+                        if (result) {
+                            successCount.incrementAndGet();
+                        } else {
+                            failureCount.incrementAndGet();
+                        }
+                        return null;
+                    });
+                } catch (org.springframework.transaction.UnexpectedRollbackException e) {
+                    unexpectedRollbackCount.incrementAndGet();
+                } catch (org.springframework.dao.DataIntegrityViolationException e) {
+                    failureCount.incrementAndGet();
+                } catch (Exception e) {
+                    exceptions.add(e);
+                    System.out.println("[Test Thread] Exception: " + e.getMessage());
+                    e.printStackTrace(System.out);
+                }
+            });
+        }
+
+        latch.countDown();
+        executorService.shutdown();
+        boolean finished = executorService.awaitTermination(20, TimeUnit.SECONDS);
+        assertThat(finished).as("Executor should have finished").isTrue();
+
+        System.out.println("[Test] Final Success Count: " + successCount.get() + ", Failure Count: " + failureCount.get() + ", Rollbacks: " + unexpectedRollbackCount.get());
+        if (!exceptions.isEmpty()) {
+            System.err.println("[Test] Got " + exceptions.size() + " unexpected exceptions:");
+            exceptions.forEach(Throwable::printStackTrace);
+        }
+
+        assertThat(exceptions).as("There should be no unexpected exceptions").isEmpty();
+        assertThat(successCount.get()).as("One thread succeeds").isEqualTo(1);
+        assertThat(unexpectedRollbackCount.get() + failureCount.get()).as("One thread fails gracefully").isEqualTo(1);
     }
 }

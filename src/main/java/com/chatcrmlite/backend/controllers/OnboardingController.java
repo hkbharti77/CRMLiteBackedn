@@ -4,6 +4,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.repositories.TenantRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -17,6 +18,9 @@ public class OnboardingController {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private TenantRepository tenantRepository;
 
     @Autowired
     private WhatsAppConfigRepository whatsappConfigRepository;
@@ -39,6 +43,11 @@ public class OnboardingController {
         user.setOnboardingCompleted(true);
         if (request.isConsentAccepted()) {
             user.setConsentAt(LocalDateTime.now());
+        }
+
+        // Explicitly save the Tenant to ensure business details are persisted
+        if (user.getTenant() != null) {
+            tenantRepository.save(user.getTenant());
         }
         userRepository.save(user);
 
@@ -66,6 +75,10 @@ public class OnboardingController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         user.setOnboardingCompleted(true);
+
+        if (user.getTenant() != null) {
+            tenantRepository.save(user.getTenant());
+        }
         userRepository.save(user);
 
         return ResponseEntity.ok("Onboarding skipped");

@@ -4,13 +4,13 @@ import com.chatcrmlite.backend.dto.*;
 import com.chatcrmlite.backend.models.Lead;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.Appointment;
+import com.chatcrmlite.backend.repositories.ActivityLogRepository;
 import com.chatcrmlite.backend.services.lead.LeadService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -22,6 +22,9 @@ public class DashboardAggregateService {
     private final TicketService ticketService;
     private final ActivityLogService activityLogService;
     private final AppointmentService appointmentService;
+    private final ActivityLogRepository activityLogRepository;
+
+    private static final int RECENT_ACTIVITY_LIMIT = 10;
 
     @Transactional(readOnly = true)
     public DashboardAggregateResponse getDashboardData(User user) {
@@ -49,23 +52,20 @@ public class DashboardAggregateService {
         // 3. Revenue
         RevenueReportDTO revenueReport = leadService.getRevenueReport(user);
 
-        // 4. Activity
-        List<ActivityLogDTO> activityLogs = activityLogService.getOwnerFeed(user);
-        List<ActivityLogDTO> recentActivity = activityLogs.size() > 6 
-                ? activityLogs.subList(0, 6) 
-                : activityLogs;
+        // 4. Activity — paginated to avoid loading the entire table into memory
+        List<ActivityLogDTO> recentActivity = activityLogRepository
+                .findByOwnerOrderByCreatedAtDesc(user, PageRequest.of(0, RECENT_ACTIVITY_LIMIT))
+                .stream()
+                .map(ActivityLogDTO::fromEntity)
+                .collect(Collectors.toList());
 
-        // 5. Meetings (Appointments today)
+        // 5. Today's meetings
         List<Appointment> todayAppts = appointmentService.getTodayAppointments(user);
-        List<DashboardAggregateResponse.DashboardMeetingDTO> todayMeetingsList = todayAppts.stream()
-            .map(appt -> DashboardAggregateResponse.DashboardMeetingDTO.builder()
-                .id(appt.getId().toString())
-                .title(appt.getTitle())
-                .time(appt.getAppointmentDateTime().toString())
-                .contactName(appt.getContact() != null ? appt.getContact().getName() : "Unknown")
-                .isBooking(false)
-                .build())
-            .collect(Collectors.toList());
+        List<DashboardAggregateResponse.DashboardMeetingDTO> todayMeetingsList = toMeetingDTOs(todayAppts);
+
+        // 6. Upcoming meetings (next 7 days, excluding today)
+        List<Appointment> upcomingAppts = appointmentService.getUpcomingAppointments(user);
+        List<DashboardAggregateResponse.DashboardMeetingDTO> upcomingMeetingsList = toMeetingDTOs(upcomingAppts);
 
         return DashboardAggregateResponse.builder()
                 .totalLeads(totalLeads)
@@ -76,6 +76,23 @@ public class DashboardAggregateService {
                 .revenueReport(revenueReport)
                 .recentActivity(recentActivity)
                 .todayMeetingsList(todayMeetingsList)
+                .upcomingMeetingsList(upcomingMeetingsList)
                 .build();
+    }
+
+    private List<DashboardAggregateResponse.DashboardMeetingDTO> toMeetingDTOs(List<Appointment> appts) {
+        return appts.stream()
+                .map(appt -> DashboardAggregateResponse.DashboardMeetingDTO.builder()
+                        .id(appt.getId().toString())
+                        .title(appt.getTitle())
+                        .dateTime(appt.getAppointmentDateTime().toString())
+                        .date(appt.getAppointmentDateTime().toLocalDate().toString())
+                        .time(appt.getAppointmentDateTime().toLocalTime().toString())
+                        .contactName(appt.getContact() != null ? appt.getContact().getName() : "Unknown")
+                        .status(appt.getStatus().name())
+                        .meetingLink(appt.getMeetingLink())
+                        .isBooking(false)
+                        .build())
+                .collect(Collectors.toList());
     }
 }

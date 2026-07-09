@@ -11,6 +11,12 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface ContactRepository extends JpaRepository<Contact, UUID> {
+
+    /**
+     * Check if a contact with the given email exists for the given tenant.
+     * Uses the ManyToOne tenant relationship on BaseTenantEntity (column: tenant_id).
+     */
+    boolean existsByEmailAndTenant_Id(String email, UUID tenantId);
     Optional<Contact> findByWaIdAndOwner(String waId, User owner);
     List<Contact> findAllByOwner(User owner);
     Optional<Contact> findByWaId(String waId);

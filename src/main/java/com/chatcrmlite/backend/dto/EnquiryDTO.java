@@ -9,7 +9,6 @@ public class EnquiryDTO implements Serializable {
 
     private String id;
     private String type;
-    @com.fasterxml.jackson.annotation.JsonIgnore
     private String message;
     private String source;
     private String status;
@@ -43,7 +42,6 @@ public class EnquiryDTO implements Serializable {
 
     public String getId() { return id; }
     public String getType() { return type; }
-    @com.fasterxml.jackson.annotation.JsonIgnore
     public String getMessage() { return message; }
     public String getSource() { return source; }
     public String getStatus() { return status; }

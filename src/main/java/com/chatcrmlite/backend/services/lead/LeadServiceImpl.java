@@ -38,6 +38,9 @@ public class LeadServiceImpl implements LeadService {
     private final LeadValidator leadValidator;
     private final LeadEnquiryService leadEnquiryService;
     private final ApplicationEventPublisher eventPublisher;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private LeadScoringService leadScoringService;
 
     private boolean isAdmin(User user) {
         return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
@@ -288,5 +291,23 @@ public class LeadServiceImpl implements LeadService {
     @Transactional
     public void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData) {
         leadEnquiryService.appendEnquiry(lead, message, type, source, collectedData);
+        // Calculate lead score asynchronously or after append to evaluate new data
+        if (leadScoringService != null) {
+            leadScoringService.calculateAndEvaluate(lead);
+            leadRepository.save(lead);
+        }
+    }
+
+    @Override
+    @Transactional
+    public Lead rescoreLead(UUID leadId, User owner) {
+        Lead lead = findOwnedLead(leadId, owner);
+        if (leadScoringService != null) {
+            leadScoringService.calculateAndEvaluate(lead);
+            Lead saved = leadRepository.save(lead);
+            initializeLead(saved);
+            return saved;
+        }
+        return lead;
     }
 }

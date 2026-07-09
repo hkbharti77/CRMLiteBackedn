@@ -35,7 +35,7 @@ public class WhatsAppAiService {
     @Transactional
     public void evaluateAiIntake(ProcessingContext context) {
         try {
-            WhatsAppConfig config = whatsappConfigRepository.findByUserId(context.getTenantId())
+            WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
             Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)
@@ -54,6 +54,9 @@ public class WhatsAppAiService {
             GuardrailResult guardrail = guardrailService.evaluate(text, contact.getWaId(), lastWasAi, owner.getBusinessSubType(), owner.getId());
 
             switch (guardrail.getDecision()) {
+                case GREETING:
+                    context.getMetadata().put("responseType", "GREETING");
+                    break;
                 case CALL_AI:
                     String aiResponse = ragRetrievalService.getAiResponse(text, owner.getId());
                     if (aiResponse != null && !aiResponse.isBlank()) {

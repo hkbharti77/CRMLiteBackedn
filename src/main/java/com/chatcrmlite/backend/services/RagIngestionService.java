@@ -38,10 +38,10 @@ public class RagIngestionService {
 
     @Async
     @Transactional
-    public CompletableFuture<Map<String, Object>> ingestDocument(MultipartFile file, UUID tenantId) {
+    public CompletableFuture<Map<String, Object>> ingestDocument(byte[] fileBytes, String filename, UUID tenantId, UUID documentId) {
         try {
-            String text = extractText(file);
-            return ingestText(text, tenantId, file.getOriginalFilename());
+            String text = extractText(fileBytes, filename);
+            return ingestText(text, tenantId, filename, documentId);
         } catch (Exception e) {
             log.error("Ingestion failed for tenant {}: {}", tenantId, e.getMessage());
             Map<String, Object> status = new HashMap<>();
@@ -54,7 +54,12 @@ public class RagIngestionService {
     @Async
     @Transactional
     public CompletableFuture<Map<String, Object>> ingestText(String text, UUID tenantId, String source) {
-        UUID documentId = UUID.randomUUID();
+        return ingestText(text, tenantId, source, UUID.randomUUID());
+    }
+
+    @Async
+    @Transactional
+    public CompletableFuture<Map<String, Object>> ingestText(String text, UUID tenantId, String source, UUID documentId) {
         Map<String, Object> status = new HashMap<>();
         status.put("documentId", documentId);
         status.put("status", "PROCESSING");
@@ -103,24 +108,22 @@ public class RagIngestionService {
         }
     }
 
-    private String extractText(MultipartFile file) throws Exception {
-        String filename = file.getOriginalFilename();
+    private String extractText(byte[] fileBytes, String filename) throws Exception {
         if (filename == null) return null;
 
-        try (InputStream is = file.getInputStream()) {
-            if (filename.endsWith(".pdf")) {
-                try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(is.readAllBytes()))) {
-                    return new PDFTextStripper().getText(doc);
-                }
-            } else if (filename.endsWith(".docx")) {
-                try (XWPFDocument doc = new XWPFDocument(is)) {
-                    return doc.getParagraphs().stream()
-                            .map(XWPFParagraph::getText)
-                            .collect(Collectors.joining("\n"));
-                }
-            } else {
-                return new String(is.readAllBytes(), StandardCharsets.UTF_8);
+        if (filename.endsWith(".pdf")) {
+            try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(fileBytes))) {
+                return new PDFTextStripper().getText(doc);
             }
+        } else if (filename.endsWith(".docx")) {
+            try (InputStream is = new java.io.ByteArrayInputStream(fileBytes);
+                 XWPFDocument doc = new XWPFDocument(is)) {
+                return doc.getParagraphs().stream()
+                        .map(XWPFParagraph::getText)
+                        .collect(Collectors.joining("\n"));
+            }
+        } else {
+            return new String(fileBytes, StandardCharsets.UTF_8);
         }
     }
 

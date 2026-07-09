@@ -58,6 +58,21 @@ public class Tenant implements Serializable {
     @Column(name = "primary_resource", nullable = false)
     private PrimaryResource primaryResource = PrimaryResource.LEAD;
 
+    // ── Platform Owner Lifecycle Management ───────────────────────────────────
+    public enum LifecycleStatus {
+        ACTIVE, SUSPENDED, LOCKED, ARCHIVED, DELETED
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "lifecycle_status", nullable = false, length = 20)
+    private LifecycleStatus lifecycleStatus = LifecycleStatus.ACTIVE;
+
+    @Column(name = "suspension_reason", columnDefinition = "TEXT")
+    private String suspensionReason;
+
+    @Column(name = "suspended_at")
+    private LocalDateTime suspendedAt;
+
     @Column(nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -141,6 +156,15 @@ public class Tenant implements Serializable {
 
     public PrimaryResource getPrimaryResource() { return primaryResource; }
     public void setPrimaryResource(PrimaryResource primaryResource) { this.primaryResource = primaryResource; }
+
+    public LifecycleStatus getLifecycleStatus() { return lifecycleStatus; }
+    public void setLifecycleStatus(LifecycleStatus lifecycleStatus) { this.lifecycleStatus = lifecycleStatus; }
+
+    public String getSuspensionReason() { return suspensionReason; }
+    public void setSuspensionReason(String suspensionReason) { this.suspensionReason = suspensionReason; }
+
+    public LocalDateTime getSuspendedAt() { return suspendedAt; }
+    public void setSuspendedAt(LocalDateTime suspendedAt) { this.suspendedAt = suspendedAt; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

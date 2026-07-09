@@ -25,10 +25,11 @@ public class LeadDTO implements Serializable {
     private boolean isNew;
     private String createdAtHuman;
     private String ownerName;
+    private Integer score;
 
     public LeadDTO() {}
 
-    public LeadDTO(UUID id, String leadNumber, ContactDTO contact, Lead.LeadStatus status, List<EnquiryDTO> enquiries, LocalDateTime createdAt, LocalDateTime lastActivity, BigDecimal dealValue, Lead.PaymentStatus paymentStatus, String currency, String dealLabel, boolean isNew, String createdAtHuman, String ownerName) {
+    public LeadDTO(UUID id, String leadNumber, ContactDTO contact, Lead.LeadStatus status, List<EnquiryDTO> enquiries, LocalDateTime createdAt, LocalDateTime lastActivity, BigDecimal dealValue, Lead.PaymentStatus paymentStatus, String currency, String dealLabel, boolean isNew, String createdAtHuman, String ownerName, Integer score) {
         this.id = id;
         this.leadNumber = leadNumber;
         this.contact = contact;
@@ -43,6 +44,7 @@ public class LeadDTO implements Serializable {
         this.isNew = isNew;
         this.createdAtHuman = createdAtHuman;
         this.ownerName = ownerName;
+        this.score = score;
     }
 
     public UUID getId() { return id; }
@@ -73,6 +75,8 @@ public class LeadDTO implements Serializable {
     public void setCreatedAtHuman(String createdAtHuman) { this.createdAtHuman = createdAtHuman; }
     public String getOwnerName() { return ownerName; }
     public void setOwnerName(String ownerName) { this.ownerName = ownerName; }
+    public Integer getScore() { return score; }
+    public void setScore(Integer score) { this.score = score; }
 
     public static LeadDTOBuilder builder() {
         return new LeadDTOBuilder();
@@ -93,6 +97,7 @@ public class LeadDTO implements Serializable {
         private boolean isNew;
         private String createdAtHuman;
         private String ownerName;
+        private Integer score;
 
         public LeadDTOBuilder id(UUID id) { this.id = id; return this; }
         public LeadDTOBuilder leadNumber(String leadNumber) { this.leadNumber = leadNumber; return this; }
@@ -108,9 +113,10 @@ public class LeadDTO implements Serializable {
         public LeadDTOBuilder isNew(boolean isNew) { this.isNew = isNew; return this; }
         public LeadDTOBuilder createdAtHuman(String createdAtHuman) { this.createdAtHuman = createdAtHuman; return this; }
         public LeadDTOBuilder ownerName(String ownerName) { this.ownerName = ownerName; return this; }
+        public LeadDTOBuilder score(Integer score) { this.score = score; return this; }
 
         public LeadDTO build() {
-            return new LeadDTO(id, leadNumber, contact, status, enquiries, createdAt, lastActivity, dealValue, paymentStatus, currency, dealLabel, isNew, createdAtHuman, ownerName);
+            return new LeadDTO(id, leadNumber, contact, status, enquiries, createdAt, lastActivity, dealValue, paymentStatus, currency, dealLabel, isNew, createdAtHuman, ownerName, score);
         }
     }
 }
