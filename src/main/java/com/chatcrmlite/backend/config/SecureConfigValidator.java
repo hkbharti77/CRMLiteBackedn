@@ -25,7 +25,12 @@ public class SecureConfigValidator {
         List<String> missingSecrets = new ArrayList<>();
 
         checkSecret("jwt.secret", missingSecrets);
-        checkSecret("langchain4j.google-ai.gemini.api-key", missingSecrets);
+        String provider = env.getProperty("ai.provider", "google");
+        if ("google".equalsIgnoreCase(provider)) {
+            checkSecret("langchain4j.google-ai.gemini.api-key", missingSecrets);
+        } else if ("openai".equalsIgnoreCase(provider) || "ollama".equalsIgnoreCase(provider) || "local".equalsIgnoreCase(provider)) {
+            checkSecret("ai.openai.base-url", missingSecrets);
+        }
         checkSecret("meta.app-secret", missingSecrets);
         checkSecret("whatsapp.verify-token", missingSecrets);
         checkSecret("spring.mail.password", missingSecrets);

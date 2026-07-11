@@ -21,6 +21,8 @@ public class ThemeConfigDTO {
     private String aiResponseMenuJson;
     private String flowCancelMenuJson;
     private String flowCompletionMenuJson;
+    private String guardrailMessageAbuse;
+    private String guardrailMessageGibberish;
 
     public ThemeConfigDTO() {}
 
@@ -81,6 +83,10 @@ public class ThemeConfigDTO {
     public void setFlowCancelMenuJson(String flowCancelMenuJson) { this.flowCancelMenuJson = flowCancelMenuJson; }
     public String getFlowCompletionMenuJson() { return flowCompletionMenuJson; }
     public void setFlowCompletionMenuJson(String flowCompletionMenuJson) { this.flowCompletionMenuJson = flowCompletionMenuJson; }
+    public String getGuardrailMessageAbuse() { return guardrailMessageAbuse; }
+    public void setGuardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; }
+    public String getGuardrailMessageGibberish() { return guardrailMessageGibberish; }
+    public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -105,6 +111,8 @@ public class ThemeConfigDTO {
         private String aiResponseMenuJson;
         private String flowCancelMenuJson;
         private String flowCompletionMenuJson;
+        private String guardrailMessageAbuse;
+        private String guardrailMessageGibberish;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -124,9 +132,14 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder aiResponseMenuJson(String aiResponseMenuJson) { this.aiResponseMenuJson = aiResponseMenuJson; return this; }
         public ThemeConfigDTOBuilder flowCancelMenuJson(String flowCancelMenuJson) { this.flowCancelMenuJson = flowCancelMenuJson; return this; }
         public ThemeConfigDTOBuilder flowCompletionMenuJson(String flowCompletionMenuJson) { this.flowCompletionMenuJson = flowCompletionMenuJson; return this; }
+        public ThemeConfigDTOBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
+        public ThemeConfigDTOBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
 
         public ThemeConfigDTO build() {
-            return new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
+            ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
+            dto.setGuardrailMessageAbuse(this.guardrailMessageAbuse);
+            dto.setGuardrailMessageGibberish(this.guardrailMessageGibberish);
+            return dto;
         }
     }
 }

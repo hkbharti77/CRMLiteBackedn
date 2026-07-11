@@ -167,6 +167,8 @@ public class NicheThemeService {
                 .aiResponseMenuJson(config != null ? config.getAiResponseMenuJson() : null)
                 .flowCancelMenuJson(config != null ? config.getFlowCancelMenuJson() : null)
                 .flowCompletionMenuJson(config != null ? config.getFlowCompletionMenuJson() : null)
+                .guardrailMessageAbuse(config != null ? config.getGuardrailMessageAbuse() : null)
+                .guardrailMessageGibberish(config != null ? config.getGuardrailMessageGibberish() : null)
                 .build();
     }
 

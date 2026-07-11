@@ -800,9 +800,8 @@
             chatHistory = [];
             clearHistory();
             this._messages.innerHTML = '';
-            this._addBotBubble(theme.welcomeMessage);
+            this._addBotBubbleWithCTAs(theme.welcomeMessage);
             this._setInputEnabled(true);
-            this._showDynamicCTAs();
         },
 
         _showDynamicCTAs() {
@@ -854,41 +853,91 @@
             }
         },
 
-        _renderCustomMenu(jsonString, defaultMessage) {
+        _renderCustomMenu(jsonString, defaultMessage, overrideBodyText = false) {
+            let bodyMsg = defaultMessage || 'Please select an option:';
+            let parsed = null;
             try {
                 if (jsonString) {
-                    const parsed = JSON.parse(jsonString);
-                    if (parsed && parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows && parsed.sections[0].rows.length > 0) {
-                        if (parsed.bodyText) {
-                            this._addBotBubble(parsed.bodyText);
-                        }
-                        const container = document.createElement('div');
-                        container.className = 'flow-buttons';
-                        
-                        parsed.sections[0].rows.forEach(btnConfig => {
-                            const btn = document.createElement('button');
-                            btn.className = 'flow-btn';
-                            btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin-right: 5px; margin-bottom: 5px;';
-                            btn.textContent = btnConfig.title;
-                            btn.onclick = () => {
-                                container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
-                                this._handleMenuAction(btnConfig.id, btnConfig.title);
-                            };
-                            container.appendChild(btn);
-                        });
-                        this._messages.appendChild(container);
-                        this._messages.scrollTop = this._messages.scrollHeight;
-                        return;
+                    parsed = JSON.parse(jsonString);
+                    if (parsed && parsed.bodyText && !overrideBodyText) {
+                        bodyMsg = parsed.bodyText;
                     }
                 }
             } catch (e) {
                 console.warn('Failed to parse custom menu JSON', e);
             }
-            
-            if (defaultMessage) {
-                this._addBotBubble(defaultMessage);
+
+            const entry = { text: bodyMsg, sender: 'bot', time: Date.now() };
+            chatHistory.push(entry);
+            saveHistory(chatHistory);
+
+            if (!this._messages) return;
+
+            // Build single bubble element
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot';
+
+            const textSpan = document.createElement('span');
+            textSpan.innerHTML = String(bodyMsg).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+            msgDiv.appendChild(textSpan);
+
+            if (parsed && parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows && parsed.sections[0].rows.length > 0) {
+                const btnWrap = document.createElement('div');
+                btnWrap.style.cssText = 'margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;';
+                
+                parsed.sections[0].rows.forEach(btnConfig => {
+                    const btn = document.createElement('button');
+                    btn.className = 'flow-btn';
+                    btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin:0;';
+                    btn.textContent = btnConfig.title;
+                    btn.onclick = () => {
+                        btnWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                        this._handleMenuAction(btnConfig.id, btnConfig.title);
+                    };
+                    btnWrap.appendChild(btn);
+                });
+                msgDiv.appendChild(btnWrap);
+            } else {
+                // Fallback to theme CTA buttons if no custom menu config is present
+                if (theme.ctaButtons && theme.ctaButtons.length > 0) {
+                    const ctaWrap = document.createElement('div');
+                    ctaWrap.style.cssText = 'margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;';
+                    theme.ctaButtons.forEach(btnConfig => {
+                        const btn = document.createElement('button');
+                        btn.className = 'flow-btn';
+                        btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin:0;';
+                        btn.textContent = btnConfig.label;
+                        btn.onclick = () => {
+                            ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                            if (btnConfig.action === 'SUPPORT') {
+                                this.startSupportFlow();
+                            } else if (btnConfig.action === 'APPOINTMENT' || btnConfig.action === 'BOOKING' || btnConfig.action === 'LEAD') {
+                                this.startFlow(btnConfig.action, btnConfig.label);
+                            } else {
+                                if (this.config && this.config.steps && this.config.steps.length > 0) {
+                                    this._addUserBubble(btnConfig.label);
+                                    this.mode = 'flow';
+                                    this._setInputEnabled(false);
+                                    this.renderStep(0);
+                                } else {
+                                    this._input.value = btnConfig.label;
+                                    document.getElementById('chat-send').click();
+                                }
+                            }
+                        };
+                        ctaWrap.appendChild(btn);
+                    });
+                    msgDiv.appendChild(ctaWrap);
+                }
             }
-            this._showDynamicCTAs();
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = new Date(entry.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+            msgDiv.appendChild(timeSpan);
+
+            this._messages.appendChild(msgDiv);
+            this._messages.scrollTop = this._messages.scrollHeight;
         },
 
         _addBotBubble(text) {
@@ -897,6 +946,65 @@
             chatHistory.push(entry);
             saveHistory(chatHistory);
             _renderMessageBubble(entry, this._messages);
+        },
+
+        // Renders greeting text + CTA buttons in a SINGLE bubble (no double bubble)
+        _addBotBubbleWithCTAs(text) {
+            if (!text || String(text).trim() === '') text = "Hello! How can I help you today?";
+            const entry = { text, sender: 'bot', time: Date.now() };
+            chatHistory.push(entry);
+            saveHistory(chatHistory);
+
+            if (!this._messages) return;
+
+            // Build the wrapper same as _renderMessageBubble
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot';
+
+            const textSpan = document.createElement('span');
+            textSpan.innerHTML = String(text).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = new Date(entry.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            msgDiv.appendChild(textSpan);
+
+            // Inject CTA buttons inside the same bubble (above the timestamp)
+            if (theme.ctaButtons && theme.ctaButtons.length > 0) {
+                const ctaWrap = document.createElement('div');
+                ctaWrap.style.cssText = 'margin-top:10px; display:flex; flex-wrap:wrap; gap:6px;';
+                theme.ctaButtons.forEach(btnConfig => {
+                    const btn = document.createElement('button');
+                    btn.className = 'flow-btn';
+                    btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin:0;';
+                    btn.textContent = btnConfig.label;
+                    btn.onclick = () => {
+                        ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                        if (btnConfig.action === 'SUPPORT') {
+                            this.startSupportFlow();
+                        } else if (btnConfig.action === 'APPOINTMENT' || btnConfig.action === 'BOOKING' || btnConfig.action === 'LEAD') {
+                            this.startFlow(btnConfig.action, btnConfig.label);
+                        } else {
+                            if (this.config && this.config.steps && this.config.steps.length > 0) {
+                                this._addUserBubble(btnConfig.label);
+                                this.mode = 'flow';
+                                this._setInputEnabled(false);
+                                this.renderStep(0);
+                            } else {
+                                this._input.value = btnConfig.label;
+                                document.getElementById('chat-send').click();
+                            }
+                        }
+                    };
+                    ctaWrap.appendChild(btn);
+                });
+                msgDiv.appendChild(ctaWrap);
+            }
+
+            msgDiv.appendChild(timeSpan);
+            this._messages.appendChild(msgDiv);
+            this._messages.scrollTop = this._messages.scrollHeight;
         },
 
         _addUserBubble(text) {
@@ -1193,16 +1301,23 @@
                 }
 
                 flowEngine._setTyping(false);
-                flowEngine._addBotBubble(data.response || "I'm sorry, I couldn't understand that.");
-                if (triggered) {
-                    setTimeout(() => flowEngine._suggestForm(), 600);
+                if (data.isGuardrail) {
+                    let fallbackMsg = data.response || (data.reason === 'abuse_throttled' 
+                        ? (theme.guardrailMessageAbuse || "We cannot process requests containing inappropriate or abusive language. Please communicate respectfully or select an option from the menu.")
+                        : (theme.guardrailMessageGibberish || "We couldn't understand your request. Please rephrase your message or select one of the available options below."));
+                    setTimeout(() => flowEngine._renderCustomMenu(theme.aiResponseMenuJson, fallbackMsg, true), 500);
                 } else {
-                    setTimeout(() => flowEngine._renderCustomMenu(theme.aiResponseMenuJson, null), 500);
+                    const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
+                    if (triggered) {
+                        flowEngine._addBotBubble(finalResponse);
+                        setTimeout(() => flowEngine._suggestForm(), 600);
+                    } else {
+                        flowEngine._renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true);
+                    }
                 }
             } catch (e) {
                 flowEngine._setTyping(false);
-                flowEngine._addBotBubble("Connection lost. Please try again.");
-                setTimeout(() => flowEngine._renderCustomMenu(theme.aiResponseMenuJson, null), 500);
+                flowEngine._renderCustomMenu(theme.aiResponseMenuJson, "Connection lost. Please try again.", true);
             }
         };
 
@@ -1263,8 +1378,8 @@
             } else {
                 let wm = theme.welcomeMessage;
                 if (!wm || String(wm).trim() === '') wm = 'Hello! How can I help you today?';
-                flowEngine._addBotBubble(wm);
-                flowEngine._showDynamicCTAs();
+                // Single bubble: greeting text + CTA buttons together
+                flowEngine._addBotBubbleWithCTAs(wm);
             }
             
             input.placeholder = 'Ask me anything...';

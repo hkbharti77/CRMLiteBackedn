@@ -49,13 +49,7 @@ public class WhatsAppConfig implements Serializable {
     private String returningMessage;
 
     @Column(length = 500)
-    private String reviewUrl;
-
-    @Column(length = 500)
     private String portfolioUrl;
-
-    @Column(columnDefinition = "TEXT")
-    private String offerText;
 
     @Column(length = 255)
     private String sosNote;
@@ -90,14 +84,12 @@ public class WhatsAppConfig implements Serializable {
     private String guardrailMessageGibberish;
 
     private Boolean showAboutContact = true;
-    private Boolean showTrustButton = true;
-    private Boolean showOfferButton = true;
     private Boolean showSosButton = true;
     private Boolean showSupportFormButton = true;
 
     public WhatsAppConfig() {}
 
-    public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String reviewUrl, String portfolioUrl, String offerText, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showTrustButton, Boolean showOfferButton, Boolean showSosButton, Boolean showSupportFormButton) {
+    public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String portfolioUrl, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showSosButton, Boolean showSupportFormButton) {
         this.id = id;
         this.tenant = tenant;
         this.phoneNumberId = phoneNumberId;
@@ -108,9 +100,7 @@ public class WhatsAppConfig implements Serializable {
         this.interactiveMenuJson = interactiveMenuJson;
         this.welcomeMessage = welcomeMessage;
         this.returningMessage = returningMessage;
-        this.reviewUrl = reviewUrl;
         this.portfolioUrl = portfolioUrl;
-        this.offerText = offerText;
         this.sosNote = sosNote;
         this.thirdButtonType = thirdButtonType;
         this.customSubMenusJson = customSubMenusJson;
@@ -121,8 +111,6 @@ public class WhatsAppConfig implements Serializable {
         this.guardrailMessageAbuse = guardrailMessageAbuse;
         this.guardrailMessageGibberish = guardrailMessageGibberish;
         this.showAboutContact = showAboutContact;
-        this.showTrustButton = showTrustButton;
-        this.showOfferButton = showOfferButton;
         this.showSosButton = showSosButton;
         this.showSupportFormButton = showSupportFormButton;
     }
@@ -137,9 +125,7 @@ public class WhatsAppConfig implements Serializable {
     public String getInteractiveMenuJson() { return interactiveMenuJson; }
     public String getWelcomeMessage() { return welcomeMessage; }
     public String getReturningMessage() { return returningMessage; }
-    public String getReviewUrl() { return reviewUrl; }
     public String getPortfolioUrl() { return portfolioUrl; }
-    public String getOfferText() { return offerText; }
     public String getSosNote() { return sosNote; }
     public String getThirdButtonType() { return thirdButtonType; }
     public String getCustomSubMenusJson() { return customSubMenusJson; }
@@ -150,8 +136,6 @@ public class WhatsAppConfig implements Serializable {
     public String getGuardrailMessageAbuse() { return guardrailMessageAbuse; }
     public String getGuardrailMessageGibberish() { return guardrailMessageGibberish; }
     public Boolean getShowAboutContact() { return showAboutContact; }
-    public Boolean getShowTrustButton() { return showTrustButton; }
-    public Boolean getShowOfferButton() { return showOfferButton; }
     public Boolean getShowSosButton() { return showSosButton; }
     public Boolean getShowSupportFormButton() { return showSupportFormButton; }
 
@@ -196,9 +180,7 @@ public class WhatsAppConfig implements Serializable {
     public void setInteractiveMenuJson(String interactiveMenuJson) { this.interactiveMenuJson = interactiveMenuJson; }
     public void setWelcomeMessage(String welcomeMessage) { this.welcomeMessage = welcomeMessage; }
     public void setReturningMessage(String returningMessage) { this.returningMessage = returningMessage; }
-    public void setReviewUrl(String reviewUrl) { this.reviewUrl = reviewUrl; }
     public void setPortfolioUrl(String portfolioUrl) { this.portfolioUrl = portfolioUrl; }
-    public void setOfferText(String offerText) { this.offerText = offerText; }
     public void setSosNote(String sosNote) { this.sosNote = sosNote; }
     public void setThirdButtonType(String thirdButtonType) { this.thirdButtonType = thirdButtonType; }
     public void setCustomSubMenusJson(String customSubMenusJson) { this.customSubMenusJson = customSubMenusJson; }
@@ -209,8 +191,6 @@ public class WhatsAppConfig implements Serializable {
     public void setGuardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; }
     public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
     public void setShowAboutContact(Boolean showAboutContact) { this.showAboutContact = showAboutContact; }
-    public void setShowTrustButton(Boolean showTrustButton) { this.showTrustButton = showTrustButton; }
-    public void setShowOfferButton(Boolean showOfferButton) { this.showOfferButton = showOfferButton; }
     public void setShowSosButton(Boolean showSosButton) { this.showSosButton = showSosButton; }
     public void setShowSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; }
 
@@ -228,9 +208,7 @@ public class WhatsAppConfig implements Serializable {
         private String interactiveMenuJson;
         private String welcomeMessage;
         private String returningMessage;
-        private String reviewUrl;
         private String portfolioUrl;
-        private String offerText;
         private String sosNote;
         private String thirdButtonType;
         private String customSubMenusJson;
@@ -241,8 +219,6 @@ public class WhatsAppConfig implements Serializable {
         private String guardrailMessageAbuse;
         private String guardrailMessageGibberish;
         private Boolean showAboutContact = true;
-        private Boolean showTrustButton = true;
-        private Boolean showOfferButton = true;
         private Boolean showSosButton = true;
         private Boolean showSupportFormButton = true;
 
@@ -263,9 +239,7 @@ public class WhatsAppConfig implements Serializable {
         public WhatsAppConfigBuilder interactiveMenuJson(String interactiveMenuJson) { this.interactiveMenuJson = interactiveMenuJson; return this; }
         public WhatsAppConfigBuilder welcomeMessage(String welcomeMessage) { this.welcomeMessage = welcomeMessage; return this; }
         public WhatsAppConfigBuilder returningMessage(String returningMessage) { this.returningMessage = returningMessage; return this; }
-        public WhatsAppConfigBuilder reviewUrl(String reviewUrl) { this.reviewUrl = reviewUrl; return this; }
         public WhatsAppConfigBuilder portfolioUrl(String portfolioUrl) { this.portfolioUrl = portfolioUrl; return this; }
-        public WhatsAppConfigBuilder offerText(String offerText) { this.offerText = offerText; return this; }
         public WhatsAppConfigBuilder sosNote(String sosNote) { this.sosNote = sosNote; return this; }
         public WhatsAppConfigBuilder thirdButtonType(String thirdButtonType) { this.thirdButtonType = thirdButtonType; return this; }
         public WhatsAppConfigBuilder customSubMenusJson(String customSubMenusJson) { this.customSubMenusJson = customSubMenusJson; return this; }
@@ -276,13 +250,11 @@ public class WhatsAppConfig implements Serializable {
         public WhatsAppConfigBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
         public WhatsAppConfigBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
         public WhatsAppConfigBuilder showAboutContact(Boolean showAboutContact) { this.showAboutContact = showAboutContact; return this; }
-        public WhatsAppConfigBuilder showTrustButton(Boolean showTrustButton) { this.showTrustButton = showTrustButton; return this; }
-        public WhatsAppConfigBuilder showOfferButton(Boolean showOfferButton) { this.showOfferButton = showOfferButton; return this; }
         public WhatsAppConfigBuilder showSosButton(Boolean showSosButton) { this.showSosButton = showSosButton; return this; }
         public WhatsAppConfigBuilder showSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; return this; }
 
         public WhatsAppConfig build() {
-            WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, reviewUrl, portfolioUrl, offerText, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showTrustButton, showOfferButton, showSosButton, showSupportFormButton);
+            WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, portfolioUrl, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showSosButton, showSupportFormButton);
             if (user != null) {
                 config.setUser(user);
             }

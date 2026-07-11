@@ -53,16 +53,17 @@ public class PublicChatController {
             return ResponseEntity.badRequest().body(Map.of("error", "Message is required"));
         }
 
-        try {
-            SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(businessId).getPlan();
-            if (!plan.isHasRagLlm()) {
-                return ResponseEntity.ok(Map.of("response", "I am a menu-based assistant. Please use the options provided to interact."));
-            }
-        } catch (Exception e) {
-            // Proceed normally if enforcement fails or tenant doesn't exist
-        }
-
         User owner = userRepository.findById(businessId).orElse(null);
+        if (owner != null && owner.getTenant() != null) {
+            try {
+                SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
+                if (!plan.isHasRagLlm()) {
+                    return ResponseEntity.ok(Map.of("response", "I am a menu-based assistant. Please use the options provided to interact."));
+                }
+            } catch (Exception e) {
+                // Proceed normally if enforcement fails or tenant doesn't exist
+            }
+        }
         java.util.List<com.chatcrmlite.backend.dto.WidgetCtaDTO> ctaButtons = null;
         if (owner != null) {
             ThemeConfigDTO theme = themeService.getThemeForUser(owner);
@@ -85,6 +86,39 @@ public class PublicChatController {
                     responseMap.put("response", greeting);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
                     
+                    return ResponseEntity.ok(responseMap);
+                } else if (guardrail.getDecision() == Decision.IGNORE && "abuse_throttled".equals(guardrail.getReason())) {
+                    Map<String, Object> responseMap = new java.util.HashMap<>();
+                    responseMap.put("isGuardrail", true);
+                    responseMap.put("reason", "abuse_throttled");
+                    String fallbackMsg = theme.getGuardrailMessageAbuse();
+                    if (fallbackMsg == null || fallbackMsg.isBlank()) {
+                        fallbackMsg = "We cannot process requests containing inappropriate or abusive language. Please communicate respectfully or select an option from the menu.";
+                    }
+                    responseMap.put("response", fallbackMsg);
+                    if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    return ResponseEntity.ok(responseMap);
+                } else if (guardrail.getDecision() == Decision.MENU && "gibberish".equals(guardrail.getReason())) {
+                    Map<String, Object> responseMap = new java.util.HashMap<>();
+                    responseMap.put("isGuardrail", true);
+                    responseMap.put("reason", "gibberish");
+                    String fallbackMsg = theme.getGuardrailMessageGibberish();
+                    if (fallbackMsg == null || fallbackMsg.isBlank()) {
+                        fallbackMsg = "We couldn't understand your request. Please rephrase your message or select one of the available options below.";
+                    }
+                    responseMap.put("response", fallbackMsg);
+                    if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    return ResponseEntity.ok(responseMap);
+                } else if (guardrail.getDecision() == Decision.IGNORE && "spam_throttled".equals(guardrail.getReason())) {
+                    Map<String, Object> responseMap = new java.util.HashMap<>();
+                    responseMap.put("isGuardrail", true);
+                    responseMap.put("reason", "gibberish");
+                    String fallbackMsg = theme.getGuardrailMessageGibberish();
+                    if (fallbackMsg == null || fallbackMsg.isBlank()) {
+                        fallbackMsg = "We couldn't understand your request. Please rephrase your message or select one of the available options below.";
+                    }
+                    responseMap.put("response", fallbackMsg);
+                    if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
                     return ResponseEntity.ok(responseMap);
                 }
             } catch (Exception e) {

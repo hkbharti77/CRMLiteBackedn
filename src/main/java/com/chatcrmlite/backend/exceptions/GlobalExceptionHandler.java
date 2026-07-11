@@ -137,6 +137,12 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.FORBIDDEN, "Access denied.", null);
     }
 
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Map<String, Object>> handleResponseStatusException(
+            org.springframework.web.server.ResponseStatusException ex) {
+        return errorResponse(org.springframework.http.HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason(), null);
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
 
     /**

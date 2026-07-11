@@ -35,6 +35,7 @@ public class NluEngine {
 
     private static final java.util.regex.Pattern NON_ALPHANUMERIC_PATTERN = java.util.regex.Pattern.compile("[^a-z0-9]");
     private static final java.util.regex.Pattern REPEATED_CHAR_PATTERN = java.util.regex.Pattern.compile(".*(.)\\1{4,}.*");
+    private static final java.util.regex.Pattern CONSONANT_CLUSTER_PATTERN = java.util.regex.Pattern.compile("[bcdfghjklmnpqrstvwxz]{5,}");
     private final Map<String, java.util.regex.Pattern> wordBoundaryPatternCache = new java.util.concurrent.ConcurrentHashMap<>();
 
     public Set<String> detectIntents(String text, NicheConfig config) {
@@ -160,6 +161,10 @@ public class NluEngine {
         try {
             if (text.length() < 3) {
                 return false; 
+            }
+            // Check for keyboard mashing consonant clusters (e.g. jjhdgkjdfkga, asdfghjkl)
+            if (CONSONANT_CLUSTER_PATTERN.matcher(text).find()) {
+                return true;
             }
             Set<Character> uniqueChars = new HashSet<>();
             for (char c : text.toCharArray()) uniqueChars.add(c);

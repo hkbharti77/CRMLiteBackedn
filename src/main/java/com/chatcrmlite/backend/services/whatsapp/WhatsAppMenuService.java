@@ -24,8 +24,6 @@ import java.util.UUID;
 public class WhatsAppMenuService {
 
     public static final String SOS_LABEL     = "\uD83C\uDD98 Human Support";
-    public static final String TRUST_LABEL   = "\u2B50 Trust & Reviews";
-    public static final String OFFER_LABEL   = "\uD83C\uDF81 Special Offer";
     public static final String ABOUT_LABEL   = "\uD83D\uDCC2 About & Contact";
     public static final String SUPPORT_LABEL = "\uD83C\uDFAB Get Support";
     private final WhatsAppOutboundService outboundService;
@@ -292,34 +290,13 @@ public class WhatsAppMenuService {
             }
             return true;
         }
-        if ("get_trust".equals(selectionId)) {
-            try {
-                String url = config.getReviewUrl();
-                if (url == null || url.isBlank()) url = "our website or social media pages";
-                outboundService.sendText(contact, "Check out our reviews and what others say about us here:\n" + url, config, owner);
-            } catch (Exception e) {
-                log.error("Failed to send trust message", e);
-            }
-            return true;
-        }
-        if ("get_offer".equals(selectionId)) {
-            try {
-                String offer = config.getOfferText();
-                if (offer == null || offer.isBlank()) offer = "Contact us to hear about our latest deals!";
-                outboundService.sendText(contact, "\uD83C\uDF81 Special Offer!\n\n" + offer, config, owner);
-            } catch (Exception e) {
-                log.error("Failed to send offer message", e);
-            }
-            return true;
-        }
+
         return false;
     }
 
     private void injectDynamicFeatures(MenuDto menu, WhatsAppConfig config) {
         if (menu == null || menu.getSections() == null || menu.getSections().isEmpty()) return;
         
-        boolean isTrust = Boolean.TRUE.equals(config.getShowTrustButton());
-        boolean isOffer = Boolean.TRUE.equals(config.getShowOfferButton());
         boolean isSos = Boolean.TRUE.equals(config.getShowSosButton());
         boolean isSupportForm = Boolean.TRUE.equals(config.getShowSupportFormButton());
         boolean isAbout = Boolean.TRUE.equals(config.getShowAboutContact());
@@ -335,36 +312,24 @@ public class WhatsAppMenuService {
             if (modifiableRows.size() < 3 && isSupportForm && modifiableRows.stream().noneMatch(r -> "trigger_flow_support".equals(r.getId()))) {
                 modifiableRows.add(MenuDto.MenuRowDto.builder().id("trigger_flow_support").title(SUPPORT_LABEL).build());
             }
-            if (modifiableRows.size() < 3 && isSos && modifiableRows.stream().noneMatch(r -> "get_support".equals(r.getId()))) {
-                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).build());
-            }
-            if (modifiableRows.size() < 3 && isTrust && modifiableRows.stream().noneMatch(r -> "get_trust".equals(r.getId()))) {
-                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_trust").title(TRUST_LABEL).build());
-            }
-            if (modifiableRows.size() < 3 && isOffer && modifiableRows.stream().noneMatch(r -> "get_offer".equals(r.getId()))) {
-                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_offer").title(OFFER_LABEL).build());
-            }
             if (modifiableRows.size() < 3 && isAbout && modifiableRows.stream().noneMatch(r -> "get_about".equals(r.getId()))) {
                 modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_about").title(ABOUT_LABEL).build());
+            }
+            if (modifiableRows.size() < 3 && isSos && modifiableRows.stream().noneMatch(r -> "get_support".equals(r.getId()))) {
+                modifiableRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).build());
             }
             
             menu.getSections().get(0).setRows(modifiableRows);
         } else if ("list".equals(menu.getType())) {
             List<MenuDto.MenuRowDto> dynamicRows = new ArrayList<>();
-            if (isTrust) {
-                dynamicRows.add(MenuDto.MenuRowDto.builder().id("get_trust").title(TRUST_LABEL).build());
-            }
-            if (isOffer) {
-                dynamicRows.add(MenuDto.MenuRowDto.builder().id("get_offer").title(OFFER_LABEL).description("View our latest special offers").build());
+            if (isSupportForm) {
+                dynamicRows.add(MenuDto.MenuRowDto.builder().id("trigger_flow_support").title(SUPPORT_LABEL).description("Submit a support request").build());
             }
             if (isAbout) {
                 dynamicRows.add(MenuDto.MenuRowDto.builder().id("get_about").title(ABOUT_LABEL).description("Learn more about us and contact info").build());
             }
             if (isSos) {
                 dynamicRows.add(MenuDto.MenuRowDto.builder().id("get_support").title(SOS_LABEL).description("Get help from our team").build());
-            }
-            if (isSupportForm) {
-                dynamicRows.add(MenuDto.MenuRowDto.builder().id("trigger_flow_support").title(SUPPORT_LABEL).description("Submit a support request").build());
             }
 
             if (!dynamicRows.isEmpty()) {
@@ -396,6 +361,12 @@ public class WhatsAppMenuService {
             if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
         }
 
+        if (hasLead) {
+            flowRows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_lead")
+                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+            hasSpecificToggles = true;
+        }
         if (hasAppointment) {
             flowRows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_appointment")
@@ -406,12 +377,6 @@ public class WhatsAppMenuService {
             flowRows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_booking")
                 .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
-            hasSpecificToggles = true;
-        }
-        if (hasLead) {
-            flowRows.add(MenuDto.MenuRowDto.builder()
-                .id("trigger_flow_lead")
-                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
             hasSpecificToggles = true;
         }
 
@@ -464,6 +429,12 @@ public class WhatsAppMenuService {
             if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
         }
 
+        if (hasLead) {
+            rows.add(MenuDto.MenuRowDto.builder()
+                .id("trigger_flow_lead")
+                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+            hasSpecificToggles = true;
+        }
         if (hasAppointment) {
             rows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_appointment")
@@ -474,12 +445,6 @@ public class WhatsAppMenuService {
             rows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_booking")
                 .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
-            hasSpecificToggles = true;
-        }
-        if (hasLead) {
-            rows.add(MenuDto.MenuRowDto.builder()
-                .id("trigger_flow_lead")
-                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
             hasSpecificToggles = true;
         }
 

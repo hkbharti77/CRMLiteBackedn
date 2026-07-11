@@ -50,8 +50,6 @@ public class WhatsAppConfigController {
     public ResponseEntity<Map<String, String>> getFeatureLabels() {
         Map<String, String> labels = new HashMap<>();
         labels.put("SOS", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.SOS_LABEL);
-        labels.put("TRUST", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.TRUST_LABEL);
-        labels.put("OFFER", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.OFFER_LABEL);
         labels.put("ABOUT", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.ABOUT_LABEL);
         labels.put("SUPPORT_FORM", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.SUPPORT_LABEL);
         return ResponseEntity.ok(labels);
@@ -87,13 +85,9 @@ public class WhatsAppConfigController {
         String welcomeMessage = (String) body.get("welcomeMessage");
         String returningMessage = (String) body.get("returningMessage");
         Boolean showAboutContact= (Boolean) body.get("showAboutContact");
-        String reviewUrl        = (String) body.get("reviewUrl");
         String portfolioUrl     = (String) body.get("portfolioUrl");
-        String offerText        = (String) body.get("offerText");
         String sosNote          = (String) body.get("sosNote");
         String thirdButtonType   = (String) body.get("thirdButtonType");
-        Boolean showTrustButton  = (Boolean) body.get("showTrustButton");
-        Boolean showOfferButton  = (Boolean) body.get("showOfferButton");
         Boolean showSosButton    = (Boolean) body.get("showSosButton");
         String customSubMenusJson = (String) body.get("customSubMenusJson");
         String customMessagesJson = (String) body.get("customMessagesJson");
@@ -135,20 +129,12 @@ public class WhatsAppConfigController {
         config.setGuardrailMessageGibberish(guardrailMessageGibberish);
         
         // Dynamic Buttons Data
-        config.setReviewUrl(reviewUrl);
         config.setPortfolioUrl(portfolioUrl);
-        config.setOfferText(offerText);
         config.setSosNote(sosNote);
         config.setThirdButtonType(thirdButtonType);
 
         if (showAboutContact != null) {
             config.setShowAboutContact(showAboutContact);
-        }
-        if (showTrustButton != null) {
-            config.setShowTrustButton(showTrustButton);
-        }
-        if (showOfferButton != null) {
-            config.setShowOfferButton(showOfferButton);
         }
         if (showSosButton != null) {
             config.setShowSosButton(showSosButton);

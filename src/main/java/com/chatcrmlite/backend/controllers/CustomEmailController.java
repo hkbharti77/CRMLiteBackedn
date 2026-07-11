@@ -41,6 +41,15 @@ public class CustomEmailController {
         return ResponseEntity.ok(customEmailService.send(me(), req));
     }
 
+    @PostMapping("/generate-ai")
+    public ResponseEntity<java.util.Map<String, String>> generateAi(@RequestBody java.util.Map<String, String> request) {
+        String prompt = request.get("prompt");
+        if (prompt == null || prompt.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(customEmailService.generateAiContent(me(), prompt));
+    }
+
     @PostMapping("/draft")
     public ResponseEntity<CustomEmailDTO> saveDraft(@Valid @RequestBody CustomEmailRequest req) {
         return ResponseEntity.ok(customEmailService.saveDraft(me(), req));
