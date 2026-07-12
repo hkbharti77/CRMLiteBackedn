@@ -3,7 +3,6 @@ package com.chatcrmlite.backend.services;
 import com.chatcrmlite.backend.models.DocumentChunk;
 import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
 import dev.langchain4j.model.chat.ChatLanguageModel;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
@@ -55,7 +54,7 @@ public class RagRetrievalService {
     @Autowired
     private CostTracker costTracker;
 
-    @Autowired
+    @Autowired(required = false)
     private EmbeddingModel embeddingModel;
 
     /**
@@ -75,6 +74,10 @@ public class RagRetrievalService {
         quotaService.checkAndEnforceQuota(tenantId, user.getPlanType());
 
         // 2. Generate Query Embedding
+        if (embeddingModel == null) {
+            log.warn("Embedding model unavailable. RAG disabled. Using direct LLM response.");
+            return null;
+        }
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
