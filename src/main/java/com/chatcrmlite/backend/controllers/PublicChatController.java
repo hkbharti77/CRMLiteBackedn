@@ -36,9 +36,6 @@ public class PublicChatController {
     @Autowired
     private GuardrailService guardrailService;
 
-    @Autowired(required = false)
-    private dev.langchain4j.model.chat.ChatLanguageModel chatLanguageModel;
-
     @GetMapping("/config/{businessId}")
     public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
         return userRepository.findById(businessId)
@@ -132,17 +129,7 @@ public class PublicChatController {
         String response = ragRetrievalService.getAiResponse(message, businessId);
         
         if (response == null || response.isBlank()) {
-            if (chatLanguageModel != null) {
-                try {
-                    dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage> responseObj = 
-                        chatLanguageModel.generate(java.util.List.of(dev.langchain4j.data.message.UserMessage.from(message)));
-                    response = responseObj.content().text();
-                } catch (Exception e) {
-                    response = "I'm sorry, I don't have information about that. How else can I help you?";
-                }
-            } else {
-                response = "I'm sorry, I don't have information about that. How else can I help you?";
-            }
+            response = "I'm sorry, I don't have information about that. How else can I help you?";
         }
 
         Map<String, Object> responseMap = new java.util.HashMap<>();

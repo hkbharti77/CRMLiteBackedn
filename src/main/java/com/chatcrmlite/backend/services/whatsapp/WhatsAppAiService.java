@@ -32,9 +32,6 @@ public class WhatsAppAiService {
     private final GuardrailService guardrailService;
     private final RagRetrievalService ragRetrievalService;
 
-    @org.springframework.beans.factory.annotation.Autowired(required = false)
-    private dev.langchain4j.model.chat.ChatLanguageModel chatLanguageModel;
-
     @Transactional
     public void evaluateAiIntake(ProcessingContext context) {
         try {
@@ -66,19 +63,7 @@ public class WhatsAppAiService {
                         context.getMetadata().put("pendingResponse", aiResponse);
                         context.getMetadata().put("responseType", "AI");
                     } else {
-                        if (chatLanguageModel != null) {
-                            log.warn("Using direct LLM response.");
-                            try {
-                                dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage> responseObj = 
-                                    chatLanguageModel.generate(java.util.List.of(dev.langchain4j.data.message.UserMessage.from(text)));
-                                context.getMetadata().put("pendingResponse", responseObj.content().text());
-                                context.getMetadata().put("responseType", "AI");
-                            } catch (Exception e) {
-                                context.getMetadata().put("responseType", "MENU");
-                            }
-                        } else {
-                            context.getMetadata().put("responseType", "MENU");
-                        }
+                        context.getMetadata().put("responseType", "MENU");
                     }
                     break;
                 case REUSE:
