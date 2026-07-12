@@ -1,4 +1,4 @@
-# ── Stage 1: Build ────────────────────────────────────────────────────────────
+# ── Stage 1: Builds ────────────────────────────────────────────────────────────
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /workspace
 
