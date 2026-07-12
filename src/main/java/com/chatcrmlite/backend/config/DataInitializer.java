@@ -120,12 +120,12 @@ public class DataInitializer implements CommandLineRunner {
             ));
             log.info("[Init] Seeded PRO subscription plan.");
         }
-        if (subscriptionPlanRepository.findById("MAX").isEmpty()) {
+        if (subscriptionPlanRepository.findById("ENTERPRISE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
-                "MAX", "Enterprise Max", new BigDecimal("79.99"), new BigDecimal("767.90"),
+                "ENTERPRISE", "Enterprise Max", new BigDecimal("79.99"), new BigDecimal("767.90"),
                 50, 1000000, 1000000, 1000000, 1000000, true, true, true
             ));
-            log.info("[Init] Seeded MAX subscription plan.");
+            log.info("[Init] Seeded ENTERPRISE subscription plan.");
         }
     }
 }

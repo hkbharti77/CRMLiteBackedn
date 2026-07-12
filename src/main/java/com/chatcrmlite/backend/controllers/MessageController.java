@@ -66,11 +66,11 @@ public class MessageController {
             @AuthenticationPrincipal String email) {
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "User not found"));
 
         Contact contact = contactRepository.findById(contactId)
                 .filter(c -> c.getOwner().getId().equals(user.getId()))
-                .orElseThrow(() -> new RuntimeException("Contact not found or access denied"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Contact not found or access denied"));
 
         List<Message> history = messageRepository.findAllByContactOrderByTimestampAsc(contact);
         return ResponseEntity.ok(history);
@@ -83,7 +83,7 @@ public class MessageController {
             @AuthenticationPrincipal String email) {
 
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "User not found"));
 
         String text = request.get("text");
         whatsappMessageService.sendMessage(contactId, text, user);

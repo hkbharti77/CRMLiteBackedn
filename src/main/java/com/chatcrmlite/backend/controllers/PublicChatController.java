@@ -16,6 +16,8 @@ import com.chatcrmlite.backend.models.SubscriptionPlan;
 import com.chatcrmlite.backend.services.ai.guardrail.GuardrailService;
 import com.chatcrmlite.backend.dto.ai.GuardrailResult;
 import com.chatcrmlite.backend.dto.ai.Decision;
+import com.chatcrmlite.backend.services.WebChatService;
+import com.chatcrmlite.backend.models.WebChatMessage;
 
 @RestController
 @RequestMapping("/api/v1/public")
@@ -36,8 +38,8 @@ public class PublicChatController {
     @Autowired
     private GuardrailService guardrailService;
 
-    @Autowired(required = false)
-    private dev.langchain4j.model.chat.ChatLanguageModel chatLanguageModel;
+    @Autowired
+    private WebChatService webChatService;
 
     @GetMapping("/config/{businessId}")
     public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
@@ -56,12 +58,20 @@ public class PublicChatController {
             return ResponseEntity.badRequest().body(Map.of("error", "Message is required"));
         }
 
+        String sessionId = request.getOrDefault("sessionId", "anonymous");
         User owner = userRepository.findById(businessId).orElse(null);
+        
+        if (owner != null) {
+            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.USER, message);
+        }
+
         if (owner != null && owner.getTenant() != null) {
             try {
                 SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
                 if (!plan.isHasRagLlm()) {
-                    return ResponseEntity.ok(Map.of("response", "I am a menu-based assistant. Please use the options provided to interact."));
+                    String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg);
+                    return ResponseEntity.ok(Map.of("response", noRagMsg));
                 }
             } catch (Exception e) {
                 // Proceed normally if enforcement fails or tenant doesn't exist
@@ -89,6 +99,7 @@ public class PublicChatController {
                     responseMap.put("response", greeting);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
                     
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, greeting);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "abuse_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -100,6 +111,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.MENU && "gibberish".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -111,6 +123,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "spam_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -122,6 +135,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 }
             } catch (Exception e) {
@@ -132,22 +146,16 @@ public class PublicChatController {
         String response = ragRetrievalService.getAiResponse(message, businessId);
         
         if (response == null || response.isBlank()) {
-            if (chatLanguageModel != null) {
-                try {
-                    dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage> responseObj = 
-                        chatLanguageModel.generate(java.util.List.of(dev.langchain4j.data.message.UserMessage.from(message)));
-                    response = responseObj.content().text();
-                } catch (Exception e) {
-                    response = "I'm sorry, I don't have information about that. How else can I help you?";
-                }
-            } else {
-                response = "I'm sorry, I don't have information about that. How else can I help you?";
-            }
+            response = "I'm sorry, I don't have information about that. How else can I help you?";
         }
 
         Map<String, Object> responseMap = new java.util.HashMap<>();
         responseMap.put("response", response);
         if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+
+        if (owner != null) {
+            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, response);
+        }
 
         return ResponseEntity.ok(responseMap);
     }
