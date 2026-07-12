@@ -6,7 +6,9 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "user_sessions")
+@Table(name = "user_sessions", indexes = {
+    @Index(name = "idx_user_session_token", columnList = "tokenId")
+})
 public class UserSession implements Serializable {
     private static final long serialVersionUID = 1L;
 

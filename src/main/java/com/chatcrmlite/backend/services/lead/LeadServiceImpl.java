@@ -146,11 +146,11 @@ public class LeadServiceImpl implements LeadService {
     @Cacheable(value = "latestLeadByContact", key = "#contactId + '_' + #owner.id")
     public Lead getLatestLeadByContactId(UUID contactId, User owner) {
         Contact contact = contactRepository.findById(contactId)
-                .orElseThrow(() -> new RuntimeException("Contact not found"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Contact not found"));
         Lead lead = leadRepository.findAllByContact(contact).stream()
                 .filter(l -> isAdmin(owner) || l.getOwner().getId().equals(owner.getId()))
                 .max(java.util.Comparator.comparing(Lead::getCreatedAt))
-                .orElseThrow(() -> new RuntimeException("No lead found for this contact"));
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "No lead found for this contact"));
         // Initialize lazy relationships to avoid LazyInitializationException outside transaction
         initializeLead(lead);
         return lead;

@@ -16,6 +16,8 @@ import com.chatcrmlite.backend.models.SubscriptionPlan;
 import com.chatcrmlite.backend.services.ai.guardrail.GuardrailService;
 import com.chatcrmlite.backend.dto.ai.GuardrailResult;
 import com.chatcrmlite.backend.dto.ai.Decision;
+import com.chatcrmlite.backend.services.WebChatService;
+import com.chatcrmlite.backend.models.WebChatMessage;
 
 @RestController
 @RequestMapping("/api/v1/public")
@@ -36,6 +38,9 @@ public class PublicChatController {
     @Autowired
     private GuardrailService guardrailService;
 
+    @Autowired
+    private WebChatService webChatService;
+
     @GetMapping("/config/{businessId}")
     public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
         return userRepository.findById(businessId)
@@ -53,12 +58,20 @@ public class PublicChatController {
             return ResponseEntity.badRequest().body(Map.of("error", "Message is required"));
         }
 
+        String sessionId = request.getOrDefault("sessionId", "anonymous");
         User owner = userRepository.findById(businessId).orElse(null);
+        
+        if (owner != null) {
+            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.USER, message);
+        }
+
         if (owner != null && owner.getTenant() != null) {
             try {
                 SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
                 if (!plan.isHasRagLlm()) {
-                    return ResponseEntity.ok(Map.of("response", "I am a menu-based assistant. Please use the options provided to interact."));
+                    String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg);
+                    return ResponseEntity.ok(Map.of("response", noRagMsg));
                 }
             } catch (Exception e) {
                 // Proceed normally if enforcement fails or tenant doesn't exist
@@ -86,6 +99,7 @@ public class PublicChatController {
                     responseMap.put("response", greeting);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
                     
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, greeting);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "abuse_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -97,6 +111,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.MENU && "gibberish".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -108,6 +123,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "spam_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -119,6 +135,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
                     return ResponseEntity.ok(responseMap);
                 }
             } catch (Exception e) {
@@ -135,6 +152,10 @@ public class PublicChatController {
         Map<String, Object> responseMap = new java.util.HashMap<>();
         responseMap.put("response", response);
         if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+
+        if (owner != null) {
+            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, response);
+        }
 
         return ResponseEntity.ok(responseMap);
     }

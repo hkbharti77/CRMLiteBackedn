@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.UUID;
 
 @Entity
-@Table(name = "chat_messages")
+@Table(name = "chat_messages", indexes = {
+    @Index(name = "idx_chat_msg_contact_time", columnList = "contact_id, timestamp")
+})
 public class Message extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)

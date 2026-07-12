@@ -7,6 +7,8 @@ import com.chatcrmlite.backend.repositories.BusinessServiceRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.FlowConfigService;
 import com.chatcrmlite.backend.services.PublicSubmissionService;
+import com.chatcrmlite.backend.services.WebChatService;
+import com.chatcrmlite.backend.models.WebChatMessage;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +47,7 @@ public class PublicFlowController {
     @Autowired private FlowConfigService flowConfigService;
     @Autowired private PublicSubmissionService submissionService;
     @Autowired private BusinessServiceRepository businessServiceRepository;
+    @Autowired private WebChatService webChatService;
 
     // ── Flow Config ────────────────────────────────────────────────────────
 
@@ -133,6 +136,10 @@ public class PublicFlowController {
         User owner = resolveOwner(businessId);
         validateEmail(request);
         submissionService.submitLead(owner, request.getData());
+        
+        String sessionId = request.getData().getOrDefault("sessionId", "anonymous");
+        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, "📝 User submitted a Lead Form with email: " + request.getData().get("email"));
+        
         return created("✅ Thank you! We've received your enquiry and will be in touch shortly.");
     }
 
@@ -144,6 +151,10 @@ public class PublicFlowController {
         User owner = resolveOwner(businessId);
         validateEmail(request);
         submissionService.submitEnquiry(owner, request.getData());
+        
+        String sessionId = request.getData().getOrDefault("sessionId", "anonymous");
+        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, "📝 User submitted an Enquiry Form with email: " + request.getData().get("email"));
+        
         return created("✅ Thank you! Your enquiry has been received. Our team will contact you soon.");
     }
 
@@ -155,6 +166,10 @@ public class PublicFlowController {
         User owner = resolveOwner(businessId);
         validateEmail(request);
         submissionService.submitAppointment(owner, request.getData());
+        
+        String sessionId = request.getData().getOrDefault("sessionId", "anonymous");
+        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, "📅 User booked an Appointment with email: " + request.getData().get("email"));
+        
         return created("✅ Your appointment has been booked! Our team will confirm the exact time shortly.");
     }
 
@@ -166,6 +181,10 @@ public class PublicFlowController {
         User owner = resolveOwner(businessId);
         validateEmail(request);
         submissionService.submitBooking(owner, request.getData());
+        
+        String sessionId = request.getData().getOrDefault("sessionId", "anonymous");
+        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, "🔖 User confirmed a Booking with email: " + request.getData().get("email"));
+        
         return created("✅ Your booking is confirmed! We'll send you the details on your email.");
     }
 
