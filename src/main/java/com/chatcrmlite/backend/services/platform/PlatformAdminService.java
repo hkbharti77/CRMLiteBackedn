@@ -1,9 +1,9 @@
 package com.chatcrmlite.backend.services.platform;
 
 import com.chatcrmlite.backend.models.PlatformAdmin;
-import com.chatcrmlite.backend.models.PlatformAuditLog;
 import com.chatcrmlite.backend.repositories.PlatformAdminRepository;
 import com.chatcrmlite.backend.repositories.PlatformAuditLogRepository;
+import com.chatcrmlite.backend.models.PlatformAuditLog;
 import com.chatcrmlite.backend.security.PlatformJwtUtils;
 import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletRequest;
@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import com.chatcrmlite.backend.services.EmailService;
 
 import java.time.LocalDateTime;
 import java.util.Map;
@@ -37,24 +38,55 @@ public class PlatformAdminService {
     private final PlatformAuditLogRepository auditRepository;
     private final PlatformJwtUtils jwtUtils;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public PlatformAdminService(PlatformAdminRepository adminRepository,
                                 PlatformAuditLogRepository auditRepository,
                                 PlatformJwtUtils jwtUtils,
-                                PasswordEncoder passwordEncoder) {
+                                PasswordEncoder passwordEncoder,
+                                EmailService emailService) {
         this.adminRepository = adminRepository;
         this.auditRepository = auditRepository;
         this.jwtUtils = jwtUtils;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     /**
-     * Authenticates the owner, enforces lockout, sets HttpOnly cookie on success.
+     * Requests an OTP for the platform owner.
+     */
+    public Map<String, Object> requestOtp(String email, HttpServletRequest request) {
+        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(email)) {
+            log.warn("[Platform] OTP request for unauthorized email: {}", email);
+            return Map.of("status", "invalid", "message", "Unauthorized email");
+        }
+
+        PlatformAdmin admin = adminRepository.findByEmail(email).orElse(null);
+        if (admin == null) {
+            return Map.of("status", "invalid", "message", "Admin not found");
+        }
+
+        if (admin.isCurrentlyLocked()) {
+            long secs = admin.remainingLockSeconds();
+            return Map.of("status", "locked",
+                          "message", "Account locked. Try again in " + Math.ceil(secs / 60.0) + " minutes.",
+                          "remainingSeconds", secs);
+        }
+
+        String ip = resolveIp(request);
+        String ua = resolveUserAgent(request);
+        emailService.generateAndSendLoginOtp(email, ip, ua);
+        
+        return Map.of("status", "ok", "message", "OTP sent successfully");
+    }
+
+    /**
+     * Authenticates the owner using OTP, enforces lockout, sets HttpOnly cookie on success.
      *
      * @return Map with "status" → "ok" or "locked"/"invalid"
      */
     @Transactional
-    public Map<String, Object> login(String email, String password,
+    public Map<String, Object> login(String email, String otp,
                                      HttpServletRequest request,
                                      HttpServletResponse response) {
         String ip = resolveIp(request);
@@ -79,7 +111,12 @@ public class PlatformAdminService {
                           "remainingSeconds", secs);
         }
 
-        if (!passwordEncoder.matches(password, admin.getPasswordHash())) {
+        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(email)) {
+            audit(requestId, "LOGIN", "FAILED", "System", email, "{\"reason\":\"unauthorized_email\"}", ip, ua);
+            return Map.of("status", "invalid", "message", "Invalid credentials");
+        }
+
+        if (!emailService.verifyOtp(email, otp)) {
             int newCount = admin.getFailedLoginCount() + 1;
             admin.setFailedLoginCount(newCount);
 

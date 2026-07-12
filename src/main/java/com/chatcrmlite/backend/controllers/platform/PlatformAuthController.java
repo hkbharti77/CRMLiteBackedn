@@ -31,12 +31,40 @@ public class PlatformAuthController {
 
     public static class PlatformLoginRequest {
         private String email;
-        private String password;
+        private String otp;
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
-        public String getPassword() { return password; }
-        public void setPassword(String password) { this.password = password; }
+        public String getOtp() { return otp; }
+        public void setOtp(String otp) { this.otp = otp; }
+    }
+
+    public static class PlatformOtpRequest {
+        private String email;
+        public String getEmail() { return email; }
+        public void setEmail(String email) { this.email = email; }
+    }
+
+    @PostMapping("/login/request-otp")
+    public ResponseEntity<Map<String, Object>> requestOtp(
+            @RequestBody PlatformOtpRequest body,
+            HttpServletRequest request) {
+        
+        String email = body.getEmail();
+        if (email == null || email.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("status", "invalid", "message", "Email required"));
+        }
+
+        Map<String, Object> result = adminService.requestOtp(email, request);
+        
+        String status = (String) result.get("status");
+        if ("ok".equals(status)) {
+            return ResponseEntity.ok(result);
+        } else if ("locked".equals(status)) {
+            return ResponseEntity.status(423).body(result);
+        } else {
+            return ResponseEntity.status(401).body(result);
+        }
     }
 
     @PostMapping("/login")
@@ -46,13 +74,13 @@ public class PlatformAuthController {
             HttpServletResponse response) {
 
         String email = body.getEmail();
-        String password = body.getPassword();
+        String otp = body.getOtp();
 
-        if (email == null || password == null) {
-            return ResponseEntity.badRequest().body(Map.of("status", "invalid", "message", "Email and password required"));
+        if (email == null || otp == null) {
+            return ResponseEntity.badRequest().body(Map.of("status", "invalid", "message", "Email and OTP required"));
         }
 
-        Map<String, Object> result = adminService.login(email, password, request, response);
+        Map<String, Object> result = adminService.login(email, otp, request, response);
 
         String status = (String) result.get("status");
         if ("ok".equals(status)) {

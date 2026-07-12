@@ -81,11 +81,20 @@ public class DataInitializer implements CommandLineRunner {
     private void seedPlatformAdmin() {
         if (platformAdminRepository.count() == 0) {
             PlatformAdmin admin = new PlatformAdmin();
-            admin.setEmail("owner@example.com");
-            admin.setPasswordHash(passwordEncoder.encode("Admin123!"));
-            admin.setDisplayName("Super Admin");
+            admin.setEmail("gyanvaniai@gmail.com");
+            admin.setPasswordHash("OTP_ONLY");
+            admin.setDisplayName("Platform Owner");
             platformAdminRepository.save(admin);
-            log.info("[Init] Seeded Platform Admin: owner@example.com (Password: Admin123!)");
+            log.info("[Init] Seeded Platform Admin: gyanvaniai@gmail.com (OTP based login)");
+        } else {
+            // Ensure email is set to gyanvaniai@gmail.com if it already exists
+            PlatformAdmin admin = platformAdminRepository.findAll().get(0);
+            if (!"gyanvaniai@gmail.com".equals(admin.getEmail())) {
+                admin.setEmail("gyanvaniai@gmail.com");
+                admin.setPasswordHash("OTP_ONLY");
+                platformAdminRepository.save(admin);
+                log.info("[Init] Updated Platform Admin email to gyanvaniai@gmail.com");
+            }
         }
     }
 

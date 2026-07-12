@@ -85,7 +85,7 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/v1/platform/auth/login").permitAll()
+                .requestMatchers("/api/v1/platform/auth/login", "/api/v1/platform/auth/login/request-otp").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 .anyRequest().hasRole("PLATFORM_ADMIN")
             )

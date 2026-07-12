@@ -229,6 +229,29 @@ public class EmailService {
 
     // ── Ticket Emails ──────────────────────────────────────────────────────
 
+    public void sendPlatformTicketCreatedNotification(String toEmail, String adminName,
+            String ticketId, String subject, String description) {
+        Context ctx = new Context();
+        ctx.setVariable("heading",    "Platform Support Ticket Raised");
+        ctx.setVariable("greeting",   "Hi " + adminName + ",");
+        ctx.setVariable("intro",      "We have received your support request. Our platform team is looking into it and will get back to you with the best solution shortly.");
+        ctx.setVariable("footerNote", "You can track and reply to this ticket directly in the Settings > Support section of your app.");
+        ctx.setVariable("ctaLabel",   "Open App");
+        ctx.setVariable("ctaUrl",     "https://app.chatcrmlite.com"); // Replace with actual URL if available
+        ctx.setVariable("customerName", adminName);
+        
+        // Truncate UUID for display to look like a ticket number
+        String ticketNumber = ticketId.length() > 8 ? ticketId.substring(0, 8).toUpperCase() : ticketId;
+        ctx.setVariable("ticketNumber", ticketNumber);
+        
+        ctx.setVariable("subject",       subject);
+        ctx.setVariable("description",   description);
+        ctx.setVariable("priority",      "HIGH");
+        
+        sendTemplate(toEmail, "[" + BRAND + " Platform Support] Ticket #" + ticketNumber + " - " + subject,
+                "ticket-created-customer", ctx);
+    }
+
     public void sendTicketCreatedToCustomer(String toEmail, String customerName,
             String ticketNumber, String subject, String description, String priority) {
         Context ctx = new Context();
