@@ -42,12 +42,20 @@ public class DashboardAggregateController {
         User user = getAuthenticatedUser();
         byte[] fileData = dashboardExportService.exportReport(user, format);
         
-        String filename = "dashboard_report." + format.toLowerCase();
+        String business = user.getBusinessName() != null ? user.getBusinessName() : "business";
+        String niche = user.getBusinessSubType() != null ? user.getBusinessSubType() : "generic";
+        
+        String cleanBusiness = business.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("__+", "_");
+        String cleanNiche = niche.replaceAll("[^a-zA-Z0-9]", "_").toLowerCase().replaceAll("__+", "_");
+        String timestamp = java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        
+        String filename = String.format("%s_%s_report_%s.%s", cleanBusiness, cleanNiche, timestamp, format.toLowerCase());
+        
         MediaType mediaType = "pdf".equalsIgnoreCase(format) ? 
                 MediaType.APPLICATION_PDF : MediaType.parseMediaType("text/csv");
                 
         return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=" + filename)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
                 .contentType(mediaType)
                 .body(fileData);
     }

@@ -1,8 +1,11 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.dto.ThemeConfigDTO;
+import com.chatcrmlite.backend.models.CustomMenuCard;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.repositories.CustomMenuCardRepository;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import org.springframework.stereotype.Service;
 
@@ -10,7 +13,10 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 import com.chatcrmlite.backend.dto.WidgetCtaDTO;
+import com.chatcrmlite.backend.dto.MenuSectionDTO;
+import com.chatcrmlite.backend.dto.MenuCardDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
@@ -24,6 +30,9 @@ public class NicheThemeService {
 
     @Autowired
     private FlowTemplateEngine templateEngine;
+
+    @Autowired
+    private CustomMenuCardRepository customMenuCardRepository;
 
     private static final Map<String, NicheTheme> THEMES = new HashMap<>();
 
@@ -81,9 +90,18 @@ public class NicheThemeService {
                 ? config.getWelcomeMessage() 
                 : "Hello! How can I help you today?";
 
+        String returning = (config != null && config.getReturningMessage() != null)
+                ? config.getReturningMessage()
+                : "Welcome back! How can we assist you today?";
+
+        String bName = user.getBusinessName() != null ? user.getBusinessName() : "our business";
+        
         if (welcome != null && welcome.contains("{{business}}")) {
-            String bName = user.getBusinessName() != null ? user.getBusinessName() : "our business";
             welcome = welcome.replace("{{business}}", bName);
+        }
+        
+        if (returning != null && returning.contains("{{business}}")) {
+            returning = returning.replace("{{business}}", bName);
         }
 
         List<WidgetCtaDTO> ctaButtons = new ArrayList<>();
@@ -128,6 +146,8 @@ public class NicheThemeService {
             }
         }
 
+        List<MenuSectionDTO> menuSections = buildMenuSections(user, slug, hasAppointment, hasBooking, hasLead, config);
+
         return ThemeConfigDTO.builder()
                 .primaryColor(finalPrimary)
                 .secondaryColor(finalSecondary)
@@ -137,11 +157,109 @@ public class NicheThemeService {
                 .nicheIcon(theme.icon)
                 .businessName(user.getBusinessName() != null ? user.getBusinessName() : "Assistant")
                 .welcomeMessage(welcome)
+                .returningMessage(returning)
                 .businessSubType(slug)
                 .logoUrl(finalLogoUrl)
                 .showWatermark(showWatermark)
                 .ctaButtons(ctaButtons)
+                .menuSections(menuSections)
+                .aboutUs(config != null && Boolean.TRUE.equals(config.getShowAboutContact()) ? user.getAboutUs() : null)
+                .aiResponseMenuJson(config != null ? config.getAiResponseMenuJson() : null)
+                .flowCancelMenuJson(config != null ? config.getFlowCancelMenuJson() : null)
+                .flowCompletionMenuJson(config != null ? config.getFlowCompletionMenuJson() : null)
+                .guardrailMessageAbuse(config != null ? config.getGuardrailMessageAbuse() : null)
+                .guardrailMessageGibberish(config != null ? config.getGuardrailMessageGibberish() : null)
                 .build();
+    }
+
+    private List<MenuSectionDTO> buildMenuSections(User user, String slug, boolean hasAppt, boolean hasBooking, boolean hasLead, WhatsAppConfig config) {
+        List<MenuSectionDTO> sections = new ArrayList<>();
+
+        // 1. CONNECT SECTION
+        List<MenuCardDTO> connectCards = new ArrayList<>();
+        if (hasAppt) {
+            connectCards.add(new MenuCardDTO("Book Appointment", "Schedule a time", "calendar", "FLOW", "appointment"));
+        }
+        if (hasBooking) {
+            connectCards.add(new MenuCardDTO("Book a Service", "Reserve your spot", "calendar", "FLOW", "booking"));
+        }
+        if (hasLead) {
+            connectCards.add(new MenuCardDTO("Get a Quote", "Contact our team", "briefcase", "FLOW", "lead"));
+        }
+        if (config != null && Boolean.TRUE.equals(config.getShowSupportFormButton())) {
+            connectCards.add(new MenuCardDTO("Support Center", "Get help now", "settings", "SUPPORT", ""));
+        }
+        if (!connectCards.isEmpty()) {
+            sections.add(new MenuSectionDTO("CONNECT", connectCards));
+        }
+
+        // 2. SERVICES SECTION
+        // Priority: tenant's custom cards > niche defaults
+        Tenant tenant = user.getTenant();
+        List<MenuCardDTO> serviceCards = new ArrayList<>();
+
+        boolean hasCustomCards = tenant != null && customMenuCardRepository.existsByTenant(tenant);
+
+        if (hasCustomCards) {
+            // Use tenant's custom-built cards
+            List<CustomMenuCard> customCards = customMenuCardRepository
+                    .findByTenantAndSectionOrderByDisplayOrderAsc(tenant, "SERVICES");
+            for (CustomMenuCard c : customCards) {
+                serviceCards.add(new MenuCardDTO(c.getTitle(), c.getSubtitle(), c.getIcon(), c.getActionType(), c.getActionPayload()));
+            }
+            // Always append About Us if the tenant hasn't added it themselves
+            boolean hasAbout = customCards.stream().anyMatch(c -> "ABOUT".equals(c.getActionType()));
+            if (!hasAbout) {
+                serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
+            }
+        } else {
+            // Fall back to niche-based default cards
+            serviceCards.addAll(getDefaultServiceCards(slug));
+        }
+
+        sections.add(new MenuSectionDTO("SERVICES", serviceCards));
+
+        // 3. RESOURCES SECTION
+        List<MenuCardDTO> resourceCards = new ArrayList<>();
+        resourceCards.add(new MenuCardDTO("Careers", "Join our team", "doc", "LINK", "#careers"));
+        resourceCards.add(new MenuCardDTO("Blog", "Read our articles", "doc", "LINK", "#blog"));
+        sections.add(new MenuSectionDTO("RESOURCES", resourceCards));
+
+        return sections;
+    }
+
+    public List<MenuCardDTO> getDefaultServiceCards(String slug) {
+        List<MenuCardDTO> serviceCards = new ArrayList<>();
+        switch (slug) {
+            case "real-estate", "property-brokers" ->
+                serviceCards.add(new MenuCardDTO("Property Listings", "View our properties", "home", "CATALOG", "services"));
+            case "dental-clinics" ->
+                serviceCards.add(new MenuCardDTO("Dental Services", "View our treatments", "briefcase", "CATALOG", "services"));
+            case "auto-used-car-dealers" ->
+                serviceCards.add(new MenuCardDTO("View Inventory", "Browse used cars", "briefcase", "CATALOG", "services"));
+            case "freelance-web-graphic-designers" ->
+                serviceCards.add(new MenuCardDTO("Portfolio", "View past work", "briefcase", "CATALOG", "services"));
+            case "retail" ->
+                serviceCards.add(new MenuCardDTO("Product Catalog", "Browse products", "briefcase", "CATALOG", "services"));
+            case "premium-salons-hair-clinics", "freelance-makeup-artists-mua" ->
+                serviceCards.add(new MenuCardDTO("Service Menu", "View all services", "briefcase", "CATALOG", "services"));
+            case "yoga-meditation-instructors", "music-art-classes" ->
+                serviceCards.add(new MenuCardDTO("View Classes", "See our schedule", "calendar", "CATALOG", "services"));
+            case "premium-tour-travel-operators", "event-wedding-planners" ->
+                serviceCards.add(new MenuCardDTO("View Packages", "Explore our offers", "briefcase", "CATALOG", "services"));
+            case "solar-panel-smart-home-installers" ->
+                serviceCards.add(new MenuCardDTO("Our Products", "See what we install", "briefcase", "CATALOG", "services"));
+            default ->
+                serviceCards.add(new MenuCardDTO("Our Services", "What we offer", "briefcase", "CATALOG", "services"));
+        }
+        
+        // Add common cards for the custom menu
+        serviceCards.add(new MenuCardDTO("Special Offers", "View current deals", "tag", "LINK", "#offers"));
+        serviceCards.add(new MenuCardDTO("FAQs", "Common questions", "info", "LINK", "#faqs"));
+        
+        // Always add About Us for all niches in the default case
+        serviceCards.add(new MenuCardDTO("About Us", "Learn more", "info", "ABOUT", "about"));
+        return serviceCards;
     }
 
     private record NicheTheme(String primary, String secondary, String accent, String font, String icon) {}

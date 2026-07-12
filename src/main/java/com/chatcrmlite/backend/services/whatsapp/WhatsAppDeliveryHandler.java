@@ -24,7 +24,7 @@ public class WhatsAppDeliveryHandler {
     @Transactional
     public void deliverResponse(ProcessingContext context) {
         try {
-            WhatsAppConfig config = whatsappConfigRepository.findByUserId(context.getTenantId())
+            WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
             Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)

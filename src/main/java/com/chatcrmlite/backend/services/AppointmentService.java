@@ -183,6 +183,19 @@ public class AppointmentService {
     }
 
     @Transactional(readOnly = true)
+    public List<Appointment> getUpcomingAppointments(User owner) {
+        // Next 7 days (excludes today — already shown separately)
+        LocalDateTime startOfTomorrow = LocalDate.now().plusDays(1).atStartOfDay();
+        LocalDateTime endOfWeek = LocalDate.now().plusDays(7).atTime(23, 59, 59);
+        if (isAdmin(owner)) {
+            return appointmentRepository.findByAppointmentDateTimeBetweenAndStatus(
+                    startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
+        }
+        return appointmentRepository.findByOwner_IdAndAppointmentDateTimeBetweenAndStatus(
+                owner.getId(), startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
+    }
+
+    @Transactional(readOnly = true)
     public List<Appointment> getTodayAppointments(User owner) {
         LocalDateTime start = LocalDate.now().atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);

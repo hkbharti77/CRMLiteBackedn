@@ -1,0 +1,14 @@
+﻿\\copy tenants FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/tenants.csv' WITH CSV HEADER
+\\copy app_users FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/app_users.csv' WITH CSV HEADER
+\\copy whatsapp_configs FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/whatsapp_configs.csv' WITH CSV HEADER
+\\copy tenant_subscriptions FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/tenant_subscriptions.csv' WITH CSV HEADER
+\\copy contacts FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/contacts.csv' WITH CSV HEADER
+\\copy leads FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/leads.csv' WITH CSV HEADER
+\\copy lead_enquiries FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/lead_enquiries.csv' WITH CSV HEADER
+\\copy appointments FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/appointments.csv' WITH CSV HEADER
+\\copy chat_messages FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/chat_messages.csv' WITH CSV HEADER
+\\copy tickets FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/tickets.csv' WITH CSV HEADER
+\\copy business_services FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/business_services.csv' WITH CSV HEADER
+\\copy activity_logs FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/activity_logs.csv' WITH CSV HEADER
+\\copy user_sessions FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/user_sessions.csv' WITH CSV HEADER
+\\copy billing_transactions FROM 'D:/xyzzz/MinorProject/CRMLiteBackedn/scripts/csv_export/billing_transactions.csv' WITH CSV HEADER

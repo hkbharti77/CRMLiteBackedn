@@ -32,6 +32,7 @@ class QuotaEnforcerServiceTest {
     @Mock private AppointmentRepository appointmentRepository;
     @Mock private TicketRepository ticketRepository;
     @Mock private CustomEmailRepository customEmailRepository;
+    @Mock private TenantRepository tenantRepository;
 
     @InjectMocks
     private QuotaEnforcerService quotaEnforcerService;
@@ -46,8 +47,8 @@ class QuotaEnforcerServiceTest {
         MockitoAnnotations.openMocks(this);
         tenantId = UUID.randomUUID();
 
-        freePlan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false);
-        proPlan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true);
+        freePlan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false, false);
+        proPlan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true, true);
 
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
@@ -71,6 +72,9 @@ class QuotaEnforcerServiceTest {
 
     @Test
     void testGetActiveSubscription_DefaultCreatedIfNull() {
+        Tenant tenant = new Tenant();
+        tenant.setId(tenantId);
+        when(tenantRepository.findById(tenantId)).thenReturn(Optional.of(tenant));
         when(tenantSubscriptionRepository.findByTenantId(tenantId)).thenReturn(Optional.empty());
         when(subscriptionPlanRepository.findById("FREE")).thenReturn(Optional.of(freePlan));
         when(tenantSubscriptionRepository.save(any(TenantSubscription.class))).thenAnswer(i -> i.getArguments()[0]);
@@ -133,7 +137,7 @@ class QuotaEnforcerServiceTest {
     }
 
     @Test
-    void testVerifyExpiredSubscriptionThrowsException() {
+    void testVerifyExpiredSubscriptionDowngradesToFree() {
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
         TenantSubscription expiredSub = TenantSubscription.builder()
@@ -145,7 +149,11 @@ class QuotaEnforcerServiceTest {
                 .build();
 
         when(tenantSubscriptionRepository.findByTenantId(tenantId)).thenReturn(Optional.of(expiredSub));
+        when(subscriptionPlanRepository.findById("FREE")).thenReturn(Optional.of(freePlan));
+        when(tenantSubscriptionRepository.save(any(TenantSubscription.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
-        assertThrows(SubscriptionExpiredException.class, () -> quotaEnforcerService.getActiveSubscription(tenantId));
+        TenantSubscription result = quotaEnforcerService.getActiveSubscription(tenantId);
+        assertEquals(freePlan, result.getPlan());
+        assertEquals(SubscriptionStatus.FREE_TRIAL, result.getStatus());
     }
 }

@@ -14,7 +14,8 @@
     "services",
     "contact",
     "support",
-    "help"
+    "help",
+    "greeting"
   ],
   "entities": {
     "rct": "root_canal",
@@ -28,7 +29,11 @@
     "kitne": "price",
     "kab": "timing",
     "kaha": "location",
-    "batao": "help"
+    "batao": "help",
+    "hi": "greeting",
+    "hello": "greeting",
+    "hey": "greeting",
+    "namaste": "greeting"
   },
   "priorities": {
     "root_canal": 10,

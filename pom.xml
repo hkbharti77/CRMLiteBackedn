@@ -147,11 +147,19 @@
       <artifactId>langchain4j-spring-boot-starter</artifactId>
       <version>0.35.0</version>
     </dependency>
-    <!-- ONNX local embedding removed: uses 150MB+ native RAM on 512MB server.
-         Using Gemini text-embedding-004 API instead (zero local RAM cost). -->
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-embeddings-all-minilm-l6-v2-q</artifactId>
+      <version>0.35.0</version>
+    </dependency>
     <dependency>
       <groupId>dev.langchain4j</groupId>
       <artifactId>langchain4j-google-ai-gemini</artifactId>
+      <version>0.35.0</version>
+    </dependency>
+    <dependency>
+      <groupId>dev.langchain4j</groupId>
+      <artifactId>langchain4j-open-ai</artifactId>
       <version>0.35.0</version>
     </dependency>
     <dependency>
@@ -206,10 +214,15 @@
       <version>1.10.0</version>
     </dependency>
 
-    <!-- Caching & Idempotency -->
+    <!-- Caching, Idempotency & Message Queue -->
     <dependency>
       <groupId>org.springframework.boot</groupId>
       <artifactId>spring-boot-starter-data-redis</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>org.redisson</groupId>
+      <artifactId>redisson-spring-boot-starter</artifactId>
+      <version>3.27.2</version>
     </dependency>
     <dependency>
       <groupId>org.apache.commons</groupId>

@@ -55,6 +55,9 @@ public class Appointment extends BaseTenantEntity {
 
     private LocalDateTime updatedAt;
 
+    @Version
+    private Long version;
+
     public Appointment() {}
 
     public Appointment(UUID id, String referenceNumber, Contact contact, User owner, LocalDateTime appointmentDateTime, String title, String collectedData, String meetingLink, AppointmentStatus status, String source, LocalDateTime createdAt, LocalDateTime updatedAt) {
@@ -70,6 +73,7 @@ public class Appointment extends BaseTenantEntity {
         this.status = status != null ? status : AppointmentStatus.SCHEDULED;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.updatedAt = updatedAt;
+        this.version = 0L;
     }
 
     @PreUpdate
@@ -105,6 +109,8 @@ public class Appointment extends BaseTenantEntity {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
 
     public static AppointmentBuilder builder() {
         return new AppointmentBuilder();

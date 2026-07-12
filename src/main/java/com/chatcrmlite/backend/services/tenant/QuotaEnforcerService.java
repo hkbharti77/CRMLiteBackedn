@@ -1,13 +1,15 @@
 package com.chatcrmlite.backend.services.tenant;
 
 import com.chatcrmlite.backend.models.SubscriptionPlan;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.TenantSubscription;
 import com.chatcrmlite.backend.models.TenantSubscription.SubscriptionStatus;
 import com.chatcrmlite.backend.repositories.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
+import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
 import org.springframework.stereotype.Service;
-
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -18,12 +20,14 @@ public class QuotaEnforcerService {
 
     private final TenantSubscriptionRepository tenantSubscriptionRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
+    private final TenantRepository tenantRepository;
     private final UserRepository userRepository;
     private final LeadRepository leadRepository;
     private final BookingRepository bookingRepository;
     private final AppointmentRepository appointmentRepository;
     private final TicketRepository ticketRepository;
     private final CustomEmailRepository customEmailRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public static class QuotaExceededException extends RuntimeException {
         public QuotaExceededException(String message) {
@@ -45,13 +49,25 @@ public class QuotaEnforcerService {
         TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId).orElse(null);
 
         if (sub == null) {
+            // Guard: verify tenant exists in DB before attempting to insert subscription.
+            // A missing tenant row would violate the FK constraint on tenant_subscriptions.
+            Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+            if (tenant == null) {
+                log.warn("⚠️ Cannot initialize FREE plan — tenant {} does not exist in the tenants table. " +
+                         "The tenant may not have been fully registered yet.", tenantId);
+                throw new IllegalStateException(
+                        "Tenant not found: " + tenantId + ". Cannot initialize subscription.");
+            }
+
             log.info("ℹ️ No subscription found for tenant: {}. Initializing FREE plan.", tenantId);
             SubscriptionPlan freePlan = subscriptionPlanRepository.findById("FREE")
                     .orElseGet(() -> {
-                        // Fallback fallback if DB not seeded yet
+                        // Fallback if DB not seeded yet
                         SubscriptionPlan plan = new SubscriptionPlan();
                         plan.setId("FREE");
                         plan.setName("Free Starter Pack");
+                        plan.setPriceMonthly(java.math.BigDecimal.ZERO);
+                        plan.setPriceYearly(java.math.BigDecimal.ZERO);
                         plan.setEmployeeLimit(1);
                         plan.setPrimaryResourceLimit(100);
                         plan.setSecondaryResourceLimit(15);
@@ -61,9 +77,6 @@ public class QuotaEnforcerService {
                         plan.setHasCustomWidget(false);
                         return subscriptionPlanRepository.save(plan);
                     });
-
-            com.chatcrmlite.backend.models.Tenant tenant = new com.chatcrmlite.backend.models.Tenant();
-            tenant.setId(tenantId);
 
             sub = TenantSubscription.builder()
                     .plan(freePlan)
@@ -75,6 +88,7 @@ public class QuotaEnforcerService {
                     .build();
 
             sub = tenantSubscriptionRepository.save(sub);
+            eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         }
 
         // Validate subscription status
@@ -94,6 +108,7 @@ public class QuotaEnforcerService {
                 sub.setCurrentPeriodStart(LocalDateTime.now());
                 sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
                 sub = tenantSubscriptionRepository.save(sub);
+                eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
             }
         }
 

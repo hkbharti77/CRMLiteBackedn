@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.services;
 
+import com.chatcrmlite.backend.models.EmailTemplate;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -164,40 +165,92 @@ public class EmailService {
      * Failures are logged but never thrown so a mail error never rolls back
      * a business transaction.
      */
-    @Async
+    @Autowired
+    @org.springframework.context.annotation.Lazy
+    private com.chatcrmlite.backend.queue.RedisEmailProducer redisEmailProducer;
+
+    /**
+     * Enqueues a Thymeleaf template email to Redis for background ARQ processing.
+     * This replaces the old @Async direct sending.
+     */
     public void sendTemplate(String to, String subject, String templateName, Context ctx) {
         if (to == null || to.isBlank()) {
             log.warn("[Email] Skipping — empty recipient. subject={}", subject);
             return;
         }
-        try {
-            ctx.setVariable("subject", subject);
-            String html = templateEngine.process("email/" + templateName, ctx);
-            MimeMessage mime = mailSender.createMimeMessage();
-            MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-            // SECURITY: 'from' is injected from env — never hardcoded
-            helper.setFrom(from);
-            
-            if (to.contains(",")) {
-                String[] emails = java.util.Arrays.stream(to.split(","))
-                        .map(String::trim)
-                        .filter(e -> !e.isBlank())
-                        .toArray(String[]::new);
-                helper.setTo(emails);
-            } else {
-                helper.setTo(to.trim());
-            }
 
-            helper.setSubject(subject);
-            helper.setText(html, true);
-            mailSender.send(mime);
-            log.info("[Email] Sent template='{}'", templateName);
-        } catch (Exception e) {
-            log.error("[Email] Failed template='{}'. Reason: {}", templateName, e.getMessage());
+        java.util.Map<String, Object> vars = new java.util.HashMap<>();
+        if (ctx.getVariableNames() != null) {
+            ctx.getVariableNames().forEach(name -> vars.put(name, ctx.getVariable(name)));
         }
+
+        com.chatcrmlite.backend.dto.email.EmailJobPayload payload = com.chatcrmlite.backend.dto.email.EmailJobPayload.builder()
+                .toEmail(to)
+                .subject(subject)
+                .templateName(templateName)
+                .contextVariables(vars)
+                .jobType(templateName)
+                .build();
+
+        redisEmailProducer.enqueueEmail(payload);
+        log.info("[Email] Enqueued template='{}' for recipient='{}'", templateName, to);
+    }
+
+    /**
+     * Synchronous send method for Queue Workers. Throws exception on failure so worker can retry.
+     */
+    public void sendTemplateSync(String to, String subject, String templateName, Context ctx) throws Exception {
+        if (to == null || to.isBlank()) {
+            log.warn("[Email] Skipping — empty recipient. subject={}", subject);
+            return;
+        }
+        ctx.setVariable("subject", subject);
+        String html = templateEngine.process("email/" + templateName, ctx);
+        MimeMessage mime = mailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
+        // SECURITY: 'from' is injected from env — never hardcoded
+        helper.setFrom(from);
+        
+        if (to.contains(",")) {
+            String[] emails = java.util.Arrays.stream(to.split(","))
+                    .map(String::trim)
+                    .filter(e -> !e.isBlank())
+                    .toArray(String[]::new);
+            helper.setTo(emails);
+        } else {
+            helper.setTo(to.trim());
+        }
+
+        helper.setSubject(subject);
+        helper.setText(html, true);
+        mailSender.send(mime);
+        log.info("[Email] Sent template='{}'", templateName);
     }
 
     // ── Ticket Emails ──────────────────────────────────────────────────────
+
+    public void sendPlatformTicketCreatedNotification(String toEmail, String adminName,
+            String ticketId, String subject, String description) {
+        Context ctx = new Context();
+        ctx.setVariable("heading",    "Platform Support Ticket Raised");
+        ctx.setVariable("greeting",   "Hi " + adminName + ",");
+        ctx.setVariable("intro",      "We have received your support request. Our platform team is looking into it and will get back to you with the best solution shortly.");
+        ctx.setVariable("footerNote", "You can track and reply to this ticket directly in the Settings > Support section of your app.");
+        ctx.setVariable("ctaLabel",   "Open App");
+        ctx.setVariable("ctaUrl",     "https://app.chatcrmlite.com"); // Replace with actual URL if available
+        ctx.setVariable("customerName", adminName);
+        
+        // Truncate UUID for display to look like a ticket number
+        String ticketNumber = ticketId.length() > 8 ? ticketId.substring(0, 8).toUpperCase() : ticketId;
+        ctx.setVariable("ticketNumber", ticketNumber);
+        
+        ctx.setVariable("subject",       subject);
+        ctx.setVariable("description",   description);
+        ctx.setVariable("priority",      "HIGH");
+        
+        sendTemplate(toEmail, "[" + BRAND + " Platform Support] Ticket #" + ticketNumber + " - " + subject,
+                "ticket-created-customer", ctx);
+    }
 
     public void sendTicketCreatedToCustomer(String toEmail, String customerName,
             String ticketNumber, String subject, String description, String priority) {
@@ -363,6 +416,33 @@ public class EmailService {
         ctx.setVariable("currency",     currency);
         sendTemplate(ownerEmail, "[" + BRAND + "] Lead Won - " + contactName,
                 "lead-closed-won-owner", ctx);
+    }
+
+    public void sendAutomatedFollowback(String toEmail, String contactName, String businessName, EmailTemplate template) {
+        Context ctx = new Context();
+        // Fallback or override context variables from template if needed
+        ctx.setVariable("contactName", contactName);
+        ctx.setVariable("businessName", businessName);
+        ctx.setVariable("content", template.getContent());
+        
+        sendTemplate(toEmail, template.getSubject(), "lead-followback", ctx);
+    }
+
+    public void sendHighValueLeadAlert(String ownerEmail, String ownerName, String leadName, int score) {
+        Context ctx = new Context();
+        ctx.setVariable("heading", "High Value Lead Alert!");
+        ctx.setVariable("greeting", "Hi " + ownerName + ",");
+        ctx.setVariable("intro", "A new high-value lead has been identified by the AI scoring engine.");
+        ctx.setVariable("footerNote", "Log in to your CRM to prioritize this lead.");
+        ctx.setVariable("ctaLabel", "Open CRM");
+        ctx.setVariable("ctaUrl", "#");
+        
+        ctx.setVariable("ownerName", ownerName);
+        ctx.setVariable("leadName", leadName);
+        ctx.setVariable("score", score);
+        
+        sendTemplate(ownerEmail, "[" + BRAND + "] High Value Lead Alert: " + leadName,
+                "high-value-lead-alert", ctx);
     }
 
     // ── Appointment Emails ─────────────────────────────────────────────────

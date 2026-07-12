@@ -14,7 +14,8 @@
     "services",
     "contact",
     "support",
-    "help"
+    "help",
+    "greeting"
   ],
   "entities": {
     "design": "concept",
@@ -28,7 +29,11 @@
     "kitne": "price",
     "kab": "timing",
     "kaha": "location",
-    "batao": "help"
+    "batao": "help",
+    "hi": "greeting",
+    "hello": "greeting",
+    "hey": "greeting",
+    "namaste": "greeting"
   },
   "priorities": {
     "concept": 10,

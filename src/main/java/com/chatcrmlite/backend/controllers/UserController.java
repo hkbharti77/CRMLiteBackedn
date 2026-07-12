@@ -486,6 +486,7 @@ public class UserController {
         private Boolean forceShowLeads;
         private String role;
         private String accountStatus;
+        private String planType;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -526,6 +527,8 @@ public class UserController {
         public void setRole(String role) { this.role = role; }
         public String getAccountStatus() { return accountStatus; }
         public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
+        public String getPlanType() { return planType; }
+        public void setPlanType(String planType) { this.planType = planType; }
 
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
@@ -548,6 +551,7 @@ public class UserController {
             dto.setForceShowLeads(user.getForceShowLeads());
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
+            dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
             return dto;
         }
     }

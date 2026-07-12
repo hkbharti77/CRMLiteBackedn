@@ -46,7 +46,7 @@ public class WhatsAppIngressService {
             JsonNode messageNode = value.path("messages").get(0);
             JsonNode contactsNode = value.path("contacts");
             
-            WhatsAppConfig config = whatsappConfigRepository.findByUserId(context.getTenantId())
+            WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
 

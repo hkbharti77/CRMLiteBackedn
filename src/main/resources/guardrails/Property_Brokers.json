@@ -14,7 +14,8 @@
     "services",
     "contact",
     "support",
-    "help"
+    "help",
+    "greeting"
   ],
   "entities": {
     "flat": "apartment",
@@ -29,7 +30,11 @@
     "kitne": "price",
     "kab": "timing",
     "kaha": "location",
-    "batao": "help"
+    "batao": "help",
+    "hi": "greeting",
+    "hello": "greeting",
+    "hey": "greeting",
+    "namaste": "greeting"
   },
   "priorities": {
     "purchase": 10,

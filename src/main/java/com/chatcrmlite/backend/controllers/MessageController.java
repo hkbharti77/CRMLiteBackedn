@@ -64,7 +64,7 @@ public class MessageController {
     public ResponseEntity<List<Message>> getMessageHistory(
             @PathVariable UUID contactId,
             @AuthenticationPrincipal String email) {
-        
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
@@ -81,13 +81,13 @@ public class MessageController {
             @PathVariable UUID contactId,
             @RequestBody Map<String, String> request,
             @AuthenticationPrincipal String email) {
-        
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String text = request.get("text");
         whatsappMessageService.sendMessage(contactId, text, user);
-        
+
         return ResponseEntity.ok().build();
     }
 
@@ -95,7 +95,7 @@ public class MessageController {
     public ResponseEntity<String> sendMenu(
             @PathVariable UUID contactId,
             @AuthenticationPrincipal String email) {
-        
+
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 

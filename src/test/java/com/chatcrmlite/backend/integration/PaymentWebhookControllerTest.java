@@ -64,11 +64,11 @@ public class PaymentWebhookControllerTest {
     void setUp() {
         // Setup default plans
         freePlan = subscriptionPlanRepository.findById("FREE").orElseGet(() -> {
-            SubscriptionPlan plan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false);
+            SubscriptionPlan plan = new SubscriptionPlan("FREE", "Free Pack", BigDecimal.ZERO, BigDecimal.ZERO, 1, 100, 15, 10, 500, false, false, false);
             return subscriptionPlanRepository.save(plan);
         });
         proPlan = subscriptionPlanRepository.findById("PRO").orElseGet(() -> {
-            SubscriptionPlan plan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true);
+            SubscriptionPlan plan = new SubscriptionPlan("PRO", "Pro Pack", BigDecimal.valueOf(2999), BigDecimal.valueOf(28790), 10, 1000000, 1000000, 1000000, 25000, true, true, true);
             return subscriptionPlanRepository.save(plan);
         });
 

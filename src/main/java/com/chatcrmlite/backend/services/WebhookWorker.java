@@ -60,11 +60,11 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                 String waMessageId = firstMsg.path("id").asText();
                 String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
 
-                // 2. Resolve owner user ID from phone number ID.
+                // 2. Resolve tenant ID from phone number ID.
                 // Using a direct scalar query avoids LazyInitializationException
-                // that would occur if we called config.getUser() outside a transaction.
+                // that would occur if we fetched the whole entity outside a transaction.
                 java.util.UUID tenantId = whatsappConfigRepository
-                        .findOwnerIdByPhoneNumberId(phoneNumberId.trim())
+                        .findTenantIdByPhoneNumberId(phoneNumberId.trim())
                         .orElse(null);
 
                 if (tenantId != null) {

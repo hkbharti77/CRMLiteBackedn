@@ -393,16 +393,8 @@ public class EmailNotificationListener {
                 : user.getEmail();
     }
 
-    /**
-     * Resolves the customer email from:
-     *  1. contact.email (set during WhatsApp flow)
-     *  2. collectedData JSON field "email" (captured in flow data)
-     */
     private String resolveEmail(Contact contact, String collectedDataJson) {
-        if (contact != null && contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            return contact.getEmail();
-        }
-        // Try to extract from collectedData JSON
+        // Try to extract from collectedData JSON first (prioritize newly provided email in flow)
         if (collectedDataJson != null && collectedDataJson.contains("\"email\"")) {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper =
@@ -416,6 +408,12 @@ public class EmailNotificationListener {
                 log.warn("[EmailListener] Could not parse collectedData for email: {}", e.getMessage());
             }
         }
+        
+        // Fallback to the existing contact email
+        if (contact != null && contact.getEmail() != null && !contact.getEmail().isBlank()) {
+            return contact.getEmail();
+        }
+        
         return null;
     }
 

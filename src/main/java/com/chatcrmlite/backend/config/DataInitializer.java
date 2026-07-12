@@ -15,6 +15,11 @@ import org.springframework.stereotype.Component;
 
 import java.util.Arrays;
 import java.util.List;
+import java.math.BigDecimal;
+import com.chatcrmlite.backend.models.SubscriptionPlan;
+import com.chatcrmlite.backend.repositories.SubscriptionPlanRepository;
+import com.chatcrmlite.backend.models.PlatformAdmin;
+import com.chatcrmlite.backend.repositories.PlatformAdminRepository;
 
 @Component
 public class DataInitializer implements CommandLineRunner {
@@ -35,8 +40,16 @@ public class DataInitializer implements CommandLineRunner {
     @Autowired
     private PasswordEncoder passwordEncoder;
 
+    @Autowired
+    private SubscriptionPlanRepository subscriptionPlanRepository;
+
+    @Autowired
+    private PlatformAdminRepository platformAdminRepository;
+
     @Override
     public void run(String... args) throws Exception {
+        seedSubscriptionPlans();
+
         // --- CLEANUP MOCK DATA ---
         List<String> mockNames = Arrays.asList("John Doe", "Sarah Smith");
         for (String name : mockNames) {
@@ -60,6 +73,59 @@ public class DataInitializer implements CommandLineRunner {
         // Users should register through the Auth flow.
         if (userRepository.count() == 0) {
             log.info("[Init] No users found. Ready for new registrations.");
+        }
+
+        seedPlatformAdmin();
+    }
+
+    private void seedPlatformAdmin() {
+        if (platformAdminRepository.count() == 0) {
+            PlatformAdmin admin = new PlatformAdmin();
+            admin.setEmail("gyanvaniai@gmail.com");
+            admin.setPasswordHash("OTP_ONLY");
+            admin.setDisplayName("Platform Owner");
+            platformAdminRepository.save(admin);
+            log.info("[Init] Seeded Platform Admin: gyanvaniai@gmail.com (OTP based login)");
+        } else {
+            // Ensure email is set to gyanvaniai@gmail.com if it already exists
+            PlatformAdmin admin = platformAdminRepository.findAll().get(0);
+            if (!"gyanvaniai@gmail.com".equals(admin.getEmail())) {
+                admin.setEmail("gyanvaniai@gmail.com");
+                admin.setPasswordHash("OTP_ONLY");
+                platformAdminRepository.save(admin);
+                log.info("[Init] Updated Platform Admin email to gyanvaniai@gmail.com");
+            }
+        }
+    }
+
+    private void seedSubscriptionPlans() {
+        if (subscriptionPlanRepository.findById("FREE").isEmpty()) {
+            subscriptionPlanRepository.save(new SubscriptionPlan(
+                "FREE", "Free Starter Pack", BigDecimal.ZERO, BigDecimal.ZERO,
+                1, 100, 15, 10, 500, false, false, false
+            ));
+            log.info("[Init] Seeded FREE subscription plan.");
+        }
+        if (subscriptionPlanRepository.findById("MIN").isEmpty()) {
+            subscriptionPlanRepository.save(new SubscriptionPlan(
+                "MIN", "Starter Menu-Bot", new BigDecimal("9.99"), new BigDecimal("99.90"),
+                3, 2500, 500, 500, 3000, true, false, false
+            ));
+            log.info("[Init] Seeded MIN subscription plan.");
+        }
+        if (subscriptionPlanRepository.findById("PRO").isEmpty()) {
+            subscriptionPlanRepository.save(new SubscriptionPlan(
+                "PRO", "Scale Professional", new BigDecimal("29.99"), new BigDecimal("287.90"),
+                10, 25000, 25000, 25000, 15000, true, true, true
+            ));
+            log.info("[Init] Seeded PRO subscription plan.");
+        }
+        if (subscriptionPlanRepository.findById("MAX").isEmpty()) {
+            subscriptionPlanRepository.save(new SubscriptionPlan(
+                "MAX", "Enterprise Max", new BigDecimal("79.99"), new BigDecimal("767.90"),
+                50, 1000000, 1000000, 1000000, 1000000, true, true, true
+            ));
+            log.info("[Init] Seeded MAX subscription plan.");
         }
     }
 }

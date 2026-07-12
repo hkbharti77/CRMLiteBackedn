@@ -77,13 +77,13 @@ public class SemanticCacheService {
         String embeddingLiteral = Arrays.toString(queryEmbedding);
         
         String sql = """
-                INSERT INTO semantic_cache (tenant_id, query_text, embedding, response_text)
-                VALUES (?, ?, CAST(? AS vector), ?)
+                INSERT INTO semantic_cache (id, tenant_id, query_text, embedding, response_text)
+                VALUES (?, ?, ?, CAST(? AS vector), ?)
                 ON CONFLICT DO NOTHING
                 """;
 
         try {
-            jdbcTemplate.update(sql, tenantId, query, embeddingLiteral, response);
+            jdbcTemplate.update(sql, UUID.randomUUID(), tenantId, query, embeddingLiteral, response);
             log.debug("[SemanticCache] Saved entry for tenant {}", tenantId);
         } catch (Exception e) {
             log.error("[SemanticCache] Save failed: {}", e.getMessage());

@@ -12,11 +12,16 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.LeadMetricsService;
 import com.chatcrmlite.backend.services.lead.LeadService;
+import com.chatcrmlite.backend.services.lead.LeadExportService;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
@@ -29,11 +34,60 @@ public class LeadController {
     @Autowired private LeadService leadService;
     @Autowired private UserRepository userRepository;
     @Autowired private LeadMetricsService leadMetricsService;
+    @Autowired private LeadExportService leadExportService;
 
     private User getAuthenticatedUser() {
         String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
+    }
+
+    @GetMapping("/export")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<byte[]> exportLeads(
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
+            @RequestParam(defaultValue = "csv") String format) {
+        User user = getAuthenticatedUser();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null).getContent();
+
+        // Filter by Date Range (inclusive)
+        LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
+        LocalDateTime end = endDate != null ? endDate.atTime(23, 59, 59, 999999999) : null;
+
+        List<Lead> filteredLeads = leads.stream()
+                .filter(lead -> {
+                    if (start != null && lead.getCreatedAt().isBefore(start)) {
+                        return false;
+                    }
+                    if (end != null && lead.getCreatedAt().isAfter(end)) {
+                        return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toList());
+
+        byte[] fileBytes;
+        String filename;
+        MediaType mediaType;
+
+        String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now());
+        String businessName = user.getBusinessName();
+
+        if ("excel".equalsIgnoreCase(format)) {
+            fileBytes = leadExportService.exportToExcel(filteredLeads, businessName);
+            filename = "leads_export_" + timestamp + ".xlsx";
+            mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        } else {
+            fileBytes = leadExportService.exportToCsv(filteredLeads, businessName);
+            filename = "leads_export_" + timestamp + ".csv";
+            mediaType = MediaType.parseMediaType("text/csv");
+        }
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(mediaType)
+                .body(fileBytes);
     }
 
     // ── Lead Queries ───────────────────────────────────────────────────────
@@ -54,6 +108,14 @@ public class LeadController {
                 "page",          pagedResult.getNumber(),
                 "size",          pagedResult.getSize()
         ));
+    }
+
+    @GetMapping("/status/{status}")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
+        User user = getAuthenticatedUser();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status).getContent();
+        return ResponseEntity.ok(leads.stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
     @GetMapping("/{id}")
@@ -104,6 +166,14 @@ public class LeadController {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, user), user));
     }
+
+    @PostMapping("/{id}/rescore")
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public ResponseEntity<LeadDTO> rescoreLead(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(toDTO(leadService.rescoreLead(id, user), user));
+    }
+
 
     // ── Enquiry CRUD ───────────────────────────────────────────────────────
 
@@ -250,6 +320,7 @@ public class LeadController {
                             ? lead.getOwner().getDisplayName() 
                             : lead.getOwner().getEmail()) 
                         : "Unknown")
+                .score(lead.getScore())
                 .build();
     }
 
