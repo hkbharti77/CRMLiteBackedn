@@ -47,51 +47,90 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
         log.info("⚙️ [Worker] Processing message {} from stream {}", messageId, streamName);
 
         try {
-            // 1. Parse payload to extract routing metadata
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(payload);
-            com.fasterxml.jackson.databind.JsonNode value = root.path("entry").get(0).path("changes").get(0).path("value");
-            com.fasterxml.jackson.databind.JsonNode messages = value.path("messages");
-            com.fasterxml.jackson.databind.JsonNode statuses = value.path("statuses");
+            com.fasterxml.jackson.databind.JsonNode entry = root.path("entry").get(0);
+            com.fasterxml.jackson.databind.JsonNode change = entry.path("changes").get(0);
+            String field = change.path("field").asText("");
+            com.fasterxml.jackson.databind.JsonNode value = change.path("value");
+            
             boolean handedToOrchestrator = false;
 
-            if (messages.isArray() && messages.size() > 0) {
-                com.fasterxml.jackson.databind.JsonNode firstMsg = messages.get(0);
-                String waId = firstMsg.path("from").asText();
-                String waMessageId = firstMsg.path("id").asText();
-                String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+            if ("messages".equals(field)) {
+                com.fasterxml.jackson.databind.JsonNode messages = value.path("messages");
+                com.fasterxml.jackson.databind.JsonNode statuses = value.path("statuses");
 
-                // 2. Resolve tenant ID from phone number ID.
-                // Using a direct scalar query avoids LazyInitializationException
-                // that would occur if we fetched the whole entity outside a transaction.
-                java.util.UUID tenantId = whatsappConfigRepository
-                        .findTenantIdByPhoneNumberId(phoneNumberId.trim())
-                        .orElse(null);
+                if (messages.isArray() && messages.size() > 0) {
+                    com.fasterxml.jackson.databind.JsonNode firstMsg = messages.get(0);
+                    String waId = firstMsg.path("from").asText();
+                    String waMessageId = firstMsg.path("id").asText();
+                    String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
 
-                if (tenantId != null) {
-                    // 2b. Rate Limit Check
-                    if (!resourceManager.canConsume(tenantId, 
-                            com.chatcrmlite.backend.services.tenant.TenantResourceManager.ResourceType.MESSAGES_PER_SECOND, 1)) {
-                        log.warn("🚨 [Rate-Limit] Tenant {} exceeded message rate limit. Dropping message {}", tenantId, waMessageId);
-                        redisTemplate.opsForStream().acknowledge(groupName, record);
-                        return;
+                    java.util.UUID tenantId = whatsappConfigRepository
+                            .findTenantIdByPhoneNumberId(phoneNumberId.trim())
+                            .orElse(null);
+
+                    if (tenantId != null) {
+                        if (!resourceManager.canConsume(tenantId, 
+                                com.chatcrmlite.backend.services.tenant.TenantResourceManager.ResourceType.MESSAGES_PER_SECOND, 1)) {
+                            log.warn("🚨 [Rate-Limit] Tenant {} exceeded message rate limit. Dropping message {}", tenantId, waMessageId);
+                            redisTemplate.opsForStream().acknowledge(groupName, record);
+                            return;
+                        }
+                        workflowOrchestrator.startWorkflow(waMessageId, waId, tenantId, payload);
+                        handedToOrchestrator = true;
+                    } else {
+                        log.warn("⚠️ [Worker] No OWNER user found for phone_number_id: {}", phoneNumberId);
                     }
-
-                    // 3. START ORCHESTRATION
-                    workflowOrchestrator.startWorkflow(waMessageId, waId, tenantId, payload);
-                    handedToOrchestrator = true;
-                } else {
-                    log.warn("⚠️ [Worker] No OWNER user found for phone_number_id: {}. Check WhatsApp config in DB.", phoneNumberId);
+                } else if (statuses.isArray() && statuses.size() > 0) {
+                    for (com.fasterxml.jackson.databind.JsonNode statusNode : statuses) {
+                        log.info("[Worker] WhatsApp delivery status id={} recipient={} status={} timestamp={} conversationId={}",
+                                statusNode.path("id").asText(""),
+                                statusNode.path("recipient_id").asText(""),
+                                statusNode.path("status").asText(""),
+                                statusNode.path("timestamp").asText(""),
+                                statusNode.path("conversation").path("id").asText(""));
+                    }
                 }
-            } else if (statuses.isArray() && statuses.size() > 0) {
-                for (com.fasterxml.jackson.databind.JsonNode statusNode : statuses) {
-                    log.info("[Worker] WhatsApp delivery status id={} recipient={} status={} timestamp={} conversationId={}",
-                            statusNode.path("id").asText(""),
-                            statusNode.path("recipient_id").asText(""),
-                            statusNode.path("status").asText(""),
-                            statusNode.path("timestamp").asText(""),
-                            statusNode.path("conversation").path("id").asText(""));
+            } else if ("account_update".equals(field)) {
+                String event = value.path("event").asText("");
+                String wabaId = entry.path("id").asText("");
+                log.warn("🚨 [BSP] Account update for WABA {}: {}", wabaId, event);
+                
+                whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                    config.setAccountStatus(event);
+                    whatsappConfigRepository.save(config);
+                });
+            } else if ("quality_update".equals(field)) {
+                String event = value.path("event").asText("");
+                String newQuality = value.path("quality_rating").asText("");
+                String wabaId = entry.path("id").asText("");
+                log.warn("🚨 [BSP] Quality update for WABA {}: {} -> {}", wabaId, event, newQuality);
+                
+                whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                    config.setQualityRating(newQuality);
+                    whatsappConfigRepository.save(config);
+                });
+            } else if ("message_template_status_update".equals(field)) {
+                String templateName = value.path("message_template_name").asText("");
+                String status = value.path("event").asText("");
+                String wabaId = entry.path("id").asText("");
+                log.info("ℹ️ [BSP] Template {} status update for WABA {}: {}", templateName, wabaId, status);
+                // Future: Update template repository status here
+            } else if ("phone_number_name_update".equals(field)) {
+                String newName = value.path("requested_verified_name").asText("");
+                String event = value.path("event").asText("");
+                String wabaId = entry.path("id").asText("");
+                log.info("ℹ️ [BSP] Phone number name update for WABA {}: {} ({})", wabaId, newName, event);
+                if ("APPROVED".equals(event)) {
+                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                        config.setVerifiedName(newName);
+                        whatsappConfigRepository.save(config);
+                    });
                 }
+            } else {
+                log.info("ℹ️ [BSP] Unhandled webhook field: {}", field);
             }
+
 
             // ACKNOWLEDGE successful ingress
             redisTemplate.opsForStream().acknowledge(groupName, record);

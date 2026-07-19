@@ -144,6 +144,19 @@ public class WhatsAppConfigController {
         return ResponseEntity.ok("Config saved");
     }
 
+    @DeleteMapping
+    public ResponseEntity<?> deleteConfig(@AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return whatsappConfigRepository.findByUserId(user.getId())
+                .map(config -> {
+                    whatsappConfigRepository.delete(config);
+                    return ResponseEntity.ok().body("Configuration deleted successfully");
+                })
+                .orElse(ResponseEntity.notFound().build());
+    }
+
     @PostMapping(value = "/upload-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<?> uploadMedia(@RequestParam("file") MultipartFile file, @AuthenticationPrincipal String email) {
         if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();

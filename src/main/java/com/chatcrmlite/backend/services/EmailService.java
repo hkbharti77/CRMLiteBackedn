@@ -37,7 +37,7 @@ public class EmailService {
     @Value("${SENDER_EMAIL}")
     private String from;
 
-    private static final String BRAND = "ChatCRM Lite";
+    private static final String BRAND = "GyanVaniAi Connect";
 
     private final Map<String, OtpEntry> otpStorage = new ConcurrentHashMap<>();
 
@@ -57,7 +57,7 @@ public class EmailService {
         Context ctx = new Context();
         ctx.setVariable("heading", "Login Verification Code");
         ctx.setVariable("greeting", "Hi there,");
-        ctx.setVariable("intro", "Someone is trying to log in to your ChatCRM Lite account. Please use the code below to complete your login.");
+        ctx.setVariable("intro", "Someone is trying to log in to your GyanVaniAi Connect account. Please use the code below to complete your login.");
         ctx.setVariable("footerNote", "This code was generated for a login attempt. If you didn't try to log in, please secure your account.");
         ctx.setVariable("ctaLabel", "Secure Account");
         ctx.setVariable("ctaUrl", "#"); // Could link to account security page
@@ -69,7 +69,7 @@ public class EmailService {
         ctx.setVariable("ipAddress", ipAddress);
         ctx.setVariable("userAgent", userAgent);
         
-        sendTemplate(toEmail, "Your ChatCRM Lite Login Code", "login-otp", ctx);
+        sendTemplate(toEmail, "Your GyanVaniAi Connect Login Code", "login-otp", ctx);
     }
 
     /**
@@ -87,7 +87,7 @@ public class EmailService {
         ctx.setVariable("otpCode", otpCode);
         ctx.setVariable("expiryMinutes", "10");
         
-        sendTemplate(toEmail, "Reset Your ChatCRM Lite Password", "password-reset-otp", ctx);
+        sendTemplate(toEmail, "Reset Your GyanVaniAi Connect Password", "password-reset-otp", ctx);
     }
 
     /**

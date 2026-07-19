@@ -188,15 +188,15 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // Merge allowed origins: env var + always include the owner panel origin
-        String rawOrigins = allowedOrigins + ",http://localhost:3001";
+        // Merge allowed origins: env var + always include the owner panel origin and ngrok domains for testing
+        String rawOrigins = allowedOrigins + ",http://localhost:3001,https://*.ngrok-free.dev,https://*.ngrok.app";
         List<String> origins = Arrays.stream(rawOrigins.split(","))
             .map(String::trim)
             .distinct()
             .toList();
 
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(origins);
+        configuration.setAllowedOriginPatterns(origins);
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList(
             "Authorization", "Content-Type", "X-Requested-With", "Accept", "Origin", "X-Hub-Signature-256", "X-Tenant-ID", "X-Trace-ID"
