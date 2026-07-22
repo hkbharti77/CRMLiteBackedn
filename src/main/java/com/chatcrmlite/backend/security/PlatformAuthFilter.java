@@ -53,7 +53,7 @@ public class PlatformAuthFilter extends OncePerRequestFilter {
                 String email = platformJwtUtils.getEmailFromToken(token);
 
                 // Verify admin exists in DB
-                boolean adminExists = platformAdminRepository.findByEmail(email).isPresent();
+                boolean adminExists = platformAdminRepository.findByEmailIgnoreCase(email).isPresent();
                 if (adminExists) {
                     List<SimpleGrantedAuthority> authorities =
                         List.of(new SimpleGrantedAuthority("ROLE_PLATFORM_ADMIN"));

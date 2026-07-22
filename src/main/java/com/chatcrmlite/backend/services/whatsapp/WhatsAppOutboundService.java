@@ -157,8 +157,9 @@ public class WhatsAppOutboundService {
         wsPayload.put("contactId", contact.getId().toString());
         wsPayload.put("contactName", contact.getName());
         wsPayload.put("content", message.getContent());
-        wsPayload.put("direction", "OUTGOING");
-        wsPayload.put("timestamp", message.getTimestamp().toString());
-        distributedWebSocketPublisher.publishMessage(owner.getId(), wsPayload);
+        UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : (owner != null ? owner.getId() : null);
+        if (tenantId != null) {
+            distributedWebSocketPublisher.publishMessage(tenantId, wsPayload);
+        }
     }
 }

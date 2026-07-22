@@ -23,6 +23,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 import java.util.Optional;
 
 @Slf4j
@@ -47,7 +48,7 @@ public class WhatsAppIngressService {
             JsonNode contactsNode = value.path("contacts");
             
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
-                    .orElseThrow(() -> new RuntimeException("Config not found"));
+                    .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + context.getTenantId()));
             User owner = config.getUser();
 
             // Idempotency check
@@ -77,6 +78,7 @@ public class WhatsAppIngressService {
             // Flag whether this contact is currently mid-flow so the orchestrator
             // can route free-text replies to the flow worker instead of the AI worker.
             context.getMetadata().put("hasActiveFlow", conversationStateRepository.existsByContact(contact));
+            context.getMetadata().put("botPaused", contact.isBotPaused());
             
             log.info("✅ [Ingress-Stage] Resolved contact {} and saved message {}", context.getWaId(), context.getMessageId());
         } catch (Exception e) {
@@ -101,7 +103,12 @@ public class WhatsAppIngressService {
         Optional<Contact> existing = contactRepository.findByWaIdAndOwner(waId, owner);
         if (existing.isPresent()) {
             Contact c = existing.get();
-            if (profileName != null && (c.getName() == null || c.getName().startsWith("WhatsApp User"))) {
+            if (profileName != null && !profileName.isBlank() && 
+                (c.getName() == null || c.getName().isBlank() || 
+                 c.getName().startsWith("WhatsApp User") || 
+                 c.getName().startsWith("Test User") || 
+                 !profileName.equals(c.getName()))) {
+                log.info("[Ingress] Auto-updating contact name from '{}' to '{}' for waId={}", c.getName(), profileName, waId);
                 c.setName(profileName);
                 contactRepository.save(c);
             }
@@ -109,7 +116,7 @@ public class WhatsAppIngressService {
         }
         Contact newContact = Contact.builder()
                 .waId(waId)
-                .name(profileName != null ? profileName : "WhatsApp User " + waId)
+                .name(profileName != null && !profileName.isBlank() ? profileName : "WhatsApp User " + waId)
                 .source("WhatsApp")
                 .owner(owner)
                 .build();
@@ -133,7 +140,9 @@ public class WhatsAppIngressService {
         wsPayload.put("contactName", contact.getName());
         wsPayload.put("content",     text);
         wsPayload.put("direction",   "INCOMING");
-        wsPayload.put("timestamp",   message.getTimestamp().toString());
-        distributedWebSocketPublisher.publishMessage(owner.getId(), wsPayload);
+        UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : (owner != null ? owner.getId() : null);
+        if (tenantId != null) {
+            distributedWebSocketPublisher.publishMessage(tenantId, wsPayload);
+        }
     }
 }

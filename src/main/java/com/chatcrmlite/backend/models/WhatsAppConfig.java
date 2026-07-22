@@ -44,6 +44,18 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "display_phone_number")
     private String displayPhoneNumber;
 
+    @Column(name = "connection_type")
+    private String connectionType = "LEGACY"; // "LEGACY" or "EMBEDDED_SIGNUP_COEXISTENCE"
+
+    @Column(name = "embedded_business_id")
+    private String embeddedBusinessId;
+
+    @Column(name = "embedded_waba_id")
+    private String embeddedWabaId;
+
+    @Column(name = "embedded_phone_id")
+    private String embeddedPhoneId;
+
     @Column(name = "verified_name")
     private String verifiedName;
 
@@ -148,6 +160,10 @@ public class WhatsAppConfig implements Serializable {
     public String getAppSecret() { return appSecret; }
     public String getBusinessId() { return businessId; }
     public String getDisplayPhoneNumber() { return displayPhoneNumber; }
+    public String getConnectionType() { return connectionType != null ? connectionType : "LEGACY"; }
+    public String getEmbeddedBusinessId() { return embeddedBusinessId; }
+    public String getEmbeddedWabaId() { return embeddedWabaId; }
+    public String getEmbeddedPhoneId() { return embeddedPhoneId; }
     public String getVerifiedName() { return verifiedName; }
     public java.time.LocalDateTime getTokenExpiry() { return tokenExpiry; }
     public String getQualityRating() { return qualityRating; }
@@ -212,6 +228,10 @@ public class WhatsAppConfig implements Serializable {
     public void setAppSecret(String appSecret) { this.appSecret = appSecret; }
     public void setBusinessId(String businessId) { this.businessId = businessId; }
     public void setDisplayPhoneNumber(String displayPhoneNumber) { this.displayPhoneNumber = displayPhoneNumber; }
+    public void setConnectionType(String connectionType) { this.connectionType = connectionType; }
+    public void setEmbeddedBusinessId(String embeddedBusinessId) { this.embeddedBusinessId = embeddedBusinessId; }
+    public void setEmbeddedWabaId(String embeddedWabaId) { this.embeddedWabaId = embeddedWabaId; }
+    public void setEmbeddedPhoneId(String embeddedPhoneId) { this.embeddedPhoneId = embeddedPhoneId; }
     public void setVerifiedName(String verifiedName) { this.verifiedName = verifiedName; }
     public void setTokenExpiry(java.time.LocalDateTime tokenExpiry) { this.tokenExpiry = tokenExpiry; }
     public void setQualityRating(String qualityRating) { this.qualityRating = qualityRating; }

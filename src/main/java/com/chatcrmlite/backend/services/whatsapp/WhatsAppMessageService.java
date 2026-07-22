@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -92,24 +93,31 @@ public class WhatsAppMessageService {
         }
     }
 
-    public void sendMessage(UUID contactId, String text, User owner) {
+    @Transactional
+    public void sendMessage(UUID contactId, String text, User currentUser) {
         Contact contact = contactRepository.findById(contactId)
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
-                .orElseThrow(() -> new RuntimeException("Contact not found"));
+                .filter(c -> c.getOwner() != null && c.getOwner().getTenant() != null && 
+                             c.getOwner().getTenant().getId().equals(currentUser.getTenant().getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Contact not found for tenant: " + currentUser.getTenant().getId()));
 
-        WhatsAppConfig config = whatsappConfigRepository.findByUserId(owner.getId())
-                .orElseThrow(() -> new RuntimeException("WhatsApp config not found"));
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(currentUser.getTenant().getId())
+                .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + currentUser.getTenant().getId()));
 
-        sendInteractiveAiResponse(contact, text, null, config, owner);
+        User owner = config.getUser() != null ? config.getUser() : currentUser;
+        
+        // Manual agent/admin reply: send cleanly as text
+        outboundService.sendText(contact, text, config, owner);
     }
 
-    public void sendTenantMenu(UUID contactId, User owner) {
+    @Transactional
+    public void sendTenantMenu(UUID contactId, User currentUser) {
         Contact contact = contactRepository.findById(contactId)
-                .filter(c -> c.getOwner().getId().equals(owner.getId()))
-                .orElseThrow(() -> new RuntimeException("Contact not found"));
+                .filter(c -> c.getOwner() != null && c.getOwner().getTenant() != null && 
+                             c.getOwner().getTenant().getId().equals(currentUser.getTenant().getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Contact not found for tenant: " + currentUser.getTenant().getId()));
 
-        WhatsAppConfig config = whatsappConfigRepository.findByUserId(owner.getId())
-                .orElseThrow(() -> new RuntimeException("WhatsApp config not found"));
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(currentUser.getTenant().getId())
+                .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + currentUser.getTenant().getId()));
 
         menuService.sendTenantMenuToContact(contact, config);
     }

@@ -8,7 +8,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "app_users")
+@Table(name = "app_users", indexes = {
+    @Index(name = "idx_user_email", columnList = "email")
+})
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 

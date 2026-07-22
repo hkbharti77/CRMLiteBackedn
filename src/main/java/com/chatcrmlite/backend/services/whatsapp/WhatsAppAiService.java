@@ -40,18 +40,21 @@ public class WhatsAppAiService {
             User owner = config.getUser();
             Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)
                     .orElseThrow(() -> new RuntimeException("Contact not found"));
-            
+
             String text = (String) context.getMetadata().get("text");
             if (text == null) {
                 text = "";
             }
-            
+
             // Check if last response was AI for context boost
             PageRequest pageRequest = PageRequest.of(0, 1, Sort.by(Sort.Direction.DESC, "timestamp"));
-            List<Message> lastOutgoing = messageRepository.findByContactAndDirection(contact, Message.Direction.OUTGOING, pageRequest);
-            boolean lastWasAi = !lastOutgoing.isEmpty() && !lastOutgoing.get(0).getContent().contains("[Sent Interactive Menu]");
+            List<Message> lastOutgoing = messageRepository.findByContactAndDirection(contact,
+                    Message.Direction.OUTGOING, pageRequest);
+            boolean lastWasAi = !lastOutgoing.isEmpty()
+                    && !lastOutgoing.get(0).getContent().contains("[Sent Interactive Menu]");
 
-            GuardrailResult guardrail = guardrailService.evaluate(text, contact.getWaId(), lastWasAi, owner.getBusinessSubType(), owner.getId());
+            GuardrailResult guardrail = guardrailService.evaluate(text, contact.getWaId(), lastWasAi,
+                    owner.getBusinessSubType(), owner.getId());
 
             switch (guardrail.getDecision()) {
                 case GREETING:
@@ -81,10 +84,12 @@ public class WhatsAppAiService {
                     String fallbackMsg = "We couldn't process your request. Please select an option from the menu below.";
                     if ("abuse_throttled".equals(guardrail.getReason())) {
                         String msg = config.getGuardrailMessageAbuse();
-                        if (msg != null && !msg.isBlank()) fallbackMsg = msg;
+                        if (msg != null && !msg.isBlank())
+                            fallbackMsg = msg;
                     } else {
                         String msg = config.getGuardrailMessageGibberish();
-                        if (msg != null && !msg.isBlank()) fallbackMsg = msg;
+                        if (msg != null && !msg.isBlank())
+                            fallbackMsg = msg;
                     }
                     context.getMetadata().put("pendingResponse", fallbackMsg);
                     context.getMetadata().put("responseType", "MENU_OVERRIDE");

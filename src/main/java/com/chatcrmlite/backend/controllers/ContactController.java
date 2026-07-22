@@ -43,4 +43,13 @@ public class ContactController {
         contactService.updateTags(id, tags, getAuthenticatedUser());
         return ResponseEntity.ok().build();
     }
+
+    @PatchMapping("/{id}/toggle-bot")
+    public ResponseEntity<Void> toggleBotPaused(@PathVariable UUID id, @RequestBody java.util.Map<String, Boolean> payload) {
+        Boolean botPaused = payload.get("botPaused");
+        if (botPaused != null) {
+            contactService.toggleBotPaused(id, botPaused, getAuthenticatedUser());
+        }
+        return ResponseEntity.ok().build();
+    }
 }

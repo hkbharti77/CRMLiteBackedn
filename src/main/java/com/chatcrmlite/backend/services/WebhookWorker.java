@@ -21,6 +21,8 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
     private final StringRedisTemplate redisTemplate;
     private final DeadLetterHandler dlqHandler;
     private final com.chatcrmlite.backend.services.tenant.TenantResourceManager resourceManager;
+    private final com.chatcrmlite.backend.repositories.WhatsAppTemplateRepository whatsappTemplateRepository;
+    private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     @Autowired private RedisStateService redisStateService;
 
     @Value("${whatsapp.async.stream.ingress}")
@@ -67,7 +69,10 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
 
                     java.util.UUID tenantId = whatsappConfigRepository
                             .findTenantIdByPhoneNumberId(phoneNumberId.trim())
-                            .orElse(null);
+                            .orElseGet(() -> {
+                                log.warn("⚠️ [Worker] No matching WhatsAppConfig found for phone_number_id: {}. Attempting fallback to default tenant.", phoneNumberId);
+                                return tenantRepository.findAll().stream().findFirst().map(com.chatcrmlite.backend.models.Tenant::getId).orElse(null);
+                            });
 
                     if (tenantId != null) {
                         if (!resourceManager.canConsume(tenantId, 
@@ -79,7 +84,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                         workflowOrchestrator.startWorkflow(waMessageId, waId, tenantId, payload);
                         handedToOrchestrator = true;
                     } else {
-                        log.warn("⚠️ [Worker] No OWNER user found for phone_number_id: {}", phoneNumberId);
+                        log.warn("⚠️ [Worker] No tenant found in system for phone_number_id: {}", phoneNumberId);
                     }
                 } else if (statuses.isArray() && statuses.size() > 0) {
                     for (com.fasterxml.jackson.databind.JsonNode statusNode : statuses) {
@@ -113,9 +118,24 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
             } else if ("message_template_status_update".equals(field)) {
                 String templateName = value.path("message_template_name").asText("");
                 String status = value.path("event").asText("");
+                String reason = value.has("reason") ? value.path("reason").asText() : 
+                               value.has("rejected_reason") ? value.path("rejected_reason").asText() : null;
                 String wabaId = entry.path("id").asText("");
-                log.info("ℹ️ [BSP] Template {} status update for WABA {}: {}", templateName, wabaId, status);
-                // Future: Update template repository status here
+                log.info("ℹ️ [BSP] Template {} status update for WABA {}: {} (reason: {})", templateName, wabaId, status, reason);
+                
+                whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                    if (config.getTenant() != null) {
+                        whatsappTemplateRepository.findByNameAndTenantId(templateName, config.getTenant().getId())
+                            .ifPresent(template -> {
+                                template.setStatus(status);
+                                if (reason != null && !reason.isBlank()) {
+                                    template.setRejectedReason(reason);
+                                }
+                                whatsappTemplateRepository.save(template);
+                                log.info("✅ [Worker] Updated WhatsAppTemplate '{}' status to '{}' (Reason: {})", templateName, status, reason);
+                            });
+                    }
+                });
             } else if ("phone_number_name_update".equals(field)) {
                 String newName = value.path("requested_verified_name").asText("");
                 String event = value.path("event").asText("");

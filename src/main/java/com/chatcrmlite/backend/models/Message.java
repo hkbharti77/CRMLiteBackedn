@@ -8,7 +8,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "chat_messages", indexes = {
-    @Index(name = "idx_chat_msg_contact_time", columnList = "contact_id, timestamp")
+    @Index(name = "idx_chat_msg_contact_time", columnList = "contact_id, timestamp"),
+    @Index(name = "idx_chat_msg_contact", columnList = "contact_id")
 })
 public class Message extends BaseTenantEntity {
     @Id

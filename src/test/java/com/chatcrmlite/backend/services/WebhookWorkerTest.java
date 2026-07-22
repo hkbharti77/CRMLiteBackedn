@@ -43,6 +43,12 @@ class WebhookWorkerTest {
     @Mock
     private RedisStateService redisStateService;
 
+    @Mock
+    private com.chatcrmlite.backend.repositories.WhatsAppTemplateRepository whatsappTemplateRepository;
+
+    @Mock
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     private WebhookWorker worker;
 
     @BeforeEach
@@ -53,7 +59,9 @@ class WebhookWorkerTest {
                 new ObjectMapper(),
                 redisTemplate,
                 deadLetterHandler,
-                resourceManager
+                resourceManager,
+                whatsappTemplateRepository,
+                tenantRepository
         );
         ReflectionTestUtils.setField(worker, "redisStateService", redisStateService);
         ReflectionTestUtils.setField(worker, "streamName", "whatsapp:ingress:stream");

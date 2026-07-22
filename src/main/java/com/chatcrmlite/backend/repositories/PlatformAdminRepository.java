@@ -10,4 +10,5 @@ import java.util.UUID;
 @Repository
 public interface PlatformAdminRepository extends JpaRepository<PlatformAdmin, UUID> {
     Optional<PlatformAdmin> findByEmail(String email);
+    Optional<PlatformAdmin> findByEmailIgnoreCase(String email);
 }

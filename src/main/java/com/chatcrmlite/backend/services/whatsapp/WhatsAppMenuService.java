@@ -35,6 +35,9 @@ public class WhatsAppMenuService {
     @org.springframework.context.annotation.Lazy
     private WhatsAppMessageService messageService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url}")
     private String appPublicUrl;
 
@@ -272,6 +275,10 @@ public class WhatsAppMenuService {
                 String note = config.getSosNote();
                 if (note == null || note.isBlank()) note = "A human agent has been notified and will be with you shortly.";
                 outboundService.sendText(contact, note, config, owner);
+                
+                // Pause the bot so human can take over
+                contact.setBotPaused(true);
+                contactRepository.save(contact);
             } catch (Exception e) {
                 log.error("Failed to send support message", e);
             }
@@ -391,14 +398,15 @@ public class WhatsAppMenuService {
             for (MenuDto.MenuSectionDto s : menu.getSections()) {
                 if (s != null && s.getRows() != null) {
                     List<MenuDto.MenuRowDto> newRows = new ArrayList<>();
+                    boolean flowRowsAdded = false;
                     for (MenuDto.MenuRowDto r : s.getRows()) {
-                        if (r != null && "trigger_flow".equals(r.getId())) {
-                            newRows.addAll(flowRows);
-                        } else {
-                            // If the menu already had specific triggers from a previous bad save, let's filter them if we are replacing
-                            if (r != null && !r.getId().startsWith("trigger_flow_")) {
-                                newRows.add(r);
+                        if (r != null && (r.getId().equals("trigger_flow") || r.getId().startsWith("trigger_flow_"))) {
+                            if (!flowRowsAdded) {
+                                newRows.addAll(flowRows);
+                                flowRowsAdded = true;
                             }
+                        } else if (r != null) {
+                            newRows.add(r);
                         }
                     }
                     s.setRows(newRows);

@@ -9,7 +9,9 @@ import java.util.UUID;
 
 
 @Entity
-@Table(name = "leads")
+@Table(name = "leads", indexes = {
+    @Index(name = "idx_lead_contact", columnList = "contact_id")
+})
 public class Lead extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.AUTO)

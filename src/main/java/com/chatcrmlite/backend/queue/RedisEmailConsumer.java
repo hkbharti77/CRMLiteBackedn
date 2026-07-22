@@ -36,7 +36,7 @@ public class RedisEmailConsumer {
         RDelayedQueue<EmailJobPayload> delayedQueue = redissonClient.getDelayedQueue(queue);
 
         executorService.submit(() -> {
-            while (!Thread.currentThread().isInterrupted()) {
+            while (!Thread.currentThread().isInterrupted() && !redissonClient.isShutdown()) {
                 try {
                     // Blocking take: waits until an item is available
                     EmailJobPayload payload = queue.take();
@@ -44,11 +44,25 @@ public class RedisEmailConsumer {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                     log.info("[RedisEmailConsumer] Consumer thread interrupted");
+                    break;
+                } catch (org.redisson.RedissonShutdownException e) {
+                    log.info("[RedisEmailConsumer] Redisson client shutdown. Stopping email consumer.");
+                    break;
                 } catch (Exception e) {
+                    if (redissonClient.isShutdown()) {
+                        log.info("[RedisEmailConsumer] Redisson is shutdown. Exiting consumer loop.");
+                        break;
+                    }
                     log.error("[RedisEmailConsumer] Unexpected error polling queue", e);
                 }
             }
         });
+    }
+
+    @jakarta.annotation.PreDestroy
+    public void stop() {
+        log.info("[RedisEmailConsumer] Shutting down executor service...");
+        executorService.shutdownNow();
     }
 
     private void processEmail(EmailJobPayload payload, RDelayedQueue<EmailJobPayload> delayedQueue) {
