@@ -38,6 +38,10 @@ public class WhatsAppIngressService {
     private final IdempotencyService idempotencyService;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
     private final ObjectMapper objectMapper;
+    @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.ai.SentimentAnalysisService sentimentAnalysisService;
+    @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.lead.LeadScoringService leadScoringService;
+    @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.repositories.LeadRepository leadRepository;
+    @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.team.AgentAssignmentService agentAssignmentService;
 
     @Transactional
     public void resolveAndSaveIngress(ProcessingContext context) {
@@ -114,11 +118,18 @@ public class WhatsAppIngressService {
             }
             return c;
         }
+        User assignedOwner = owner;
+        if (agentAssignmentService != null && owner != null && owner.getTenant() != null) {
+            User rrAgent = agentAssignmentService.getNextRoundRobinAgent(owner.getTenant());
+            if (rrAgent != null) {
+                assignedOwner = rrAgent;
+            }
+        }
         Contact newContact = Contact.builder()
                 .waId(waId)
                 .name(profileName != null && !profileName.isBlank() ? profileName : "WhatsApp User " + waId)
                 .source("WhatsApp")
-                .owner(owner)
+                .owner(assignedOwner)
                 .build();
         return contactRepository.save(newContact);
     }
@@ -134,12 +145,34 @@ public class WhatsAppIngressService {
                 .build();
         messageRepository.save(message);
 
+        // Perform Sentiment Analysis & Auto-Escalation check
+        if (sentimentAnalysisService != null) {
+            try {
+                sentimentAnalysisService.analyzeAndProcessMessage(message);
+            } catch (Exception e) {
+                log.error("[Ingress] Sentiment analysis failed for messageId={}: {}", waMessageId, e.getMessage());
+            }
+        }
+
+        // Recalculate Lead Score if lead exists
+        if (leadScoringService != null && leadRepository != null) {
+            try {
+                leadRepository.findTopByContactOrderByCreatedAtDesc(contact).ifPresent(lead -> {
+                    leadScoringService.calculateAndUpdateLeadScore(lead);
+                });
+            } catch (Exception e) {
+                log.error("[Ingress] Lead score calculation failed for contactId={}: {}", contact.getId(), e.getMessage());
+            }
+        }
+
         Map<String, Object> wsPayload = new HashMap<>();
         wsPayload.put("id",          message.getId().toString());
         wsPayload.put("contactId",   contact.getId().toString());
         wsPayload.put("contactName", contact.getName());
         wsPayload.put("content",     text);
         wsPayload.put("direction",   "INCOMING");
+        wsPayload.put("sentiment",   message.getSentiment() != null ? message.getSentiment().name() : "NEUTRAL");
+        wsPayload.put("escalated",   contact.isEscalated());
         UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : (owner != null ? owner.getId() : null);
         if (tenantId != null) {
             distributedWebSocketPublisher.publishMessage(tenantId, wsPayload);

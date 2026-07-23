@@ -9,6 +9,7 @@ import com.chatcrmlite.backend.repositories.CustomMenuCardRepository;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import org.springframework.stereotype.Service;
 
+import java.util.UUID;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.List;
@@ -130,7 +131,8 @@ public class NicheThemeService {
             ctaButtons.add(new WidgetCtaDTO("🎫 Get Support", "SUPPORT"));
         }
 
-        boolean allowBranding = quotaEnforcerService.isCustomWidgetBrandingAllowed(user.getId());
+        UUID tenantIdForQuota = user.getTenant() != null ? user.getTenant().getId() : user.getId();
+        boolean allowBranding = quotaEnforcerService.isCustomWidgetBrandingAllowed(tenantIdForQuota);
         String finalLogoUrl = allowBranding ? user.getLogoUrl() : null;
         boolean showWatermark = !allowBranding;
 

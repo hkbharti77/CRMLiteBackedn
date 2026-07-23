@@ -23,6 +23,11 @@ public interface ContactRepository extends JpaRepository<Contact, UUID> {
     List<Contact> findByName(String name);
     
     /**
+     * Fetch all contacts for a user matching any of the given tag IDs.
+     */
+    List<Contact> findByOwnerAndTags_IdIn(User owner, List<UUID> tagIds);
+
+    /**
      * Fetch all contacts for a user with tags eagerly loaded.
      * Prevents LazyInitializationException when accessing tags outside transaction.
      */

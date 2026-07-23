@@ -46,6 +46,16 @@ public class Contact extends BaseTenantEntity {
     @Column(name = "bot_paused", nullable = false)
     private boolean botPaused = false;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "latest_sentiment")
+    private Message.Sentiment latestSentiment = Message.Sentiment.NEUTRAL;
+
+    @Column(name = "escalated", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean escalated = false;
+
+    @Column(name = "escalated_at")
+    private java.time.LocalDateTime escalatedAt;
+
     public Contact() {}
 
     public Contact(UUID id, String waId, String displayId, String name, String email, List<Tag> tags, String source, User owner, boolean botPaused) {
@@ -80,6 +90,19 @@ public class Contact extends BaseTenantEntity {
     public void setOwner(User owner) { this.owner = owner; }
     public boolean isBotPaused() { return botPaused; }
     public void setBotPaused(boolean botPaused) { this.botPaused = botPaused; }
+
+    public Message.Sentiment getLatestSentiment() { return latestSentiment != null ? latestSentiment : Message.Sentiment.NEUTRAL; }
+    public void setLatestSentiment(Message.Sentiment latestSentiment) { this.latestSentiment = latestSentiment; }
+    public boolean isEscalated() { return escalated; }
+    public void setEscalated(boolean escalated) { this.escalated = escalated; }
+    public java.time.LocalDateTime getEscalatedAt() { return escalatedAt; }
+    public void setEscalatedAt(java.time.LocalDateTime escalatedAt) { this.escalatedAt = escalatedAt; }
+
+    public String getPhone() { return waId; }
+    public Boolean getOptedOut() { return false; }
+    public Boolean getBlacklisted() { return false; }
+    public java.util.Map<String, Object> getCustomFields() { return java.util.Collections.emptyMap(); }
+    public java.time.LocalDateTime getLastInteractiveAt() { return null; }
 
     @PrePersist
     @PreUpdate

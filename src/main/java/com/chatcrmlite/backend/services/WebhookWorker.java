@@ -23,6 +23,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
     private final com.chatcrmlite.backend.services.tenant.TenantResourceManager resourceManager;
     private final com.chatcrmlite.backend.repositories.WhatsAppTemplateRepository whatsappTemplateRepository;
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+    @Autowired private com.chatcrmlite.backend.services.whatsapp.campaign.CampaignAnalyticsService campaignAnalyticsService;
     @Autowired private RedisStateService redisStateService;
 
     @Value("${whatsapp.async.stream.ingress}")
@@ -88,12 +89,24 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                     }
                 } else if (statuses.isArray() && statuses.size() > 0) {
                     for (com.fasterxml.jackson.databind.JsonNode statusNode : statuses) {
+                        String waMsgId = statusNode.path("id").asText("");
+                        String statusStr = statusNode.path("status").asText("");
+                        String errorReason = statusNode.has("errors") ? statusNode.path("errors").toString() : null;
+                        
                         log.info("[Worker] WhatsApp delivery status id={} recipient={} status={} timestamp={} conversationId={}",
-                                statusNode.path("id").asText(""),
+                                waMsgId,
                                 statusNode.path("recipient_id").asText(""),
-                                statusNode.path("status").asText(""),
+                                statusStr,
                                 statusNode.path("timestamp").asText(""),
                                 statusNode.path("conversation").path("id").asText(""));
+
+                        if (!waMsgId.isBlank() && campaignAnalyticsService != null) {
+                            try {
+                                campaignAnalyticsService.processWebhookStatus(waMsgId, statusStr, errorReason);
+                            } catch (Exception ex) {
+                                log.warn("[Worker] Error updating campaign status for message {}: {}", waMsgId, ex.getMessage());
+                            }
+                        }
                     }
                 }
             } else if ("account_update".equals(field)) {

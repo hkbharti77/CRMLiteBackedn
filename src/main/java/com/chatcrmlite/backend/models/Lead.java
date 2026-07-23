@@ -86,6 +86,17 @@ public class Lead extends BaseTenantEntity {
     @Version
     private Long version;
 
+    public enum ScoreGrade {
+        HOT, WARM, COLD
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "score_grade")
+    private ScoreGrade scoreGrade = ScoreGrade.COLD;
+
+    @Column(name = "last_scored_at")
+    private LocalDateTime lastScoredAt;
+
     public enum PaymentStatus {
         NONE, PENDING, PARTIAL, PAID
     }
@@ -129,8 +140,10 @@ public class Lead extends BaseTenantEntity {
     public PaymentStatus getPaymentStatus() { return paymentStatus; }
     public String getCurrency() { return currency; }
     public String getDealLabel() { return dealLabel; }
-    public Integer getScore() { return score; }
+    public Integer getScore() { return score != null ? score : 0; }
     public String getInterestCategory() { return interestCategory; }
+    public ScoreGrade getScoreGrade() { return scoreGrade != null ? scoreGrade : ScoreGrade.COLD; }
+    public LocalDateTime getLastScoredAt() { return lastScoredAt; }
     public Long getVersion() { return version; }
 
     public void setId(UUID id) { this.id = id; }
@@ -150,6 +163,8 @@ public class Lead extends BaseTenantEntity {
     public void setDealLabel(String dealLabel) { this.dealLabel = dealLabel; }
     public void setScore(Integer score) { this.score = score; }
     public void setInterestCategory(String interestCategory) { this.interestCategory = interestCategory; }
+    public void setScoreGrade(ScoreGrade scoreGrade) { this.scoreGrade = scoreGrade; }
+    public void setLastScoredAt(LocalDateTime lastScoredAt) { this.lastScoredAt = lastScoredAt; }
     public void setVersion(Long version) { this.version = version; }
     @com.fasterxml.jackson.annotation.JsonIgnore
     public List<LeadEnquiry> getEnquiryList() { return enquiryList; }
