@@ -41,7 +41,8 @@ public class WhatsAppDeliveryHandler {
                     }
                     break;
                 case "GREETING":
-                    menuService.sendGreetingWithMenu(contact, config, owner, (Boolean) context.getMetadata().getOrDefault("isNewContact", false));
+                    menuService.sendGreetingWithMenu(contact, config, owner,
+                            (Boolean) context.getMetadata().getOrDefault("isNewContact", false));
                     break;
                 case "INTERACTIVE_SELECTION":
                     String selectionId = (String) context.getMetadata().get("selectionId");

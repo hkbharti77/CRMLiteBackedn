@@ -31,6 +31,9 @@ public class MessageController {
     @Autowired
     private WhatsAppMessageService whatsappMessageService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.ContactService contactService;
+
     @GetMapping("/chats")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<Map<String, Object>>> getActiveChats(@AuthenticationPrincipal String email) {
@@ -87,6 +90,7 @@ public class MessageController {
 
         String text = request.get("text");
         whatsappMessageService.sendMessage(contactId, text, user);
+        contactService.toggleBotPaused(contactId, true, user);
 
         return ResponseEntity.ok().build();
     }

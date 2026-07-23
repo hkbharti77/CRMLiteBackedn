@@ -38,6 +38,42 @@ public class WhatsAppConfig implements Serializable {
     @Column(length = 255)
     private String appSecret;
 
+    @Column(name = "business_id")
+    private String businessId;
+
+    @Column(name = "display_phone_number")
+    private String displayPhoneNumber;
+
+    @Column(name = "connection_type")
+    private String connectionType = "LEGACY"; // "LEGACY" or "EMBEDDED_SIGNUP_COEXISTENCE"
+
+    @Column(name = "embedded_business_id")
+    private String embeddedBusinessId;
+
+    @Column(name = "embedded_waba_id")
+    private String embeddedWabaId;
+
+    @Column(name = "embedded_phone_id")
+    private String embeddedPhoneId;
+
+    @Column(name = "verified_name")
+    private String verifiedName;
+
+    @Column(name = "token_expiry")
+    private java.time.LocalDateTime tokenExpiry;
+
+    @Column(name = "quality_rating")
+    private String qualityRating = "UNKNOWN";
+
+    @Column(name = "messaging_tier")
+    private String messagingTier;
+
+    @Column(name = "verification_status")
+    private String verificationStatus = "UNVERIFIED";
+
+    @Column(name = "account_status")
+    private String accountStatus = "ACTIVE";
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "interactive_menu_json", columnDefinition = "jsonb")
     private String interactiveMenuJson;
@@ -122,6 +158,18 @@ public class WhatsAppConfig implements Serializable {
     public String getAccessToken() { return accessToken; }
     public String getVerifyToken() { return verifyToken; }
     public String getAppSecret() { return appSecret; }
+    public String getBusinessId() { return businessId; }
+    public String getDisplayPhoneNumber() { return displayPhoneNumber; }
+    public String getConnectionType() { return connectionType != null ? connectionType : "LEGACY"; }
+    public String getEmbeddedBusinessId() { return embeddedBusinessId; }
+    public String getEmbeddedWabaId() { return embeddedWabaId; }
+    public String getEmbeddedPhoneId() { return embeddedPhoneId; }
+    public String getVerifiedName() { return verifiedName; }
+    public java.time.LocalDateTime getTokenExpiry() { return tokenExpiry; }
+    public String getQualityRating() { return qualityRating; }
+    public String getMessagingTier() { return messagingTier; }
+    public String getVerificationStatus() { return verificationStatus; }
+    public String getAccountStatus() { return accountStatus; }
     public String getInteractiveMenuJson() { return interactiveMenuJson; }
     public String getWelcomeMessage() { return welcomeMessage; }
     public String getReturningMessage() { return returningMessage; }
@@ -138,6 +186,7 @@ public class WhatsAppConfig implements Serializable {
     public Boolean getShowAboutContact() { return showAboutContact; }
     public Boolean getShowSosButton() { return showSosButton; }
     public Boolean getShowSupportFormButton() { return showSupportFormButton; }
+
 
     // ── Transient User Helpers for Backward Compatibility ──
     public User getUser() {
@@ -177,6 +226,18 @@ public class WhatsAppConfig implements Serializable {
     public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
     public void setVerifyToken(String verifyToken) { this.verifyToken = verifyToken; }
     public void setAppSecret(String appSecret) { this.appSecret = appSecret; }
+    public void setBusinessId(String businessId) { this.businessId = businessId; }
+    public void setDisplayPhoneNumber(String displayPhoneNumber) { this.displayPhoneNumber = displayPhoneNumber; }
+    public void setConnectionType(String connectionType) { this.connectionType = connectionType; }
+    public void setEmbeddedBusinessId(String embeddedBusinessId) { this.embeddedBusinessId = embeddedBusinessId; }
+    public void setEmbeddedWabaId(String embeddedWabaId) { this.embeddedWabaId = embeddedWabaId; }
+    public void setEmbeddedPhoneId(String embeddedPhoneId) { this.embeddedPhoneId = embeddedPhoneId; }
+    public void setVerifiedName(String verifiedName) { this.verifiedName = verifiedName; }
+    public void setTokenExpiry(java.time.LocalDateTime tokenExpiry) { this.tokenExpiry = tokenExpiry; }
+    public void setQualityRating(String qualityRating) { this.qualityRating = qualityRating; }
+    public void setMessagingTier(String messagingTier) { this.messagingTier = messagingTier; }
+    public void setVerificationStatus(String verificationStatus) { this.verificationStatus = verificationStatus; }
+    public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
     public void setInteractiveMenuJson(String interactiveMenuJson) { this.interactiveMenuJson = interactiveMenuJson; }
     public void setWelcomeMessage(String welcomeMessage) { this.welcomeMessage = welcomeMessage; }
     public void setReturningMessage(String returningMessage) { this.returningMessage = returningMessage; }

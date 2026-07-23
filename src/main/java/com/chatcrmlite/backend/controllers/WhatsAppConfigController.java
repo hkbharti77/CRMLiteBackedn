@@ -97,6 +97,11 @@ public class WhatsAppConfigController {
         String guardrailMessageAbuse = (String) body.get("guardrailMessageAbuse");
         String guardrailMessageGibberish = (String) body.get("guardrailMessageGibberish");
 
+        String connectionType = (String) body.get("connectionType");
+        String embeddedBusinessId = (String) body.get("embeddedBusinessId");
+        String embeddedWabaId = (String) body.get("embeddedWabaId");
+        String embeddedPhoneId = (String) body.get("embeddedPhoneId");
+
         if (interactiveMenuJson != null && !interactiveMenuJson.isBlank()) {
             try {
                 com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
@@ -112,11 +117,16 @@ public class WhatsAppConfigController {
                 .orElse(new WhatsAppConfig());
 
         config.setUser(user);
+        config.setConnectionType(connectionType != null && !connectionType.isBlank() ? connectionType : "LEGACY");
         config.setPhoneNumberId(phoneNumberId != null ? phoneNumberId.trim() : null);
         config.setWabaId(wabaId != null ? wabaId.trim() : null);
         config.setAccessToken(accessToken != null ? accessToken.trim() : null);
         config.setVerifyToken(verifyToken != null ? verifyToken.trim() : null);
         config.setAppSecret(appSecret != null ? appSecret.trim() : null);
+        if (embeddedBusinessId != null) config.setEmbeddedBusinessId(embeddedBusinessId);
+        if (embeddedWabaId != null) config.setEmbeddedWabaId(embeddedWabaId);
+        if (embeddedPhoneId != null) config.setEmbeddedPhoneId(embeddedPhoneId);
+
         config.setInteractiveMenuJson(interactiveMenuJson != null && !interactiveMenuJson.isBlank() ? interactiveMenuJson.trim() : null);
         config.setWelcomeMessage(welcomeMessage);
         config.setReturningMessage(returningMessage);
@@ -142,6 +152,47 @@ public class WhatsAppConfigController {
 
         whatsappConfigRepository.save(config);
         return ResponseEntity.ok("Config saved");
+    }
+
+    @PostMapping("/embedded-signup/callback")
+    public ResponseEntity<?> handleEmbeddedSignupCallback(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> body) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String code = body.get("code");
+        String wabaId = body.get("wabaId");
+        String phoneNumberId = body.get("phoneNumberId");
+
+        if (code == null || code.isBlank()) {
+            return ResponseEntity.badRequest().body("OAuth authorization code is required");
+        }
+
+        WhatsAppConfig config = whatsappConfigRepository.findByUserId(user.getId())
+                .orElse(new WhatsAppConfig());
+
+        config.setUser(user);
+        config.setConnectionType("EMBEDDED_SIGNUP_COEXISTENCE");
+        if (wabaId != null) config.setWabaId(wabaId.trim());
+        if (phoneNumberId != null) config.setPhoneNumberId(phoneNumberId.trim());
+        config.setAccessToken(code.trim()); // Code or exchanged access token
+
+        whatsappConfigRepository.save(config);
+        return ResponseEntity.ok(Map.of("message", "WhatsApp Coexistence Embedded Signup Connected Successfully", "connectionType", "EMBEDDED_SIGNUP_COEXISTENCE"));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<?> deleteConfig(@AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return whatsappConfigRepository.findByUserId(user.getId())
+                .map(config -> {
+                    whatsappConfigRepository.delete(config);
+                    return ResponseEntity.ok().body("Configuration deleted successfully");
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @PostMapping(value = "/upload-media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

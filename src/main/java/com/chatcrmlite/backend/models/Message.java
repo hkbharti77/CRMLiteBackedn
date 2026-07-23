@@ -8,7 +8,8 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "chat_messages", indexes = {
-    @Index(name = "idx_chat_msg_contact_time", columnList = "contact_id, timestamp")
+    @Index(name = "idx_chat_msg_contact_time", columnList = "contact_id, timestamp"),
+    @Index(name = "idx_chat_msg_contact", columnList = "contact_id")
 })
 public class Message extends BaseTenantEntity {
     @Id
@@ -42,6 +43,17 @@ public class Message extends BaseTenantEntity {
         INCOMING, OUTGOING
     }
 
+    public enum Sentiment {
+        POSITIVE, NEUTRAL, FRUSTRATED, URGENT
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "sentiment")
+    private Sentiment sentiment = Sentiment.NEUTRAL;
+
+    @Column(name = "sentiment_score")
+    private Double sentimentScore = 0.0;
+
     public Message() {}
 
     public Message(UUID id, String waMessageId, List<String> tags, Contact contact, User owner, String content, Direction direction, LocalDateTime timestamp) {
@@ -71,7 +83,11 @@ public class Message extends BaseTenantEntity {
     public void setOwner(User owner) { this.owner = owner; }
     public void setContent(String content) { this.content = content; }
     public void setDirection(Direction direction) { this.direction = direction; }
-    public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
+    public Sentiment getSentiment() { return sentiment != null ? sentiment : Sentiment.NEUTRAL; }
+    public Double getSentimentScore() { return sentimentScore != null ? sentimentScore : 0.0; }
+
+    public void setSentiment(Sentiment sentiment) { this.sentiment = sentiment; }
+    public void setSentimentScore(Double sentimentScore) { this.sentimentScore = sentimentScore; }
 
     @PrePersist
     protected void onCreate() {
@@ -91,6 +107,8 @@ public class Message extends BaseTenantEntity {
         private String content;
         private Direction direction;
         private LocalDateTime timestamp;
+        private Sentiment sentiment = Sentiment.NEUTRAL;
+        private Double sentimentScore = 0.0;
 
         public MessageBuilder id(UUID id) { this.id = id; return this; }
         public MessageBuilder waMessageId(String waMessageId) { this.waMessageId = waMessageId; return this; }
@@ -100,9 +118,14 @@ public class Message extends BaseTenantEntity {
         public MessageBuilder content(String content) { this.content = content; return this; }
         public MessageBuilder direction(Direction direction) { this.direction = direction; return this; }
         public MessageBuilder timestamp(LocalDateTime timestamp) { this.timestamp = timestamp; return this; }
+        public MessageBuilder sentiment(Sentiment sentiment) { this.sentiment = sentiment; return this; }
+        public MessageBuilder sentimentScore(Double sentimentScore) { this.sentimentScore = sentimentScore; return this; }
 
         public Message build() {
-            return new Message(id, waMessageId, tags, contact, owner, content, direction, timestamp);
+            Message msg = new Message(id, waMessageId, tags, contact, owner, content, direction, timestamp);
+            msg.setSentiment(this.sentiment);
+            msg.setSentimentScore(this.sentimentScore);
+            return msg;
         }
     }
 }

@@ -8,7 +8,9 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "app_users")
+@Table(name = "app_users", indexes = {
+    @Index(name = "idx_user_email", columnList = "email")
+})
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -33,9 +35,17 @@ public class User implements Serializable {
     @Enumerated(EnumType.STRING)
     private Role role;
 
+    public enum AvailabilityStatus {
+        AVAILABLE, BUSY, OFFLINE
+    }
+
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", nullable = false, length = 20)
     private AccountStatus accountStatus = AccountStatus.ACTIVE;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "availability_status", columnDefinition = "VARCHAR(255) DEFAULT 'AVAILABLE'")
+    private AvailabilityStatus availabilityStatus = AvailabilityStatus.AVAILABLE;
 
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_ip_whitelist", joinColumns = @JoinColumn(name = "user_id"))
@@ -126,6 +136,13 @@ public class User implements Serializable {
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
 
+    public String getFirstName() {
+        if (displayName != null && !displayName.isBlank()) {
+            return displayName.split(" ")[0];
+        }
+        return email != null ? email.split("@")[0] : "User";
+    }
+
     public String getPhone() { return phone; }
     public void setPhone(String phone) { this.phone = phone; }
 
@@ -134,6 +151,9 @@ public class User implements Serializable {
 
     public AccountStatus getAccountStatus() { return accountStatus; }
     public void setAccountStatus(AccountStatus accountStatus) { this.accountStatus = accountStatus; }
+
+    public AvailabilityStatus getAvailabilityStatus() { return availabilityStatus != null ? availabilityStatus : AvailabilityStatus.AVAILABLE; }
+    public void setAvailabilityStatus(AvailabilityStatus availabilityStatus) { this.availabilityStatus = availabilityStatus; }
 
     public Set<String> getIpWhitelist() { return ipWhitelist; }
     public void setIpWhitelist(Set<String> ipWhitelist) { this.ipWhitelist = ipWhitelist; }

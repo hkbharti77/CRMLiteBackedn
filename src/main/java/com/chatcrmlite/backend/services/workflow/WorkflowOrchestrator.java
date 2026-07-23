@@ -43,6 +43,13 @@ public class WorkflowOrchestrator {
         // Routing logic based on type
         String type = (String) context.getMetadata().get("type");
         boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
+        boolean botPaused = Boolean.TRUE.equals(context.getMetadata().get("botPaused"));
+
+        if (botPaused) {
+            log.info("⏸️ [Workflow] Bot is paused for contact {}. Skipping AI/Flow routing.", context.getWaId());
+            completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
+            return;
+        }
 
         // Route to flow worker if:
         //   1. The message is an interactive selection (button/list tap), OR

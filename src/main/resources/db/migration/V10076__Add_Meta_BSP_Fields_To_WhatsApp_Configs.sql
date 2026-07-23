@@ -1,0 +1,11 @@
+-- V10076: Add Meta BSP Fields to WhatsApp Configs for Embedded Signup and Account Health
+
+ALTER TABLE whatsapp_configs 
+ADD COLUMN IF NOT EXISTS business_id VARCHAR(255),
+ADD COLUMN IF NOT EXISTS display_phone_number VARCHAR(50),
+ADD COLUMN IF NOT EXISTS verified_name VARCHAR(255),
+ADD COLUMN IF NOT EXISTS token_expiry TIMESTAMP,
+ADD COLUMN IF NOT EXISTS quality_rating VARCHAR(20) DEFAULT 'UNKNOWN',
+ADD COLUMN IF NOT EXISTS messaging_tier VARCHAR(50),
+ADD COLUMN IF NOT EXISTS verification_status VARCHAR(50) DEFAULT 'UNVERIFIED',
+ADD COLUMN IF NOT EXISTS account_status VARCHAR(50) DEFAULT 'ACTIVE';

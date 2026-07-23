@@ -29,7 +29,7 @@ import org.springframework.data.redis.serializer.StringRedisSerializer;
 import java.time.Duration;
 
 @Configuration
-public class RedisConfig implements CachingConfigurer {
+public class RedisConfig {
 
     private static final Logger log = LoggerFactory.getLogger(RedisConfig.class);
 
@@ -90,22 +90,26 @@ public class RedisConfig implements CachingConfigurer {
     }
 
     /**
-     * Resilient error handler: on a cache GET failure (e.g. stale serialization format
-     * that slipped through the prefix guard), log a warning and evict the corrupt entry
-     * so the request falls through to the database instead of throwing a 500.
+     * Expose CachingConfigurer as a standalone @Bean rather than implementing it on @Configuration directly.
+     * This prevents early initialization of RedisConfig and its dependencies during BeanPostProcessor setup.
      */
-    @Override
-    public CacheErrorHandler errorHandler() {
-        return new SimpleCacheErrorHandler() {
+    @Bean
+    public CachingConfigurer cachingConfigurer() {
+        return new CachingConfigurer() {
             @Override
-            public void handleCacheGetError(RuntimeException e, Cache cache, Object key) {
-                log.warn("[Redis-Cache] GET error on cache='{}' key='{}' — evicting corrupt entry and falling back to DB. Cause: {}",
-                        cache.getName(), key, e.getMessage());
-                try {
-                    cache.evict(key);
-                } catch (Exception evictEx) {
-                    log.warn("[Redis-Cache] Failed to evict key '{}' from cache '{}': {}", key, cache.getName(), evictEx.getMessage());
-                }
+            public CacheErrorHandler errorHandler() {
+                return new SimpleCacheErrorHandler() {
+                    @Override
+                    public void handleCacheGetError(RuntimeException e, Cache cache, Object key) {
+                        log.warn("[Redis-Cache] GET error on cache='{}' key='{}' — evicting corrupt entry and falling back to DB. Cause: {}",
+                                cache.getName(), key, e.getMessage());
+                        try {
+                            cache.evict(key);
+                        } catch (Exception evictEx) {
+                            log.warn("[Redis-Cache] Failed to evict key '{}' from cache '{}': {}", key, cache.getName(), evictEx.getMessage());
+                        }
+                    }
+                };
             }
         };
     }

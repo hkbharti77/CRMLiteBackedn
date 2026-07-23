@@ -3,20 +3,30 @@ package com.chatcrmlite.backend.services.lead;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.EmailTemplate;
 import com.chatcrmlite.backend.models.Lead;
+import com.chatcrmlite.backend.models.Message;
 import com.chatcrmlite.backend.models.Reminder;
 import com.chatcrmlite.backend.models.LeadEnquiry;
+import com.chatcrmlite.backend.repositories.LeadRepository;
+import com.chatcrmlite.backend.repositories.MessageRepository;
 import com.chatcrmlite.backend.services.EmailService;
 import com.chatcrmlite.backend.services.EmailTemplateService;
 import com.chatcrmlite.backend.services.ReminderService;
 import com.chatcrmlite.backend.services.ai.AiOrchestrator;
 import com.chatcrmlite.backend.services.ai.AiRequest;
 import com.chatcrmlite.backend.services.ai.AiResponse;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -29,48 +39,144 @@ public class LeadScoringService {
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final ReminderService reminderService;
+    @Autowired private LeadRepository leadRepository;
+    @Autowired private MessageRepository messageRepository;
+
+    @Data
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class LeadScoreResult {
+        private Integer totalScore; // 0 to 100
+        private Lead.ScoreGrade scoreGrade; // HOT, WARM, COLD
+        private int interactionScore; // max 30
+        private int sentimentScore;   // max 30
+        private int dealValueScore;   // max 25
+        private int profileScore;     // max 15
+        private LocalDateTime calculatedAt;
+    }
+
+    /**
+     * Calculates dynamic quality score (0–100) for a lead and updates Lead entity.
+     */
+    @Transactional
+    public LeadScoreResult calculateAndUpdateLeadScore(Lead lead) {
+        if (lead == null) {
+            return LeadScoreResult.builder()
+                    .totalScore(0)
+                    .scoreGrade(Lead.ScoreGrade.COLD)
+                    .calculatedAt(LocalDateTime.now())
+                    .build();
+        }
+
+        Contact contact = lead.getContact();
+
+        // 1. Interaction Frequency Score (Max 30 pts)
+        int interactionScore = 0;
+        if (contact != null) {
+            List<Message> messages = messageRepository.findAllByContactOrderByTimestampAsc(contact);
+            int count = messages != null ? messages.size() : 0;
+            if (count >= 10) {
+                interactionScore = 30;
+            } else if (count >= 5) {
+                interactionScore = 20;
+            } else if (count >= 2) {
+                interactionScore = 10;
+            } else if (count >= 1) {
+                interactionScore = 5;
+            }
+        }
+
+        // 2. Sentiment Tone Score (Max 30 pts)
+        int sentimentScore = 15; // default neutral
+        if (contact != null && contact.getLatestSentiment() != null) {
+            switch (contact.getLatestSentiment()) {
+                case POSITIVE:
+                    sentimentScore = 30;
+                    break;
+                case URGENT:
+                    sentimentScore = 22; // High intent but needs fast response
+                    break;
+                case NEUTRAL:
+                    sentimentScore = 15;
+                    break;
+                case FRUSTRATED:
+                    sentimentScore = 0;
+                    break;
+            }
+        }
+
+        // 3. Deal Value Score (Max 25 pts)
+        int dealValueScore = 0;
+        BigDecimal val = lead.getDealValue();
+        if (val != null) {
+            double doubleVal = val.doubleValue();
+            if (doubleVal >= 50000) {
+                dealValueScore = 25;
+            } else if (doubleVal >= 10000) {
+                dealValueScore = 18;
+            } else if (doubleVal > 0) {
+                dealValueScore = 10;
+            }
+        }
+
+        // 4. Engagement & Profile Completeness (Max 15 pts)
+        int profileScore = 0;
+        if (contact != null && contact.getEmail() != null && !contact.getEmail().isBlank()) {
+            profileScore += 5;
+        }
+        if (lead.getStatus() == Lead.LeadStatus.INTERESTED || lead.getStatus() == Lead.LeadStatus.BOOKED) {
+            profileScore += 10;
+        } else if (lead.getStatus() == Lead.LeadStatus.FOLLOW_UP) {
+            profileScore += 5;
+        }
+
+        int total = Math.min(100, interactionScore + sentimentScore + dealValueScore + profileScore);
+
+        Lead.ScoreGrade grade;
+        if (total >= 75) {
+            grade = Lead.ScoreGrade.HOT;
+        } else if (total >= 45) {
+            grade = Lead.ScoreGrade.WARM;
+        } else {
+            grade = Lead.ScoreGrade.COLD;
+        }
+
+        // Update Lead entity
+        lead.setScore(total);
+        lead.setScoreGrade(grade);
+        lead.setLastScoredAt(LocalDateTime.now());
+        if (leadRepository != null) {
+            leadRepository.save(lead);
+        }
+
+        log.info("[LeadScoring] Calculated score={} grade={} for leadId={}", total, grade, lead.getId());
+
+        return LeadScoreResult.builder()
+                .totalScore(total)
+                .scoreGrade(grade)
+                .interactionScore(interactionScore)
+                .sentimentScore(sentimentScore)
+                .dealValueScore(dealValueScore)
+                .profileScore(profileScore)
+                .calculatedAt(lead.getLastScoredAt())
+                .build();
+    }
 
     public void calculateAndEvaluate(Lead lead) {
         if (lead.getContact() == null) return;
 
-        int score = calculateProgrammaticScore(lead);
-        
+        calculateAndUpdateLeadScore(lead);
+
         AiEvaluation aiEval = calculateAiScore(lead);
-        if (aiEval.failed()) {
-            score = fallbackRuleBasedScore(lead, score);
-        } else {
-            score += aiEval.score();
+        if (!aiEval.failed() && aiEval.interestCategory() != null) {
+            lead.setInterestCategory(aiEval.interestCategory());
         }
-        
-        // Cap score at 100
-        score = Math.min(score, 100);
 
-        lead.setScore(score);
-        lead.setInterestCategory(aiEval.interestCategory());
-
-        log.info("Calculated Lead Score for {}: {}. Interest: {} (AI Failed: {})", 
-                lead.getId(), score, aiEval.interestCategory(), aiEval.failed());
+        log.info("Evaluated Lead Score for {}: {}. Interest: {} (AI Failed: {})", 
+                lead.getId(), lead.getScore(), aiEval.interestCategory(), aiEval.failed());
         
         evaluateAndTriggerActions(lead);
-    }
-
-    private int calculateProgrammaticScore(Lead lead) {
-        int score = 0;
-        Contact contact = lead.getContact();
-
-        if (contact.getName() != null && !contact.getName().isBlank()) {
-            score += 10;
-        }
-        if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
-            score += 15;
-        }
-        if (contact.getWaId() != null && !contact.getWaId().isBlank()) {
-            score += 15;
-        }
-        if (lead.getDealValue() != null && lead.getDealValue().compareTo(BigDecimal.ZERO) > 0) {
-            score += 10;
-        }
-        return score;
     }
 
     private record AiEvaluation(int score, String interestCategory, boolean failed) {}
@@ -124,69 +230,6 @@ public class LeadScoringService {
             log.warn("Failed to parse AI evaluation response: {}", content);
         }
         return new AiEvaluation(aiScore, category, false);
-    }
-
-    private int fallbackRuleBasedScore(Lead lead, int baseScore) {
-        int fallbackScore = baseScore;
-        String enquiriesContext = lead.getEnquiryList().stream()
-                .map(LeadEnquiry::getMessage)
-                .collect(Collectors.joining("\n")).toLowerCase();
-                
-        if (enquiriesContext.contains("buy") || enquiriesContext.contains("purchase") || enquiriesContext.contains("urgent") || enquiriesContext.contains("demo")) {
-            fallbackScore += 30;
-        } else if (enquiriesContext.contains("price") || enquiriesContext.contains("cost") || enquiriesContext.contains("quote")) {
-            fallbackScore += 20;
-        } else if (enquiriesContext.length() > 20) {
-            fallbackScore += 10;
-        }
-        
-        String niche = lead.getOwner().getBusinessType();
-        if (niche != null) {
-            switch (niche) {
-                case "auto-used-car-dealers":
-                    if (enquiriesContext.contains("test drive") || enquiriesContext.contains("mileage") || enquiriesContext.contains("car")) fallbackScore += 15;
-                    break;
-                case "dental-clinics":
-                case "physiotherapy-chiropractic-centers":
-                case "homeopathy-ayurveda-doctors":
-                case "skin-aesthetic-clinics":
-                    if (enquiriesContext.contains("appointment") || enquiriesContext.contains("pain") || enquiriesContext.contains("treatment") || enquiriesContext.contains("consultation")) fallbackScore += 15;
-                    break;
-                case "property-brokers":
-                    if (enquiriesContext.contains("visit") || enquiriesContext.contains("apartment") || enquiriesContext.contains("property") || enquiriesContext.contains("rent")) fallbackScore += 15;
-                    break;
-                case "event-wedding-planners":
-                case "wedding-portrait-photographers":
-                    if (enquiriesContext.contains("wedding") || enquiriesContext.contains("event") || enquiriesContext.contains("booking") || enquiriesContext.contains("date")) fallbackScore += 15;
-                    break;
-                case "freelance-makeup-artists-mua":
-                case "premium-salons-hair-clinics":
-                    if (enquiriesContext.contains("bridal") || enquiriesContext.contains("hair") || enquiriesContext.contains("makeup") || enquiriesContext.contains("booking")) fallbackScore += 15;
-                    break;
-                case "independent-tutors":
-                case "music-art-classes":
-                case "career-study-abroad-counselors":
-                    if (enquiriesContext.contains("class") || enquiriesContext.contains("course") || enquiriesContext.contains("admission") || enquiriesContext.contains("tutor")) fallbackScore += 15;
-                    break;
-                case "gym-personal-fitness-trainers":
-                case "yoga-meditation-instructors":
-                    if (enquiriesContext.contains("membership") || enquiriesContext.contains("trainer") || enquiriesContext.contains("join")) fallbackScore += 15;
-                    break;
-                case "premium-tour-travel-operators":
-                    if (enquiriesContext.contains("package") || enquiriesContext.contains("tour") || enquiriesContext.contains("trip") || enquiriesContext.contains("flight")) fallbackScore += 15;
-                    break;
-                case "insurance-agents":
-                    if (enquiriesContext.contains("policy") || enquiriesContext.contains("claim") || enquiriesContext.contains("premium") || enquiriesContext.contains("cover")) fallbackScore += 15;
-                    break;
-                case "interior-designers-architects":
-                case "solar-panel-smart-home-installers":
-                case "freelance-web-graphic-designers":
-                    if (enquiriesContext.contains("design") || enquiriesContext.contains("project") || enquiriesContext.contains("installation") || enquiriesContext.contains("estimate")) fallbackScore += 15;
-                    break;
-            }
-        }
-        
-        return fallbackScore;
     }
 
     private void evaluateAndTriggerActions(Lead lead) {

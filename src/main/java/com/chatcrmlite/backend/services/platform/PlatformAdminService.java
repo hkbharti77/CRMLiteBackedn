@@ -56,12 +56,17 @@ public class PlatformAdminService {
      * Requests an OTP for the platform owner.
      */
     public Map<String, Object> requestOtp(String email, HttpServletRequest request) {
-        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(email)) {
+        if (email == null || email.isBlank()) {
+            return Map.of("status", "invalid", "message", "Email is required");
+        }
+        String cleanEmail = email.trim().toLowerCase();
+
+        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail)) {
             log.warn("[Platform] OTP request for unauthorized email: {}", email);
             return Map.of("status", "invalid", "message", "Unauthorized email");
         }
 
-        PlatformAdmin admin = adminRepository.findByEmail(email).orElse(null);
+        PlatformAdmin admin = adminRepository.findByEmailIgnoreCase(cleanEmail).orElse(null);
         if (admin == null) {
             return Map.of("status", "invalid", "message", "Admin not found");
         }
@@ -75,7 +80,7 @@ public class PlatformAdminService {
 
         String ip = resolveIp(request);
         String ua = resolveUserAgent(request);
-        emailService.generateAndSendLoginOtp(email, ip, ua);
+        emailService.generateAndSendLoginOtp(cleanEmail, ip, ua);
         
         return Map.of("status", "ok", "message", "OTP sent successfully");
     }
@@ -89,34 +94,38 @@ public class PlatformAdminService {
     public Map<String, Object> login(String email, String otp,
                                      HttpServletRequest request,
                                      HttpServletResponse response) {
+        if (email == null || email.isBlank()) {
+            return Map.of("status", "invalid", "message", "Email is required");
+        }
+        String cleanEmail = email.trim().toLowerCase();
         String ip = resolveIp(request);
         String ua = resolveUserAgent(request);
         String requestId = java.util.UUID.randomUUID().toString();
 
-        PlatformAdmin admin = adminRepository.findByEmail(email).orElse(null);
+        PlatformAdmin admin = adminRepository.findByEmailIgnoreCase(cleanEmail).orElse(null);
 
         if (admin == null) {
             // Don't reveal whether account exists
-            audit(requestId, "LOGIN", "FAILED", "System", email, "{\"reason\":\"unknown_email\"}", ip, ua);
-            log.warn("[Platform] Login attempt for unknown email");
+            audit(requestId, "LOGIN", "FAILED", "System", cleanEmail, "{\"reason\":\"unknown_email\"}", ip, ua);
+            log.warn("[Platform] Login attempt for unknown email: {}", cleanEmail);
             return Map.of("status", "invalid", "message", "Invalid credentials");
         }
 
         if (admin.isCurrentlyLocked()) {
             long secs = admin.remainingLockSeconds();
-            audit(requestId, "LOGIN", "FAILED", "System", email,
+            audit(requestId, "LOGIN", "FAILED", "System", cleanEmail,
                   "{\"reason\":\"account_locked\",\"remainingSeconds\":" + secs + "}", ip, ua);
             return Map.of("status", "locked",
                           "message", "Account locked. Try again in " + Math.ceil(secs / 60.0) + " minutes.",
                           "remainingSeconds", secs);
         }
 
-        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(email)) {
-            audit(requestId, "LOGIN", "FAILED", "System", email, "{\"reason\":\"unauthorized_email\"}", ip, ua);
+        if (!"gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail)) {
+            audit(requestId, "LOGIN", "FAILED", "System", cleanEmail, "{\"reason\":\"unauthorized_email\"}", ip, ua);
             return Map.of("status", "invalid", "message", "Invalid credentials");
         }
 
-        if (!emailService.verifyOtp(email, otp)) {
+        if (!emailService.verifyOtp(cleanEmail, otp)) {
             int newCount = admin.getFailedLoginCount() + 1;
             admin.setFailedLoginCount(newCount);
 

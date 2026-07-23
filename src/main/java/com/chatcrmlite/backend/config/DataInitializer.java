@@ -46,8 +46,24 @@ public class DataInitializer implements CommandLineRunner {
     @Autowired
     private PlatformAdminRepository platformAdminRepository;
 
+    @Autowired
+    private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
     @Override
     public void run(String... args) throws Exception {
+        try {
+            jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS escalated BOOLEAN DEFAULT FALSE;");
+            jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMP;");
+            jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS latest_sentiment VARCHAR(255) DEFAULT 'NEUTRAL';");
+            jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sentiment VARCHAR(255) DEFAULT 'NEUTRAL';");
+            jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sentiment_score DOUBLE PRECISION DEFAULT 0.0;");
+            jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_grade VARCHAR(255) DEFAULT 'COLD';");
+            jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_scored_at TIMESTAMP;");
+            jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS availability_status VARCHAR(255) DEFAULT 'AVAILABLE';");
+        } catch (Exception e) {
+            log.warn("[SchemaMigration] Column auto-migration notice: {}", e.getMessage());
+        }
+
         seedSubscriptionPlans();
 
         // --- CLEANUP MOCK DATA ---

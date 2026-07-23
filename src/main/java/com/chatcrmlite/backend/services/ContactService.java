@@ -93,6 +93,16 @@ public class ContactService {
         contactRepository.save(contact);
     }
     
+    @Transactional
+    public void toggleBotPaused(UUID contactId, boolean botPaused, User owner) {
+        Contact contact = contactRepository.findById(contactId)
+                .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
+                .orElseThrow(() -> new RuntimeException("Contact not found"));
+        
+        contact.setBotPaused(botPaused);
+        contactRepository.save(contact);
+    }
+    
     /**
      * Convert Contact entity to DTO.
      * Must be called within a transaction where tags are already loaded.
@@ -104,6 +114,7 @@ public class ContactService {
                 .name(c.getName())
                 .email(c.getEmail())
                 .source(c.getSource())
+                .botPaused(c.isBotPaused())
                 .tags(c.getTags().stream()
                         .map(Tag::getName)
                         .collect(Collectors.toList()))

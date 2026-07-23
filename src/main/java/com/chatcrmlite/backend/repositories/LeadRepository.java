@@ -21,6 +21,8 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     
     Optional<Lead> findByLeadNumber(String leadNumber);
 
+    List<Lead> findByOwnerAndStatusIn(User owner, List<Lead.LeadStatus> statuses);
+
     List<Lead> findAllByOwner(User owner);
     /** Optimized: fetch leads by status with contact and tags eagerly to avoid lazy initialization */
     @Query("SELECT DISTINCT l FROM Lead l " +

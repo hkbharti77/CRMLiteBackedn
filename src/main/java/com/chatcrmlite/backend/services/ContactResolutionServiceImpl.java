@@ -25,7 +25,12 @@ public class ContactResolutionServiceImpl implements ContactResolutionService {
         Optional<Contact> existing = contactRepository.findByWaIdAndOwner(waId, owner);
         if (existing.isPresent()) {
             Contact c = existing.get();
-            if (profileName != null && (c.getName() == null || c.getName().startsWith("WhatsApp User"))) {
+            if (profileName != null && !profileName.isBlank() && 
+                (c.getName() == null || c.getName().isBlank() || 
+                 c.getName().startsWith("WhatsApp User") || 
+                 c.getName().startsWith("Test User") || 
+                 !profileName.equals(c.getName()))) {
+                log.info("[ContactResolution] Auto-updating contact name from '{}' to '{}' for waId={}", c.getName(), profileName, waId);
                 c.setName(profileName);
                 contactRepository.save(c);
             }
@@ -34,7 +39,7 @@ public class ContactResolutionServiceImpl implements ContactResolutionService {
         
         Contact newContact = Contact.builder()
                 .waId(waId)
-                .name(profileName != null ? profileName : "WhatsApp User " + waId)
+                .name(profileName != null && !profileName.isBlank() ? profileName : "WhatsApp User " + waId)
                 .source("WhatsApp")
                 .owner(owner)
                 .build();
