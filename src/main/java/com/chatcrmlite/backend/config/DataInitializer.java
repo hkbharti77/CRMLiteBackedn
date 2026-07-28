@@ -117,28 +117,28 @@ public class DataInitializer implements CommandLineRunner {
     private void seedSubscriptionPlans() {
         if (subscriptionPlanRepository.findById("FREE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
-                "FREE", "Free Starter Pack", BigDecimal.ZERO, BigDecimal.ZERO,
+                "FREE", "Free Starter Pack", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
                 1, 100, 15, 10, 500, false, false, false
             ));
             log.info("[Init] Seeded FREE subscription plan.");
         }
         if (subscriptionPlanRepository.findById("MIN").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
-                "MIN", "Starter Menu-Bot", new BigDecimal("9.99"), new BigDecimal("99.90"),
+                "MIN", "Starter Pack", new BigDecimal("1499.00"), new BigDecimal("14390.00"), new BigDecimal("19.99"), new BigDecimal("189.90"),
                 3, 2500, 500, 500, 3000, true, false, false
             ));
             log.info("[Init] Seeded MIN subscription plan.");
         }
         if (subscriptionPlanRepository.findById("PRO").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
-                "PRO", "Scale Professional", new BigDecimal("29.99"), new BigDecimal("287.90"),
+                "PRO", "Scale Professional", new BigDecimal("2499.00"), new BigDecimal("23990.00"), new BigDecimal("29.99"), new BigDecimal("287.90"),
                 10, 25000, 25000, 25000, 15000, true, true, true
             ));
             log.info("[Init] Seeded PRO subscription plan.");
         }
         if (subscriptionPlanRepository.findById("ENTERPRISE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
-                "ENTERPRISE", "Enterprise Max", new BigDecimal("79.99"), new BigDecimal("767.90"),
+                "ENTERPRISE", "Enterprise Max", new BigDecimal("6499.00"), new BigDecimal("62390.00"), new BigDecimal("79.99"), new BigDecimal("767.90"),
                 50, 1000000, 1000000, 1000000, 1000000, true, true, true
             ));
             log.info("[Init] Seeded ENTERPRISE subscription plan.");

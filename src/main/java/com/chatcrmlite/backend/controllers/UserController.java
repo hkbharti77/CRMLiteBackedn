@@ -86,8 +86,11 @@ public class UserController {
             if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
             if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
             if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
-            if (request.getPrimaryColor() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
-            if (request.getSecondaryColor() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
+            if (request.getPrimaryColor() != null && user.getTenant() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
+            if (request.getSecondaryColor() != null && user.getTenant() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
+            if (request.getCountry() != null && user.getTenant() != null) user.getTenant().setCountry(request.getCountry());
+            if (request.getCurrency() != null && user.getTenant() != null) user.getTenant().setCurrency(request.getCurrency());
+            if (request.getTimezone() != null && user.getTenant() != null) user.getTenant().setTimezone(request.getTimezone());
             
             // Manual module overrides
             if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
@@ -429,6 +432,9 @@ public class UserController {
         private String logoUrl;
         private String primaryColor;
         private String secondaryColor;
+        private String country;
+        private String currency;
+        private String timezone;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
@@ -458,6 +464,12 @@ public class UserController {
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
         public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+        public String getCountry() { return country; }
+        public void setCountry(String country) { this.country = country; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        public String getTimezone() { return timezone; }
+        public void setTimezone(String timezone) { this.timezone = timezone; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
@@ -481,6 +493,9 @@ public class UserController {
         private String logoUrl;
         private String primaryColor;
         private String secondaryColor;
+        private String country;
+        private String currency;
+        private String timezone;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
@@ -517,6 +532,12 @@ public class UserController {
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
         public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+        public String getCountry() { return country; }
+        public void setCountry(String country) { this.country = country; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        public String getTimezone() { return timezone; }
+        public void setTimezone(String timezone) { this.timezone = timezone; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
@@ -546,6 +567,9 @@ public class UserController {
             dto.setLogoUrl(user.getLogoUrl());
             dto.setPrimaryColor(user.getTenant() != null ? user.getTenant().getPrimaryColor() : null);
             dto.setSecondaryColor(user.getTenant() != null ? user.getTenant().getSecondaryColor() : null);
+            dto.setCountry(user.getTenant() != null ? user.getTenant().getCountry() : "IN");
+            dto.setCurrency(user.getTenant() != null ? user.getTenant().getCurrency() : "INR");
+            dto.setTimezone(user.getTenant() != null ? user.getTenant().getTimezone() : "Asia/Kolkata");
             dto.setForceShowBooking(user.getForceShowBooking());
             dto.setForceShowAppointment(user.getForceShowAppointment());
             dto.setForceShowLeads(user.getForceShowLeads());

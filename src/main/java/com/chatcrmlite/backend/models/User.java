@@ -210,7 +210,7 @@ public class User implements Serializable {
     }
 
     public enum Role {
-        OWNER, ADMIN, AGENT
+        OWNER, ADMIN, AGENT, SUPER_ADMIN
     }
 
     public enum PlanType {

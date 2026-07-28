@@ -24,6 +24,8 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import com.chatcrmlite.backend.repositories.PlatformAdminRepository;
+
 /**
  * Authentication controller — OTP-based login flow.
  *
@@ -42,11 +44,13 @@ public class AuthController {
     private static final Pattern OTP_PATTERN   = Pattern.compile("^\\d{6}$");
 
     @Autowired private UserRepository userRepository;
+    @Autowired private PlatformAdminRepository platformAdminRepository;
     @Autowired private JwtUtils jwtUtils;
     @Autowired private EmailService emailService;
     @Autowired private UserSessionRepository sessionRepository;
     @Autowired private SecurityService securityService;
     @Autowired private RateLimitConfig rateLimitConfig;
+    @Autowired private com.chatcrmlite.backend.services.platform.PlatformAuditService platformAuditService;
 
     /**
      * Step 1: Initiate login — sends OTP to the provided email.
@@ -105,19 +109,26 @@ public class AuthController {
         }
 
         if (emailService.verifyOtp(request.getEmail(), request.getOtp())) {
+            boolean isSuperAdminUser = platformAdminRepository.findByEmailIgnoreCase(request.getEmail()).isPresent()
+                    || "gyanvaniai@gmail.com".equalsIgnoreCase(request.getEmail().trim());
+
             Optional<User> userOpt = userRepository.findByEmailWithTenant(request.getEmail());
             User user;
             if (userOpt.isEmpty()) {
                 user = User.builder()
                         .email(request.getEmail())
-                        .businessName("My Business")
-                        .onboardingCompleted(false)
-                        .role(User.Role.OWNER)
+                        .businessName(isSuperAdminUser ? "Platform Control Center" : "My Business")
+                        .onboardingCompleted(true)
+                        .role(isSuperAdminUser ? User.Role.SUPER_ADMIN : User.Role.OWNER)
                         .build();
                 userRepository.save(user);
-                log.info("[Auth] New user registered from ip={}", clientIp);
+                log.info("[Auth] New user registered from ip={} (role={})", clientIp, user.getRole());
             } else {
                 user = userOpt.get();
+                if (isSuperAdminUser && user.getRole() != User.Role.SUPER_ADMIN) {
+                    user.setRole(User.Role.SUPER_ADMIN);
+                    userRepository.save(user);
+                }
             }
 
             String sessionId = UUID.randomUUID().toString();
@@ -135,13 +146,18 @@ public class AuthController {
             securityService.logSecurityEvent(user, SecurityLog.LogAction.LOGIN_SUCCESS, "SUCCESS",
                     "Successful OTP login", clientIp, sanitizeUserAgent(servletRequest.getHeader("User-Agent")));
 
+            String tenantIdStr = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId().toString() : user.getId().toString();
+            platformAuditService.recordTenantLogin(user.getEmail(), tenantIdStr, "SUCCESS", servletRequest);
+
+            String roleStr = user.getRole() != null ? user.getRole().name() : (isSuperAdminUser ? "SUPER_ADMIN" : "OWNER");
+
             return ResponseEntity.ok(new AuthResponse(
                 token,
                 user.getId().toString(),
                 user.getTenant().getId().toString(),
                 user.getEmail(),
                 user.getBusinessName(),
-                user.getRole() != null ? user.getRole().name() : "OWNER",
+                roleStr,
                 user.getOnboardingCompleted() != null && user.getOnboardingCompleted()
             ));
         }

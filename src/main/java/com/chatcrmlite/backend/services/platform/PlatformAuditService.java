@@ -38,7 +38,30 @@ public class PlatformAuditService {
         return repository.findRecent(pageable);
     }
 
+    public void recordTenantLogin(String email, String tenantId, String outcome, HttpServletRequest request) {
+        String detail = String.format("{\"userEmail\":\"%s\",\"tenantId\":\"%s\",\"event\":\"TENANT_LOGIN\"}", email, tenantId != null ? tenantId : "N/A");
+        record("TENANT_LOGIN", outcome, "Tenant", tenantId != null ? tenantId : email, detail, request);
+    }
+
+    public void recordMetaConnection(String tenantId, String action, String wabaId, String phoneId, String status, HttpServletRequest request) {
+        String detail = String.format("{\"wabaId\":\"%s\",\"phoneNumberId\":\"%s\",\"status\":\"%s\"}", 
+            wabaId != null ? wabaId : "", phoneId != null ? phoneId : "", status != null ? status : "");
+        record(action, "SUCCESS", "MetaWhatsApp", tenantId != null ? tenantId : "N/A", detail, request);
+    }
+
+    public void recordFeatureToggle(String tenantId, String featureName, boolean enabled, HttpServletRequest request) {
+        String detail = String.format("{\"feature\":\"%s\",\"enabled\":%b}", featureName, enabled);
+        String actionName = "TOGGLE_" + featureName.toUpperCase();
+        record(actionName, "SUCCESS", "FeatureToggle", tenantId != null ? tenantId : "N/A", detail, request);
+    }
+
+    public void recordSubscriptionEvent(String tenantId, String action, String planId, String detailText, HttpServletRequest request) {
+        String detail = String.format("{\"planId\":\"%s\",\"info\":\"%s\"}", planId != null ? planId : "", detailText != null ? detailText : "");
+        record(action, "SUCCESS", "Subscription", tenantId != null ? tenantId : "N/A", detail, request);
+    }
+
     private String resolveIp(HttpServletRequest request) {
+        if (request == null) return "0.0.0.0";
         String xff = request.getHeader("X-Forwarded-For");
         if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
         return request.getRemoteAddr();

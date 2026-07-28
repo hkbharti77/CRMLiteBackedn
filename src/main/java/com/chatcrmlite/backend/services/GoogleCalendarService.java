@@ -99,16 +99,25 @@ public class GoogleCalendarService {
 
         Calendar calendarService = buildCalendarService(owner);
 
-        // Event window
-        Date startDate = Date.from(startTime.atZone(ZoneId.systemDefault()).toInstant());
-        Date endDate = Date.from(startTime.plusMinutes(durationMinutes).atZone(ZoneId.systemDefault()).toInstant());
+        String tenantTz = (owner.getTenant() != null && owner.getTenant().getTimezone() != null)
+                ? owner.getTenant().getTimezone()
+                : "Asia/Kolkata";
+        ZoneId zoneId;
+        try {
+            zoneId = ZoneId.of(tenantTz);
+        } catch (Exception e) {
+            zoneId = ZoneId.of("Asia/Kolkata");
+        }
+
+        Date startDate = Date.from(startTime.atZone(zoneId).toInstant());
+        Date endDate = Date.from(startTime.plusMinutes(durationMinutes).atZone(zoneId).toInstant());
 
         Event event = new Event()
                 .setSummary(appointmentTitle)
                 .setDescription("Meeting scheduled via CRMLite");
 
-        event.setStart(new EventDateTime().setDateTime(new DateTime(startDate)).setTimeZone("Asia/Kolkata"));
-        event.setEnd(new EventDateTime().setDateTime(new DateTime(endDate)).setTimeZone("Asia/Kolkata"));
+        event.setStart(new EventDateTime().setDateTime(new DateTime(startDate)).setTimeZone(tenantTz));
+        event.setEnd(new EventDateTime().setDateTime(new DateTime(endDate)).setTimeZone(tenantTz));
 
         // Add client as attendee so they get the Meet link via Google calendar invite
         if (clientEmail != null && !clientEmail.isBlank()) {

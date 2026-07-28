@@ -87,7 +87,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/v1/platform/auth/login", "/api/v1/platform/auth/login/request-otp").permitAll()
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
-                .anyRequest().hasRole("PLATFORM_ADMIN")
+                .anyRequest().hasAnyRole("PLATFORM_ADMIN", "SUPER_ADMIN")
             )
             .addFilterBefore(platformAuthFilter(), UsernamePasswordAuthenticationFilter.class);
         return http.build();
@@ -189,7 +189,7 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         // Merge allowed origins: env var + always include the owner panel origin and ngrok domains for testing
-        String rawOrigins = allowedOrigins + ",http://localhost:3001,https://*.ngrok-free.dev,https://*.ngrok.app";
+        String rawOrigins = allowedOrigins + ",http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,https://*.ngrok-free.dev,https://*.ngrok.app";
         List<String> origins = Arrays.stream(rawOrigins.split(","))
             .map(String::trim)
             .distinct()

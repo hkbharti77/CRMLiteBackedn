@@ -195,9 +195,21 @@ public class AppointmentService {
                 owner.getId(), startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
     }
 
+    private java.time.ZoneId getTenantZoneId(User owner) {
+        String tz = (owner != null && owner.getTenant() != null && owner.getTenant().getTimezone() != null)
+                ? owner.getTenant().getTimezone()
+                : "Asia/Kolkata";
+        try {
+            return java.time.ZoneId.of(tz);
+        } catch (Exception e) {
+            return java.time.ZoneId.of("Asia/Kolkata");
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<Appointment> getTodayAppointments(User owner) {
-        LocalDateTime start = LocalDate.now().atStartOfDay();
+        java.time.ZoneId zoneId = getTenantZoneId(owner);
+        LocalDateTime start = java.time.LocalDate.now(zoneId).atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
         if (isAdmin(owner)) {
             return appointmentRepository.findByAppointmentDateTimeBetweenAndStatus(
@@ -209,7 +221,8 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public long countTodayAppointments(User owner) {
-        LocalDateTime start = LocalDate.now().atStartOfDay();
+        java.time.ZoneId zoneId = getTenantZoneId(owner);
+        LocalDateTime start = java.time.LocalDate.now(zoneId).atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
         if (isAdmin(owner)) {
             return appointmentRepository.countByAppointmentDateTimeBetweenAndStatus(

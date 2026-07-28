@@ -161,7 +161,17 @@ public class WhatsAppCampaignService {
             campaign.setStatus(WhatsAppCampaign.Status.SCHEDULED);
             WhatsAppCampaign saved = campaignRepository.save(campaign);
 
-            Date startDate = Date.from(scheduleTime.atZone(ZoneId.systemDefault()).toInstant());
+            String tenantTz = (actor.getTenant() != null && actor.getTenant().getTimezone() != null)
+                    ? actor.getTenant().getTimezone()
+                    : "Asia/Kolkata";
+            ZoneId zoneId;
+            try {
+                zoneId = ZoneId.of(tenantTz);
+            } catch (Exception e) {
+                zoneId = ZoneId.of("Asia/Kolkata");
+            }
+
+            Date startDate = Date.from(scheduleTime.atZone(zoneId).toInstant());
             distributedSchedulerService.scheduleOneTimeJob(
                     "campaign-job-" + saved.getId(),
                     com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppCampaignJob.class,

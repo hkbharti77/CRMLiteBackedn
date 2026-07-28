@@ -54,6 +54,15 @@ public class Tenant implements Serializable {
         BOOKING
     }
 
+    @Column(name = "country", length = 10)
+    private String country = "IN";
+
+    @Column(name = "currency", length = 10)
+    private String currency = "INR";
+
+    @Column(name = "timezone", length = 50)
+    private String timezone = "Asia/Kolkata";
+
     @Enumerated(EnumType.STRING)
     @Column(name = "primary_resource", nullable = false)
     private PrimaryResource primaryResource = PrimaryResource.LEAD;
@@ -153,6 +162,15 @@ public class Tenant implements Serializable {
 
     public Boolean getForceShowLeads() { return forceShowLeads; }
     public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+
+    public String getCountry() { return country != null ? country : "IN"; }
+    public void setCountry(String country) { this.country = country; }
+
+    public String getCurrency() { return currency != null ? currency : "INR"; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
+    public String getTimezone() { return timezone != null ? timezone : "Asia/Kolkata"; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
 
     public PrimaryResource getPrimaryResource() { return primaryResource; }
     public void setPrimaryResource(PrimaryResource primaryResource) { this.primaryResource = primaryResource; }

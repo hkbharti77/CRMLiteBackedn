@@ -41,6 +41,7 @@ public class PaymentWebhookController {
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final BillingTransactionRepository billingTransactionRepository;
     private final UserRepository userRepository;
+    private final TenantRepository tenantRepository;
     private final QuotaEnforcerService quotaEnforcerService;
     private final LeadRepository leadRepository;
     private final BookingRepository bookingRepository;
@@ -52,6 +53,23 @@ public class PaymentWebhookController {
 
     @Value("${razorpay.webhook.secret}")
     private String razorpayWebhookSecret;
+
+    @GetMapping("/api/v1/billing/plans")
+    public ResponseEntity<List<SubscriptionPlan>> getAvailablePlans(@RequestParam(required = false) String currency) {
+        List<SubscriptionPlan> plans = subscriptionPlanRepository.findAll();
+        if ("INR".equalsIgnoreCase(currency)) {
+            plans.forEach(p -> {
+                if (p.getPriceMonthlyInr() != null) p.setPriceMonthly(p.getPriceMonthlyInr());
+                if (p.getPriceYearlyInr() != null) p.setPriceYearly(p.getPriceYearlyInr());
+            });
+        } else if ("USD".equalsIgnoreCase(currency)) {
+            plans.forEach(p -> {
+                if (p.getPriceMonthlyUsd() != null) p.setPriceMonthly(p.getPriceMonthlyUsd());
+                if (p.getPriceYearlyUsd() != null) p.setPriceYearly(p.getPriceYearlyUsd());
+            });
+        }
+        return ResponseEntity.ok(plans);
+    }
 
     @GetMapping("/api/v1/billing/subscription")
     public ResponseEntity<?> getSubscriptionStatus(@AuthenticationPrincipal String email) {
@@ -87,6 +105,7 @@ public class PaymentWebhookController {
         limits.put("emailLimit", sub.getPlan().getEmailLimit());
         limits.put("hasWhatsapp", sub.getPlan().isHasWhatsapp());
         limits.put("hasCustomWidget", sub.getPlan().isHasCustomWidget());
+        limits.put("hasRagLlm", sub.getPlan().isHasRagLlm());
         response.put("limits", limits);
 
         Map<String, Object> usage = new HashMap<>();
@@ -384,6 +403,18 @@ public class PaymentWebhookController {
         if (razorpaySubId != null) sub.setRazorpaySubscriptionId(razorpaySubId);
 
         tenantSubscriptionRepository.save(sub);
+
+        // Sync legacy Tenant.planType field so profile-based plan checks are consistent
+        tenantRepository.findById(tenantId).ifPresent(t -> {
+            try {
+                User.PlanType legacyPlan = User.PlanType.valueOf(planId.toUpperCase());
+                t.setPlanType(legacyPlan);
+                tenantRepository.save(t);
+            } catch (IllegalArgumentException e) {
+                log.warn("⚠️ Plan ID '{}' has no matching legacy PlanType enum — skipping Tenant.planType sync", planId);
+            }
+        });
+
         eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         log.info("✅ Tenant {} subscription updated to plan: {} until {}", tenantId, planId, sub.getCurrentPeriodEnd());
     }
