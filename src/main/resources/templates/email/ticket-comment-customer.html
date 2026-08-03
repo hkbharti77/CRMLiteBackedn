@@ -1,54 +1,68 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">New Reply</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${subject ?: 'New Reply on Ticket'}">New Ticket Reply</title>
+</head>
+<body>
 
-<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+<div th:replace="~{email/base :: header(
+    heading  = ${heading},
+    greeting = ${greeting},
+    intro    = ${intro})}">
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+  <tr>
+    <td align="center">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+        <tr>
+          <td style="padding:0 36px 28px;">
 
-        <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Ticket #</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;
-                       border:1px solid #000000;font-family:monospace"
-                th:text="${ticketNumber}">TKT-0001</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Subject</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${subject}">Subject</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Reply from</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${agentName}">Agent</td>
-          </tr>
-        </table>
+            <!-- Agent Reply Callout -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:10px;">
+                <tr>
+                  <td valign="middle" style="width:32px;">
+                    <div style="width:28px;height:28px;background-color:#16A34A;color:#FFFFFF;border-radius:50%;text-align:center;line-height:28px;font-size:12px;font-weight:700;">
+                      <span th:text="${#strings.substring(agentName ?: 'A', 0, 1)}">A</span>
+                    </div>
+                  </td>
+                  <td valign="middle" style="padding-left:8px;">
+                    <span class="text-main" style="color:#111827;font-size:14px;font-weight:700;" th:text="${agentName}">Support Agent</span>
+                    <span class="text-muted" style="color:#6B7280;font-size:12px;"> &middot; Support Representative</span>
+                  </td>
+                </tr>
+              </table>
 
-        <p style="color:#000000;font-size:13px;margin:0 0 8px;font-weight:600;
-                  text-transform:uppercase;letter-spacing:0.5px">Reply</p>
-        <blockquote th:text="${comment}"
-                    style="border-left:4px solid #008000;margin:0;padding:12px 16px;
-                           background:#ffffff;color:#000000;font-size:14px;
-                           line-height:1.6;border-radius:0 6px 6px 0">
-          Comment.
-        </blockquote>
+              <div class="text-main" style="color:#111827;font-size:14px;line-height:1.6;" th:text="${comment}">
+                Agent comment text...
+              </div>
+            </div>
 
-      </td></tr>
-    </table>
-  </td></tr>
+          </td>
+        </tr>
+      </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=${ctaLabel},ctaUrl=${ctaUrl})}"></div>
+<div th:replace="~{email/base :: footer(
+    footerNote = ${footerNote},
+    ctaLabel   = ${ctaLabel},
+    ctaUrl     = ${ctaUrl})}">
+</div>
 
 </body>
 </html>

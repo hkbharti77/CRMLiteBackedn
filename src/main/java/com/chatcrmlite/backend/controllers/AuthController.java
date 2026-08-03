@@ -115,9 +115,11 @@ public class AuthController {
             Optional<User> userOpt = userRepository.findByEmailWithTenant(request.getEmail());
             User user;
             if (userOpt.isEmpty()) {
+                String defaultBiz = StringUtils.hasText(request.getBusinessName()) ? request.getBusinessName().trim() : "My Business";
                 user = User.builder()
                         .email(request.getEmail())
-                        .businessName(isSuperAdminUser ? "Platform Control Center" : "My Business")
+                        .displayName(StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName().trim() : null)
+                        .businessName(isSuperAdminUser ? "Platform Control Center" : defaultBiz)
                         .onboardingCompleted(true)
                         .role(isSuperAdminUser ? User.Role.SUPER_ADMIN : User.Role.OWNER)
                         .build();
@@ -127,8 +129,14 @@ public class AuthController {
                 user = userOpt.get();
                 if (isSuperAdminUser && user.getRole() != User.Role.SUPER_ADMIN) {
                     user.setRole(User.Role.SUPER_ADMIN);
-                    userRepository.save(user);
                 }
+                if (StringUtils.hasText(request.getDisplayName()) && !StringUtils.hasText(user.getDisplayName())) {
+                    user.setDisplayName(request.getDisplayName().trim());
+                }
+                if (StringUtils.hasText(request.getBusinessName()) && ("My Business".equals(user.getBusinessName()) || !StringUtils.hasText(user.getBusinessName()))) {
+                    user.setBusinessName(request.getBusinessName().trim());
+                }
+                userRepository.save(user);
             }
 
             String sessionId = UUID.randomUUID().toString();
@@ -154,8 +162,9 @@ public class AuthController {
             return ResponseEntity.ok(new AuthResponse(
                 token,
                 user.getId().toString(),
-                user.getTenant().getId().toString(),
+                tenantIdStr,
                 user.getEmail(),
+                user.getDisplayName(),
                 user.getBusinessName(),
                 roleStr,
                 user.getOnboardingCompleted() != null && user.getOnboardingCompleted()
@@ -234,11 +243,18 @@ public class AuthController {
     public static class VerifyRequest {
         private String email;
         private String otp;
+        private String displayName;
+        private String businessName;
+
         public VerifyRequest() {}
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
         public String getOtp() { return otp; }
         public void setOtp(String otp) { this.otp = otp; }
+        public String getDisplayName() { return displayName; }
+        public void setDisplayName(String displayName) { this.displayName = displayName; }
+        public String getBusinessName() { return businessName; }
+        public void setBusinessName(String businessName) { this.businessName = businessName; }
     }
 
     public static class AuthResponse {
@@ -246,16 +262,18 @@ public class AuthController {
         private String userId;
         private String tenantId;
         private String email;
+        private String displayName;
         private String businessName;
         private String role;
         private boolean onboardingCompleted;
 
         public AuthResponse() {}
-        public AuthResponse(String token, String userId, String tenantId, String email, String businessName, String role, boolean onboardingCompleted) {
+        public AuthResponse(String token, String userId, String tenantId, String email, String displayName, String businessName, String role, boolean onboardingCompleted) {
             this.token = token;
             this.userId = userId;
             this.tenantId = tenantId;
             this.email = email;
+            this.displayName = displayName;
             this.businessName = businessName;
             this.role = role;
             this.onboardingCompleted = onboardingCompleted;
@@ -265,6 +283,7 @@ public class AuthController {
         public String getUserId() { return userId; }
         public String getTenantId() { return tenantId; }
         public String getEmail() { return email; }
+        public String getDisplayName() { return displayName; }
         public String getBusinessName() { return businessName; }
         public String getRole() { return role; }
         public boolean isOnboardingCompleted() { return onboardingCompleted; }

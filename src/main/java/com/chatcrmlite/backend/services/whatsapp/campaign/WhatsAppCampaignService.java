@@ -29,6 +29,7 @@ public class WhatsAppCampaignService {
     private final CampaignQueueProducer queueProducer;
     private final CampaignAnalyticsService analyticsService;
     private final CampaignAuditService auditService;
+    private final WhatsAppCampaignRecipientRepository recipientRepository;
     private final PersonalizationEngine personalizationEngine;
     private final DistributedSchedulerService distributedSchedulerService;
 
@@ -65,11 +66,45 @@ public class WhatsAppCampaignService {
      * Create a new draft WhatsApp campaign.
      */
     @Transactional
-    public WhatsAppCampaign createCampaign(String name, UUID templateId, WhatsAppCampaign.TargetType targetType,
+    public WhatsAppCampaign createCampaign(String name, String templateIdOrName, WhatsAppCampaign.TargetType targetType,
                                             String targetFilterJson, String variableMappingJson, User owner) {
 
-        WhatsAppTemplate template = templateRepository.findById(templateId)
-                .orElseThrow(() -> new IllegalArgumentException("WhatsAppTemplate not found with ID: " + templateId));
+        if (templateIdOrName == null || templateIdOrName.trim().isEmpty()) {
+            throw new IllegalArgumentException("Template ID or template name must be provided");
+        }
+
+        WhatsAppTemplate template = null;
+
+        // 1. Try parsing as UUID if standard 36-char format
+        if (templateIdOrName.trim().length() == 36 && templateIdOrName.contains("-")) {
+            try {
+                UUID uuid = UUID.fromString(templateIdOrName.trim());
+                template = templateRepository.findById(uuid).orElse(null);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+
+        // 2. If not found by UUID, try lookup by name or metaTemplateId
+        if (template == null) {
+            String cleanName = templateIdOrName.trim();
+            UUID tenantId = (owner.getTenant() != null) ? owner.getTenant().getId() : null;
+
+            if (tenantId != null) {
+                template = templateRepository.findByNameAndTenantId(cleanName, tenantId).orElse(null);
+            }
+            if (template == null) {
+                template = templateRepository.findByNameAndOwner(cleanName, owner).orElse(null);
+            }
+            if (template == null) {
+                template = templateRepository.findFirstByName(cleanName).orElse(null);
+            }
+            if (template == null) {
+                template = templateRepository.findFirstByMetaTemplateId(cleanName).orElse(null);
+            }
+            if (template == null) {
+                throw new IllegalArgumentException("WhatsAppTemplate not found with ID or Name: " + cleanName);
+            }
+        }
 
         // Create immutable snapshot of template
         WhatsAppTemplateSnapshot snapshot = createTemplateSnapshot(template);
@@ -221,10 +256,12 @@ public class WhatsAppCampaignService {
         return saved;
     }
 
+    @Transactional(readOnly = true)
     public Page<WhatsAppCampaign> getCampaigns(User owner, Pageable pageable) {
         return campaignRepository.findByOwner(owner, pageable);
     }
 
+    @Transactional(readOnly = true)
     public WhatsAppCampaign getCampaign(UUID id) {
         return campaignRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
     }
@@ -237,5 +274,10 @@ public class WhatsAppCampaignService {
     public List<WhatsAppCampaignAuditLog> getAuditLogs(UUID campaignId) {
         WhatsAppCampaign campaign = getCampaign(campaignId);
         return auditService.getAuditLogs(campaign);
+    }
+
+    public Page<WhatsAppCampaignRecipient> getRecipients(UUID campaignId, Pageable pageable) {
+        WhatsAppCampaign campaign = getCampaign(campaignId);
+        return recipientRepository.findByCampaign(campaign, pageable);
     }
 }

@@ -72,7 +72,7 @@ public class PublicSubmissionService {
         if (title == null)
             title = "Web Appointment";
 
-        LocalDateTime apptTime = parseDateTime(firstNonBlank(clean, "date_time", "preferred_slot", "event_date"));
+        LocalDateTime apptTime = com.chatcrmlite.backend.util.DateTimeParser.extractAndParse(clean);
 
         appointmentService.bookFromFlow(contact, owner, title, clean, apptTime, "WEB_BOT");
         log.info("[PublicSubmission] Appointment created for contact={} owner={}", contact.getId(), owner.getId());
@@ -160,15 +160,6 @@ public class PublicSubmissionService {
     }
 
     private LocalDateTime parseDateTime(String raw) {
-        LocalDateTime fallback = LocalDateTime.now().plusDays(1)
-                .withHour(10).withMinute(0).withSecond(0).withNano(0);
-        if (raw == null || raw.isBlank()) return fallback;
-        try {
-            return LocalDateTime.parse(raw);
-        } catch (Exception ignored) {}
-        try {
-            return java.time.LocalDate.parse(raw).atTime(10, 0);
-        } catch (Exception ignored) {}
-        return fallback;
+        return com.chatcrmlite.backend.util.DateTimeParser.parse(raw);
     }
 }

@@ -15,15 +15,42 @@ public class CustomEmailDTO {
     private String tagsFilter;
     private CustomEmail.EmailStatus status;
     private LocalDateTime sentAt;
+    
+    // New Phase 2 Fields
+    private LocalDateTime scheduledAt;
+    private LocalDateTime startedAt;
+    private LocalDateTime completedAt;
+    private LocalDateTime pausedAt;
+    private LocalDateTime cancelledAt;
+    private int totalRecipients;
+    private int processedRecipients;
+
     private int totalSent;
     private int totalFailed;
+    
+    // Analytics Metrics
+    private long uniqueOpens;
+    private long uniqueClicks;
+    private long bounces;
+    private long unsubscribes;
+    private double openRate;
+    private double clickRate;
+    private double clickToOpenRate;
+    private double bounceRate;
+    private double unsubscribeRate;
+
     private LocalDateTime createdAt;
 
     public CustomEmailDTO() {}
 
     public CustomEmailDTO(UUID id, String subject, String body, String ctaLabel, String ctaUrl, 
                          CustomEmail.RecipientMode recipientMode, String tagsFilter, CustomEmail.EmailStatus status, 
-                         LocalDateTime sentAt, int totalSent, int totalFailed, LocalDateTime createdAt) {
+                         LocalDateTime sentAt, LocalDateTime scheduledAt, LocalDateTime startedAt, LocalDateTime completedAt,
+                         LocalDateTime pausedAt, LocalDateTime cancelledAt, int totalRecipients, int processedRecipients,
+                         int totalSent, int totalFailed, 
+                         long uniqueOpens, long uniqueClicks, long bounces, long unsubscribes,
+                         double openRate, double clickRate, double clickToOpenRate, double bounceRate, double unsubscribeRate,
+                         LocalDateTime createdAt) {
         this.id = id;
         this.subject = subject;
         this.body = body;
@@ -33,8 +60,24 @@ public class CustomEmailDTO {
         this.tagsFilter = tagsFilter;
         this.status = status;
         this.sentAt = sentAt;
+        this.scheduledAt = scheduledAt;
+        this.startedAt = startedAt;
+        this.completedAt = completedAt;
+        this.pausedAt = pausedAt;
+        this.cancelledAt = cancelledAt;
+        this.totalRecipients = totalRecipients;
+        this.processedRecipients = processedRecipients;
         this.totalSent = totalSent;
         this.totalFailed = totalFailed;
+        this.uniqueOpens = uniqueOpens;
+        this.uniqueClicks = uniqueClicks;
+        this.bounces = bounces;
+        this.unsubscribes = unsubscribes;
+        this.openRate = openRate;
+        this.clickRate = clickRate;
+        this.clickToOpenRate = clickToOpenRate;
+        this.bounceRate = bounceRate;
+        this.unsubscribeRate = unsubscribeRate;
         this.createdAt = createdAt;
     }
 
@@ -56,10 +99,46 @@ public class CustomEmailDTO {
     public void setStatus(CustomEmail.EmailStatus status) { this.status = status; }
     public LocalDateTime getSentAt() { return sentAt; }
     public void setSentAt(LocalDateTime sentAt) { this.sentAt = sentAt; }
+
+    public LocalDateTime getScheduledAt() { return scheduledAt; }
+    public void setScheduledAt(LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
+    public LocalDateTime getStartedAt() { return startedAt; }
+    public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
+    public LocalDateTime getCompletedAt() { return completedAt; }
+    public void setCompletedAt(LocalDateTime completedAt) { this.completedAt = completedAt; }
+    public LocalDateTime getPausedAt() { return pausedAt; }
+    public void setPausedAt(LocalDateTime pausedAt) { this.pausedAt = pausedAt; }
+    public LocalDateTime getCancelledAt() { return cancelledAt; }
+    public void setCancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; }
+    public int getTotalRecipients() { return totalRecipients; }
+    public void setTotalRecipients(int totalRecipients) { this.totalRecipients = totalRecipients; }
+    public int getProcessedRecipients() { return processedRecipients; }
+    public void setProcessedRecipients(int processedRecipients) { this.processedRecipients = processedRecipients; }
+
     public int getTotalSent() { return totalSent; }
     public void setTotalSent(int totalSent) { this.totalSent = totalSent; }
     public int getTotalFailed() { return totalFailed; }
     public void setTotalFailed(int totalFailed) { this.totalFailed = totalFailed; }
+
+    public long getUniqueOpens() { return uniqueOpens; }
+    public void setUniqueOpens(long uniqueOpens) { this.uniqueOpens = uniqueOpens; }
+    public long getUniqueClicks() { return uniqueClicks; }
+    public void setUniqueClicks(long uniqueClicks) { this.uniqueClicks = uniqueClicks; }
+    public long getBounces() { return bounces; }
+    public void setBounces(long bounces) { this.bounces = bounces; }
+    public long getUnsubscribes() { return unsubscribes; }
+    public void setUnsubscribes(long unsubscribes) { this.unsubscribes = unsubscribes; }
+    public double getOpenRate() { return openRate; }
+    public void setOpenRate(double openRate) { this.openRate = openRate; }
+    public double getClickRate() { return clickRate; }
+    public void setClickRate(double clickRate) { this.clickRate = clickRate; }
+    public double getClickToOpenRate() { return clickToOpenRate; }
+    public void setClickToOpenRate(double clickToOpenRate) { this.clickToOpenRate = clickToOpenRate; }
+    public double getBounceRate() { return bounceRate; }
+    public void setBounceRate(double bounceRate) { this.bounceRate = bounceRate; }
+    public double getUnsubscribeRate() { return unsubscribeRate; }
+    public void setUnsubscribeRate(double unsubscribeRate) { this.unsubscribeRate = unsubscribeRate; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -77,8 +156,24 @@ public class CustomEmailDTO {
         private String tagsFilter;
         private CustomEmail.EmailStatus status;
         private LocalDateTime sentAt;
+        private LocalDateTime scheduledAt;
+        private LocalDateTime startedAt;
+        private LocalDateTime completedAt;
+        private LocalDateTime pausedAt;
+        private LocalDateTime cancelledAt;
+        private int totalRecipients;
+        private int processedRecipients;
         private int totalSent;
         private int totalFailed;
+        private long uniqueOpens;
+        private long uniqueClicks;
+        private long bounces;
+        private long unsubscribes;
+        private double openRate;
+        private double clickRate;
+        private double clickToOpenRate;
+        private double bounceRate;
+        private double unsubscribeRate;
         private LocalDateTime createdAt;
 
         public CustomEmailDTOBuilder id(UUID id) { this.id = id; return this; }
@@ -90,12 +185,30 @@ public class CustomEmailDTO {
         public CustomEmailDTOBuilder tagsFilter(String tagsFilter) { this.tagsFilter = tagsFilter; return this; }
         public CustomEmailDTOBuilder status(CustomEmail.EmailStatus status) { this.status = status; return this; }
         public CustomEmailDTOBuilder sentAt(LocalDateTime sentAt) { this.sentAt = sentAt; return this; }
+        public CustomEmailDTOBuilder scheduledAt(LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; return this; }
+        public CustomEmailDTOBuilder startedAt(LocalDateTime startedAt) { this.startedAt = startedAt; return this; }
+        public CustomEmailDTOBuilder completedAt(LocalDateTime completedAt) { this.completedAt = completedAt; return this; }
+        public CustomEmailDTOBuilder pausedAt(LocalDateTime pausedAt) { this.pausedAt = pausedAt; return this; }
+        public CustomEmailDTOBuilder cancelledAt(LocalDateTime cancelledAt) { this.cancelledAt = cancelledAt; return this; }
+        public CustomEmailDTOBuilder totalRecipients(int totalRecipients) { this.totalRecipients = totalRecipients; return this; }
+        public CustomEmailDTOBuilder processedRecipients(int processedRecipients) { this.processedRecipients = processedRecipients; return this; }
         public CustomEmailDTOBuilder totalSent(int totalSent) { this.totalSent = totalSent; return this; }
         public CustomEmailDTOBuilder totalFailed(int totalFailed) { this.totalFailed = totalFailed; return this; }
+        public CustomEmailDTOBuilder uniqueOpens(long uniqueOpens) { this.uniqueOpens = uniqueOpens; return this; }
+        public CustomEmailDTOBuilder uniqueClicks(long uniqueClicks) { this.uniqueClicks = uniqueClicks; return this; }
+        public CustomEmailDTOBuilder bounces(long bounces) { this.bounces = bounces; return this; }
+        public CustomEmailDTOBuilder unsubscribes(long unsubscribes) { this.unsubscribes = unsubscribes; return this; }
+        public CustomEmailDTOBuilder openRate(double openRate) { this.openRate = openRate; return this; }
+        public CustomEmailDTOBuilder clickRate(double clickRate) { this.clickRate = clickRate; return this; }
+        public CustomEmailDTOBuilder clickToOpenRate(double clickToOpenRate) { this.clickToOpenRate = clickToOpenRate; return this; }
+        public CustomEmailDTOBuilder bounceRate(double bounceRate) { this.bounceRate = bounceRate; return this; }
+        public CustomEmailDTOBuilder unsubscribeRate(double unsubscribeRate) { this.unsubscribeRate = unsubscribeRate; return this; }
         public CustomEmailDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public CustomEmailDTO build() {
-            return new CustomEmailDTO(id, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, sentAt, totalSent, totalFailed, createdAt);
+            return new CustomEmailDTO(id, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
+                                      sentAt, scheduledAt, startedAt, completedAt, pausedAt, cancelledAt, totalRecipients, processedRecipients,
+                                      totalSent, totalFailed, uniqueOpens, uniqueClicks, bounces, unsubscribes, openRate, clickRate, clickToOpenRate, bounceRate, unsubscribeRate, createdAt);
         }
     }
 }

@@ -33,4 +33,12 @@ public class TagService {
                         .orElseGet(() -> tagRepository.save(new Tag(owner, entityType, name.trim()))))
                 .collect(Collectors.toList());
     }
+
+    @Transactional(readOnly = true)
+    public List<String> getAllContactTags(User owner) {
+        return tagRepository.findAllByOwnerAndEntityType(owner, Tag.TYPE_CONTACT)
+                .stream()
+                .map(Tag::getName)
+                .collect(Collectors.toList());
+    }
 }

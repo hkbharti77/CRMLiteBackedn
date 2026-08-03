@@ -31,4 +31,18 @@ public interface LeadService {
     RevenueReportDTO getRevenueReport(User owner);
     void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData);
     Lead rescoreLead(UUID leadId, User owner);
+
+    // Notes, Attachments, Activities, Reassign
+    com.chatcrmlite.backend.dto.LeadNoteResponseDTO addNote(UUID leadId, String content, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> getNotesPaged(UUID leadId, int page, int size, User caller);
+    void softDeleteNote(UUID leadId, UUID noteId, User caller);
+
+    com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO uploadAttachment(UUID leadId, org.springframework.web.multipart.MultipartFile file, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> getAttachmentsPaged(UUID leadId, int page, int size, User caller);
+    com.chatcrmlite.backend.models.LeadAttachment getAttachmentEntity(UUID leadId, UUID attachmentId, User caller);
+    void softDeleteAttachment(UUID leadId, UUID attachmentId, User caller);
+
+    Lead reassignLeadOwner(UUID leadId, UUID newOwnerId, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO> getActivitiesPaged(UUID leadId, int page, int size, User caller);
+    void logActivity(Lead lead, User actor, com.chatcrmlite.backend.models.LeadActivity.ActivityType type, String metadataJson);
 }

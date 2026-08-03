@@ -60,14 +60,18 @@ public class LeadScoringService {
      * Calculates dynamic quality score (0–100) for a lead and updates Lead entity.
      */
     @Transactional
-    public LeadScoreResult calculateAndUpdateLeadScore(Lead lead) {
-        if (lead == null) {
+    public LeadScoreResult calculateAndUpdateLeadScore(Lead leadInput) {
+        if (leadInput == null) {
             return LeadScoreResult.builder()
                     .totalScore(0)
                     .scoreGrade(Lead.ScoreGrade.COLD)
                     .calculatedAt(LocalDateTime.now())
                     .build();
         }
+
+        Lead lead = (leadInput.getId() != null && leadRepository != null)
+                ? leadRepository.findById(leadInput.getId()).orElse(leadInput)
+                : leadInput;
 
         Contact contact = lead.getContact();
 

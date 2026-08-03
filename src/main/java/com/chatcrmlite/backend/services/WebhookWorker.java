@@ -25,6 +25,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     @Autowired private com.chatcrmlite.backend.services.whatsapp.campaign.CampaignAnalyticsService campaignAnalyticsService;
     @Autowired private RedisStateService redisStateService;
+    @Autowired private com.chatcrmlite.backend.clients.WhatsAppClient whatsappClient;
 
     @Value("${whatsapp.async.stream.ingress}")
     private String streamName;
@@ -70,10 +71,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
 
                     java.util.UUID tenantId = whatsappConfigRepository
                             .findTenantIdByPhoneNumberId(phoneNumberId.trim())
-                            .orElseGet(() -> {
-                                log.warn("⚠️ [Worker] No matching WhatsAppConfig found for phone_number_id: {}. Attempting fallback to default tenant.", phoneNumberId);
-                                return tenantRepository.findAll().stream().findFirst().map(com.chatcrmlite.backend.models.Tenant::getId).orElse(null);
-                            });
+                            .orElse(null);
 
                     if (tenantId != null) {
                         if (!resourceManager.canConsume(tenantId, 
@@ -82,6 +80,19 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                             redisTemplate.opsForStream().acknowledge(groupName, record);
                             return;
                         }
+
+                        // 🔵 Send Blue Tick Read Receipt to WhatsApp user
+                        try {
+                            whatsappConfigRepository.findByTenantId(tenantId).ifPresent(config -> {
+                                if (config.getAccessToken() != null && !config.getAccessToken().isBlank()) {
+                                    whatsappClient.markAsRead(waMessageId, config.getAccessToken(), phoneNumberId.trim());
+                                    log.info("🔵 [BlueTick] Sent read receipt to user for waMessageId={}", waMessageId);
+                                }
+                            });
+                        } catch (Exception ex) {
+                            log.warn("⚠️ [BlueTick] Could not send read receipt: {}", ex.getMessage());
+                        }
+
                         workflowOrchestrator.startWorkflow(waMessageId, waId, tenantId, payload);
                         handedToOrchestrator = true;
                     } else {

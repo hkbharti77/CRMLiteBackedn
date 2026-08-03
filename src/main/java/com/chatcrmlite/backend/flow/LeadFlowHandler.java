@@ -84,8 +84,20 @@ public class LeadFlowHandler implements FlowHandler {
                             capturedName, contact.getWaId());
                 }
             }
+            
+            // ── 2. Update contact email if captured in flow ─────────────────
+            String capturedEmail = data.get("email");
+            if (capturedEmail != null && !capturedEmail.isBlank()) {
+                Contact contact = context.getContact();
+                if (contact.getEmail() == null || contact.getEmail().isBlank()) {
+                    contact.setEmail(capturedEmail.trim());
+                    contactRepository.save(contact);
+                    log.info("[LeadFlowHandler] Updated contact email to '{}' for waId={}",
+                            capturedEmail, contact.getWaId());
+                }
+            }
 
-            // ── 2. Determine lead status ────────────────────────────────────
+            // ── 3. Determine lead status ────────────────────────────────────
             Lead.LeadStatus initialStatus = isLeadCapture
                     ? Lead.LeadStatus.INTERESTED
                     : Lead.LeadStatus.FOLLOW_UP;

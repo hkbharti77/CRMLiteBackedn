@@ -116,6 +116,7 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/webhook/**",
                     "/api/v1/public/**",
+                    "/api/v1/test-emails/**", // TEMPORARY — remove after testing
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
                     "/webhook/**",
                     "/whatsapp/**",
@@ -141,8 +142,8 @@ public class SecurityConfig {
 
             // ── Security Headers ─────────────────────────────────────────────────
             .headers(headers -> headers
-                // X-Frame-Options: DENY — blocks clickjacking
-                .frameOptions(frame -> frame.deny())
+                // Disable X-Frame-Options to allow chat widget iframe previews on localhost & client sites
+                .frameOptions(frame -> frame.disable())
                 // X-Content-Type-Options: nosniff — blocks MIME sniffing
                 .contentTypeOptions(cto -> {})
                 // HSTS — tells browsers to only use HTTPS for 1 year (including subdomains)
@@ -156,12 +157,12 @@ public class SecurityConfig {
                 .contentSecurityPolicy(csp -> csp
                     .policyDirectives(
                         "default-src 'self'; " +
-                        "script-src 'self' 'unsafe-inline'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
                         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
                         "img-src 'self' data: https:; " +
                         "font-src 'self' https://fonts.gstatic.com; " +
                         "connect-src 'self' *; " +
-                        "frame-ancestors 'none'; " +
+                        "frame-ancestors *; " +
                         "form-action 'self'; " +
                         "base-uri 'self';"
                     )

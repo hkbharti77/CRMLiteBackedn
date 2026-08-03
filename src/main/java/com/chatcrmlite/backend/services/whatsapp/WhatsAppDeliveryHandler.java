@@ -27,8 +27,8 @@ public class WhatsAppDeliveryHandler {
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
-            Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)
-                    .orElseThrow(() -> new RuntimeException("Contact not found"));
+            Contact contact = contactRepository.findByWaIdAndTenant_Id(context.getWaId(), context.getTenantId())
+                    .orElseThrow(() -> new RuntimeException("Contact not found for tenant: " + context.getTenantId()));
 
             String responseType = (String) context.getMetadata().getOrDefault("responseType", "NONE");
             String pendingResponse = (String) context.getMetadata().get("pendingResponse");

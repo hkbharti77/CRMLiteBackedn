@@ -1,40 +1,72 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">High Value Lead</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${heading ?: 'High Value Lead Alert'}">High Value Lead</title>
+</head>
+<body>
 
 <div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+  <tr>
+    <td align="center">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+        <tr>
+          <td style="padding:0 36px 28px;">
 
-        <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Lead Name</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;
-                       border:1px solid #000000;font-family:monospace"
-                th:text="${leadName}">John Doe</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Calculated Score</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${score}">85</td>
-          </tr>
-        </table>
-        
-        <p style="color:#000000;font-size:14px;line-height:1.6;margin:0">
-          This lead has scored very highly based on their provided details and AI analysis. Please log in to your CRM and follow up with them immediately.
-        </p>
+            <!-- ── AI LEAD SCORE HIGHLIGHT CARD ─────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:14px;padding:28px 24px;text-align:center;margin:0 0 28px;">
+              <span class="pill-badge" style="background-color:#FFFFFF;color:#16A34A;border:1px solid #DCFCE7;font-size:12px;font-weight:700;padding:5px 16px;border-radius:9999px;display:inline-block;letter-spacing:0.5px;">
+                ✦ AI SCORING ENGINE ALERT
+              </span>
+              
+              <div style="margin:16px 0 8px;">
+                <span class="otp-code" th:text="${score}" style="font-size:48px;font-weight:800;color:#16A34A;">85</span>
+                <span class="text-muted" style="font-size:20px;color:#6B7280;font-weight:600;">/ 100</span>
+              </div>
 
-      </td></tr>
-    </table>
-  </td></tr>
+              <h2 class="text-main" th:text="${leadName}" style="margin:4px 0 0;color:#111827;font-size:20px;font-weight:700;">
+                Lead Name
+              </h2>
+            </div>
+
+            <!-- ── DETAILS CARD ───────────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
+                <tr>
+                  <td class="text-muted" style="color:#6B7280;width:120px;padding:4px 0;">Prospect Name:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${leadName}">John Doe</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Calculated Score:</td>
+                  <td class="text-main" style="color:#16A34A;font-weight:700;padding:4px 0;">
+                    <span th:text="${score}">85</span> (High Intent Opportunity)
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <p class="text-muted" style="color:#4B5563;font-size:14px;line-height:1.6;margin:0;">
+              This lead has scored very highly based on AI Intent analysis. Please log in to your CRM to prioritize and follow up immediately.
+            </p>
+
+          </td>
+        </tr>
+      </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
 <div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=${ctaLabel},ctaUrl=${ctaUrl})}"></div>

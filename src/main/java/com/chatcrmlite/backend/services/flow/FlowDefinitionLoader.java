@@ -38,7 +38,7 @@ public class FlowDefinitionLoader {
     public FlowMachineDef loadDefinition(UUID flowDefinitionId) {
         FlowDefinition def = flowDefinitionRepository.findById(flowDefinitionId)
                 .orElseThrow(() -> new IllegalArgumentException("FlowDefinition not found for id: " + flowDefinitionId));
-        return parseDefinition(def.getDefinitionJson());
+        return parseDefinition(def.getDefinitionJson(), flowDefinitionId);
     }
 
     /**
@@ -56,7 +56,6 @@ public class FlowDefinitionLoader {
     }
 
     public Optional<FlowMachineDef> resolveFlowMachineDef(User owner, String explicitSuffix) {
-        // 1 & 2 — check DB first (tenant-scoped, then global)
         ConversationState.FlowType targetType = null;
         if (explicitSuffix != null) {
             try {
@@ -67,46 +66,65 @@ public class FlowDefinitionLoader {
         }
         
         if (targetType != null) {
+            // 1. Build dynamically from FlowConfigService (Form Builder UI settings / TenantFlowConfig)
+            FlowConfigDTO config = flowConfigService.getFlowConfig(owner, explicitSuffix);
+            if (config != null && config.getSteps() != null && !config.getSteps().isEmpty()) {
+                log.debug("[FlowLoader] Building FlowMachineDef from FlowConfigService for owner={}, flowType={}",
+                        owner.getId(), config.getFlowType());
+                return Optional.of(buildMachineDefFromSteps(config));
+            }
+
+            // 2. Fallback to tenant-specific custom DB state machine (legacy override)
             Optional<FlowDefinition> dbDef = flowDefinitionRepository
                     .findLatestActiveByTenantAndFlowType(owner, targetType);
-            if (dbDef.isEmpty()) {
-                dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(targetType);
-            }
             if (dbDef.isPresent()) {
                 log.debug("[FlowLoader] Using DB flow definition for owner={}, type={}", owner.getId(), targetType);
-                return Optional.of(parseDefinition(dbDef.get().getDefinitionJson()));
+                return Optional.of(parseDefinition(dbDef.get().getDefinitionJson(), dbDef.get().getId()));
+            }
+
+            // 3. Fallback to global DB definition
+            dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(targetType);
+            if (dbDef.isPresent()) {
+                log.debug("[FlowLoader] Using GLOBAL DB flow definition for type={}", targetType);
+                return Optional.of(parseDefinition(dbDef.get().getDefinitionJson(), dbDef.get().getId()));
             }
         } else {
+            // No target type specified — try generic fallback sequence
+            // Note: In practice explicitSuffix is almost always provided by WhatsAppMenuService.
             for (ConversationState.FlowType type : ConversationState.FlowType.values()) {
                 Optional<FlowDefinition> dbDef = flowDefinitionRepository
                         .findLatestActiveByTenantAndFlowType(owner, type);
-                if (dbDef.isEmpty()) {
-                    dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(type);
-                }
                 if (dbDef.isPresent()) {
                     log.debug("[FlowLoader] Using DB flow definition for owner={}", owner.getId());
-                    return Optional.of(parseDefinition(dbDef.get().getDefinitionJson()));
+                    return Optional.of(parseDefinition(dbDef.get().getDefinitionJson(), dbDef.get().getId()));
+                }
+            }
+            
+            FlowConfigDTO config = flowConfigService.getFlowConfig(owner, explicitSuffix);
+            if (config != null && config.getSteps() != null && !config.getSteps().isEmpty()) {
+                log.debug("[FlowLoader] Building FlowMachineDef from FlowConfigService for owner={}", owner.getId());
+                return Optional.of(buildMachineDefFromSteps(config));
+            }
+
+            for (ConversationState.FlowType type : ConversationState.FlowType.values()) {
+                Optional<FlowDefinition> dbDef = flowDefinitionRepository.findLatestActiveGlobalByFlowType(type);
+                if (dbDef.isPresent()) {
+                    log.debug("[FlowLoader] Using GLOBAL DB flow definition for type={}", type);
+                    return Optional.of(parseDefinition(dbDef.get().getDefinitionJson(), dbDef.get().getId()));
                 }
             }
         }
 
-        // 3 & 4 — fall back to classpath JSON files
-        FlowConfigDTO config = flowConfigService.getFlowConfig(owner, explicitSuffix);
-        if (config == null || config.getSteps() == null || config.getSteps().isEmpty()) {
-            log.warn("[FlowLoader] No flow config found for owner={}", owner.getId());
-            return Optional.empty();
-        }
-
-        log.debug("[FlowLoader] Building FlowMachineDef from JSON file for owner={}, flowType={}",
-                owner.getId(), config.getFlowType());
-        return Optional.of(buildMachineDefFromSteps(config));
+        log.warn("[FlowLoader] No flow config or definition found for owner={}", owner.getId());
+        return Optional.empty();
     }
 
     /**
      * Converts the legacy steps-array format (FlowConfigDTO) into a FlowMachineDef
      * state machine. Each step becomes a MESSAGE state chained sequentially.
      *
-     * Step 0  → STATE_0  → STATE_1 → ... → STATE_N → COMPLETE (END)
+     * Greeting is sent separately in FlowStateMachine.startFlow() before questions begin.
+     * STATE_0  → STATE_1 → ... → STATE_N → COMPLETE (END)
      */
     public FlowMachineDef buildMachineDefFromSteps(FlowConfigDTO config) {
         List<FlowStepDTO> steps = config.getSteps();
@@ -117,10 +135,8 @@ public class FlowDefinitionLoader {
             String stateName = "STATE_" + i;
             String nextState = (i < steps.size() - 1) ? "STATE_" + (i + 1) : "COMPLETE";
 
+            // Greeting is sent separately — do NOT prepend it to the first question
             String questionText = step.getQuestion();
-            if (i == 0 && config.getGreetingMessage() != null && !config.getGreetingMessage().isBlank()) {
-                questionText = config.getGreetingMessage() + "\n\n" + questionText;
-            }
 
             StateDef state = StateDef.builder()
                     .type(StateDef.StateType.MESSAGE)
@@ -175,12 +191,16 @@ public class FlowDefinitionLoader {
         return flowConfigService;
     }
 
-    private FlowMachineDef parseDefinition(String json) {
+    private FlowMachineDef parseDefinition(String json, UUID id) {
         try {
-            return objectMapper.readValue(json, FlowMachineDef.class);
+            FlowMachineDef machineDef = objectMapper.readValue(json, FlowMachineDef.class);
+            if (machineDef != null) {
+                machineDef.setId(id);
+            }
+            return machineDef;
         } catch (Exception e) {
-            log.error("Failed to parse FlowMachineDef JSON", e);
-            throw new RuntimeException("Invalid FlowMachineDef JSON", e);
+            log.error("[FlowLoader] Failed to parse flow definition JSON", e);
+            throw new RuntimeException("Invalid flow definition JSON", e);
         }
     }
 }

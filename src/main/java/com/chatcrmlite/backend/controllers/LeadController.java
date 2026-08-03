@@ -174,6 +174,127 @@ public class LeadController {
         return ResponseEntity.ok(toDTO(leadService.rescoreLead(id, user), user));
     }
 
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/notes")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO>> getNotes(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getNotesPaged(id, page, size, user));
+    }
+
+    @PostMapping("/{id}/notes")
+    public ResponseEntity<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> addNote(
+            @PathVariable UUID id,
+            @RequestBody java.util.Map<String, String> body) {
+        User user = getAuthenticatedUser();
+        String content = body.get("content");
+        return ResponseEntity.ok(leadService.addNote(id, content, user));
+    }
+
+    @DeleteMapping("/{id}/notes/{noteId}")
+    public ResponseEntity<Void> deleteNote(
+            @PathVariable UUID id,
+            @PathVariable UUID noteId) {
+        User user = getAuthenticatedUser();
+        leadService.softDeleteNote(id, noteId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Attachments ───────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/attachments")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO>> getAttachments(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getAttachmentsPaged(id, page, size, user));
+    }
+
+    @PostMapping(value = "/{id}/attachments", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> uploadAttachment(
+            @PathVariable UUID id,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.uploadAttachment(id, file, user));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.storage.S3StorageService s3StorageService;
+
+    @GetMapping("/{id}/attachments/{attachmentId}/download")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadAttachment(
+            @PathVariable UUID id,
+            @PathVariable UUID attachmentId) {
+        User user = getAuthenticatedUser();
+        com.chatcrmlite.backend.models.LeadAttachment attachment = leadService.getAttachmentEntity(id, attachmentId, user);
+
+        if (attachment.getStorageType() == com.chatcrmlite.backend.models.LeadAttachment.StorageType.S3) {
+            try {
+                byte[] s3Bytes = s3StorageService.downloadFile(attachment.getStoragePath());
+                org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(s3Bytes);
+                return ResponseEntity.ok()
+                        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getFileName() + "\"")
+                        .contentType(org.springframework.http.MediaType.parseMediaType(attachment.getFileType()))
+                        .contentLength(s3Bytes.length)
+                        .body(resource);
+            } catch (Exception e) {
+                return ResponseEntity.notFound().build();
+            }
+        }
+
+        java.io.File file = new java.io.File(attachment.getStoragePath());
+        if (!file.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        org.springframework.core.io.FileSystemResource resource = new org.springframework.core.io.FileSystemResource(file);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getFileName() + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(attachment.getFileType()))
+                .body(resource);
+    }
+
+    @DeleteMapping("/{id}/attachments/{attachmentId}")
+    public ResponseEntity<Void> deleteAttachment(
+            @PathVariable UUID id,
+            @PathVariable UUID attachmentId) {
+        User user = getAuthenticatedUser();
+        leadService.softDeleteAttachment(id, attachmentId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Reassign & Activity Log ───────────────────────────────────────────
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<LeadDTO> reassignLead(
+            @PathVariable UUID id,
+            @RequestParam UUID agentId) {
+        User user = getAuthenticatedUser();
+        Lead updated = leadService.reassignLeadOwner(id, agentId, user);
+        return ResponseEntity.ok(toDTO(updated, user));
+    }
+
+    @GetMapping("/{id}/activities")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO>> getActivities(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getActivitiesPaged(id, page, size, user));
+    }
+
+    @PostMapping("/{id}/call-log")
+    public ResponseEntity<Void> logCallActivity(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        Lead lead = leadService.getLeadById(id, user);
+        leadService.logActivity(lead, user, com.chatcrmlite.backend.models.LeadActivity.ActivityType.CALL_INITIATED, "{\"phoneNumber\":\"" + (lead.getContact() != null ? lead.getContact().getPhone() : "") + "\"}");
+        return ResponseEntity.ok().build();
+    }
+
 
     // ── Enquiry CRUD ───────────────────────────────────────────────────────
 

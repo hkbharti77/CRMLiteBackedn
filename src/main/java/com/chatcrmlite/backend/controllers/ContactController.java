@@ -20,6 +20,9 @@ public class ContactController {
     private ContactService contactService;
 
     @Autowired
+    private com.chatcrmlite.backend.services.TagService tagService;
+
+    @Autowired
     private UserRepository userRepository;
 
     private User getAuthenticatedUser() {
@@ -31,6 +34,11 @@ public class ContactController {
     @GetMapping
     public ResponseEntity<List<ContactDTO>> getContacts() {
         return ResponseEntity.ok(contactService.getContactsByUser(getAuthenticatedUser()));
+    }
+
+    @GetMapping("/tags/all")
+    public ResponseEntity<List<String>> getAllContactTags() {
+        return ResponseEntity.ok(tagService.getAllContactTags(getAuthenticatedUser()));
     }
 
     @GetMapping("/{id}")

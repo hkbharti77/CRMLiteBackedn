@@ -69,9 +69,9 @@
     position: absolute;
     bottom: 68px;
     right: 0;
-    width: 380px;
-    height: calc(100vh - 120px);
-    max-height: 560px;
+    width: 360px;
+    height: 520px;
+    max-height: calc(85vh - 70px);
     background: var(--bg-color);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
@@ -90,19 +90,19 @@
     animation: premiumPop 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Expanded/Zoomed view: ~17-20% screen footprint (450px x 600px max), NEVER 100% full screen */
 .chat-panel.zoomed {
-    position: fixed !important;
-    top: 0 !important;
-    left: 0 !important;
+    position: absolute !important;
+    top: auto !important;
+    left: auto !important;
     right: 0 !important;
-    bottom: 0 !important;
-    width: 100vw !important;
-    height: 100vh !important;
-    height: 100dvh !important;
-    max-height: 100vh !important;
-    max-height: 100dvh !important;
-    border-radius: 0 !important;
-    z-index: 999999 !important;
+    bottom: 68px !important;
+    width: 450px !important;
+    height: 600px !important;
+    max-width: 90vw !important;
+    max-height: calc(90vh - 80px) !important;
+    border-radius: 24px !important;
+    z-index: 99999 !important;
     animation: zoomExpand 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
@@ -387,24 +387,23 @@
         height: 26px;
     }
 
-    /* Panel — bottom-sheet style: full width, rises from bottom */
+    /* Mobile Floating Panel: Occupies ~20% of screen footprint instead of 100% full-screen modal */
     .chat-panel {
         position: fixed;
-        bottom: 0;
-        right: 0;
-        left: 0;
-        width: 100%;
-        height: 90vh;
-        height: 90dvh;
-        max-height: 90vh;
-        max-height: 90dvh;
-        border-radius: 20px 20px 0 0;
-        transform-origin: bottom center;
-        /* Safe-area inset for iPhones with home bar */
+        bottom: 72px;
+        right: 12px;
+        left: 12px;
+        width: calc(100vw - 24px);
+        max-width: 400px;
+        height: 70vh;
+        max-height: 520px;
+        border-radius: 24px;
+        transform-origin: bottom right;
+        margin: 0 auto;
         padding-bottom: env(safe-area-inset-bottom, 0px);
     }
 
-    /* Slide-up animation for mobile bottom sheet */
+    /* Slide-up animation for mobile floating sheet */
     .chat-panel.open {
         animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
     }
@@ -440,9 +439,18 @@
         padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
     }
 
-    /* Full-screen zoom on mobile */
+    /* Compact Zoomed view on mobile */
     .chat-panel.zoomed {
-        border-radius: 0 !important;
+        position: fixed !important;
+        bottom: 72px !important;
+        right: 8px !important;
+        left: 8px !important;
+        width: calc(100vw - 16px) !important;
+        max-width: 440px !important;
+        height: 80vh !important;
+        max-height: 580px !important;
+        border-radius: 24px !important;
+        margin: 0 auto !important;
     }
 }
 

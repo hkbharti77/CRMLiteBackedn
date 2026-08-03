@@ -1,44 +1,59 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">Booking Completed</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${heading ?: 'Booking Completed'}">Booking Completed</title>
+</head>
+<body>
 
-<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+<div th:replace="~{email/base :: header(
+      heading  = ${heading},
+      greeting = ${greeting}, 
+      intro    = ${intro})}">
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+  <tr>
+    <td align="center">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+        <tr>
+          <td style="padding:0 36px 28px;">
 
-        <div style="background:#ffffff;border:1px solid #008000;border-radius:8px;
-                    padding:20px;text-align:center;margin:0 0 20px">
-          <div style="font-size:36px;margin:0 0 8px">&#11088;</div>
-          <p style="margin:0;color:#008000;font-size:16px;font-weight:700">Thank You for Your Booking!</p>
-        </div>
+            <div class="card-subtle" style="background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:14px;padding:28px 24px;text-align:center;margin:0 0 28px;">
+              <span class="pill-badge" style="background-color:#FFFFFF;color:#16A34A;border:1px solid #DCFCE7;font-size:12px;font-weight:700;padding:5px 16px;border-radius:9999px;display:inline-block;letter-spacing:0.5px;">
+                ✓ SERVICE COMPLETED
+              </span>
+              <h2 class="text-main" th:text="${service}" style="margin:12px 0 6px;color:#111827;font-size:20px;font-weight:700;">
+                Service
+              </h2>
+              <p class="text-muted" th:text="${businessName}" style="margin:0;color:#6B7280;font-size:14px;">
+                Business
+              </p>
+            </div>
 
-        <table style="width:100%;border-collapse:collapse">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Service</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${service}">Service</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">With</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${businessName}">Business</td>
-          </tr>
-        </table>
-
-      </td></tr>
-    </table>
-  </td></tr>
+          </td>
+        </tr>
+      </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=null,ctaUrl=null)}"></div>
+<div th:replace="~{email/base :: footer(
+      footerNote = ${footerNote},
+      ctaLabel   = ${ctaLabel},
+      ctaUrl     = ${ctaUrl})}">
+</div>
 
 </body>
 </html>

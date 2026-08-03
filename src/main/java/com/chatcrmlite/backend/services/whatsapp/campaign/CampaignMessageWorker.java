@@ -43,14 +43,19 @@ public class CampaignMessageWorker {
                 .toList();
 
         for (WhatsAppCampaign campaign : runningCampaigns) {
-            processCampaignBatch(campaign);
+            processCampaignBatch(campaign.getId());
         }
     }
 
     @Async
     @Transactional
-    public void processCampaignBatch(WhatsAppCampaign campaign) {
-        String campaignId = campaign.getId().toString();
+    public void processCampaignBatch(UUID campaignId) {
+        WhatsAppCampaign campaign = campaignRepository.findById(campaignId).orElse(null);
+        if (campaign == null || campaign.getStatus() != WhatsAppCampaign.Status.RUNNING) {
+            return;
+        }
+
+        String campaignIdStr = campaign.getId().toString();
         WhatsAppConfig config = whatsAppConfigRepository.findByUserId(campaign.getOwner().getId()).orElse(null);
 
         if (config == null || config.getAccessToken() == null || config.getPhoneNumberId() == null) {
@@ -77,11 +82,13 @@ public class CampaignMessageWorker {
         int processedCount = 0;
 
         while (processedCount < batchSize) {
-            String recipientIdStr = queueProducer.popTask(campaignId);
+            String recipientIdStr = queueProducer.popTask(campaignIdStr);
             if (recipientIdStr == null) {
-                // Queue is empty, check if all processing is complete
-                long remainingQueued = recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.QUEUED);
-                if (remainingQueued == 0) {
+                long remainingUnfinished = recipientRepository.countByCampaignAndStatusIn(campaign, List.of(
+                    WhatsAppCampaignRecipient.RecipientStatus.QUEUED,
+                    WhatsAppCampaignRecipient.RecipientStatus.PENDING
+                ));
+                if (remainingUnfinished == 0) {
                     campaign.setStatus(WhatsAppCampaign.Status.COMPLETED);
                     campaign.setCompletedAt(LocalDateTime.now());
                     campaignRepository.save(campaign);

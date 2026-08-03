@@ -88,7 +88,15 @@ public class RedisStreamConfig {
                 StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .builder()
                         .pollTimeout(Duration.ofSeconds(1))
+                        .batchSize(10)
                         .targetType(String.class)
+                        .errorHandler(t -> {
+                            if (t instanceof NullPointerException && t.getStackTrace() != null && t.getStackTrace().length > 0 && t.getStackTrace()[0].getClassName().contains("StreamPollTask")) {
+                                log.trace("Redis stream poll timeout for [{}] on stream '{}'", consumerName, stream);
+                            } else {
+                                log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}", consumerName, stream, t.getMessage(), t);
+                            }
+                        })
                         .build();
 
         StreamMessageListenerContainer<String, ObjectRecord<String, String>> container =

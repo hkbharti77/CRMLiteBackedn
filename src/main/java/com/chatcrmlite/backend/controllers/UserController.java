@@ -96,6 +96,8 @@ public class UserController {
             if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
             if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
             if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
+            if (request.getEmailHeaderText() != null && user.getTenant() != null) user.getTenant().setEmailHeaderText(request.getEmailHeaderText());
+            if (request.getEmailFooterText() != null && user.getTenant() != null) user.getTenant().setEmailFooterText(request.getEmailFooterText());
         }
 
         userRepository.save(user);
@@ -104,7 +106,7 @@ public class UserController {
     }
 
     @PostMapping("/staff")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> createStaffUser(
             @AuthenticationPrincipal String callerEmail,
@@ -438,6 +440,8 @@ public class UserController {
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
+        private String emailHeaderText;
+        private String emailFooterText;
 
         public UpdateUserRequest() {}
         public String getDisplayName() { return displayName; }
@@ -476,6 +480,10 @@ public class UserController {
         public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
         public Boolean getForceShowLeads() { return forceShowLeads; }
         public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+        public String getEmailHeaderText() { return emailHeaderText; }
+        public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+        public String getEmailFooterText() { return emailFooterText; }
+        public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
     }
 
     public static class UserProfileDto {
@@ -502,6 +510,8 @@ public class UserController {
         private String role;
         private String accountStatus;
         private String planType;
+        private String emailHeaderText;
+        private String emailFooterText;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -550,6 +560,10 @@ public class UserController {
         public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
         public String getPlanType() { return planType; }
         public void setPlanType(String planType) { this.planType = planType; }
+        public String getEmailHeaderText() { return emailHeaderText; }
+        public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+        public String getEmailFooterText() { return emailFooterText; }
+        public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
 
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
@@ -576,6 +590,8 @@ public class UserController {
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
             dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
+            dto.setEmailHeaderText(user.getTenant() != null ? user.getTenant().getEmailHeaderText() : null);
+            dto.setEmailFooterText(user.getTenant() != null ? user.getTenant().getEmailFooterText() : null);
             return dto;
         }
     }

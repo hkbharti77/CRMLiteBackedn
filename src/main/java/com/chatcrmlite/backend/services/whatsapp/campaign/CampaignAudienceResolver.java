@@ -173,12 +173,63 @@ public class CampaignAudienceResolver {
                 if (campaign.getTargetFilterJson() != null && !campaign.getTargetFilterJson().isBlank()) {
                     Map<String, Object> map = objectMapper.readValue(campaign.getTargetFilterJson(), new TypeReference<Map<String, Object>>() {});
                     List<?> list = (List<?>) map.get("csvRecipients");
+
+                    // Read the phone column name (defaults to legacy "phone" / "phoneNumber")
+                    String phoneColumn = map.get("phoneColumn") != null ? map.get("phoneColumn").toString() : null;
+
+                    // Read applied filters and match logic (AND / OR)
+                    List<?> appliedFilters = (List<?>) map.get("appliedFilters");
+                    String filterMatchLogic = map.get("filterMatchLogic") != null ? map.get("filterMatchLogic").toString().toUpperCase() : "AND";
+
                     if (list != null) {
                         for (Object o : list) {
                             if (o instanceof Map) {
                                 Map<?, ?> item = (Map<?, ?>) o;
-                                String phone = item.get("phone") != null ? item.get("phone").toString() :
-                                               item.get("phoneNumber") != null ? item.get("phoneNumber").toString() : null;
+
+                                // Apply column filters using AND / OR logic
+                                if (appliedFilters != null && !appliedFilters.isEmpty()) {
+                                    boolean isOrLogic = "OR".equalsIgnoreCase(filterMatchLogic);
+                                    boolean passesFilter = isOrLogic ? false : true;
+
+                                    for (Object filterObj : appliedFilters) {
+                                        if (filterObj instanceof Map) {
+                                            Map<?, ?> filter = (Map<?, ?>) filterObj;
+                                            String filterColumn = filter.get("column") != null ? filter.get("column").toString() : null;
+                                            String filterOperator = filter.get("operator") != null ? filter.get("operator").toString() : "EQUALS";
+                                            String filterValue = filter.get("value") != null ? filter.get("value").toString() : "";
+
+                                            if (filterColumn != null && !filterValue.isBlank()) {
+                                                String cellValue = item.get(filterColumn) != null ? item.get(filterColumn).toString() : "";
+                                                boolean match = matchesFilter(cellValue, filterOperator, filterValue);
+                                                if (isOrLogic) {
+                                                    if (match) {
+                                                        passesFilter = true;
+                                                        break;
+                                                    }
+                                                } else {
+                                                    if (!match) {
+                                                        passesFilter = false;
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    if (!passesFilter) {
+                                        continue;
+                                    }
+                                }
+
+                                // Resolve phone number — try dynamic phoneColumn first, then fallbacks
+                                String phone = null;
+                                if (phoneColumn != null && item.get(phoneColumn) != null) {
+                                    phone = item.get(phoneColumn).toString();
+                                }
+                                if (phone == null || phone.isBlank()) {
+                                    phone = item.get("phone") != null ? item.get("phone").toString() :
+                                           item.get("phoneNumber") != null ? item.get("phoneNumber").toString() : null;
+                                }
+
                                 if (phone != null && !phone.isBlank()) {
                                     String cleanPhone = phone.startsWith("+") ? phone : "+" + phone.replaceAll("[^0-9]", "");
                                     String name = item.get("name") != null ? item.get("name").toString() : "CSV Recipient";
@@ -210,6 +261,35 @@ public class CampaignAudienceResolver {
         }
 
         return contactRepository.findAllByOwner(owner);
+    }
+
+    /**
+     * Evaluates whether a cell value matches the given filter operator and value.
+     * Supports: EQUALS, CONTAINS, STARTS_WITH, NOT_EQUALS, IN (comma-separated list).
+     */
+    private boolean matchesFilter(String cellValue, String operator, String filterValue) {
+        if (cellValue == null) cellValue = "";
+        String cellLower = cellValue.toLowerCase().trim();
+        String filterLower = filterValue.toLowerCase().trim();
+
+        return switch (operator.toUpperCase()) {
+            case "EQUALS" -> cellLower.equals(filterLower);
+            case "NOT_EQUALS" -> !cellLower.equals(filterLower);
+            case "CONTAINS" -> cellLower.contains(filterLower);
+            case "STARTS_WITH" -> cellLower.startsWith(filterLower);
+            case "IN" -> {
+                String[] values = filterLower.split(",");
+                boolean matched = false;
+                for (String v : values) {
+                    if (cellLower.equals(v.trim())) {
+                        matched = true;
+                        break;
+                    }
+                }
+                yield matched;
+            }
+            default -> cellLower.equals(filterLower);
+        };
     }
 
     private boolean isValidPhoneNumber(String phone) {

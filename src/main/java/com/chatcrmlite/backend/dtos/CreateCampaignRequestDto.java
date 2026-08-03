@@ -11,7 +11,7 @@ import java.util.UUID;
 @Builder
 public class CreateCampaignRequestDto {
     private String name;
-    private UUID templateId;
+    private String templateId;
     private WhatsAppCampaign.TargetType targetType;
     private String targetFilterJson;
     private String variableMappingJson;

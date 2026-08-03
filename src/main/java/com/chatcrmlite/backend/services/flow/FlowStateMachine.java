@@ -45,6 +45,16 @@ public class FlowStateMachine {
 
     @Transactional
     public boolean processFlow(Contact contact, User owner, String messageText, String selectionId, boolean isInteractiveSelection) {
+        // 1. Check if starting a new flow FIRST — overrides any existing active state
+        if (isInteractiveSelection && selectionId != null && selectionId.startsWith("trigger_flow")) {
+            log.debug("[StateMachine] Starting new flow for contact={}", contact.getWaId());
+            String suffix = null;
+            if (selectionId.startsWith("trigger_flow_")) {
+                suffix = selectionId.substring("trigger_flow_".length());
+            }
+            return startFlow(contact, owner, messageText, suffix);
+        }
+
         Optional<ConversationState> existingStateOpt = stateRepository.findByContact(contact);
 
         if (existingStateOpt.isPresent()) {
@@ -62,6 +72,12 @@ public class FlowStateMachine {
                     return false;
                 }
                 StateDef currentStateDef = machineDefOpt.get().getStates().get(state.getCurrentState());
+                if (currentStateDef == null) {
+                    log.warn("[StateMachine] State definition {} not found. Deleting stale ConversationState for contact={}",
+                            state.getCurrentState(), contact.getWaId());
+                    stateRepository.delete(state);
+                    return false;
+                }
                 log.debug("[StateMachine] Pagination request for state={}, page={}", state.getCurrentState(), nextPg);
                 stateResolver.sendStateMessage(currentStateDef, contact, owner, nextPg);
                 return true;
@@ -69,16 +85,6 @@ public class FlowStateMachine {
 
             advanceFlow(state, contact, owner, messageText, selectionId);
             return true;
-        }
-
-        // Check if starting a new flow
-        if (isInteractiveSelection && selectionId != null && selectionId.startsWith("trigger_flow")) {
-            log.debug("[StateMachine] Starting new flow for contact={}", contact.getWaId());
-            String suffix = null;
-            if (selectionId.startsWith("trigger_flow_")) {
-                suffix = selectionId.substring("trigger_flow_".length());
-            }
-            return startFlow(contact, owner, messageText, suffix);
         }
 
         return false;
@@ -96,44 +102,65 @@ public class FlowStateMachine {
      *   4. Generic JSON file (resources/flows/generic.json)
      */
     public boolean startFlow(Contact contact, User owner, String initialMessage, String flowSuffix) {
+        resetFlow(contact);
         ConversationState.FlowType flowType = resolveFlowTypeForOwner(owner, flowSuffix);
 
-        // Try DB-backed definition first for THIS SPECIFIC flowType
-        Optional<FlowDefinition> dbDefOpt = definitionLoader.findLatestActiveDefinition(owner, flowType);
-
-        FlowMachineDef machineDef;
-        UUID flowDefinitionId = null;
-
-        if (dbDefOpt.isPresent()) {
-            FlowDefinition def = dbDefOpt.get();
-            flowDefinitionId = def.getId();
-            flowType = def.getFlowType();
-            machineDef = definitionLoader.loadDefinition(flowDefinitionId);
-            // FIX #4: Validate machineDef is not null after loading
-            if (machineDef == null) {
-                log.error("[StateMachine] Failed to load DB flow definition id={} for owner={}", flowDefinitionId, owner.getId());
-                return false;
-            }
-            log.debug("[StateMachine] Using DB flow definition id={} for owner={}", flowDefinitionId, owner.getId());
-        } else {
-            // Fall back to classpath JSON files via FlowConfigService
-            Optional<FlowMachineDef> jsonDef = definitionLoader.resolveFlowMachineDef(owner, flowSuffix);
-            if (jsonDef.isEmpty()) {
-                log.warn("[StateMachine] No flow definition found for owner={} — skipping flow start", owner.getId());
-                return false;
-            }
-            machineDef = jsonDef.get();
-            // FIX #4: Validate machineDef is not null
-            if (machineDef == null) {
-                log.error("[StateMachine] Resolved flow definition is null for owner={}", owner.getId());
-                return false;
-            }
-            // flowType is already resolved
-            log.debug("[StateMachine] Using JSON file flow for owner={}, flowType={}", owner.getId(), flowType);
+        // Load flow config ONCE — reused for greeting and passed to flow machine builder
+        com.chatcrmlite.backend.dto.FlowConfigDTO flowConfig = null;
+        try {
+            flowConfig = definitionLoader.getFlowConfigService().getFlowConfig(owner, flowSuffix);
+        } catch (Exception e) {
+            log.warn("[StateMachine] Could not load flow config for owner={}: {}", owner.getId(), e.getMessage());
         }
 
+        // Send greeting message BEFORE starting flow questions (Admin custom greeting or flow default)
+        String greeting = (flowConfig != null && flowConfig.getGreetingMessage() != null && !flowConfig.getGreetingMessage().isBlank())
+                ? flowConfig.getGreetingMessage()
+                : getDefaultGreetingForFlow(flowType);
+
+        if (greeting != null && !greeting.isBlank()) {
+            try {
+                WhatsAppConfig waConfig = configRepository.findByUserId(owner.getId())
+                        .orElseGet(() -> owner.getTenant() != null 
+                                ? configRepository.findByTenantId(owner.getTenant().getId()).orElse(null) 
+                                : null);
+                if (waConfig != null) {
+                    if (contact.getName() != null && !contact.getName().isBlank()
+                            && !contact.getName().startsWith("WhatsApp User")) {
+                        String firstName = contact.getName().split(" ")[0];
+                        greeting = greeting.replace("{{contact.firstName}}", firstName);
+                        greeting = greeting.replace("{{contact.name}}", contact.getName());
+                    } else {
+                        greeting = greeting.replace("{{contact.firstName}}", "there");
+                        greeting = greeting.replace("{{contact.name}}", "there");
+                    }
+                    outboundService.sendText(contact, greeting, waConfig, owner);
+                    log.info("[StateMachine] Sent greeting to contact={} for flowType={}: {}", contact.getWaId(), flowType, greeting);
+                } else {
+                    log.warn("[StateMachine] WhatsAppConfig null for owner={} (tenant={}) — cannot send flow greeting", owner.getId(), owner.getTenant() != null ? owner.getTenant().getId() : "null");
+                }
+            } catch (Exception e) {
+                log.warn("[StateMachine] Could not send greeting for owner={}: {}", owner.getId(), e.getMessage());
+            }
+        }
+
+        // Build machine def directly from already-loaded config (avoids 2nd DB call)
+        Optional<FlowMachineDef> jsonDef;
+        if (flowConfig != null && flowConfig.getSteps() != null && !flowConfig.getSteps().isEmpty()) {
+            jsonDef = Optional.of(definitionLoader.buildMachineDefFromSteps(flowConfig));
+        } else {
+            jsonDef = definitionLoader.resolveFlowMachineDef(owner, flowSuffix);
+        }
+        
+        if (jsonDef.isEmpty()) {
+            log.warn("[StateMachine] No flow definition found for owner={} — skipping flow start", owner.getId());
+            return false;
+        }
+
+        FlowMachineDef machineDef = jsonDef.get();
+        UUID flowDefinitionId = machineDef.getId();
+
         String initialStateName = machineDef.getInitialState();
-        // FIX #4: Validate initial state name exists
         if (initialStateName == null || initialStateName.isBlank()) {
             log.error("[StateMachine] Flow definition has no initial state for owner={}", owner.getId());
             return false;
@@ -142,14 +169,12 @@ public class FlowStateMachine {
         ConversationState state = ConversationState.builder()
                 .contact(contact)
                 .flowType(flowType)
-                .flowDefinitionId(flowDefinitionId) // null for JSON-backed flows
+                .flowDefinitionId(flowDefinitionId)
                 .currentState(initialStateName)
                 .collectedData("{}")
                 .build();
 
         saveAnswer(state, "initial_selection", initialMessage);
-        // CRITICAL: Save state to DB BEFORE executing the first step.
-        // Without this, the next incoming message finds no active flow and falls back to MENU.
         stateRepository.save(state);
         executeState(state, machineDef, contact, owner);
         return true;
@@ -205,13 +230,20 @@ public class FlowStateMachine {
         if (machineDefOpt.isEmpty()) {
             log.error("[StateMachine] Flow definition missing for in-progress state. contact={}, owner={}, flowType={}",
                     contact.getWaId(), owner.getId(), state.getFlowType());
-            // Clean up the orphaned state so the user isn't stuck forever
+            // Clean up the orphaned state and complete flow gracefully
             stateRepository.delete(state);
-            log.warn("[StateMachine] Orphaned ConversationState deleted for contact={} to unblock flow", contact.getWaId());
+            completeFlow(state, contact, owner, state.getFlowType());
             return;
         }
         FlowMachineDef machineDef = machineDefOpt.get();
         StateDef currentStateDef = machineDef.getStates().get(state.getCurrentState());
+        if (currentStateDef == null) {
+            log.warn("[StateMachine] State definition {} not found in machine def for contact={}. Completing flow.",
+                    state.getCurrentState(), contact.getWaId());
+            stateRepository.delete(state);
+            completeFlow(state, contact, owner, state.getFlowType());
+            return;
+        }
 
         // Use selectionId if interactive, otherwise plain text input
         String activeInput = (selectionId != null && !selectionId.isEmpty() && !selectionId.startsWith("flow_page_")) ? selectionId : input;
@@ -331,6 +363,7 @@ public class FlowStateMachine {
         StateDef stateDef = machineDef.getStates().get(state.getCurrentState());
         
         if (stateDef.getType() == StateDef.StateType.MESSAGE) {
+            // Send exact configured question without modifying it
             stateResolver.sendStateMessage(stateDef, contact, owner, 0);
         } else if (stateDef.getType() == StateDef.StateType.EVALUATE) {
             // Auto transition immediately
@@ -347,6 +380,59 @@ public class FlowStateMachine {
                 log.error("[StateMachine] EVALUATE state {} yielded no next state", state.getCurrentState());
             }
         }
+    }
+    
+    /**
+     * Creates a modified state definition that shows pre-filled value to the user
+     * and asks for confirmation or update.
+     */
+    private StateDef createPreFilledState(StateDef originalState, String existingValue) {
+        String originalQuestion = originalState.getText();
+        String modifiedQuestion = String.format(
+            "%s\n\n💡 We have: *%s*\n\nPlease confirm by typing it again, or provide a new value:",
+            originalQuestion,
+            existingValue
+        );
+        
+        return StateDef.builder()
+                .type(originalState.getType())
+                .text(modifiedQuestion)
+                .saveInputAs(originalState.getSaveInputAs())
+                .options(originalState.getOptions())
+                .dynamicOptions(originalState.isDynamicOptions())
+                .transitions(originalState.getTransitions())
+                .fallbackState(originalState.getFallbackState())
+                .build();
+    }
+    
+    /**
+     * Retrieves existing field value from Contact entity if available.
+     * Supports: name, email, phone
+     */
+    private String getExistingFieldValue(Contact contact, String fieldKey) {
+        if (contact == null || fieldKey == null) {
+            return null;
+        }
+        
+        switch (fieldKey.toLowerCase()) {
+            case "name":
+                if (contact.getName() != null && !contact.getName().startsWith("WhatsApp User")) {
+                    return contact.getName();
+                }
+                break;
+            case "email":
+                if (contact.getEmail() != null && !contact.getEmail().isBlank()) {
+                    return contact.getEmail();
+                }
+                break;
+            case "phone":
+                if (contact.getPhone() != null && !contact.getPhone().isBlank()) {
+                    return contact.getPhone();
+                }
+                break;
+        }
+        
+        return null;
     }
 
     private void completeFlow(ConversationState state, Contact contact, User owner, ConversationState.FlowType flowType) {
@@ -370,23 +456,27 @@ public class FlowStateMachine {
                 .map(h -> h.handle(context))
                 .orElseGet(() -> FlowResponse.failure("No handler for flow type: " + flowType));
 
+        String messageToSend = response.getConfirmationMessage();
         if (!response.isSuccess()) {
             log.error("[StateMachine] FlowHandler failed for flowType={}: {}", flowType, response.getErrorReason());
+            if (messageToSend == null || messageToSend.isBlank()) {
+                messageToSend = "✅ Thank you! We have received your details and will be in touch shortly to confirm your appointment.";
+            }
         }
 
-        if (config != null && response.getConfirmationMessage() != null) {
+        if (config != null && messageToSend != null && !messageToSend.isBlank()) {
             try {
                 if (config.getFlowCompletionMenuJson() != null && !config.getFlowCompletionMenuJson().isBlank()) {
                     try {
                         com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
                                 config.getFlowCompletionMenuJson(), com.chatcrmlite.backend.dto.MenuDto.class);
-                        outboundService.sendInteractiveMenu(contact, menu, response.getConfirmationMessage(), config, owner);
+                        outboundService.sendInteractiveMenu(contact, menu, messageToSend, config, owner);
                     } catch (Exception e) {
                         log.warn("[StateMachine] Failed to parse configured completion menu, falling back to text", e);
-                        outboundService.sendText(contact, response.getConfirmationMessage(), config, owner);
+                        outboundService.sendText(contact, messageToSend, config, owner);
                     }
                 } else {
-                    outboundService.sendText(contact, response.getConfirmationMessage(), config, owner);
+                    outboundService.sendText(contact, messageToSend, config, owner);
                 }
             } catch (Exception e) {
                 log.warn("[StateMachine] Could not send confirmation to {}: {}", contact.getWaId(), e.getMessage());
@@ -439,5 +529,16 @@ public class FlowStateMachine {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
         stateRepository.deleteStaleFlows(cutoff);
         log.info("[StateMachine] Stale flow cleanup completed (cutoff={})", cutoff);
+    }
+
+    private String getDefaultGreetingForFlow(ConversationState.FlowType flowType) {
+        if (flowType == ConversationState.FlowType.APPOINTMENT) {
+            return "👋 Hello {{contact.firstName}}!\n\nWelcome! Let's schedule your appointment. Please answer a few quick questions.";
+        } else if (flowType == ConversationState.FlowType.BOOKING) {
+            return "👋 Hello {{contact.firstName}}!\n\nThank you for choosing us! Let's get your service booking details recorded.";
+        } else if (flowType == ConversationState.FlowType.SUPPORT) {
+            return "👋 Hello {{contact.firstName}}!\n\nWe're here to help! Please tell us what issue you are facing.";
+        }
+        return "👋 Hello {{contact.firstName}}!\n\nThank you for reaching out to us. Please share a few details so we can assist you.";
     }
 }

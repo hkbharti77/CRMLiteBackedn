@@ -84,8 +84,8 @@ public class RagConfig {
                     .baseUrl(cleanUrl)
                     .apiKey(openAiApiKey)
                     .modelName(openAiModelName)
-                    .timeout(java.time.Duration.ofSeconds(60))
-                    .maxRetries(3)
+                    .timeout(java.time.Duration.ofSeconds(8))
+                    .maxRetries(1)
                     .build();
         }
 
@@ -96,7 +96,7 @@ public class RagConfig {
         return GoogleAiGeminiChatModel.builder()
                 .apiKey(geminiApiKey)
                 .modelName(modelName)
-                .maxRetries(3)
+                .maxRetries(1)
                 .build();
     }
 

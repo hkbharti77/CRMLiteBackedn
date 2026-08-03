@@ -104,7 +104,10 @@ public class WhatsAppIngressService {
     }
 
     private Contact resolveContact(String waId, String profileName, User owner) {
-        Optional<Contact> existing = contactRepository.findByWaIdAndOwner(waId, owner);
+        UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : null;
+        Optional<Contact> existing = (tenantId != null) 
+                ? contactRepository.findByWaIdAndTenant_Id(waId, tenantId)
+                : contactRepository.findByWaId(waId);
         if (existing.isPresent()) {
             Contact c = existing.get();
             if (profileName != null && !profileName.isBlank() && 

@@ -55,7 +55,8 @@ public class StateResolver {
         }
 
         if (stateDef.isDynamicOptions()) {
-            if ("category".equals(stateDef.getSaveInputAs())) {
+            String inputKey = stateDef.getSaveInputAs() != null ? stateDef.getSaveInputAs().toLowerCase() : "";
+            if (inputKey.contains("category")) {
                 sendDynamicCategoriesList(stateDef, contact, owner, config);
             } else {
                 sendDynamicList(stateDef, contact, owner, config, pageIndex);
@@ -70,9 +71,38 @@ public class StateResolver {
                 sendButtonMessage(stateDef, contact, owner, config);
             }
         } else {
-            // Plain text
-            outboundService.sendText(contact, stateDef.getText(), config, owner);
+            // Plain text - personalize with contact name if available
+            String messageText = personalizeMessage(stateDef.getText(), contact);
+            outboundService.sendText(contact, messageText, config, owner);
         }
+    }
+    
+    /**
+     * Personalizes a message by replacing placeholders with contact information.
+     * Currently supports {{contact.name}} and {{contact.firstName}}
+     */
+    private String personalizeMessage(String text, Contact contact) {
+        if (text == null || text.isBlank()) {
+            return text;
+        }
+        
+        String personalizedText = text;
+        
+        // Replace {{contact.name}} with full name
+        if (contact.getName() != null && !contact.getName().isBlank() 
+                && !contact.getName().startsWith("WhatsApp User")) {
+            personalizedText = personalizedText.replace("{{contact.name}}", contact.getName());
+            
+            // Replace {{contact.firstName}} with first name
+            String firstName = contact.getName().split(" ")[0];
+            personalizedText = personalizedText.replace("{{contact.firstName}}", firstName);
+        } else {
+            // If name not available, remove the placeholders gracefully
+            personalizedText = personalizedText.replace("{{contact.name}}", "there");
+            personalizedText = personalizedText.replace("{{contact.firstName}}", "there");
+        }
+        
+        return personalizedText;
     }
 
     private void sendDynamicCategoriesList(StateDef stateDef, Contact contact, User owner, WhatsAppConfig config) {

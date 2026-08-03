@@ -102,7 +102,7 @@ public class Lead extends BaseTenantEntity {
     }
 
     public enum LeadStatus {
-        NEW, INTERESTED, FOLLOW_UP, BOOKED, CLOSED_WON, CLOSED_LOST
+        NEW, INTERESTED, FOLLOW_UP, BOOKED, CLOSED_WON, CLOSED_LOST, CONTACTED, QUALIFIED, WON, LOST
     }
 
     public Lead() {}

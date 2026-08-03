@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.EmailTemplate;
+import com.chatcrmlite.backend.models.Tenant;
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -152,6 +153,20 @@ public class EmailService {
         return false;
     }
 
+    /**
+     * Injects the tenant's brand configuration into the Thymeleaf Context.
+     */
+    public void injectBrandVariables(Context ctx, Tenant tenant) {
+        if (tenant != null) {
+            ctx.setVariable("businessName", tenant.getBusinessName());
+            ctx.setVariable("logoUrl", tenant.getLogoUrl());
+            ctx.setVariable("primaryColor", tenant.getPrimaryColor());
+            ctx.setVariable("businessAddress", tenant.getAddress());
+            ctx.setVariable("emailHeaderText", tenant.getEmailHeaderText());
+            ctx.setVariable("emailFooterText", tenant.getEmailFooterText());
+        }
+    }
+
     // ══════════════════════════════════════════════════════════════════════
     //  Core send helper — renders Thymeleaf template → HTML → SMTP
     // ══════════════════════════════════════════════════════════════════════
@@ -263,10 +278,15 @@ public class EmailService {
         ctx.setVariable("ctaUrl",     "#");
         ctx.setVariable("customerName",  customerName);
         ctx.setVariable("ticketNumber",  ticketNumber);
-        ctx.setVariable("subject",       subject);
-        ctx.setVariable("description",   description);
+        ctx.setVariable("ticketTitle", subject);
+        ctx.setVariable("ticketDescription", description);
         ctx.setVariable("priority",      priority);
-        sendTemplate(toEmail, "[" + BRAND + "] Ticket #" + ticketNumber + " - " + subject,
+        ctx.setVariable("businessName", BRAND);
+        
+        // Ensure this method caller provides the Tenant in the future or fetches it from DB.
+        // For now, base.html will gracefully fallback if logo/color is null.
+        
+        sendTemplate(toEmail, "[" + BRAND + " Support] Ticket #" + ticketNumber + " - " + subject,
                 "ticket-created-customer", ctx);
     }
 

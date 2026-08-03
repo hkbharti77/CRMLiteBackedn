@@ -1,6 +1,10 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/></head>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${heading ?: 'Welcome to Team'}">Staff Welcome</title>
+</head>
 <body>
 
 <div th:replace="~{email/base :: header(
@@ -9,48 +13,93 @@
       intro    = ${intro})}">
 </div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;max-width:600px;width:100%">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
         <tr>
-          <td style="padding:0 36px 24px">
+          <td style="padding:0 36px 28px;">
 
-            <div style="background:#ffffff;border:1px solid #000000;border-radius:8px;
-                        padding:16px 20px;margin:0 0 24px">
-              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
-                🏢 Account Details
+            <!-- ── HERO WELCOME HERO CARD ───────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:14px;padding:28px 24px;text-align:center;margin:0 0 28px;">
+              <!-- Rocket / Team Icon -->
+              <div style="width:48px;height:48px;background-color:#FFFFFF;border:1px solid #DCFCE7;border-radius:50%;margin:0 auto 12px;line-height:48px;text-align:center;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;">
+                  <path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.71 1.1-1.33 1.1-1.33l-2.77-2.77s-.62.39-1.33 1.1z"></path>
+                  <path d="M12 15l-3-3 7.5-7.5c1.88-1.88 4.2-1.74 4.5-1.44.3.3.44 2.62-1.44 4.5L12 15z"></path>
+                  <path d="M9 18l3 3"></path>
+                  <path d="M14 9l3 3"></path>
+                </svg>
+              </div>
+              <h2 class="text-main" style="margin:0 0 6px;color:#111827;font-size:20px;font-weight:700;">
+                You are invited to join <span th:text="${businessName}">Workspace</span>
+              </h2>
+              <span class="pill-badge" style="background-color:#FFFFFF;color:#16A34A;border:1px solid #DCFCE7;font-size:12px;font-weight:700;padding:4px 14px;border-radius:9999px;display:inline-block;letter-spacing:0.5px;text-transform:uppercase;">
+                Role: <span th:text="${role}">Agent</span>
+              </span>
+            </div>
+
+            <!-- ── ACCOUNT DETAILS CARD ────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 28px;">
+              <p class="text-main" style="margin:0 0 14px;color:#111827;font-size:14px;font-weight:700;">
+                🏢 Workspace Account Details
               </p>
-              <table style="width:100%;font-size:13px;color:#000000">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
                 <tr>
-                  <td style="padding:2px 0;width:80px">Business:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${businessName}">My Company</td>
+                  <td class="text-muted" style="color:#6B7280;width:110px;padding:4px 0;">Organization:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${businessName}">My Company</td>
                 </tr>
                 <tr>
-                  <td style="padding:2px 0">Role:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${role}">Agent</td>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Assigned Role:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${role}">Support Agent</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Authentication:</td>
+                  <td class="text-main" style="color:#16A34A;font-weight:600;padding:4px 0;">Passwordless Verification (Email OTP)</td>
                 </tr>
               </table>
             </div>
 
-            <div style="background:#ffffff;border-left:4px solid #008000;
-                        padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
-              <p style="margin:0 0 8px;color:#008000;font-size:14px;font-weight:600">
-                ⚡ How to Log In
+            <!-- ── ONBOARDING STEPS ───────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 24px;">
+              <p class="text-main" style="margin:0 0 12px;color:#111827;font-size:14px;font-weight:700;">
+                ⚡ How to Access Your Workspace
               </p>
-              <ul style="margin:0;padding-left:16px;color:#000000;font-size:13px;line-height:1.6">
-                <li>Go to the ChatCRM Lite application</li>
-                <li>Enter your email address in the login form</li>
-                <li>A 6-digit verification code (OTP) will be sent to your email</li>
-                <li>Enter the code to access your workspace directly</li>
-              </ul>
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td valign="top" style="width:24px;padding-bottom:10px;color:#16A34A;font-weight:700;">✓</td>
+                  <td class="text-muted" style="color:#4B5563;font-size:13px;line-height:1.5;padding-bottom:10px;">
+                    Click the <strong>Log In Now</strong> button below to open the portal.
+                  </td>
+                </tr>
+                <tr>
+                  <td valign="top" style="width:24px;padding-bottom:10px;color:#16A34A;font-weight:700;">✓</td>
+                  <td class="text-muted" style="color:#4B5563;font-size:13px;line-height:1.5;padding-bottom:10px;">
+                    Enter your email address in the authentication prompt.
+                  </td>
+                </tr>
+                <tr>
+                  <td valign="top" style="width:24px;color:#16A34A;font-weight:700;">✓</td>
+                  <td class="text-muted" style="color:#4B5563;font-size:13px;line-height:1.5;">
+                    Enter the 6-digit OTP sent to your email to log in securely.
+                  </td>
+                </tr>
+              </table>
             </div>
 
           </td>
         </tr>
       </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
     </td>
   </tr>
 </table>

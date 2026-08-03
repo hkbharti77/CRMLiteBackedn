@@ -58,6 +58,9 @@ public class RagRetrievalService {
     @Autowired
     private EmbeddingModel embeddingModel;
 
+    @Autowired
+    private FaqMatchingService faqMatchingService;
+
     /**
      * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker, 
      * Prompt Injection Defense, and Hallucination detection.
@@ -77,6 +80,14 @@ public class RagRetrievalService {
         // 2. Generate Query Embedding
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
+
+        // 2b. FAQ High-Confidence Fast Path (Direct Answer if score >= 85%)
+        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
+        if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
+            log.info("[FAQ-FastPath] High-confidence match (Score: {}) for tenant {} | Direct FAQ response returned.",
+                    String.format("%.4f", faqMatch.getScore()), tenantId);
+            return faqMatch.getFaqItem().getAnswer();
+        }
 
         // 3. Semantic Cache Check (O(log N) in DB)
         String cachedResponse = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);

@@ -68,7 +68,7 @@ public class QuotaEnforcerService {
                         plan.setName("Free Starter Pack");
                         plan.setPriceMonthly(java.math.BigDecimal.ZERO);
                         plan.setPriceYearly(java.math.BigDecimal.ZERO);
-                        plan.setEmployeeLimit(1);
+                        plan.setEmployeeLimit(10);
                         plan.setPrimaryResourceLimit(100);
                         plan.setSecondaryResourceLimit(15);
                         plan.setTicketLimit(10);

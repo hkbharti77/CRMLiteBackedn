@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDateTime;
@@ -10,6 +11,7 @@ import java.util.Set;
 
 @Entity
 @Table(name = "tenants")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Tenant implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -36,6 +38,12 @@ public class Tenant implements Serializable {
 
     @Column(name = "secondary_color", length = 20)
     private String secondaryColor;
+
+    @Column(name = "email_header_text", columnDefinition = "TEXT")
+    private String emailHeaderText;
+
+    @Column(name = "email_footer_text", columnDefinition = "TEXT")
+    private String emailFooterText;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -148,6 +156,12 @@ public class Tenant implements Serializable {
     public String getSecondaryColor() { return secondaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
 
+    public String getEmailHeaderText() { return emailHeaderText; }
+    public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+
+    public String getEmailFooterText() { return emailFooterText; }
+    public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+
     public User.PlanType getPlanType() { return planType; }
     public void setPlanType(User.PlanType planType) { this.planType = planType; }
 
@@ -205,6 +219,8 @@ public class Tenant implements Serializable {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String emailHeaderText;
+        private String emailFooterText;
         private User.PlanType planType = User.PlanType.FREE;
         private Boolean onboardingCompleted = false;
         private Boolean forceShowBooking;
@@ -224,6 +240,8 @@ public class Tenant implements Serializable {
         public TenantBuilder latitude(Double latitude) { this.latitude = latitude; return this; }
         public TenantBuilder longitude(Double longitude) { this.longitude = longitude; return this; }
         public TenantBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
+        public TenantBuilder emailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; return this; }
+        public TenantBuilder emailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; return this; }
         public TenantBuilder planType(User.PlanType planType) { this.planType = planType; return this; }
         public TenantBuilder onboardingCompleted(Boolean onboardingCompleted) { this.onboardingCompleted = onboardingCompleted; return this; }
         public TenantBuilder forceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; return this; }

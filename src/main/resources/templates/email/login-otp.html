@@ -1,113 +1,140 @@
 <!DOCTYPE html>
-<!--
-  login-otp.html — Login OTP Email Template
-  =========================================
-  Sends OTP code for login verification
-  Uses the base.html template fragments for consistent styling
--->
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/></head>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${heading ?: 'Your Login Verification Code'}">Login OTP</title>
+</head>
 <body>
 
-<!-- Header with heading, greeting, and intro -->
+<!-- Header with brand logo, heading, greeting, and intro -->
 <div th:replace="~{email/base :: header(
       heading  = ${heading},
       greeting = ${greeting}, 
       intro    = ${intro})}">
 </div>
 
-<!-- OTP Code Display -->
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
+<!-- Main OTP & Security Body Card -->
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;max-width:600px;width:100%">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
         <tr>
-          <td style="padding:0 36px 24px">
+          <td style="padding:0 36px 28px;">
             
-            <!-- OTP Code Box -->
-            <div style="background:#ffffff;border:2px solid #008000;border-radius:12px;
-                        padding:24px;text-align:center;margin:0 0 24px">
-              <p style="margin:0 0 8px;color:#008000;font-size:14px;font-weight:600;
-                        text-transform:uppercase;letter-spacing:0.5px">
-                Your Login Code
+            <!-- ── HERO OTP DISPLAY CARD ────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;padding:32px 24px;text-align:center;margin:0 0 28px;">
+              
+              <!-- Security Shield Vector SVG Illustration -->
+              <div style="width:52px;height:52px;background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:50%;margin:0 auto 16px;line-height:52px;text-align:center;">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                  <path d="m9 12 2 2 4-4"></path>
+                </svg>
+              </div>
+
+              <p class="text-muted" style="margin:0 0 10px;color:#6B7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+                Verification Code
               </p>
-              <div th:text="${otpCode}"
-                   style="font-size:32px;font-weight:700;color:#000000;
-                          letter-spacing:8px;font-family:monospace;
-                          margin:8px 0;text-align:center">
+              
+              <!-- 56px Monospace Code Display -->
+              <div class="otp-code" th:text="${otpCode}" style="font-size:52px;font-weight:800;color:#16A34A;letter-spacing:10px;font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;margin:8px 0;text-align:center;line-height:1.1;">
                 123456
               </div>
-              <p style="margin:8px 0 0;color:#008000;font-size:13px">
-                Valid for <strong th:text="${expiryMinutes}">10</strong> minutes
+
+              <div style="margin-top:16px;">
+                <span class="pill-badge" style="background-color:#FEF3C7;color:#92400E;border:1px solid #FDE68A;font-size:12px;font-weight:600;padding:5px 14px;border-radius:9999px;display:inline-block;">
+                  ⏱️ Valid for <strong th:text="${expiryMinutes}">10</strong> minutes
+                </span>
+              </div>
+              
+              <p class="text-subtle" style="margin:14px 0 0;color:#9CA3AF;font-size:12px;">
+                💡 Highlight & copy the code above to complete your login
               </p>
             </div>
 
-            <!-- Login Details -->
-            <div style="background:#ffffff;border:1px solid #000000;border-radius:8px;
-                        padding:16px 20px;margin:0 0 24px">
-              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
-                📍 Login Attempt Details
-              </p>
-              <table style="width:100%;font-size:13px;color:#000000">
+            <!-- ── SECURITY AUDIT METADATA CARD ───────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:0 0 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:12px;">
                 <tr>
-                  <td style="padding:2px 0;width:80px">Email:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${userEmail}">user@example.com</td>
+                  <td>
+                    <span class="text-main" style="color:#111827;font-size:14px;font-weight:700;">
+                      📍 Login Request Details
+                    </span>
+                  </td>
+                  <td align="right">
+                    <span style="background-color:#F1F5F9;color:#475569;font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;">
+                      ✦ AI MONITORED
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
+                <tr>
+                  <td class="text-muted" style="color:#6B7280;width:95px;padding:4px 0;">Account:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${userEmail}">user@example.com</td>
                 </tr>
                 <tr>
-                  <td style="padding:2px 0">Time:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${loginTime}">2026-05-09 14:30:15</td>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Time (UTC):</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${loginTime}">2026-07-29 14:30:15</td>
                 </tr>
                 <tr th:if="${ipAddress}">
-                  <td style="padding:2px 0">IP Address:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${ipAddress}">192.168.1.1</td>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">IP Address:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${ipAddress}">192.168.1.1</td>
                 </tr>
                 <tr th:if="${userAgent}">
-                  <td style="padding:2px 0">Device:</td>
-                  <td style="padding:2px 0;color:#000000" th:text="${userAgent}">Chrome Browser</td>
+                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Device/Browser:</td>
+                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${userAgent}">Chrome Browser (Windows 11)</td>
                 </tr>
               </table>
             </div>
 
-            <!-- Security Notice -->
-            <div style="background:#ffffff;border-left:4px solid #ff0000;
-                        padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
-              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
-                🔒 Security Notice
-              </p>
-              <p style="margin:0;color:#000000;font-size:13px;line-height:1.5">
-                If you didn't attempt to log in, please secure your account immediately by changing your password.
-              </p>
+            <!-- ── SECURITY WARNING CALLOUT ───────────────────────────────── -->
+            <div style="background-color:#FEF2F2;border:1px solid #FCA5A5;border-radius:12px;padding:18px 20px;margin:0 0 28px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
+                <tr>
+                  <td valign="top" style="width:28px;padding-right:12px;">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                    </svg>
+                  </td>
+                  <td valign="middle">
+                    <p style="margin:0 0 4px;color:#991B1B;font-size:14px;font-weight:700;">
+                      Security Warning
+                    </p>
+                    <p style="margin:0;color:#7F1D1D;font-size:13px;line-height:1.5;">
+                      Never share this code with anyone. ChatCRM Lite engineers or support agents will never ask for your code.
+                    </p>
+                  </td>
+                </tr>
+              </table>
             </div>
 
-            <!-- Quick Actions -->
-            <div style="background:#ffffff;border-left:4px solid #000000;
-                        padding:16px 20px;margin:0 0 24px;border-radius:0 8px 8px 0">
-              <p style="margin:0 0 8px;color:#000000;font-size:14px;font-weight:600">
-                ⚡ Quick Actions
-              </p>
-              <ul style="margin:0;padding-left:16px;color:#000000;font-size:13px;line-height:1.6">
-                <li>Enter the code on the login page to access your account</li>
-                <li>The code will expire automatically after 10 minutes</li>
-                <li>Request a new code if this one expires</li>
-              </ul>
-            </div>
-
-            <!-- Help Text -->
-            <p style="color:#000000;font-size:13px;line-height:1.5;margin:0">
-              <strong>Having trouble?</strong> Make sure you're entering the code on the same device 
-              and browser where you initiated the login. Contact support if you need assistance.
+            <!-- ── HELP & TROUBLESHOOTING ─────────────────────────────────── -->
+            <p class="text-muted" style="color:#6B7280;font-size:13px;line-height:1.6;margin:0;">
+              <strong>Did not request this code?</strong> If you did not initiate this login attempt, please secure your account immediately or contact <a href="mailto:security@chatcrmlite.com" style="color:#16A34A;text-decoration:none;font-weight:600;">Security Team</a>.
             </p>
 
           </td>
         </tr>
       </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
     </td>
   </tr>
 </table>
 
-<!-- Footer with note and optional CTA -->
+<!-- Footer with support note & CTA -->
 <div th:replace="~{email/base :: footer(
       footerNote = ${footerNote},
       ctaLabel   = ${ctaLabel},

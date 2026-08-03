@@ -1,52 +1,77 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">Message</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title th:text="${subject}">Broadcast Message</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #F8FAFC; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
 
-<div th:replace="~{email/base :: header(
-    heading  = '',
-    greeting = '',
-    intro    = '')}">
-</div>
+<table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC; padding: 40px 16px;">
+  <tr>
+    <td align="center">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px; background-color:#FFFFFF; border:1px solid #E5E7EB; border-radius: 8px; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);">
+        
+        <!-- Custom Header with Logo -->
+        <tr>
+          <td align="center" style="padding: 32px 36px 0;">
+            <div th:if="${logoUrl != null and !logoUrl.isEmpty()}" style="margin-bottom: 24px;">
+              <img th:src="${logoUrl}" alt="Logo" style="max-height: 60px; max-width: 200px; display: block;" />
+            </div>
+            <div th:unless="${logoUrl != null and !logoUrl.isEmpty()}" style="margin-bottom: 24px;">
+              <span style="font-size: 24px; font-weight: 800; color: #111827; letter-spacing: -0.5px;" th:text="${businessName}">Business Name</span>
+            </div>
+            <hr style="border: 0; border-top: 1px solid #E5E7EB; margin: 0;" />
+          </td>
+        </tr>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+        <!-- Body -->
+        <tr>
+          <td style="padding: 32px 36px;">
+            <div style="color:#374151; font-size:16px; line-height:1.6; margin:0;" th:utext="${body}">
+              Email body content...
+            </div>
+            
+            <!-- Dynamic CTA Button -->
+            <div th:if="${ctaUrl != null and !ctaUrl.isEmpty()}" style="text-align: center; margin-top: 32px;">
+              <a th:href="${ctaUrl}" th:text="${ctaLabel ?: 'Click Here'}"
+                 th:style="'display: inline-block; padding: 12px 24px; color: #FFFFFF; font-weight: 600; text-decoration: none; border-radius: 6px; background-color: ' + (${primaryColor} != null ? ${primaryColor} : '#2563EB') + ';'">
+                 Action Button
+              </a>
+            </div>
+          </td>
+        </tr>
 
-        <!-- Business name badge -->
-        <p style="margin:0 0 20px">
-          <span style="background:#ffffff;color:#008000;padding:4px 12px;
-                       border-radius:20px;font-size:13px;font-weight:600;
-                       border:1px solid #000000"
-                th:text="${businessName}">Business</span>
-        </p>
+        <!-- Custom Footer -->
+        <tr>
+          <td align="center" style="background-color: #F9FAFB; padding: 24px 36px; border-top: 1px solid #E5E7EB;">
+            <p style="color:#6B7280; font-size:12px; margin:0 0 8px; line-height:1.5;">
+              This email was sent by <strong th:text="${businessName}" style="color:#374151;">Business Name</strong>.
+            </p>
+            <p th:if="${businessAddress != null and !businessAddress.isEmpty()}" style="color:#9CA3AF; font-size:11px; margin:0; line-height:1.5;" th:text="${businessAddress}">
+              123 Business St, City, Country
+            </p>
+          </td>
+        </tr>
 
-        <!-- Tenant-written body -->
-        <div style="color:#000000;font-size:15px;line-height:1.8;margin:0 0 28px"
-             th:utext="${body}">
-          Email body.
-        </div>
-
-        <!-- Unsubscribe note -->
-        <p style="color:#000000;font-size:11px;margin:0;text-align:center;line-height:1.5">
-          You are receiving this email because you are a customer of
-          <span th:text="${businessName}">Business</span>.
-          If you no longer wish to receive these emails, please contact us directly.
-        </p>
-
-      </td></tr>
-    </table>
-  </td></tr>
+      </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+      
+      <!-- Required Unsubscribe Spacer (Injected by Tracking Service) -->
+      <div style="padding-top: 20px;"></div>
+      
+    </td>
+  </tr>
 </table>
-
-<div th:replace="~{email/base :: footer(
-    footerNote = '',
-    ctaLabel   = ${ctaLabel},
-    ctaUrl     = ${ctaUrl})}">
-</div>
 
 </body>
 </html>

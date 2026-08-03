@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class WhatsAppCampaign extends BaseTenantEntity {
 
     public enum Status {
@@ -71,6 +73,7 @@ public class WhatsAppCampaign extends BaseTenantEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
+    @JsonIgnoreProperties({"password", "tenant", "ipWhitelist", "googleAccessToken", "googleRefreshToken", "hibernateLazyInitializer", "handler"})
     private User owner;
 
     @PrePersist

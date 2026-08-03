@@ -1,66 +1,108 @@
 <!DOCTYPE html>
-<!--
-  base.html — ChatCRM Lite Email Base Layout
-  ==========================================
-  Exposes two fragments used by every child template:
-
-    th:fragment="header(heading, greeting, intro)"
-      → renders the full outer wrapper + indigo header bar
-        + body cell open with heading/greeting/intro pre-filled
-
-    th:fragment="footer(footerNote, ctaLabel, ctaUrl)"
-      → renders optional CTA button + footer note
-        + closes body cell + footer bar + outer wrapper
-
-  Child template pattern:
-  ─────────────────────────────────────────────────────────────
-  <div th:replace="~{email/base :: header(
-        heading  = 'Booking Confirmed',
-        greeting = 'Hi Rahul,',
-        intro    = 'Your booking has been confirmed.')}">
-  </div>
-
-  ... detail tables, blockquotes, etc. ...
-
-  <div th:replace="~{email/base :: footer(
-        footerNote = 'We look forward to serving you.',
-        ctaLabel   = 'View Booking',
-        ctaUrl     = 'https://example.com')}">
-  </div>
-  ─────────────────────────────────────────────────────────────
--->
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/></head>
-<body>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${subject ?: 'ChatCRM Lite Notification'}">ChatCRM Lite</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* ── RESET & BASE STYLES ────────────────────────────────────────── */
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    html, body { margin: 0 !important; padding: 0 !important; width: 100% !important; height: 100% !important; background-color: #F8FAFC; -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
+    div[style*="margin: 16px 0"] { margin: 0 !important; }
+    table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; border-collapse: collapse !important; }
+    img { border: 0 !important; height: auto !important; line-height: 100% !important; outline: none !important; text-decoration: none !important; -ms-interpolation-mode: bicubic !important; }
+    a { text-decoration: none; }
+    a[x-apple-data-detectors] { color: inherit !important; text-decoration: none !important; font-size: inherit !important; font-family: inherit !important; font-weight: inherit !important; line-height: inherit !important; }
+    
+    /* ── TYPOGRAPHY ─────────────────────────────────────────────────── */
+    body, table, td, p, a, li, blockquote { font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important; }
+    
+    /* ── DARK MODE MEDIA QUERIES ────────────────────────────────────── */
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0F172A !important; }
+      .card-bg { background-color: #1E293B !important; border-color: #334155 !important; }
+      .card-subtle { background-color: #0F172A !important; border-color: #334155 !important; }
+      .text-main { color: #F8FAFC !important; }
+      .text-muted { color: #94A3B8 !important; }
+      .text-subtle { color: #64748B !important; }
+      .border-color { border-color: #334155 !important; }
+      .otp-code { color: #4ADE80 !important; }
+      .brand-header-bg { background-color: #1E293B !important; border-bottom: 1px solid #334155 !important; }
+      .footer-bg { background-color: #0F172A !important; border-top: 1px solid #334155 !important; }
+      .pill-badge { background-color: #334155 !important; color: #F8FAFC !important; }
+    }
+    
+    /* Outlook & Gmail Dark Mode Attribute Selectors */
+    [data-ogsc] .body-bg { background-color: #0F172A !important; }
+    [data-ogsc] .card-bg { background-color: #1E293B !important; border-color: #334155 !important; }
+    [data-ogsc] .text-main { color: #F8FAFC !important; }
+    [data-ogsc] .text-muted { color: #94A3B8 !important; }
+    [data-ogsc] .otp-code { color: #4ADE80 !important; }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#F8FAFC;word-spacing:normal;">
 
 <!-- ════════════════════════════════════════════════════════════════ -->
-<!--  HEADER fragment                                                -->
+<!--  HEADER FRAGMENT                                                -->
 <!--  Parameters: heading, greeting, intro                          -->
 <!-- ════════════════════════════════════════════════════════════════ -->
-<table th:fragment="header(heading, greeting, intro)"
-       width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:40px 16px;font-family:Arial,Helvetica,sans-serif">
+<table th:fragment="header(heading, greeting, intro)" class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:40px 16px 0;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;
-                    box-shadow:0 4px 16px rgba(0,0,0,1);max-width:600px;width:100%">
-
-        <!-- Brand header bar -->
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 10px 25px -5px rgba(0,0,0,0.04), 0 8px 10px -6px rgba(0,0,0,0.02);">
+        
+        <!-- Brand Header Bar -->
         <tr>
-          <td style="background:#000000;
-                     padding:26px 36px">
+          <td class="brand-header-bg" style="background-color:#FFFFFF;padding:28px 36px 20px;border-bottom:1px solid #F3F4F6;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td>
-                  <span style="color:#ffffff;font-size:21px;font-weight:700;
-                               letter-spacing:-0.4px">
-                    &#128172; ChatCRM Lite
-                  </span>
+                <td valign="middle">
+                  <table cellpadding="0" cellspacing="0" role="presentation">
+                    <tr>
+                      <td valign="middle" style="padding-right:10px;">
+                        <!-- Dynamic Logo -->
+                        <div th:if="${logoUrl != null and !#strings.isEmpty(logoUrl)}">
+                           <img th:src="${logoUrl}" alt="Logo" style="max-height: 40px; max-width: 150px; display: block;" />
+                        </div>
+                        <!-- Fallback Logo -->
+                        <div th:unless="${logoUrl != null and !#strings.isEmpty(logoUrl)}" style="width:36px;height:36px;background:linear-gradient(135deg, #16A34A 0%, #15803D 100%);border-radius:10px;text-align:center;line-height:36px;box-shadow:0 4px 12px rgba(22,163,74,0.25);">
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;">
+                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                            <path d="M12 7v6"></path>
+                            <path d="M9 10h6"></path>
+                          </svg>
+                        </div>
+                      </td>
+                      <td valign="middle">
+                        <span class="text-main" th:text="${businessName ?: 'ChatCRM Lite'}" style="color:#111827;font-size:18px;font-weight:700;letter-spacing:-0.4px;display:block;line-height:1.2;">
+                          ChatCRM Lite
+                        </span>
+                        <span th:if="${businessName == null or businessName == 'ChatCRM Lite'}" class="text-muted" style="color:#6B7280;font-size:11px;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;display:block;margin-top:2px;">
+                          Powered by GyanVaniAi
+                        </span>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
-                <td align="right">
-                  <span style="color:#ffffff;font-size:11px">
-                    Smart CRM &middot; Powered by AI
+                <td align="right" valign="middle">
+                  <span class="pill-badge" style="background-color:#F0FDF4;color:#16A34A;border:1px solid #DCFCE7;font-size:11px;font-weight:600;padding:5px 12px;border-radius:9999px;display:inline-block;letter-spacing:0.3px;">
+                    ✦ VERIFIED
                   </span>
                 </td>
               </tr>
@@ -68,94 +110,130 @@
           </td>
         </tr>
 
-        <!-- Body cell -->
-        <tr>
-          <td style="padding:36px">
+        <!-- Custom Email Header Text (Tenant-defined) -->
+        <tr th:if="${emailHeaderText != null and !#strings.isEmpty(emailHeaderText)}">
+          <td style="padding:16px 36px 0;">
+            <p class="text-muted" th:text="${emailHeaderText}" style="color:#6B7280;font-size:13px;margin:0;line-height:1.5;text-align:center;font-style:italic;">
+              Custom header text
+            </p>
+            <hr style="border:0;border-top:1px solid #F3F4F6;margin:12px 0 0;" />
+          </td>
+        </tr>
 
+        <!-- Main Body Cell -->
+        <tr>
+          <td style="padding:36px 36px 12px;">
+            
             <!-- Heading -->
-            <h2 th:if="${heading != null and !#strings.isEmpty(heading)}"
-                th:text="${heading}"
-                style="margin:0 0 6px;color:#000000;font-size:22px;font-weight:700;
-                       line-height:1.3">
+            <h1 class="text-main" th:if="${heading != null and !#strings.isEmpty(heading)}" th:text="${heading}" style="margin:0 0 12px;color:#111827;font-size:26px;font-weight:700;line-height:1.3;letter-spacing:-0.02em;">
               Heading
-            </h2>
-            <!-- Accent line -->
-            <div th:if="${heading != null and !#strings.isEmpty(heading)}"
-                 style="width:48px;height:3px;background:#008000;
-                        border-radius:2px;margin:0 0 20px"></div>
+            </h1>
 
             <!-- Greeting -->
-            <p th:text="${greeting}"
-               style="color:#000000;margin:0 0 8px;font-size:15px">
+            <p class="text-main" th:if="${greeting != null and !#strings.isEmpty(greeting)}" th:text="${greeting}" style="color:#111827;margin:0 0 12px;font-size:16px;font-weight:600;line-height:1.5;">
               Hi,
             </p>
 
             <!-- Intro -->
-            <p th:text="${intro}"
-               style="color:#000000;margin:0 0 20px;font-size:15px;line-height:1.6">
+            <p class="text-muted" th:if="${intro != null and !#strings.isEmpty(intro)}" th:text="${intro}" style="color:#4B5563;margin:0 0 24px;font-size:15px;line-height:1.6;">
               Intro text.
             </p>
 
           </td>
         </tr>
       </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
     </td>
   </tr>
 </table>
 
 
 <!-- ════════════════════════════════════════════════════════════════ -->
-<!--  FOOTER fragment                                                -->
+<!--  FOOTER FRAGMENT                                                -->
 <!--  Parameters: footerNote, ctaLabel (nullable), ctaUrl (nullable)-->
 <!-- ════════════════════════════════════════════════════════════════ -->
-<table th:fragment="footer(footerNote, ctaLabel, ctaUrl)"
-       width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px 40px;font-family:Arial,Helvetica,sans-serif">
+<table th:fragment="footer(footerNote, ctaLabel, ctaUrl)" class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px 40px;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;border-radius:0 0 10px 10px;
-                    max-width:600px;width:100%">
+      <!--[if mso]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 16px 16px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(0,0,0,0.04), 0 8px 10px -6px rgba(0,0,0,0.02);">
 
-        <!-- CTA button (optional) -->
+        <!-- Optional Primary CTA Button -->
         <tr th:if="${ctaLabel != null and !#strings.isEmpty(ctaLabel)}">
-          <td style="padding:0 36px 24px;text-align:center">
-            <a th:href="${ctaUrl ?: '#'}"
-               th:text="${ctaLabel}"
-               style="display:inline-block;background:#008000;color:#ffffff;
-                      padding:13px 32px;border-radius:7px;text-decoration:none;
-                      font-weight:700;font-size:14px;
-                      box-shadow:0 2px 8px rgba(0,128,0,1)">
+          <td style="padding:12px 36px 28px;text-align:center;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:href="${ctaUrl ?: '#'}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="20%" stroke="f" th:attr="fillcolor=${primaryColor ?: '#16A34A'}">
+              <w:anchorlock/>
+              <center style="color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:bold;" th:text="${ctaLabel}">Action</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <a th:href="${ctaUrl ?: '#'}" th:text="${ctaLabel}" th:style="'display:inline-block;background-color:' + (${primaryColor} ?: '#16A34A') + ';color:#FFFFFF;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,0.15);transition:all 0.2s ease;'">
               Action
             </a>
+            <!--<![endif]-->
           </td>
         </tr>
 
-        <!-- Footer note -->
-        <tr>
-          <td style="padding:0 36px 28px">
-            <p th:text="${footerNote}"
-               style="color:#000000;font-size:13px;margin:0;line-height:1.5">
-              Footer note.
-            </p>
+        <!-- Footer Note -->
+        <tr th:if="${footerNote != null and !#strings.isEmpty(footerNote)}">
+          <td style="padding:0 36px 28px;">
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:10px;padding:16px 20px;">
+              <p class="text-muted" th:text="${footerNote}" style="color:#4B5563;font-size:13px;margin:0;line-height:1.5;text-align:center;">
+                Footer note.
+              </p>
+            </div>
           </td>
         </tr>
 
-        <!-- Footer bar -->
+        <!-- Enterprise Footer Links & Copyright -->
         <tr>
-          <td style="background:#ffffff;padding:18px 36px;
-                     border-top:1px solid #000000;
-                     border-radius:0 0 10px 10px">
-            <p style="margin:0 0 4px;color:#000000;font-size:12px;text-align:center">
-              &copy; 2026 ChatCRM Lite &middot; All rights reserved
+          <td class="footer-bg" style="background-color:#FAFAFA;padding:24px 36px;border-top:1px solid #E5E7EB;border-radius:0 0 16px 16px;text-align:center;">
+            
+            <!-- Custom Email Footer Text (Tenant-defined) -->
+            <p th:if="${emailFooterText != null and !#strings.isEmpty(emailFooterText)}" class="text-muted" th:text="${emailFooterText}" style="color:#4B5563;font-size:12px;margin:0 0 12px;line-height:1.5;">
+              Custom footer text
             </p>
-            <p style="margin:0;color:#000000;font-size:11px;text-align:center">
-              This is an automated notification. Please do not reply to this email.
+
+            <p class="text-subtle" style="margin:0 0 6px;color:#9CA3AF;font-size:12px;line-height:1.4;">
+              &copy; <span th:text="${#dates.year(#dates.createNow())}">2026</span> <span th:text="${businessName ?: 'ChatCRM Lite'}">ChatCRM Lite</span>. All rights reserved.
+            </p>
+            <p th:if="${businessAddress != null and !#strings.isEmpty(businessAddress)}" class="text-subtle" style="margin:0 0 6px;color:#9CA3AF;font-size:11px;line-height:1.4;" th:text="${businessAddress}">
+              Address
+            </p>
+            <p class="text-subtle" style="margin:0;color:#9CA3AF;font-size:11px;line-height:1.4;">
+              This is an automated system notification. Replies to this address are monitored by AI Support.
             </p>
           </td>
         </tr>
 
       </table>
+      <!--[if mso]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+
+      <!-- ⚡ Permanent Platform Watermark (Cannot be removed by Tenant) -->
+      <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;">
+        <tr>
+          <td align="center" style="padding:16px 0 0;">
+            <a href="https://gyanvaniai.com" target="_blank" style="text-decoration:none;">
+              <span style="color:#C0C5CE;font-size:10px;font-weight:500;letter-spacing:0.5px;">⚡ Powered by </span>
+              <span style="color:#94A3B8;font-size:10px;font-weight:700;letter-spacing:0.3px;">GyanVaniAi</span>
+            </a>
+          </td>
+        </tr>
+      </table>
+
     </td>
   </tr>
 </table>

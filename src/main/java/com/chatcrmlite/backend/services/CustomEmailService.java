@@ -7,14 +7,29 @@ import com.chatcrmlite.backend.models.CustomEmail;
 import com.chatcrmlite.backend.models.CustomEmail.EmailStatus;
 import com.chatcrmlite.backend.models.CustomEmail.RecipientMode;
 import com.chatcrmlite.backend.models.User;
+import com.chatcrmlite.backend.models.email.EmailCampaignSnapshot;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.CustomEmailRepository;
+import com.chatcrmlite.backend.repositories.TenantRepository;
+import com.chatcrmlite.backend.repositories.email.EmailCampaignSnapshotRepository;
+import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
+import com.chatcrmlite.backend.services.email.EmailSuppressionService;
+import com.chatcrmlite.backend.services.email.EmailTrackingService;
+import com.chatcrmlite.backend.services.email.EmailAudienceResolver;
+import com.chatcrmlite.backend.services.email.EmailCampaignStateService;
+import com.chatcrmlite.backend.services.email.EmailCampaignAuditService;
+import com.chatcrmlite.backend.repositories.email.EmailCampaignRecipientRepository;
+import com.chatcrmlite.backend.models.email.EmailCampaignRecipient;
+import com.chatcrmlite.backend.models.email.EmailCampaignRecipient.DeliveryStatus;
+import com.chatcrmlite.backend.models.email.EmailCampaignAuditLog;
+
 import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -25,6 +40,7 @@ import org.thymeleaf.TemplateEngine;
 import org.thymeleaf.context.Context;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,24 +58,57 @@ public class CustomEmailService {
 
     private final CustomEmailRepository customEmailRepository;
     private final ContactRepository     contactRepository;
+    private final TenantRepository      tenantRepository;
     private final JavaMailSender        mailSender;
     private final TemplateEngine        templateEngine;
-    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    private final QuotaEnforcerService  quotaEnforcerService;
+    private final EmailSuppressionService suppressionService;
+    private final EmailTrackingService    trackingService;
+    private final EmailCampaignRecipientRepository recipientRepository;
+    private final EmailAudienceResolver audienceResolver;
+    private final EmailCampaignSnapshotRepository snapshotRepository;
+    private final EmailCampaignStateService stateService;
+    private final EmailCampaignAuditService auditService;
+    private final DistributedSchedulerService distributedSchedulerService;
+    private final com.chatcrmlite.backend.services.email.EmailProviderService emailProviderService;
+    private final com.chatcrmlite.backend.services.email.ProviderFactory providerFactory;
 
-    @Value("${spring.mail.username}")
+    @Value("${spring.mail.username:noreply@crm.com}")
     private String fromAddress;
 
     @Autowired
     public CustomEmailService(CustomEmailRepository customEmailRepository,
                              ContactRepository contactRepository,
+                             TenantRepository tenantRepository,
                              JavaMailSender mailSender,
                              TemplateEngine templateEngine,
-                             com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService) {
+                             QuotaEnforcerService quotaEnforcerService,
+                             EmailSuppressionService suppressionService,
+                             EmailTrackingService trackingService,
+                             EmailCampaignRecipientRepository recipientRepository,
+                             EmailAudienceResolver audienceResolver,
+                             EmailCampaignSnapshotRepository snapshotRepository,
+                             EmailCampaignStateService stateService,
+                             EmailCampaignAuditService auditService,
+                             DistributedSchedulerService distributedSchedulerService,
+                             com.chatcrmlite.backend.services.email.EmailProviderService emailProviderService,
+                             com.chatcrmlite.backend.services.email.ProviderFactory providerFactory) {
         this.customEmailRepository = customEmailRepository;
         this.contactRepository = contactRepository;
+        this.tenantRepository = tenantRepository;
         this.mailSender = mailSender;
         this.templateEngine = templateEngine;
         this.quotaEnforcerService = quotaEnforcerService;
+        this.suppressionService = suppressionService;
+        this.trackingService = trackingService;
+        this.recipientRepository = recipientRepository;
+        this.audienceResolver = audienceResolver;
+        this.snapshotRepository = snapshotRepository;
+        this.stateService = stateService;
+        this.auditService = auditService;
+        this.distributedSchedulerService = distributedSchedulerService;
+        this.emailProviderService = emailProviderService;
+        this.providerFactory = providerFactory;
     }
 
     @Autowired(required = false)
@@ -106,10 +155,21 @@ public class CustomEmailService {
             prompt
         );
 
-        Response<AiMessage> responseObj = chatLanguageModel.generate(List.of(
-            SystemMessage.from(systemInstruction),
-            UserMessage.from(userMsg)
-        ));
+        Response<AiMessage> responseObj = null;
+        try {
+            responseObj = chatLanguageModel.generate(List.of(
+                SystemMessage.from(systemInstruction),
+                UserMessage.from(userMsg)
+            ));
+        } catch (Exception ex) {
+            log.warn("[AI Email Service] AI Server at 10.118.165.16:8085 offline ({}) — returning fallback template.", ex.getMessage());
+            return Map.of(
+                "subject", "Exclusive Offer for {{lead.name}}",
+                "body", "Hi {{lead.name}},<br><br>Thank you for reaching out to <strong>{{business.name}}</strong>. In response to: <em>\"" + prompt.replace("<", "&lt;").replace(">", "&gt;") + "\"</em>, we have created this custom campaign for you.<br><br>Contact us today for more details!",
+                "ctaLabel", "Claim Offer →",
+                "ctaUrl", "https://gyanvaniai.com"
+            );
+        }
         
         String rawResponse = responseObj.content().text().trim();
 
@@ -133,11 +193,55 @@ public class CustomEmailService {
             }
             jsonText = jsonText.trim();
 
-            return objectMapper.readValue(jsonText, Map.class);
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper lenientMapper = objectMapper.copy()
+                        .configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_UNQUOTED_CONTROL_CHARS, true)
+                        .configure(com.fasterxml.jackson.core.JsonParser.Feature.ALLOW_SINGLE_QUOTES, true);
+                return lenientMapper.readValue(jsonText, Map.class);
+            } catch (Exception parseEx) {
+                log.warn("[CustomEmail] Standard JSON parse failed, attempting regex extraction from LLM response: {}", parseEx.getMessage());
+                return parseJsonWithRegex(rawResponse, prompt);
+            }
         } catch (Exception e) {
             log.error("Failed to parse AI email generation JSON: " + rawResponse, e);
-            throw new RuntimeException("AI generated content in an invalid format. Please try again.");
+            return Map.of(
+                "subject", "Special Offer for {{lead.name}}",
+                "body", rawResponse.replace("\n", "<br>"),
+                "ctaLabel", "Learn More",
+                "ctaUrl", "https://gyanvaniai.com"
+            );
         }
+    }
+
+    private Map<String, String> parseJsonWithRegex(String text, String fallbackPrompt) {
+        String subject = extractJsonField(text, "subject");
+        String body = extractJsonField(text, "body");
+        String ctaLabel = extractJsonField(text, "ctaLabel");
+        String ctaUrl = extractJsonField(text, "ctaUrl");
+
+        if (subject.isBlank()) subject = "Special Announcement from {{business.name}}";
+        if (body.isBlank()) body = text.replace("\n", "<br>");
+        if (ctaLabel.isBlank()) ctaLabel = "View Details";
+
+        Map<String, String> res = new java.util.HashMap<>();
+        res.put("subject", subject);
+        res.put("body", body);
+        res.put("ctaLabel", ctaLabel);
+        res.put("ctaUrl", ctaUrl);
+        return res;
+    }
+
+    private String extractJsonField(String text, String fieldName) {
+        try {
+            java.util.regex.Pattern p = java.util.regex.Pattern.compile("\"" + fieldName + "\"\\s*:\\s*\"(.*?)\"(?:\\s*[,}]|\n)", java.util.regex.Pattern.DOTALL);
+            java.util.regex.Matcher m = p.matcher(text);
+            if (m.find()) {
+                return m.group(1).replace("\\n", "\n").replace("\\\"", "\"").trim();
+            }
+        } catch (Exception e) {
+            // Ignore
+        }
+        return "";
     }
 
     private boolean isAdmin(User user) {
@@ -159,29 +263,6 @@ public class CustomEmailService {
         return toDTO(customEmailRepository.save(draft));
     }
 
-    public CustomEmailDTO send(User owner, CustomEmailRequest req) {
-        List<String> recipients = resolveRecipients(owner, req);
-        // Verify email quota
-        quotaEnforcerService.verifyEmailCampaignQuota(owner.getTenant().getId(), recipients.size());
-
-        CustomEmail saved = saveCampaign(owner, req);
-
-        log.info("[CustomEmail] Campaign {} — {} recipients resolved for owner={}",
-                saved.getId(), recipients.size(), owner.getId());
-
-        java.util.concurrent.CompletableFuture.runAsync(() -> {
-            try {
-                // Short sleep to ensure database transaction commits
-                Thread.sleep(150);
-                dispatchAsync(saved.getId(), owner, recipients);
-            } catch (Exception e) {
-                log.error("Error in async campaign dispatch", e);
-            }
-        });
-
-        return toDTO(saved);
-    }
-
     @Transactional
     public CustomEmail saveCampaign(User owner, CustomEmailRequest req) {
         CustomEmail campaign = CustomEmail.builder()
@@ -195,6 +276,338 @@ public class CustomEmailService {
                 .status(EmailStatus.DRAFT)
                 .build();
         return customEmailRepository.save(campaign);
+    }
+
+    /**
+     * Dry Run / Test Send: Sends a rendered preview message to a test email.
+     */
+    @Transactional
+    public String sendTestEmail(UUID campaignId, String testEmailAddress, User actor) {
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+
+        if (!isValidEmail(testEmailAddress)) {
+            throw new IllegalArgumentException("Invalid test email address");
+        }
+
+        try {
+            String businessName = actor.getBusinessName() != null ? actor.getBusinessName()
+                    : (actor.getTenant() != null && actor.getTenant().getBusinessName() != null ? actor.getTenant().getBusinessName() : actor.getDisplayName());
+            
+            String trackingToken = trackingService.generateTrackingToken();
+            String unsubUrl = trackingService.getUnsubscribeUrl(trackingToken);
+            String testName = (actor.getDisplayName() != null && !actor.getDisplayName().isBlank()) ? actor.getDisplayName() : extractNameFromEmail(testEmailAddress);
+
+            String subject = personaliseString("[TEST PREVIEW] " + campaign.getSubject(), testName, testEmailAddress, businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+            String body = personaliseString(campaign.getBody(), testName, testEmailAddress, businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+
+            sendOne(testEmailAddress, subject, body,
+                    campaign.getCtaLabel(), campaign.getCtaUrl(), businessName,
+                    trackingToken, actor.getTenant().getId(), campaignId);
+            
+            auditService.logAction(campaign, actor, EmailCampaignAuditLog.Action.TEST_SENT, "{\"testEmail\": \"" + testEmailAddress + "\"}");
+            return "Sent successfully";
+        } catch (Exception e) {
+            log.error("Failed to send test email to {}", testEmailAddress, e);
+            throw new RuntimeException("Failed to send test email: " + e.getMessage());
+        }
+    }
+
+    public com.chatcrmlite.backend.dto.AudiencePreviewResponse previewAudience(User actor, com.chatcrmlite.backend.dto.AudiencePreviewRequest req) {
+        String filterJson = "";
+        if (req.getTagsFilter() != null) {
+            if (req.getTagsFilter() instanceof String) {
+                filterJson = (String) req.getTagsFilter();
+            } else {
+                try {
+                    filterJson = objectMapper.writeValueAsString(req.getTagsFilter());
+                } catch (Exception e) {
+                    log.error("Failed to serialize tagsFilter", e);
+                }
+            }
+        }
+        
+        String actualFilter = req.getRecipientMode() == CustomEmail.RecipientMode.MANUAL ? req.getManualRecipients() : filterJson;
+        List<String> recipientsRaw = audienceResolver.resolveEmailAddresses(actor, req.getRecipientMode().name(), actualFilter);
+        
+        int validCount = 0;
+        int skippedCount = 0;
+        UUID tenantId = actor.getTenant().getId();
+        
+        for (String raw : recipientsRaw) {
+            String email = raw;
+            if (raw.contains("<") && raw.contains(">")) {
+                int start = raw.indexOf("<");
+                int end = raw.indexOf(">");
+                if (end > start) {
+                    email = raw.substring(start + 1, end).trim();
+                }
+            }
+            String normalizedEmail = suppressionService.normalizeEmail(email);
+            if (suppressionService.isSuppressed(tenantId, normalizedEmail)) {
+                skippedCount++;
+            } else {
+                validCount++;
+            }
+        }
+        
+        return com.chatcrmlite.backend.dto.AudiencePreviewResponse.builder()
+                .matched(recipientsRaw.size())
+                .excluded(skippedCount)
+                .eligible(validCount)
+                .build();
+    }
+
+    @Transactional
+    public CustomEmailDTO scheduleOrExecuteCampaign(UUID campaignId, CustomEmailRequest req, User actor) {
+        CustomEmail campaign;
+        if (campaignId != null) {
+            campaign = customEmailRepository.findById(campaignId).orElseThrow(() -> new RuntimeException("Campaign not found"));
+            // Update fields if provided in request
+            if (req.getSubject() != null) campaign.setSubject(req.getSubject().trim());
+            if (req.getBody() != null) campaign.setBody(sanitise(req.getBody()));
+            if (req.getCtaLabel() != null) campaign.setCtaLabel(req.getCtaLabel());
+            if (req.getCtaUrl() != null) campaign.setCtaUrl(req.getCtaUrl());
+            if (req.getRecipientMode() != null) campaign.setRecipientMode(req.getRecipientMode());
+            if (req.getTagsFilter() != null) campaign.setTagsFilter(req.getTagsFilter());
+        } else {
+            campaign = saveCampaign(actor, req);
+        }
+
+        if (campaign.getStatus() == EmailStatus.SENDING || campaign.getStatus() == EmailStatus.COMPLETED) {
+            throw new IllegalStateException("Campaign is already in status: " + campaign.getStatus());
+        }
+
+        // 1. Resolve and freeze immutable audience snapshot
+        resolveAndFreezeAudience(campaign, req.getManualRecipients());
+
+        // 2. Schedule or immediate execute
+        if (req.getScheduledAt() != null && req.getScheduledAt().isAfter(LocalDateTime.now())) {
+            campaign.setScheduledAt(req.getScheduledAt());
+            stateService.transitionState(campaign, EmailStatus.SCHEDULED, actor);
+
+            String tenantTz = (actor.getTenant() != null && actor.getTenant().getTimezone() != null)
+                    ? actor.getTenant().getTimezone()
+                    : "Asia/Kolkata";
+            ZoneId zoneId;
+            try {
+                zoneId = ZoneId.of(tenantTz);
+            } catch (Exception e) {
+                zoneId = ZoneId.of("Asia/Kolkata");
+            }
+
+            Date startDate = Date.from(req.getScheduledAt().atZone(zoneId).toInstant());
+            distributedSchedulerService.scheduleOneTimeJob(
+                    "email-campaign-job-" + campaign.getId(),
+                    com.chatcrmlite.backend.services.email.EmailCampaignJob.class,
+                    startDate,
+                    Map.of("campaignId", campaign.getId().toString())
+            );
+        } else {
+            stateService.transitionState(campaign, EmailStatus.SENDING, actor);
+            startCampaignExecution(campaign.getId());
+        }
+        
+        return toDTO(customEmailRepository.save(campaign));
+    }
+
+    private void resolveAndFreezeAudience(CustomEmail campaign, String manualRecipients) {
+        log.info("[EmailAudienceResolver] Resolving immutable audience snapshot for campaignId={}", campaign.getId());
+
+        String filterJson = campaign.getRecipientMode() == RecipientMode.MANUAL ? manualRecipients : campaign.getTagsFilter();
+        List<String> recipientsRaw = audienceResolver.resolveEmailAddresses(campaign.getOwner(), campaign.getRecipientMode().name(), filterJson);
+        
+        // Quota check
+        quotaEnforcerService.verifyEmailCampaignQuota(campaign.getOwner().getTenant().getId(), recipientsRaw.size());
+
+        int validCount = 0;
+        int skippedCount = 0;
+
+        List<EmailCampaignRecipient> recipientsToSave = new ArrayList<>();
+        UUID tenantId = campaign.getOwner().getTenant().getId();
+
+        for (String raw : recipientsRaw) {
+            String email = raw;
+            String name = "";
+
+            if (raw.contains("<") && raw.contains(">")) {
+                int start = raw.indexOf("<");
+                int end = raw.indexOf(">");
+                if (end > start) {
+                    name = raw.substring(0, start).trim();
+                    email = raw.substring(start + 1, end).trim();
+                }
+            }
+
+            String normalizedEmail = suppressionService.normalizeEmail(email);
+
+            if (suppressionService.isSuppressed(tenantId, normalizedEmail)) {
+                skippedCount++;
+                continue;
+            }
+
+            if (recipientRepository.existsByTenantIdAndCampaignIdAndEmail(tenantId, campaign.getId(), normalizedEmail)) {
+                skippedCount++;
+                continue;
+            }
+
+            EmailCampaignRecipient recipient = EmailCampaignRecipient.builder()
+                    .campaignId(campaign.getId())
+                    .email(normalizedEmail)
+                    .trackingToken(UUID.randomUUID().toString())
+                    .deliveryStatus(DeliveryStatus.PENDING)
+                    .build();
+            recipient.setTenantId(campaign.getOwner().getTenant().getId());
+            recipientsToSave.add(recipient);
+            validCount++;
+        }
+
+        recipientRepository.saveAll(recipientsToSave);
+
+        // Create Snapshot
+        EmailCampaignSnapshot snapshot = EmailCampaignSnapshot.builder()
+                .campaignId(campaign.getId())
+                .subject(campaign.getSubject())
+                .body(campaign.getBody())
+                .ctaLabel(campaign.getCtaLabel())
+                .ctaUrl(campaign.getCtaUrl())
+                .audienceType(campaign.getRecipientMode().name())
+                .audienceFilterJson(filterJson)
+                .build();
+        snapshot.setTenant(campaign.getOwner().getTenant());
+        snapshot = snapshotRepository.save(snapshot);
+
+        campaign.setSnapshotId(snapshot.getId());
+        campaign.setTotalRecipients(validCount);
+        customEmailRepository.save(campaign);
+
+        log.info("[EmailAudienceResolver] Frozen audience snapshot for campaignId={}: Valid={}, Skipped={}",
+                campaign.getId(), validCount, skippedCount);
+    }
+
+    /**
+     * Durable Batch Processor
+     */
+    @Async
+    public void startCampaignExecution(UUID campaignId) {
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
+
+        if (campaign.getStatus() != EmailStatus.SENDING) {
+            log.warn("[CustomEmail] Campaign {} is not in SENDING state, aborting execution", campaignId);
+            return;
+        }
+
+        String businessName = campaign.getOwner().getBusinessName() != null
+                ? campaign.getOwner().getBusinessName()
+                : campaign.getOwner().getDisplayName() != null ? campaign.getOwner().getDisplayName() : campaign.getOwner().getEmail();
+        UUID tenantId = campaign.getOwner().getTenant().getId();
+
+        int batchSize = 100;
+        int processedThisRun = 0;
+        int sentThisRun = 0;
+        int failedThisRun = 0;
+
+        try {
+            while (true) {
+                // Refresh campaign to check state changes (like paused or cancelled)
+                campaign = customEmailRepository.findById(campaignId).orElse(null);
+                if (campaign == null || campaign.getStatus() != EmailStatus.SENDING) {
+                    log.info("[CustomEmail] Campaign {} execution halted. Current status: {}", campaignId, campaign != null ? campaign.getStatus() : "DELETED");
+                    break;
+                }
+
+                Page<EmailCampaignRecipient> pendingBatch = recipientRepository.findByCampaignIdAndDeliveryStatus(
+                        campaignId, DeliveryStatus.PENDING, PageRequest.of(0, batchSize));
+
+                if (pendingBatch.isEmpty()) {
+                    log.info("[CustomEmail] Campaign {} execution finished. No pending recipients left.", campaignId);
+                    stateService.transitionState(campaign, EmailStatus.COMPLETED, null);
+                    break;
+                }
+
+                for (EmailCampaignRecipient recipient : pendingBatch) {
+                    try {
+                        String trackingToken = trackingService.generateTrackingToken();
+                        recipient.setTrackingToken(trackingToken);
+
+                        Optional<Contact> cOpt = contactRepository.findFirstByEmailAndTenant_Id(recipient.getEmail(), tenantId);
+                        String name = cOpt.map(Contact::getName).filter(n -> n != null && !n.isBlank())
+                                .orElseGet(() -> extractNameFromEmail(recipient.getEmail()));
+
+                        String unsubUrl = trackingService.getUnsubscribeUrl(trackingToken);
+
+                        String subject = personaliseString(campaign.getSubject(), name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+                        String body = personaliseString(campaign.getBody(), name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+
+                        sendOne(recipient.getEmail(), subject, body,
+                                campaign.getCtaLabel(), campaign.getCtaUrl(), businessName,
+                                trackingToken, tenantId, campaignId);
+
+                        recipient.setDeliveryStatus(DeliveryStatus.SENT);
+                        recipient.setSentAt(LocalDateTime.now());
+                        sentThisRun++;
+                    } catch (Exception ex) {
+                        log.error("[CustomEmail] SMTP failed to send to {} — {}", recipient.getEmail(), ex.getMessage());
+                        recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+                        recipient.setFailedAt(LocalDateTime.now());
+                        recipient.setFailureMessage(ex.getMessage());
+                        failedThisRun++;
+                    }
+                    processedThisRun++;
+                }
+
+                // Batch save and checkpoint
+                recipientRepository.saveAll(pendingBatch);
+                
+                campaign.setProcessedRecipients(campaign.getProcessedRecipients() + pendingBatch.getNumberOfElements());
+                campaign.setTotalSent(campaign.getTotalSent() + sentThisRun);
+                campaign.setTotalFailed(campaign.getTotalFailed() + failedThisRun);
+                customEmailRepository.save(campaign);
+                
+                sentThisRun = 0;
+                failedThisRun = 0;
+            }
+        } catch (Exception e) {
+            log.error("[CustomEmail] Critical error in campaign {} execution", campaignId, e);
+            stateService.transitionState(campaign, EmailStatus.FAILED, null);
+        }
+    }
+
+    @Transactional
+    public CustomEmailDTO pauseCampaign(UUID campaignId, User actor) {
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        stateService.transitionState(campaign, EmailStatus.PAUSED, actor);
+        return toDTO(campaign);
+    }
+
+    @Transactional
+    public CustomEmailDTO resumeCampaign(UUID campaignId, User actor) {
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        stateService.transitionState(campaign, EmailStatus.SENDING, actor);
+        startCampaignExecution(campaignId);
+        return toDTO(campaign);
+    }
+
+    @Transactional
+    public CustomEmailDTO cancelCampaign(UUID campaignId, User actor) {
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        stateService.transitionState(campaign, EmailStatus.CANCELLED, actor);
+        
+        // Mark remaining pending as cancelled
+        List<EmailCampaignRecipient> pending = recipientRepository.findByCampaignIdAndDeliveryStatus(
+            campaignId, DeliveryStatus.PENDING, Pageable.unpaged()).getContent();
+            
+        for(EmailCampaignRecipient r : pending) {
+            r.setDeliveryStatus(DeliveryStatus.FAILED); // or CANCELLED if we added it, but let's use FAILED with reason
+            r.setFailureMessage("Campaign Cancelled");
+        }
+        recipientRepository.saveAll(pending);
+        
+        return toDTO(campaign);
     }
 
     @Transactional(readOnly = true)
@@ -218,156 +631,207 @@ public class CustomEmailService {
                 .orElseThrow(() -> new RuntimeException("Campaign not found"));
     }
 
-    @Transactional
-    public void dispatchAsync(UUID campaignId, User owner, List<String> recipients) {
-        CustomEmail campaign = customEmailRepository.findById(campaignId)
-                .orElseThrow(() -> new RuntimeException("Campaign not found: " + campaignId));
-
-        String businessName = owner.getBusinessName() != null
-                ? owner.getBusinessName()
-                : owner.getDisplayName() != null ? owner.getDisplayName() : owner.getEmail();
-
-        int sent   = 0;
-        int failed = 0;
-
-        for (String recipientRaw : recipients) {
-            try {
-                String email = recipientRaw;
-                String name = "";
-
-                if (recipientRaw.contains("<") && recipientRaw.contains(">")) {
-                    int start = recipientRaw.indexOf("<");
-                    int end = recipientRaw.indexOf(">");
-                    if (end > start) {
-                        name = recipientRaw.substring(0, start).trim();
-                        email = recipientRaw.substring(start + 1, end).trim();
-                    }
-                }
-
-                // Personalise subject
-                String subject = personaliseString(campaign.getSubject(), name);
-
-                // Personalise body
-                String body = personaliseString(campaign.getBody(), name);
-
-                sendOne(email, subject, body,
-                        campaign.getCtaLabel(), campaign.getCtaUrl(), businessName);
-                sent++;
-            } catch (Exception e) {
-                log.error("[CustomEmail] Failed to send to {} — {}", recipientRaw, e.getMessage());
-                failed++;
-            }
-        }
-
-        campaign.setStatus(failed == recipients.size() && !recipients.isEmpty()
-                ? EmailStatus.FAILED : EmailStatus.SENT);
-        campaign.setSentAt(LocalDateTime.now());
-        campaign.setTotalSent(sent);
-        campaign.setTotalFailed(failed);
-        customEmailRepository.save(campaign);
-
-        log.info("[CustomEmail] Campaign {} complete — sent={} failed={}", campaignId, sent, failed);
-    }
-
-    private List<String> resolveRecipients(User owner, CustomEmailRequest req) {
-        RecipientMode mode = req.getRecipientMode() != null ? req.getRecipientMode() : RecipientMode.ALL;
-
-        return switch (mode) {
-            case ALL -> contactRepository.findAllByOwner(owner).stream()
-                    .filter(c -> c.getEmail() != null && !c.getEmail().isBlank() && isValidEmail(c.getEmail()))
-                    .map(c -> c.getName() != null && !c.getName().isBlank() 
-                            ? c.getName().trim() + " <" + c.getEmail().trim() + ">" 
-                            : c.getEmail().trim())
-                    .distinct()
-                    .collect(Collectors.toList());
-
-            case TAGGED -> {
-                if (req.getTagsFilter() == null || req.getTagsFilter().isBlank()) {
-                    yield List.of();
-                }
-                Set<String> filterTags = Arrays.stream(req.getTagsFilter().split(","))
-                        .map(String::trim)
-                        .filter(t -> !t.isEmpty())
-                        .collect(Collectors.toSet());
-
-                yield contactRepository.findAllByOwner(owner).stream()
-                        .filter(c -> c.getTags() != null &&
-                                c.getTags().stream().anyMatch(filterTags::contains))
-                        .filter(c -> c.getEmail() != null && !c.getEmail().isBlank() && isValidEmail(c.getEmail()))
-                        .map(c -> c.getName() != null && !c.getName().isBlank() 
-                                ? c.getName().trim() + " <" + c.getEmail().trim() + ">" 
-                                : c.getEmail().trim())
-                        .distinct()
-                        .collect(Collectors.toList());
-            }
-
-            case MANUAL -> {
-                if (req.getManualRecipients() == null || req.getManualRecipients().isBlank()) {
-                    yield List.of();
-                }
-                yield Arrays.stream(req.getManualRecipients().split(","))
-                        .map(String::trim)
-                        .filter(e -> !e.isEmpty() && isValidEmail(e))
-                        .distinct()
-                        .collect(Collectors.toList());
-            }
-        };
-    }
-
     private void sendOne(String to, String subject, String body,
-                         String ctaLabel, String ctaUrl, String businessName) throws Exception {
-        Context ctx = new Context();
-        ctx.setVariable("subject",      subject);
-        ctx.setVariable("body",         body);
-        ctx.setVariable("ctaLabel",     ctaLabel);
-        ctx.setVariable("ctaUrl",       ctaUrl);
-        ctx.setVariable("businessName", businessName);
+                         String ctaLabel, String ctaUrl, String businessName,
+                         String trackingToken, UUID tenantId, UUID campaignId) throws Exception {
+        
+        com.chatcrmlite.backend.models.Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        String html;
 
-        String html = templateEngine.process("email/custom-email", ctx);
+        String trimmedBody = body != null ? body.trim() : "";
+        boolean isRawHtml = trimmedBody.startsWith("<!DOCTYPE html>") 
+                || trimmedBody.startsWith("<html") 
+                || trimmedBody.startsWith("<div") 
+                || trimmedBody.startsWith("<table") 
+                || trimmedBody.startsWith("<head") 
+                || trimmedBody.startsWith("<body");
 
-        MimeMessage mime = mailSender.createMimeMessage();
-        MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-        helper.setFrom(fromAddress);
-        helper.setTo(to);
-        helper.setSubject(subject);
-        helper.setText(html, true);
-        mailSender.send(mime);
-        log.debug("[CustomEmail] Sent '{}' → {}", subject, to);
+        // If the body is a raw HTML template from the Enterprise Builder, bypass Thymeleaf
+        if (isRawHtml) {
+            html = body;
+            // Inject CTA button if defined but missing from raw HTML
+            if (ctaUrl != null && !ctaUrl.isBlank() && !html.contains(ctaUrl)) {
+                String btnText = (ctaLabel != null && !ctaLabel.isBlank()) ? ctaLabel : "View Offer";
+                String btnColor = (tenant != null && tenant.getPrimaryColor() != null && !tenant.getPrimaryColor().isBlank())
+                        ? tenant.getPrimaryColor() : "#2563EB";
+                String btnHtml = "<div style=\"text-align: center; margin: 32px 0;\">"
+                        + "<a href=\"" + ctaUrl + "\" style=\"display: inline-block; padding: 14px 32px; color: #FFFFFF; font-weight: 700; text-decoration: none; border-radius: 8px; background-color: " + btnColor + "; box-shadow: 0 4px 12px rgba(0,0,0,0.15);\">"
+                        + btnText + "</a></div>";
+                
+                if (html.contains("</body>")) {
+                    html = html.replace("</body>", btnHtml + "</body>");
+                } else {
+                    html = html + btnHtml;
+                }
+            }
+        } else {
+            // Use the marketing-specific custom-email template and inject brand variables
+            Context ctx = new Context();
+            ctx.setVariable("subject",      subject);
+            ctx.setVariable("body",         body);
+            ctx.setVariable("ctaLabel",     ctaLabel);
+            ctx.setVariable("ctaUrl",       ctaUrl);
+            ctx.setVariable("businessName", businessName);
+            
+            if (tenant != null) {
+                ctx.setVariable("logoUrl", tenant.getLogoUrl());
+                ctx.setVariable("primaryColor", tenant.getPrimaryColor());
+                ctx.setVariable("businessAddress", tenant.getAddress());
+            }
+            
+            html = templateEngine.process("email/custom-email", ctx);
+        }
+        
+        html = trackingService.rewriteLinks(html, tenantId, campaignId, trackingToken);
+        html = trackingService.injectTrackingPixel(html, trackingToken);
+        html = trackingService.appendUnsubscribeFooter(html, trackingToken);
+
+        com.chatcrmlite.backend.models.EmailProvider defaultProvider = emailProviderService
+                .getDefaultProvider(tenantId.toString())
+                .orElse(null);
+
+        if (defaultProvider != null) {
+            com.chatcrmlite.backend.services.email.EmailSenderProvider providerInstance = providerFactory.getProvider(defaultProvider);
+            com.chatcrmlite.backend.services.email.EmailRequest request = com.chatcrmlite.backend.services.email.EmailRequest.builder()
+                    .toEmail(to)
+                    .subject(subject)
+                    .htmlBody(html)
+                    .build();
+            providerInstance.sendBatch(List.of(request), defaultProvider.getFromEmail());
+            log.info("[CustomEmail] Sent campaign email to {} via default BYOP Provider '{}' ({})", to, defaultProvider.getName(), defaultProvider.getProviderType());
+        } else {
+            MimeMessage mime = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
+            helper.setFrom(fromAddress);
+            helper.setTo(to);
+            helper.setSubject(subject);
+            helper.setText(html, true);
+            
+            // Add List-Unsubscribe headers
+            String unsubUrl = trackingService.getUnsubscribeUrl(trackingToken);
+            mime.addHeader("List-Unsubscribe", "<" + unsubUrl + ">");
+            mime.addHeader("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+
+            mailSender.send(mime);
+            log.debug("[CustomEmail] Sent '{}' → {} via default system mailer", subject, to);
+        }
     }
 
     private String sanitise(String raw) {
         if (raw == null) return "";
-        return raw
-                .replace("&", "&amp;")
+        String trimmed = raw.trim();
+        boolean isHtmlDocument = trimmed.startsWith("<!DOCTYPE html>") 
+                || trimmed.startsWith("<html") 
+                || trimmed.startsWith("<div") 
+                || trimmed.startsWith("<table") 
+                || trimmed.startsWith("<head") 
+                || trimmed.startsWith("<body");
+
+        // Strip dangerous script/iframe tags while preserving valid HTML & CSS
+        String clean = raw
                 .replace("<script", "&lt;script")
                 .replace("</script", "&lt;/script")
                 .replace("<iframe", "&lt;iframe")
                 .replace("</iframe", "&lt;/iframe")
-                .replace("javascript:", "")
-                .replace("\r\n", "<br>")
-                .replace("\n", "<br>");
+                .replace("javascript:", "");
+
+        // Only convert newlines to <br> for plain-text / markdown inputs, NEVER for HTML documents!
+        if (!isHtmlDocument) {
+            clean = clean.replace("\r\n", "<br>").replace("\n", "<br>");
+        }
+        return clean;
     }
 
     private boolean isValidEmail(String email) {
         return email != null && email.contains("@") && email.contains(".");
     }
 
-    private String personaliseString(String input, String name) {
+    private String personaliseString(String input, String recipientName, String recipientEmail, String businessName, String unsubUrl, String ctaLabel, String ctaUrl) {
         if (input == null) return "";
-        String replacement = (name != null && !name.isBlank()) ? name.trim() : "";
         
+        String name = (recipientName != null && !recipientName.isBlank()) ? recipientName.trim() : "Valued Customer";
+        String email = (recipientEmail != null && !recipientEmail.isBlank()) ? recipientEmail.trim() : "";
+        String bName = (businessName != null && !businessName.isBlank()) ? businessName.trim() : "Our Business";
+        String dateStr = java.time.LocalDate.now().format(java.time.format.DateTimeFormatter.ofPattern("MMMM dd, yyyy"));
+        String uUrl = (unsubUrl != null && !unsubUrl.isBlank()) ? unsubUrl : "#";
+        String cLabel = (ctaLabel != null && !ctaLabel.isBlank()) ? ctaLabel.trim() : "Click Here";
+        String cUrl = (ctaUrl != null && !ctaUrl.isBlank()) ? ctaUrl.trim() : "#";
+
         return input
-            .replace("[User Name]", replacement)
-            .replace("[Customer Name]", replacement)
-            .replace("[Recipient Name]", replacement)
-            .replace("[Name]", replacement)
-            .replace("{{name}}", replacement)
-            .replace("{{Name}}", replacement)
-            .replace("{name}", replacement)
-            .replace("{Name}", replacement);
+            .replace("{{lead.name}}", name)
+            .replace("{{lead.email}}", email)
+            .replace("[User Name]", name)
+            .replace("[Customer Name]", name)
+            .replace("[Recipient Name]", name)
+            .replace("[Name]", name)
+            .replace("{{name}}", name)
+            .replace("{{Name}}", name)
+            .replace("{name}", name)
+            .replace("{Name}", name)
+            .replace("{{business.name}}", bName)
+            .replace("{{businessName}}", bName)
+            .replace("{{tenant.businessName}}", bName)
+            .replace("[Business Name]", bName)
+            .replace("[Company]", bName)
+            .replace("{{current_date}}", dateStr)
+            .replace("{{unsubscribe_link}}", uUrl)
+            .replace("{{ctaLabel}}", cLabel)
+            .replace("{{ctaUrl}}", cUrl);
+    }
+
+    private String extractNameFromEmail(String email) {
+        if (email == null || !email.contains("@")) return "Valued Customer";
+        String prefix = email.split("@")[0];
+        String clean = prefix.replaceAll("[._\\-+1234567890]", " ").trim();
+        if (clean.isBlank()) return "Valued Customer";
+        String[] parts = clean.split("\\s+");
+        StringBuilder sb = new StringBuilder();
+        for (String p : parts) {
+            if (!p.isBlank()) {
+                sb.append(Character.toUpperCase(p.charAt(0))).append(p.substring(1).toLowerCase()).append(" ");
+            }
+        }
+        return sb.toString().trim();
     }
 
     public CustomEmailDTO toDTO(CustomEmail e) {
+        long sentCount = 0;
+        long uniqueOpens = 0;
+        long uniqueClicks = 0;
+        long bounces = 0;
+        long unsubscribes = 0;
+        
+        double openRate = 0;
+        double clickRate = 0;
+        double clickToOpenRate = 0;
+        double bounceRate = 0;
+        double unsubscribeRate = 0;
+
+        if (e.getId() != null) {
+            sentCount = recipientRepository.countByCampaignIdAndDeliveryStatusIn(
+                e.getId(), 
+                Arrays.asList(DeliveryStatus.SENT, DeliveryStatus.DELIVERED, DeliveryStatus.BOUNCED)
+            );
+            uniqueOpens = recipientRepository.countByCampaignIdAndFirstOpenedAtIsNotNull(e.getId());
+            uniqueClicks = recipientRepository.countByCampaignIdAndFirstClickedAtIsNotNull(e.getId());
+            bounces = recipientRepository.countByCampaignIdAndDeliveryStatus(e.getId(), DeliveryStatus.BOUNCED);
+            unsubscribes = recipientRepository.countByCampaignIdAndUnsubscribedAtIsNotNull(e.getId());
+
+            if (sentCount > 0) {
+                openRate = (double) uniqueOpens / sentCount * 100.0;
+                clickRate = (double) uniqueClicks / sentCount * 100.0;
+                bounceRate = (double) bounces / sentCount * 100.0;
+                
+                long sentOrDelivered = sentCount; 
+                if (sentOrDelivered > 0) {
+                    unsubscribeRate = (double) unsubscribes / sentOrDelivered * 100.0;
+                }
+            }
+            if (uniqueOpens > 0) {
+                clickToOpenRate = (double) uniqueClicks / uniqueOpens * 100.0;
+            }
+        }
+
         return CustomEmailDTO.builder()
                 .id(e.getId())
                 .subject(e.getSubject())
@@ -377,9 +841,25 @@ public class CustomEmailService {
                 .recipientMode(e.getRecipientMode())
                 .tagsFilter(e.getTagsFilter())
                 .status(e.getStatus())
+                .scheduledAt(e.getScheduledAt())
+                .startedAt(e.getStartedAt())
+                .completedAt(e.getCompletedAt())
+                .pausedAt(e.getPausedAt())
+                .cancelledAt(e.getCancelledAt())
+                .totalRecipients(e.getTotalRecipients())
+                .processedRecipients(e.getProcessedRecipients())
                 .sentAt(e.getSentAt())
                 .totalSent(e.getTotalSent())
                 .totalFailed(e.getTotalFailed())
+                .uniqueOpens(uniqueOpens)
+                .uniqueClicks(uniqueClicks)
+                .bounces(bounces)
+                .unsubscribes(unsubscribes)
+                .openRate(Math.round(openRate * 100.0) / 100.0)
+                .clickRate(Math.round(clickRate * 100.0) / 100.0)
+                .clickToOpenRate(Math.round(clickToOpenRate * 100.0) / 100.0)
+                .bounceRate(Math.round(bounceRate * 100.0) / 100.0)
+                .unsubscribeRate(Math.round(unsubscribeRate * 100.0) / 100.0)
                 .createdAt(e.getCreatedAt())
                 .build();
     }

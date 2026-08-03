@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Slf4j
@@ -68,12 +69,22 @@ public class CampaignAnalyticsService {
                         .build());
 
         analytics.setTenant(campaign.getTenant());
-        analytics.setTotalSent((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.SENT));
-        analytics.setTotalDelivered((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.DELIVERED));
+        analytics.setTotalSent((int) recipientRepository.countByCampaignAndStatusIn(campaign, List.of(
+            WhatsAppCampaignRecipient.RecipientStatus.SENT,
+            WhatsAppCampaignRecipient.RecipientStatus.DELIVERED,
+            WhatsAppCampaignRecipient.RecipientStatus.READ
+        )));
+        analytics.setTotalDelivered((int) recipientRepository.countByCampaignAndStatusIn(campaign, List.of(
+            WhatsAppCampaignRecipient.RecipientStatus.DELIVERED,
+            WhatsAppCampaignRecipient.RecipientStatus.READ
+        )));
         analytics.setTotalRead((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.READ));
         analytics.setTotalFailed((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.FAILED));
         analytics.setTotalSkippedRecipients((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.SKIPPED));
-        analytics.setTotalQueued((int) recipientRepository.countByCampaignAndStatus(campaign, WhatsAppCampaignRecipient.RecipientStatus.QUEUED));
+        analytics.setTotalQueued((int) recipientRepository.countByCampaignAndStatusIn(campaign, List.of(
+            WhatsAppCampaignRecipient.RecipientStatus.QUEUED,
+            WhatsAppCampaignRecipient.RecipientStatus.PENDING
+        )));
         analytics.setLastUpdatedAt(LocalDateTime.now());
 
         return analyticsRepository.save(analytics);

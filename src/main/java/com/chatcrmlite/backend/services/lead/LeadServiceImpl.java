@@ -310,4 +310,241 @@ public class LeadServiceImpl implements LeadService {
         }
         return lead;
     }
+
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadNoteRepository leadNoteRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadAttachmentRepository leadAttachmentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadActivityRepository leadActivityRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
+    @Override
+    @Transactional
+    public com.chatcrmlite.backend.dto.LeadNoteResponseDTO addNote(UUID leadId, String content, User caller) {
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("Note content cannot be empty.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+
+        com.chatcrmlite.backend.models.LeadNote note = com.chatcrmlite.backend.models.LeadNote.builder()
+                .lead(lead)
+                .author(caller)
+                .tenant(caller.getTenant())
+                .content(content.trim())
+                .createdAt(LocalDateTime.now())
+                .deleted(false)
+                .build();
+
+        com.chatcrmlite.backend.models.LeadNote saved = leadNoteRepository.save(note);
+        logActivity(lead, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.NOTE_ADDED, "{\"noteId\":\"" + saved.getId() + "\"}");
+        return com.chatcrmlite.backend.dto.LeadNoteResponseDTO.from(saved);
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> getNotesPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadNote> notes = leadNoteRepository.findByLeadAndTenantAndDeletedFalseOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return notes.map(com.chatcrmlite.backend.dto.LeadNoteResponseDTO::from);
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteNote(UUID leadId, UUID noteId, User caller) {
+        // Authorization: Only OWNER or ADMIN can delete notes
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized: Only Tenant Owners and Admins can delete notes.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+        com.chatcrmlite.backend.models.LeadNote note = leadNoteRepository.findByIdAndLeadAndTenantAndDeletedFalse(noteId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Note not found or already deleted"));
+
+        note.setDeleted(true);
+        note.setDeletedAt(LocalDateTime.now());
+        note.setDeletedBy(caller);
+        leadNoteRepository.save(note);
+    }
+
+    // ── Attachments ───────────────────────────────────────────────────────
+
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final java.util.Set<String> ALLOWED_MIME_TYPES = java.util.Set.of(
+        "application/pdf", "image/png", "image/jpeg", "image/jpg",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"
+    );
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.storage.S3StorageService s3StorageService;
+
+    @Override
+    @Transactional
+    public com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO uploadAttachment(UUID leadId, org.springframework.web.multipart.MultipartFile file, User caller) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File size exceeds maximum limit of 10MB.");
+        }
+
+        String mimeType = file.getContentType();
+        if (mimeType == null || !ALLOWED_MIME_TYPES.contains(mimeType.toLowerCase())) {
+            throw new IllegalArgumentException("File type not allowed. Allowed types: PDF, PNG, JPEG, DOCX.");
+        }
+
+        Lead lead = findOwnedLead(leadId, caller);
+
+        // Sanitize original filename (prevent path traversal)
+        String originalName = file.getOriginalFilename();
+        if (originalName == null) originalName = "attachment";
+        String sanitizedFilename = java.nio.file.Paths.get(originalName).getFileName().toString().replaceAll("[^a-zA-Z0-9._-]", "_");
+
+        String checksum = "";
+        try {
+            byte[] bytes = file.getBytes();
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(bytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            checksum = sb.toString();
+        } catch (Exception e) {
+            log.warn("Failed to compute SHA-256 checksum: {}", e.getMessage());
+        }
+
+        String storagePath;
+        com.chatcrmlite.backend.models.LeadAttachment.StorageType storageType;
+
+        if (s3StorageService != null && s3StorageService.isConfigured()) {
+            String s3Key = "leads/" + caller.getTenant().getId() + "/" + lead.getId() + "/" + UUID.randomUUID() + "_" + sanitizedFilename;
+            try {
+                storagePath = s3StorageService.uploadFile(s3Key, file);
+                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.S3;
+                log.info("Uploaded lead attachment to AWS S3: {}", s3Key);
+            } catch (Exception e) {
+                log.error("Failed to upload file to S3, falling back to local storage: {}", e.getMessage());
+                storagePath = saveToLocalStorage(caller.getTenant().getId().toString(), lead.getId().toString(), sanitizedFilename, file);
+                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.LOCAL;
+            }
+        } else {
+            storagePath = saveToLocalStorage(caller.getTenant().getId().toString(), lead.getId().toString(), sanitizedFilename, file);
+            storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.LOCAL;
+        }
+
+        com.chatcrmlite.backend.models.LeadAttachment attachment = com.chatcrmlite.backend.models.LeadAttachment.builder()
+                .lead(lead)
+                .uploader(caller)
+                .tenant(caller.getTenant())
+                .fileName(sanitizedFilename)
+                .fileSize(file.getSize())
+                .fileType(mimeType)
+                .storagePath(storagePath)
+                .storageType(storageType)
+                .checksumSha256(checksum)
+                .createdAt(LocalDateTime.now())
+                .deleted(false)
+                .build();
+
+        com.chatcrmlite.backend.models.LeadAttachment saved = leadAttachmentRepository.save(attachment);
+        logActivity(lead, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.FILE_UPLOADED, "{\"fileName\":\"" + sanitizedFilename + "\",\"storageType\":\"" + storageType + "\"}");
+        return com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO.from(saved);
+    }
+
+    private String saveToLocalStorage(String tenantId, String leadId, String sanitizedFilename, org.springframework.web.multipart.MultipartFile file) {
+        String storageDir = "uploads/leads/" + tenantId + "/" + leadId;
+        java.io.File dir = new java.io.File(storageDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        String storedFileName = UUID.randomUUID() + "_" + sanitizedFilename;
+        java.io.File destFile = new java.io.File(dir, storedFileName);
+        try {
+            file.transferTo(destFile);
+            return destFile.getAbsolutePath();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to store file attachment locally: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> getAttachmentsPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadAttachment> attachments = leadAttachmentRepository.findByLeadAndTenantAndDeletedFalseOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return attachments.map(com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO::from);
+    }
+
+    @Override
+    public com.chatcrmlite.backend.models.LeadAttachment getAttachmentEntity(UUID leadId, UUID attachmentId, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        return leadAttachmentRepository.findByIdAndLeadAndTenantAndDeletedFalse(attachmentId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteAttachment(UUID leadId, UUID attachmentId, User caller) {
+        // Authorization: Only OWNER or ADMIN can delete attachments
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized: Only Tenant Owners and Admins can delete attachments.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+        com.chatcrmlite.backend.models.LeadAttachment attachment = leadAttachmentRepository.findByIdAndLeadAndTenantAndDeletedFalse(attachmentId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Attachment not found or already deleted"));
+
+        attachment.setDeleted(true);
+        attachment.setDeletedAt(LocalDateTime.now());
+        attachment.setDeletedBy(caller);
+        leadAttachmentRepository.save(attachment);
+    }
+
+    // ── Reassign & Activity ───────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public Lead reassignLeadOwner(UUID leadId, UUID newOwnerId, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        User newOwner = userRepository.findById(newOwnerId)
+                .orElseThrow(() -> new IllegalArgumentException("Target user not found"));
+
+        if (!newOwner.getTenant().getId().equals(caller.getTenant().getId())) {
+            throw new IllegalArgumentException("Cannot reassign lead to a user from another tenant.");
+        }
+
+        lead.setOwner(newOwner);
+        Lead saved = leadRepository.save(lead);
+        logActivity(saved, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + (newOwner.getDisplayName() != null && !newOwner.getDisplayName().isBlank() ? newOwner.getDisplayName() : newOwner.getEmail()) + "\"}");
+        initializeLead(saved);
+        return saved;
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO> getActivitiesPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadActivity> activities = leadActivityRepository.findByLeadAndTenantOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return activities.map(com.chatcrmlite.backend.dto.LeadActivityResponseDTO::from);
+    }
+
+    @Override
+    @Transactional
+    public void logActivity(Lead lead, User actor, com.chatcrmlite.backend.models.LeadActivity.ActivityType type, String metadataJson) {
+        if (lead == null || actor == null || type == null) return;
+        com.chatcrmlite.backend.models.LeadActivity activity = com.chatcrmlite.backend.models.LeadActivity.builder()
+                .lead(lead)
+                .actor(actor)
+                .tenant(actor.getTenant())
+                .type(type)
+                .metadataJson(metadataJson != null ? metadataJson : "{}")
+                .createdAt(LocalDateTime.now())
+                .build();
+        leadActivityRepository.save(activity);
+    }
 }

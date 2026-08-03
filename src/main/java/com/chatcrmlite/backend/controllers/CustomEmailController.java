@@ -14,6 +14,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
 @RestController
@@ -38,16 +39,51 @@ public class CustomEmailController {
 
     @PostMapping("/send")
     public ResponseEntity<CustomEmailDTO> send(@Valid @RequestBody CustomEmailRequest req) {
-        return ResponseEntity.ok(customEmailService.send(me(), req));
+        return ResponseEntity.ok(customEmailService.scheduleOrExecuteCampaign(null, req, me()));
+    }
+
+    @PostMapping("/{id}/send")
+    public ResponseEntity<CustomEmailDTO> sendExisting(@PathVariable UUID id, @Valid @RequestBody CustomEmailRequest req) {
+        return ResponseEntity.ok(customEmailService.scheduleOrExecuteCampaign(id, req, me()));
+    }
+
+    @PostMapping("/{id}/pause")
+    public ResponseEntity<CustomEmailDTO> pause(@PathVariable UUID id) {
+        return ResponseEntity.ok(customEmailService.pauseCampaign(id, me()));
+    }
+
+    @PostMapping("/{id}/resume")
+    public ResponseEntity<CustomEmailDTO> resume(@PathVariable UUID id) {
+        return ResponseEntity.ok(customEmailService.resumeCampaign(id, me()));
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<CustomEmailDTO> cancel(@PathVariable UUID id) {
+        return ResponseEntity.ok(customEmailService.cancelCampaign(id, me()));
+    }
+
+    @PostMapping("/{id}/test-send")
+    public ResponseEntity<Map<String, String>> testSend(@PathVariable UUID id, @RequestBody Map<String, String> payload) {
+        String testEmail = payload.get("testEmail");
+        if (testEmail == null || testEmail.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "testEmail is required"));
+        }
+        String msg = customEmailService.sendTestEmail(id, testEmail, me());
+        return ResponseEntity.ok(Map.of("message", msg));
     }
 
     @PostMapping("/generate-ai")
-    public ResponseEntity<java.util.Map<String, String>> generateAi(@RequestBody java.util.Map<String, String> request) {
+    public ResponseEntity<Map<String, String>> generateAi(@RequestBody Map<String, String> request) {
         String prompt = request.get("prompt");
         if (prompt == null || prompt.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(customEmailService.generateAiContent(me(), prompt));
+    }
+
+    @PostMapping("/audience/preview")
+    public ResponseEntity<com.chatcrmlite.backend.dto.AudiencePreviewResponse> previewAudience(@RequestBody com.chatcrmlite.backend.dto.AudiencePreviewRequest req) {
+        return ResponseEntity.ok(customEmailService.previewAudience(me(), req));
     }
 
     @PostMapping("/draft")
@@ -82,6 +118,6 @@ public class CustomEmailController {
         req.setCtaUrl(existing.getCtaUrl());
         req.setRecipientMode(existing.getRecipientMode());
         req.setTagsFilter(existing.getTagsFilter());
-        return ResponseEntity.ok(customEmailService.send(me(), req));
+        return ResponseEntity.ok(customEmailService.scheduleOrExecuteCampaign(null, req, me()));
     }
 }

@@ -199,7 +199,9 @@ public class WhatsAppConfig implements Serializable {
                     return users.stream()
                             .filter(u -> u.getRole() == User.Role.OWNER)
                             .findFirst()
-                            .orElseGet(() -> users.stream().findFirst().orElse(null));
+                            .orElseGet(() -> users.stream().filter(u -> u.getRole() == User.Role.SUPER_ADMIN).findFirst()
+                            .orElseGet(() -> users.stream().filter(u -> u.getRole() == User.Role.ADMIN).findFirst()
+                            .orElseGet(() -> users.stream().sorted(java.util.Comparator.comparing(u -> u.getId().toString())).findFirst().orElse(null))));
                 }
             } catch (org.hibernate.LazyInitializationException e) {
                 // FIX #8: Log lazy initialization error instead of crashing

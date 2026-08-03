@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Widget Test Page</title>
-    <link rel="stylesheet" href="http://localhost:8080/styles.css">
+    <link rel="stylesheet" href="/styles.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@700&family=Montserrat:wght@400;600&family=Merriweather:wght@400;700&family=Fira+Code&family=Oswald:wght@500&family=Lora&family=Quicksand:wght@500&family=Roboto&family=Poppins:wght@400;600&family=Raleway&family=Cinzel&family=Libre+Baskerville&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -137,6 +137,62 @@
             0%, 100% { opacity: 1; }
             50% { opacity: 0.4; }
         }
+
+        /* ── Embed Mode: widget fills entire viewport inside iframe ── */
+        body.embed-mode {
+            padding: 0;
+            margin: 0;
+            background: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        body.embed-mode .demo-card {
+            display: none !important;
+        }
+
+        /* In embed mode, override the widget to fill the page inline */
+        body.embed-mode #crm-chat-widget {
+            position: relative !important;
+            bottom: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            z-index: 1 !important;
+        }
+
+        /* Hide the floating chat button in embed mode */
+        body.embed-mode .chat-button {
+            display: none !important;
+        }
+
+        /* Force the chat panel open and fill the container in embed mode */
+        body.embed-mode .chat-panel {
+            display: flex !important;
+            position: relative !important;
+            bottom: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            animation: none !important;
+        }
+
+        body.embed-mode .chat-panel.zoomed {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            max-width: 100% !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
+        }
     </style>
 </head>
 <body>
@@ -157,8 +213,8 @@
             <span class="label"># Embed code for your website</span>
             <button class="copy-btn" onclick="copySnippet()">Copy</button>
             <code id="snippet-text">
-&lt;link rel="stylesheet" href="http://localhost:8080/styles.css"&gt;<br>
-&lt;script src="http://localhost:8080/chat-widget.js"<br>
+&lt;link rel="stylesheet" href="/styles.css"&gt;<br>
+&lt;script src="/chat-widget.js"<br>
 &nbsp;&nbsp;data-business-id="<span class="highlight" id="snippet-id">YOUR_BUSINESS_UUID</span>"&gt;<br>
 &lt;/script&gt;
             </code>
@@ -174,10 +230,17 @@
     <script id="widget-script"></script>
 
     <script>
+        // Detect embed mode from URL param
+        const urlParams = new URLSearchParams(window.location.search);
+        const isEmbedMode = urlParams.get('embed') === 'true';
+
+        if (isEmbedMode) {
+            document.body.classList.add('embed-mode');
+        }
+
         // Read businessId from URL on load
         window.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            const id = params.get('businessId') || '';
+            const id = urlParams.get('businessId') || '';
             if (id) {
                 document.getElementById('biz-id').value = id;
                 injectWidget(id);
@@ -211,14 +274,25 @@
             // Inject fresh script with data-business-id
             const script = document.createElement('script');
             script.id = 'widget-script';
-            script.src = 'http://localhost:8080/chat-widget.js?t=' + new Date().getTime();
+            script.src = '/chat-widget.js?t=' + new Date().getTime();
             script.setAttribute('data-business-id', businessId);
+
+            // In embed mode, auto-open the chat panel after widget loads
+            if (isEmbedMode) {
+                script.onload = () => {
+                    setTimeout(() => {
+                        const chatBtn = document.querySelector('.chat-button');
+                        if (chatBtn) chatBtn.click();
+                    }, 300);
+                };
+            }
+
             document.body.appendChild(script);
         }
 
         function copySnippet() {
             const id = document.getElementById('snippet-id').textContent;
-            const text = `<link rel="stylesheet" href="http://localhost:8080/styles.css">\n<script src="http://localhost:8080/chat-widget.js" data-business-id="${id}"><\/script>`;
+            const text = `<link rel="stylesheet" href="/styles.css">\n<script src="/chat-widget.js" data-business-id="${id}"><\/script>`;
             navigator.clipboard.writeText(text).then(() => {
                 const btn = document.querySelector('.copy-btn');
                 btn.textContent = 'Copied!';
