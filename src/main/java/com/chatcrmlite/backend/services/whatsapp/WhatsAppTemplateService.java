@@ -7,6 +7,14 @@ import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.models.WhatsAppTemplate;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppTemplateRepository;
+import com.chatcrmlite.backend.dto.WhatsAppAiTemplateResponse;
+import com.chatcrmlite.backend.services.AIQuotaService;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.SystemMessage;
+import dev.langchain4j.data.message.UserMessage;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +37,12 @@ public class WhatsAppTemplateService {
     private final WhatsAppConfigRepository configRepository;
     private final MetaWhatsAppClient metaWhatsAppClient;
     private final ObjectMapper objectMapper;
+
+    @Autowired(required = false)
+    private ChatLanguageModel chatLanguageModel;
+
+    @Autowired
+    private AIQuotaService aiQuotaService;
 
     @Transactional
     public List<WhatsAppTemplateDto> getTemplatesForTenant(User currentUser, boolean forceSync) {
@@ -186,6 +200,9 @@ public class WhatsAppTemplateService {
             try {
                 metaWhatsAppClient.deleteMessageTemplate(config.getWabaId(), name, config.getAccessToken());
                 log.info("✅ [TemplateService] Successfully deleted template '{}' from Meta WABA {}", name, config.getWabaId());
+            } catch (org.springframework.web.server.ResponseStatusException e) {
+                log.error("[TemplateService] Meta API delete for template '{}' refused: {}", name, e.getReason());
+                throw e;
             } catch (Exception e) {
                 log.error("[TemplateService] Meta API delete for template '{}' failed: {}", name, e.getMessage());
                 // Throw exception so user knows why Meta refused to delete (e.g. system default template)
@@ -218,5 +235,64 @@ public class WhatsAppTemplateService {
                 .rejectedReason(t.getRejectedReason())
                 .buttons(buttons)
                 .build();
+    }
+
+    public WhatsAppAiTemplateResponse generateAiTemplate(User user, String prompt) {
+        aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
+
+        String systemInstruction = 
+            "You are an expert WhatsApp marketing copywriter. " +
+            "Generate a WhatsApp Template adhering strictly to Meta's formatting and character limit rules.\n" +
+            "Rules:\n" +
+            "1. Header: Maximum 60 characters. Text only.\n" +
+            "2. Body: Maximum 1024 characters. Use only WhatsApp formatting: *bold*, _italic_, ~strikethrough~. Do NOT use markdown headers or HTML. Use numeric variables like {{1}}, {{2}} for dynamic data.\n" +
+            "3. Footer: Maximum 60 characters. Text only.\n" +
+            "4. Buttons: Max 3 buttons. Allowed types: QUICK_REPLY, URL, PHONE_NUMBER. If the user doesn't specify URLs or Phone numbers, provide placeholders like 'https://example.com' or '+1234567890'.\n\n" +
+            "Output MUST be a valid JSON object with EXACTLY these keys:\n" +
+            "{\n" +
+            "  \"headerContent\": \"...\",\n" +
+            "  \"bodyText\": \"...\",\n" +
+            "  \"footerText\": \"...\",\n" +
+            "  \"buttons\": [\n" +
+            "    { \"type\": \"QUICK_REPLY\", \"text\": \"Buy Now\" },\n" +
+            "    { \"type\": \"URL\", \"text\": \"Visit Site\", \"url\": \"https://example.com\" }\n" +
+            "  ]\n" +
+            "}";
+
+        if (chatLanguageModel == null) {
+            log.warn("ChatLanguageModel not configured. Returning fallback WhatsApp AI template.");
+            return WhatsAppAiTemplateResponse.builder()
+                .headerContent("Special Offer Inside!")
+                .bodyText("Hi {{1}},\n\nHere is your custom template for: _" + prompt.replace("\"", "") + "_\n\nReply STOP to unsubscribe.")
+                .footerText("Company Name")
+                .buttons(List.of(
+                    WhatsAppTemplateDto.TemplateButtonDto.builder().type("QUICK_REPLY").text("Interested").build(),
+                    WhatsAppTemplateDto.TemplateButtonDto.builder().type("URL").text("View Details").url("https://example.com").build()
+                ))
+                .build();
+        }
+
+        try {
+            Response<AiMessage> response = chatLanguageModel.generate(
+                new SystemMessage(systemInstruction),
+                new UserMessage(prompt)
+            );
+
+            String jsonText = response.content().text().trim();
+            if (jsonText.startsWith("```json")) {
+                jsonText = jsonText.substring(7);
+            } else if (jsonText.startsWith("```")) {
+                jsonText = jsonText.substring(3);
+            }
+            if (jsonText.endsWith("```")) {
+                jsonText = jsonText.substring(0, jsonText.length() - 3);
+            }
+            jsonText = jsonText.trim();
+
+            return objectMapper.readValue(jsonText, WhatsAppAiTemplateResponse.class);
+        } catch (Exception e) {
+            log.error("Failed to generate AI WhatsApp Template: ", e);
+            throw new RuntimeException("AI generation failed: " + e.getMessage());
+        }
     }
 }

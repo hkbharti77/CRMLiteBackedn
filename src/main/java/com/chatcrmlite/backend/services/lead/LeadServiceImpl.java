@@ -42,6 +42,15 @@ public class LeadServiceImpl implements LeadService {
     @org.springframework.beans.factory.annotation.Autowired
     private LeadScoringService leadScoringService;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.EmailService emailService;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService whatsAppOutboundService;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
+
     private boolean isAdmin(User user) {
         return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
     }
@@ -193,20 +202,26 @@ public class LeadServiceImpl implements LeadService {
     }
 
     @Override
-    public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status) {
+    public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status, String search) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastActivity"));
         Page<Lead> result;
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        
         if (isAdmin(user)) {
             if (status != null) {
-                result = leadRepository.findAllByStatusPaged(status, pageable);
+                result = hasSearch ? leadRepository.findAllByStatusAndSearchPaged(status, search, pageable) 
+                                   : leadRepository.findAllByStatusPaged(status, pageable);
             } else {
-                result = leadRepository.findAllPaged(pageable);
+                result = hasSearch ? leadRepository.findAllAndSearchPaged(search, pageable)
+                                   : leadRepository.findAllPaged(pageable);
             }
         } else {
             if (status != null) {
-                result = leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+                result = hasSearch ? leadRepository.findAllByStatusAndOwnerAndSearchPaged(status, user, search, pageable)
+                                   : leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
             } else {
-                result = leadRepository.findAllByOwnerPaged(user, pageable);
+                result = hasSearch ? leadRepository.findAllByOwnerAndSearchPaged(user, search, pageable)
+                                   : leadRepository.findAllByOwnerPaged(user, pageable);
             }
         }
         initializeLeads(result);
@@ -216,7 +231,7 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @CacheEvict(value = {"leadsByContact", "latestLeadByContact", "activeLeadCount", "leadsByUser", "leadsByStatus"}, allEntries = true)
     @Transactional
-    public Lead updateStatus(UUID leadId, Lead.LeadStatus status, User owner) {
+    public Lead updateStatus(UUID leadId, Lead.LeadStatus status, java.math.BigDecimal dealValue, String lostReason, Lead.PaymentStatus paymentStatus, Boolean sendPaymentLink, String paymentMethod, String paymentLinkUrl, User owner) {
         Lead lead = findOwnedLead(leadId, owner);
         Lead.LeadStatus oldStatus = lead.getStatus();
         
@@ -225,12 +240,44 @@ public class LeadServiceImpl implements LeadService {
                 lead.getContact().getWaId(), owner.getId());
         
         lead.setStatus(status);
+        if (status == Lead.LeadStatus.WON || status == Lead.LeadStatus.CLOSED_WON) {
+            if (dealValue != null) lead.setDealValue(dealValue);
+            if (paymentStatus != null) {
+                lead.setPaymentStatus(paymentStatus);
+            } else {
+                lead.setPaymentStatus(Lead.PaymentStatus.PAID);
+            }
+        } else if (status == Lead.LeadStatus.LOST || status == Lead.LeadStatus.CLOSED_LOST) {
+            if (lostReason != null) lead.setLostReason(lostReason);
+        }
+
         lead.setLastActivity(LocalDateTime.now());
         Lead savedLead = leadRepository.save(lead);
         initializeLead(savedLead);
         
         eventPublisher.publishEvent(new LeadStatusChangedEvent(this, savedLead, oldStatus, status));
         
+        if (Boolean.TRUE.equals(sendPaymentLink) && paymentLinkUrl != null && !paymentLinkUrl.isBlank()) {
+            if ("EMAIL".equalsIgnoreCase(paymentMethod) || "BOTH".equalsIgnoreCase(paymentMethod)) {
+                String toEmail = savedLead.getContact().getEmail();
+                if (toEmail != null && !toEmail.isBlank()) {
+                    emailService.sendPaymentLinkEmail(toEmail, paymentLinkUrl, savedLead.getDealValue());
+                } else {
+                    log.warn("Cannot send email payment link, contact has no email.");
+                }
+            }
+            if ("WHATSAPP".equalsIgnoreCase(paymentMethod) || "BOTH".equalsIgnoreCase(paymentMethod)) {
+                com.chatcrmlite.backend.models.WhatsAppConfig config = whatsappConfigRepository.findByTenantId(owner.getTenant().getId()).stream().findFirst().orElse(null);
+                if (config != null) {
+                    String amountText = savedLead.getDealValue() != null ? String.format("₹%,.2f", savedLead.getDealValue()) : "the agreed amount";
+                    String message = String.format("Hi, your deal for *%s* has been approved!\n\nPlease complete your payment securely using the link below:\n%s", amountText, paymentLinkUrl);
+                    whatsAppOutboundService.sendText(savedLead.getContact(), message, config, owner);
+                } else {
+                    log.warn("Cannot send WhatsApp payment link, tenant has no WhatsApp Config.");
+                }
+            }
+        }
+
         return savedLead;
     }
 

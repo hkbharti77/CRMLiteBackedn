@@ -61,6 +61,7 @@ public class WhatsAppCampaignController {
                 request.getTargetType(),
                 request.getTargetFilterJson(),
                 request.getVariableMappingJson(),
+                request.getSaveImportedRecipients(),
                 user
         );
         return ResponseEntity.ok(campaign);

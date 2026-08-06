@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="supported-color-schemes" content="light dark"/>
-  <title th:text="${subject ?: 'ChatCRM Lite Notification'}">ChatCRM Lite</title>
+  <title th:text="${subject ?: 'GyanVaniAi Connect Notification'}">GyanVaniAi Connect</title>
   <!--[if mso]>
   <noscript>
     <xml>
@@ -65,7 +65,7 @@
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:16px 16px 0 0;overflow:hidden;box-shadow:0 10px 25px -5px rgba(0,0,0,0.04), 0 8px 10px -6px rgba(0,0,0,0.02);">
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:8px 8px 0 0;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
         
         <!-- Brand Header Bar -->
         <tr>
@@ -78,22 +78,18 @@
                       <td valign="middle" style="padding-right:10px;">
                         <!-- Dynamic Logo -->
                         <div th:if="${logoUrl != null and !#strings.isEmpty(logoUrl)}">
-                           <img th:src="${logoUrl}" alt="Logo" style="max-height: 40px; max-width: 150px; display: block;" />
+                           <img th:src="${logoUrl}" alt="Logo" style="height: 56px; width: auto; max-width: 220px; object-fit: contain; display: block; border: 0;" />
                         </div>
                         <!-- Fallback Logo -->
-                        <div th:unless="${logoUrl != null and !#strings.isEmpty(logoUrl)}" style="width:36px;height:36px;background:linear-gradient(135deg, #16A34A 0%, #15803D 100%);border-radius:10px;text-align:center;line-height:36px;box-shadow:0 4px 12px rgba(22,163,74,0.25);">
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#FFFFFF" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                            <path d="M12 7v6"></path>
-                            <path d="M9 10h6"></path>
-                          </svg>
+                        <div th:unless="${logoUrl != null and !#strings.isEmpty(logoUrl)}">
+                           <img src="https://www.gyanvaniai.online/logo.webp" alt="GyanVaniAi Connect Logo" style="height: 56px; width: auto; max-width: 220px; object-fit: contain; display: block; border: 0;" />
                         </div>
                       </td>
                       <td valign="middle">
-                        <span class="text-main" th:text="${businessName ?: 'ChatCRM Lite'}" style="color:#111827;font-size:18px;font-weight:700;letter-spacing:-0.4px;display:block;line-height:1.2;">
-                          ChatCRM Lite
+                        <span class="text-main" th:text="${businessName ?: 'GyanVaniAi Connect'}" style="color:#111827;font-size:18px;font-weight:700;letter-spacing:-0.4px;display:block;line-height:1.2;">
+                          GyanVaniAi Connect
                         </span>
-                        <span th:if="${businessName == null or businessName == 'ChatCRM Lite'}" class="text-muted" style="color:#6B7280;font-size:11px;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;display:block;margin-top:2px;">
+                        <span th:if="${businessName == null or businessName == 'GyanVaniAi Connect'}" class="text-muted" style="color:#6B7280;font-size:11px;font-weight:500;letter-spacing:0.3px;text-transform:uppercase;display:block;margin-top:2px;">
                           Powered by GyanVaniAi
                         </span>
                       </td>
@@ -101,8 +97,8 @@
                   </table>
                 </td>
                 <td align="right" valign="middle">
-                  <span class="pill-badge" style="background-color:#F0FDF4;color:#16A34A;border:1px solid #DCFCE7;font-size:11px;font-weight:600;padding:5px 12px;border-radius:9999px;display:inline-block;letter-spacing:0.3px;">
-                    ✦ VERIFIED
+                  <span class="pill-badge" style="background-color:#F8FAFC;color:#334155;border:1px solid #CBD5E1;font-size:11px;font-weight:600;padding:4px 10px;border-radius:4px;display:inline-block;letter-spacing:0.5px;">
+                    VERIFIED
                   </span>
                 </td>
               </tr>
@@ -164,19 +160,19 @@
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 16px 16px;overflow:hidden;box-shadow:0 10px 25px -5px rgba(0,0,0,0.04), 0 8px 10px -6px rgba(0,0,0,0.02);">
+      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border:1px solid #E5E7EB;border-top:none;border-radius:0 0 8px 8px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);">
 
         <!-- Optional Primary CTA Button -->
         <tr th:if="${ctaLabel != null and !#strings.isEmpty(ctaLabel)}">
           <td style="padding:12px 36px 28px;text-align:center;">
             <!--[if mso]>
-            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:href="${ctaUrl ?: '#'}" style="height:48px;v-text-anchor:middle;width:240px;" arcsize="20%" stroke="f" th:attr="fillcolor=${primaryColor ?: '#16A34A'}">
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:href="${ctaUrl ?: '#'}" style="height:44px;v-text-anchor:middle;width:240px;" arcsize="10%" stroke="f" th:attr="fillcolor=${primaryColor ?: '#0F172A'}">
               <w:anchorlock/>
-              <center style="color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:bold;" th:text="${ctaLabel}">Action</center>
+              <center style="color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:bold;" th:text="${ctaLabel}">Action</center>
             </v:roundrect>
             <![endif]-->
             <!--[if !mso]><!-->
-            <a th:href="${ctaUrl ?: '#'}" th:text="${ctaLabel}" th:style="'display:inline-block;background-color:' + (${primaryColor} ?: '#16A34A') + ';color:#FFFFFF;padding:14px 36px;border-radius:10px;text-decoration:none;font-weight:600;font-size:15px;line-height:1;box-shadow:0 4px 14px rgba(0,0,0,0.15);transition:all 0.2s ease;'">
+            <a th:href="${ctaUrl ?: '#'}" th:text="${ctaLabel}" th:style="'display:inline-block;background-color:' + (${primaryColor} ?: '#0F172A') + ';color:#FFFFFF;padding:12px 32px;border-radius:6px;text-decoration:none;font-weight:600;font-size:14px;line-height:1;box-shadow:0 1px 2px rgba(0,0,0,0.05);transition:all 0.2s ease;'">
               Action
             </a>
             <!--<![endif]-->
@@ -196,7 +192,7 @@
 
         <!-- Enterprise Footer Links & Copyright -->
         <tr>
-          <td class="footer-bg" style="background-color:#FAFAFA;padding:24px 36px;border-top:1px solid #E5E7EB;border-radius:0 0 16px 16px;text-align:center;">
+          <td class="footer-bg" style="background-color:#FAFAFA;padding:24px 36px;border-top:1px solid #E5E7EB;border-radius:0 0 8px 8px;text-align:center;">
             
             <!-- Custom Email Footer Text (Tenant-defined) -->
             <p th:if="${emailFooterText != null and !#strings.isEmpty(emailFooterText)}" class="text-muted" th:text="${emailFooterText}" style="color:#4B5563;font-size:12px;margin:0 0 12px;line-height:1.5;">
@@ -204,7 +200,7 @@
             </p>
 
             <p class="text-subtle" style="margin:0 0 6px;color:#9CA3AF;font-size:12px;line-height:1.4;">
-              &copy; <span th:text="${#dates.year(#dates.createNow())}">2026</span> <span th:text="${businessName ?: 'ChatCRM Lite'}">ChatCRM Lite</span>. All rights reserved.
+              &copy; <span th:text="${#dates.year(#dates.createNow())}">2026</span> <span th:text="${businessName ?: 'GyanVaniAi Connect'}">GyanVaniAi Connect</span>. All rights reserved.
             </p>
             <p th:if="${businessAddress != null and !#strings.isEmpty(businessAddress)}" class="text-subtle" style="margin:0 0 6px;color:#9CA3AF;font-size:11px;line-height:1.4;" th:text="${businessAddress}">
               Address

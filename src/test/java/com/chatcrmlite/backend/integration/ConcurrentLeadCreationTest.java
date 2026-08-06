@@ -195,7 +195,7 @@ public class ConcurrentLeadCreationTest {
             Future<Lead> future = executor.submit(() -> {
                 try {
                     startLatch.await();
-                    Lead updatedLead = leadService.updateStatus(lead.getId(), newStatus, testUser);
+                    Lead updatedLead = leadService.updateStatus(lead.getId(), newStatus, null, null, null, null, null, null, testUser);
                     successCount.incrementAndGet();
                     return updatedLead;
                 } catch (Exception e) {

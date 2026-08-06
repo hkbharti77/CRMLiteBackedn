@@ -418,14 +418,15 @@ public class MetaWhatsAppClient implements WhatsAppClient {
                 } catch (NumberFormatException ignored) {}
             }
             if (!varIndices.isEmpty()) {
+                int maxIndex = varIndices.stream().max(Integer::compareTo).get();
                 List<String> sampleValues = new ArrayList<>();
-                for (Integer idx : varIndices) {
-                    sampleValues.add("SampleValue" + idx);
+                for (int i = 1; i <= maxIndex; i++) {
+                    sampleValues.add("SampleValue" + i);
                 }
                 Map<String, Object> exampleObj = new HashMap<>();
                 exampleObj.put("body_text", List.of(sampleValues));
                 bodyComponent.put("example", exampleObj);
-                log.info("[MetaAPI] Added variable example.body_text for {} variables: {}", varIndices.size(), sampleValues);
+                log.info("[MetaAPI] Added variable example.body_text for {} max variables: {}", maxIndex, sampleValues);
             }
         }
         components.add(bodyComponent);
@@ -466,7 +467,11 @@ public class MetaWhatsAppClient implements WhatsAppClient {
             return objectMapper.valueToTree(response);
         } catch (HttpStatusCodeException e) {
             log.error("[MetaAPI] Failed to create message template for WABA {}: {}", wabaId, e.getResponseBodyAsString());
-            throw new RuntimeException("Meta API Error: " + parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString()));
+            String metaError = parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Meta API Error: " + metaError);
+            }
+            throw new RuntimeException("Meta API Error: " + metaError);
         } catch (Exception e) {
             log.error("[MetaAPI] Error creating template: {}", e.getMessage());
             throw new RuntimeException("Failed to submit message template to Meta Graph API");
@@ -488,7 +493,11 @@ public class MetaWhatsAppClient implements WhatsAppClient {
             log.info("[MetaAPI] Deleted message template '{}' for WABA {}", templateName, wabaId);
         } catch (HttpStatusCodeException e) {
             log.error("[MetaAPI] Failed to delete message template '{}': {}", templateName, e.getResponseBodyAsString());
-            throw new RuntimeException("Meta API Error: " + parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString()));
+            String metaError = parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Meta API Error: " + metaError);
+            }
+            throw new RuntimeException("Meta API Error: " + metaError);
         }
     }
 }

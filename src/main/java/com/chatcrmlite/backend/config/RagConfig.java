@@ -84,7 +84,7 @@ public class RagConfig {
                     .baseUrl(cleanUrl)
                     .apiKey(openAiApiKey)
                     .modelName(openAiModelName)
-                    .timeout(java.time.Duration.ofSeconds(8))
+                    .timeout(java.time.Duration.ofSeconds(300))
                     .maxRetries(1)
                     .build();
         }

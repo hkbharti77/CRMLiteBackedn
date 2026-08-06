@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "whatsapp_campaign_recipients", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_camp_contact", columnNames = {"campaign_id", "contact_id"})
+    @UniqueConstraint(name = "uk_camp_phone", columnNames = {"campaign_id", "phone_number"})
 }, indexes = {
     @Index(name = "idx_wa_cr_tenant", columnList = "tenant_id"),
     @Index(name = "idx_wa_cr_camp", columnList = "campaign_id"),
@@ -44,7 +44,8 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
 
     @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "contact_id", nullable = false)
+    @JoinColumn(name = "contact_id", nullable = true, foreignKey = @ForeignKey(name = "fk_wa_camp_recip_contact"))
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.SET_NULL)
     private Contact contact;
 
     @Column(nullable = false)

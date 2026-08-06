@@ -19,6 +19,7 @@ public interface ContactRepository extends JpaRepository<Contact, UUID>, JpaSpec
      */
     boolean existsByEmailAndTenant_Id(String email, UUID tenantId);
     Optional<Contact> findFirstByEmailAndTenant_Id(String email, UUID tenantId);
+    boolean existsByWaIdAndTenant_Id(String waId, UUID tenantId);
     Optional<Contact> findByWaIdAndTenant_Id(String waId, UUID tenantId);
     Optional<Contact> findByWaIdAndOwner(String waId, User owner);
     List<Contact> findAllByOwner(User owner);

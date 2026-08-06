@@ -209,6 +209,6 @@ public class CustomEmail {
         }
     }
 
-    public enum RecipientMode { ALL, TAGGED, MANUAL, LEAD_STATUS_BASED, ADVANCED }
+    public enum RecipientMode { ALL, TAGGED, MANUAL, LEAD_STATUS_BASED }
     public enum EmailStatus { DRAFT, SCHEDULED, SENDING, PAUSED, CANCELLED, COMPLETED, FAILED, SENT } // SENT kept for backwards compat
 }

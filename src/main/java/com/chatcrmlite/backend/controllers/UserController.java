@@ -589,7 +589,14 @@ public class UserController {
             dto.setForceShowLeads(user.getForceShowLeads());
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
-            dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
+            
+            // Fix: Pull plan type from Tenant if available, fallback to user's plan type
+            if (user.getTenant() != null && user.getTenant().getPlanType() != null) {
+                dto.setPlanType(user.getTenant().getPlanType().name());
+            } else {
+                dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
+            }
+            
             dto.setEmailHeaderText(user.getTenant() != null ? user.getTenant().getEmailHeaderText() : null);
             dto.setEmailFooterText(user.getTenant() != null ? user.getTenant().getEmailFooterText() : null);
             return dto;

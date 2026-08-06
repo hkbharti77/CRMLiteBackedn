@@ -106,10 +106,36 @@ public class EmailTrackingController {
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
-    @GetMapping("/u/{trackingToken}")
+    @GetMapping(value = "/u/{trackingToken}", produces = MediaType.TEXT_HTML_VALUE)
     public ResponseEntity<String> handleUnsubscribeGet(@PathVariable String trackingToken) {
         processUnsubscribe(trackingToken);
-        return ResponseEntity.ok("You have been successfully unsubscribed.");
+        
+        String html = "<!DOCTYPE html>\n" +
+                "<html lang=\"en\">\n" +
+                "<head>\n" +
+                "    <meta charset=\"UTF-8\">\n" +
+                "    <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">\n" +
+                "    <title>Unsubscribed Successfully</title>\n" +
+                "    <style>\n" +
+                "        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background-color: #f9fafb; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }\n" +
+                "        .container { background: white; padding: 48px 40px; border-radius: 16px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05); text-align: center; max-width: 420px; width: 90%; }\n" +
+                "        .icon { width: 72px; height: 72px; margin-bottom: 24px; color: #10b981; background: #d1fae5; border-radius: 50%; padding: 16px; box-sizing: border-box; display: inline-block; }\n" +
+                "        h1 { color: #111827; font-size: 26px; margin-bottom: 16px; font-weight: 700; }\n" +
+                "        p { color: #6b7280; font-size: 16px; line-height: 1.6; margin-bottom: 0; }\n" +
+                "    </style>\n" +
+                "</head>\n" +
+                "<body>\n" +
+                "    <div class=\"container\">\n" +
+                "        <svg class=\"icon\" fill=\"none\" stroke=\"currentColor\" viewBox=\"0 0 24 24\" xmlns=\"http://www.w3.org/2000/svg\">\n" +
+                "            <path stroke-linecap=\"round\" stroke-linejoin=\"round\" stroke-width=\"2.5\" d=\"M5 13l4 4L19 7\"></path>\n" +
+                "        </svg>\n" +
+                "        <h1>Unsubscribed</h1>\n" +
+                "        <p>You've been successfully removed from this mailing list. You will no longer receive these emails.</p>\n" +
+                "    </div>\n" +
+                "</body>\n" +
+                "</html>";
+                
+        return ResponseEntity.ok(html);
     }
 
     @PostMapping("/u/{trackingToken}")

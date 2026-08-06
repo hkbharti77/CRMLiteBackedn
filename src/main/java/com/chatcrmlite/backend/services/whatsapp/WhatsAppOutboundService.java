@@ -31,12 +31,24 @@ public class WhatsAppOutboundService {
     private final MessageRepository messageRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
 
+    private String convertToWhatsAppMarkdown(String text) {
+        if (text == null) return null;
+        return text
+                .replaceAll("(?s)\\*\\*(.*?)\\*\\*", "*$1*") // **bold** -> *bold*
+                .replaceAll("(?s)~~(.*?)~~", "~$1~")         // ~~strike~~ -> ~strike~
+                .replaceAll("(?m)^\\s*-\\s+", "• ")          // list bullets
+                .replaceAll("(?m)^###\\s+(.*?)$", "*$1*")    // headers -> bold
+                .replaceAll("(?m)^##\\s+(.*?)$", "*$1*")     // headers -> bold
+                .replaceAll("(?m)^#\\s+(.*?)$", "*$1*");      // headers -> bold
+    }
+
     @Transactional
     public Message sendText(Contact contact, String text, WhatsAppConfig config, User owner) {
         try {
+            String formattedText = convertToWhatsAppMarkdown(text);
             String metaMessageId = whatsappClient.sendMessage(
                     contact.getWaId(),
-                    text,
+                    formattedText,
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );

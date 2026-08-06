@@ -83,6 +83,9 @@ public class Lead extends BaseTenantEntity {
     @Column(name = "interest_category")
     private String interestCategory;
 
+    @Column(name = "lost_reason", columnDefinition = "text")
+    private String lostReason;
+
     @Version
     private Long version;
 
@@ -107,7 +110,7 @@ public class Lead extends BaseTenantEntity {
 
     public Lead() {}
 
-    public Lead(UUID id, String leadNumber, Contact contact, LeadStatus status, String enquiries, boolean deleted, List<Tag> tags, LocalDateTime createdAt, LocalDateTime lastActivity, User owner, BigDecimal dealValue, PaymentStatus paymentStatus, String currency, String dealLabel, Long version) {
+    public Lead(UUID id, String leadNumber, Contact contact, LeadStatus status, String enquiries, boolean deleted, List<Tag> tags, LocalDateTime createdAt, LocalDateTime lastActivity, User owner, BigDecimal dealValue, PaymentStatus paymentStatus, String currency, String dealLabel, Long version, String lostReason) {
         this.id = id;
         this.leadNumber = leadNumber;
         this.contact = contact;
@@ -123,6 +126,7 @@ public class Lead extends BaseTenantEntity {
         this.currency = (currency != null) ? currency : "INR";
         this.dealLabel = dealLabel;
         this.version = version;
+        this.lostReason = lostReason;
     }
 
     public UUID getId() { return id; }
@@ -145,6 +149,7 @@ public class Lead extends BaseTenantEntity {
     public ScoreGrade getScoreGrade() { return scoreGrade != null ? scoreGrade : ScoreGrade.COLD; }
     public LocalDateTime getLastScoredAt() { return lastScoredAt; }
     public Long getVersion() { return version; }
+    public String getLostReason() { return lostReason; }
 
     public void setId(UUID id) { this.id = id; }
     public void setLeadNumber(String leadNumber) { this.leadNumber = leadNumber; }
@@ -165,6 +170,7 @@ public class Lead extends BaseTenantEntity {
     public void setInterestCategory(String interestCategory) { this.interestCategory = interestCategory; }
     public void setScoreGrade(ScoreGrade scoreGrade) { this.scoreGrade = scoreGrade; }
     public void setLastScoredAt(LocalDateTime lastScoredAt) { this.lastScoredAt = lastScoredAt; }
+    public void setLostReason(String lostReason) { this.lostReason = lostReason; }
     public void setVersion(Long version) { this.version = version; }
     @com.fasterxml.jackson.annotation.JsonIgnore
     public List<LeadEnquiry> getEnquiryList() { return enquiryList; }
@@ -190,6 +196,7 @@ public class Lead extends BaseTenantEntity {
         private Integer score = 0;
         private String interestCategory;
         private Long version;
+        private String lostReason;
 
         public LeadBuilder id(UUID id) { this.id = id; return this; }
         public LeadBuilder leadNumber(String leadNumber) { this.leadNumber = leadNumber; return this; }
@@ -208,9 +215,10 @@ public class Lead extends BaseTenantEntity {
         public LeadBuilder score(Integer score) { this.score = score; return this; }
         public LeadBuilder interestCategory(String interestCategory) { this.interestCategory = interestCategory; return this; }
         public LeadBuilder version(Long version) { this.version = version; return this; }
+        public LeadBuilder lostReason(String lostReason) { this.lostReason = lostReason; return this; }
 
         public Lead build() {
-            Lead lead = new Lead(id, leadNumber, contact, status, enquiries, deleted, tags, createdAt, lastActivity, owner, dealValue, paymentStatus, currency, dealLabel, version);
+            Lead lead = new Lead(id, leadNumber, contact, status, enquiries, deleted, tags, createdAt, lastActivity, owner, dealValue, paymentStatus, currency, dealLabel, version, lostReason);
             lead.setScore(this.score);
             lead.setInterestCategory(this.interestCategory);
             return lead;

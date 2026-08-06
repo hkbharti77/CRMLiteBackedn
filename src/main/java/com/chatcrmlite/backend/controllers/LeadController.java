@@ -49,7 +49,7 @@ public class LeadController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "csv") String format) {
         User user = getAuthenticatedUser();
-        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null).getContent();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null, null).getContent();
 
         // Filter by Date Range (inclusive)
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
@@ -92,15 +92,16 @@ public class LeadController {
 
     // ── Lead Queries ───────────────────────────────────────────────────────
 
-    /** GET /api/v1/leads/paged?page=0&size=20&status=NEW — paginated for large datasets */
+    /** GET /api/v1/leads/paged?page=0&size=20&status=NEW&search=foo — paginated for large datasets */
     @GetMapping("/paged")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getLeadsPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Lead.LeadStatus status) {
+            @RequestParam(required = false) Lead.LeadStatus status,
+            @RequestParam(required = false) String search) {
         User user = getAuthenticatedUser();
-        var pagedResult = leadService.getLeadsByUserPaged(user, page, size, status);
+        var pagedResult = leadService.getLeadsByUserPaged(user, page, size, status, search);
         return ResponseEntity.ok(java.util.Map.of(
                 "content",       pagedResult.getContent().stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()),
                 "totalElements", pagedResult.getTotalElements(),
@@ -114,7 +115,7 @@ public class LeadController {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
         User user = getAuthenticatedUser();
-        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status).getContent();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status, null).getContent();
         return ResponseEntity.ok(leads.stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
@@ -159,12 +160,18 @@ public class LeadController {
     // ── Status ─────────────────────────────────────────────────────────────
 
     @PatchMapping("/{id}/status")
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<LeadDTO> updateStatus(
             @PathVariable UUID id,
-            @RequestParam Lead.LeadStatus status) {
+            @RequestParam("status") Lead.LeadStatus status,
+            @RequestParam(value = "dealValue", required = false) java.math.BigDecimal dealValue,
+            @RequestParam(value = "lostReason", required = false) String lostReason,
+            @RequestParam(value = "paymentStatus", required = false) Lead.PaymentStatus paymentStatus,
+            @RequestParam(value = "sendPaymentLink", required = false) Boolean sendPaymentLink,
+            @RequestParam(value = "paymentMethod", required = false) String paymentMethod,
+            @RequestParam(value = "paymentLinkUrl", required = false) String paymentLinkUrl) {
         User user = getAuthenticatedUser();
-        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, user), user));
+        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, dealValue, lostReason, paymentStatus, sendPaymentLink, paymentMethod, paymentLinkUrl, user), user));
     }
 
     @PostMapping("/{id}/rescore")

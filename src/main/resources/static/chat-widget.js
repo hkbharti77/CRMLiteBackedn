@@ -50,6 +50,31 @@
     // Temporary cleanup for users who have the old {{business}} text cached in their browsers
     chatHistory = chatHistory.filter(m => !m.text.includes('{{business}}'));
 
+    function parseMarkdown(text) {
+        if (!text) return '';
+        let html = String(text);
+        
+        html = html.replace(/```([\s\S]*?)```/g, '<pre style="background:#f1f5f9;color:#0f172a;padding:8px;border-radius:4px;overflow-x:auto;margin:4px 0;font-family:monospace;font-size:12px;"><code>$1</code></pre>');
+        html = html.replace(/`(.*?)`/g, '<code style="background:#f1f5f9;color:#0f172a;padding:2px 4px;border-radius:3px;font-family:monospace;font-size:12px;">$1</code>');
+        
+        html = html.replace(/^### (.*$)/gim, '<strong style="display:block;margin-top:8px;font-size:1.1em;">$1</strong>');
+        html = html.replace(/^## (.*$)/gim, '<strong style="display:block;margin-top:8px;font-size:1.2em;">$1</strong>');
+        html = html.replace(/^# (.*$)/gim, '<strong style="display:block;margin-top:8px;font-size:1.3em;">$1</strong>');
+        
+        html = html.replace(/^\s*> (.*$)/gim, '<blockquote style="border-left:3px solid #cbd5e1;padding-left:8px;margin:4px 0;color:#64748b;font-style:italic;">$1</blockquote>');
+        
+        // Fix for lists: handle dash or asterisk with optional leading spaces
+        html = html.replace(/^\s*[-*]\s+(.*$)/gim, '• $1');
+        
+        html = html.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+        html = html.replace(/\*([^\n*]+?)\*/g, '<i>$1</i>');
+        html = html.replace(/\_([^\n_]+?)\_/g, '<i>$1</i>');
+        html = html.replace(/~~(.*?)~~/g, '<del>$1</del>');
+        
+        html = html.replace(/\n/g, '<br>');
+        return html;
+    }
+
     let theme = {
         primaryColor: '#3b82f6',
         secondaryColor: '#1e293b',
@@ -878,7 +903,7 @@
             msgDiv.className = 'message bot';
 
             const textSpan = document.createElement('span');
-            textSpan.innerHTML = String(bodyMsg).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+            textSpan.innerHTML = parseMarkdown(bodyMsg);
             msgDiv.appendChild(textSpan);
 
             if (parsed && parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows && parsed.sections[0].rows.length > 0) {
@@ -962,7 +987,7 @@
             msgDiv.className = 'message bot';
 
             const textSpan = document.createElement('span');
-            textSpan.innerHTML = String(text).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+            textSpan.innerHTML = parseMarkdown(text);
 
             const timeSpan = document.createElement('span');
             timeSpan.className = 'message-time';
@@ -1082,7 +1107,7 @@
         msgDiv.className = `message ${entry.sender}`;
 
         const textSpan = document.createElement('span');
-        textSpan.innerHTML = String(entry.text).replace(/\*\*(.*?)\*\*/g, '<b>$1</b>').replace(/\n/g, '<br>');
+        textSpan.innerHTML = parseMarkdown(entry.text);
 
         const timeSpan = document.createElement('span');
         timeSpan.className = 'message-time';

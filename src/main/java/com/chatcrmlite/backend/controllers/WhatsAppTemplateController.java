@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.controllers;
 
 import com.chatcrmlite.backend.dto.WhatsAppTemplateDto;
+import com.chatcrmlite.backend.dto.WhatsAppAiTemplateResponse;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.whatsapp.WhatsAppTemplateService;
@@ -10,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/whatsapp/templates")
@@ -48,5 +50,17 @@ public class WhatsAppTemplateController {
         User user = getAuthenticatedUser(email);
         templateService.deleteTemplate(name, user);
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/ai/generate")
+    public ResponseEntity<WhatsAppAiTemplateResponse> generateAiTemplate(
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        String prompt = request.getOrDefault("prompt", "");
+        if (prompt.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(templateService.generateAiTemplate(user, prompt));
     }
 }

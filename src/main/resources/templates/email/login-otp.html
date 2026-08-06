@@ -28,48 +28,46 @@
           <td style="padding:0 36px 28px;">
             
             <!-- ── HERO OTP DISPLAY CARD ────────────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:14px;padding:32px 24px;text-align:center;margin:0 0 28px;">
+            <div class="card-subtle" style="background-color:#F0F9FF;border:1px solid #BAE6FD;border-radius:8px;padding:24px 24px;text-align:center;margin:0 0 24px;">
               
-              <!-- Security Shield Vector SVG Illustration -->
-              <div style="width:52px;height:52px;background-color:#F0FDF4;border:1px solid #DCFCE7;border-radius:50%;margin:0 auto 16px;line-height:52px;text-align:center;">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;display:inline-block;">
-                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-                  <path d="m9 12 2 2 4-4"></path>
-                </svg>
+              <!-- Security Key SVG Illustration -->
+              <div style="width:48px;height:48px;background-color:#FFFFFF;border:1px solid #BAE6FD;border-radius:50%;margin:0 auto 12px;line-height:48px;text-align:center;box-shadow:0 2px 4px rgba(0,0,0,0.05);">
+                <!-- Replaced SVG with image for email compatibility -->
+                <img src="https://img.icons8.com/material-outlined/48/0284C7/lock.png" width="24" height="24" alt="Lock" style="vertical-align:middle;display:inline-block;border:none;outline:none;" />
               </div>
 
-              <p class="text-muted" style="margin:0 0 10px;color:#6B7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
+              <p class="text-muted" style="margin:0 0 4px;color:#0369A1;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;">
                 Verification Code
               </p>
               
-              <!-- 56px Monospace Code Display -->
-              <div class="otp-code" th:text="${otpCode}" style="font-size:52px;font-weight:800;color:#16A34A;letter-spacing:10px;font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;margin:8px 0;text-align:center;line-height:1.1;">
+              <!-- Monospace Code Display -->
+              <div class="otp-code" th:text="${otpCode}" style="font-size:56px;font-weight:900;color:#082F49;letter-spacing:12px;font-family:'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;margin:8px 0;text-align:center;line-height:1.1;text-shadow: 1px 1px 0px rgba(0,0,0,0.1);">
                 123456
               </div>
 
-              <div style="margin-top:16px;">
-                <span class="pill-badge" style="background-color:#FEF3C7;color:#92400E;border:1px solid #FDE68A;font-size:12px;font-weight:600;padding:5px 14px;border-radius:9999px;display:inline-block;">
-                  ⏱️ Valid for <strong th:text="${expiryMinutes}">10</strong> minutes
+              <div style="margin-top:12px;">
+                <span class="pill-badge" style="background-color:#FFFFFF;color:#0369A1;border:1px solid #BAE6FD;font-size:12px;font-weight:600;padding:4px 12px;border-radius:12px;display:inline-block;">
+                  Expires in <strong th:text="${expiryMinutes}" style="color:#0C4A6E;">10</strong> minutes
                 </span>
               </div>
               
-              <p class="text-subtle" style="margin:14px 0 0;color:#9CA3AF;font-size:12px;">
-                💡 Highlight & copy the code above to complete your login
+              <p class="text-subtle" style="margin:16px 0 0;color:#0284C7;font-size:13px;font-weight:500;">
+                Enter this code on the login screen to continue.
               </p>
             </div>
 
             <!-- ── SECURITY AUDIT METADATA CARD ───────────────────────────── -->
-            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px;margin:0 0 28px;">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:12px;">
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:20px;margin:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:16px;border-bottom:1px solid #F1F5F9;padding-bottom:12px;">
                 <tr>
                   <td>
-                    <span class="text-main" style="color:#111827;font-size:14px;font-weight:700;">
-                      📍 Login Request Details
+                    <span class="text-main" style="color:#0F172A;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+                      Request Details
                     </span>
                   </td>
                   <td align="right">
-                    <span style="background-color:#F1F5F9;color:#475569;font-size:11px;font-weight:600;padding:3px 10px;border-radius:6px;">
-                      ✦ AI MONITORED
+                    <span style="background-color:#F0FDF4;color:#16A34A;font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;border:1px solid #BBF7D0;">
+                      VERIFIED
                     </span>
                   </td>
                 </tr>
@@ -77,40 +75,37 @@
 
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;width:95px;padding:4px 0;">Account:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${userEmail}">user@example.com</td>
+                  <td class="text-muted" style="color:#64748B;width:130px;padding:4px 0;">📧 Email:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${userEmail}">user@example.com</td>
                 </tr>
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Time (UTC):</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${loginTime}">2026-07-29 14:30:15</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">🕒 Time (UTC):</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${loginTime}">2026-07-29 14:30:15</td>
                 </tr>
                 <tr th:if="${ipAddress}">
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">IP Address:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${ipAddress}">192.168.1.1</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">📍 IP Address:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${ipAddress}">192.168.1.1</td>
                 </tr>
                 <tr th:if="${userAgent}">
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Device/Browser:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${userAgent}">Chrome Browser (Windows 11)</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">💻 Device/Browser:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${userAgent}">Chrome Browser (Windows 11)</td>
                 </tr>
               </table>
             </div>
 
-            <!-- ── SECURITY WARNING CALLOUT ───────────────────────────────── -->
-            <div style="background-color:#FEF2F2;border:1px solid #FCA5A5;border-radius:12px;padding:18px 20px;margin:0 0 28px;">
+            <!-- ── STANDARD SECURITY ADVISORY (BLUE/GRAY) ─────────────────── -->
+            <div style="background-color:#F8FAFC;border-left:4px solid #64748B;border-radius:4px;padding:16px;margin:0 0 24px;">
               <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
                 <tr>
-                  <td valign="top" style="width:28px;padding-right:12px;">
-                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#DC2626" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
-                    </svg>
+                  <td valign="top" style="width:24px;padding-right:12px;">
+                    <img src="https://img.icons8.com/material-outlined/48/475569/info.png" width="20" height="20" alt="Info" style="display:block;border:none;outline:none;" />
                   </td>
                   <td valign="middle">
-                    <p style="margin:0 0 4px;color:#991B1B;font-size:14px;font-weight:700;">
-                      Security Warning
+                    <p style="margin:0 0 4px;color:#334155;font-size:13px;font-weight:600;">
+                      Security Tip
                     </p>
-                    <p style="margin:0;color:#7F1D1D;font-size:13px;line-height:1.5;">
-                      Never share this code with anyone. ChatCRM Lite engineers or support agents will never ask for your code.
+                    <p style="margin:0;color:#475569;font-size:12px;line-height:1.5;">
+                      Never share this verification code. Our support personnel will never request this information from you.
                     </p>
                   </td>
                 </tr>
@@ -118,8 +113,8 @@
             </div>
 
             <!-- ── HELP & TROUBLESHOOTING ─────────────────────────────────── -->
-            <p class="text-muted" style="color:#6B7280;font-size:13px;line-height:1.6;margin:0;">
-              <strong>Did not request this code?</strong> If you did not initiate this login attempt, please secure your account immediately or contact <a href="mailto:security@chatcrmlite.com" style="color:#16A34A;text-decoration:none;font-weight:600;">Security Team</a>.
+            <p class="text-muted" style="color:#6B7280;font-size:12px;line-height:1.6;margin:0;">
+              <strong>Did not request this code?</strong> If you did not initiate this attempt, please secure your account immediately or contact <a href="mailto:security@chatcrmlite.com" style="color:#0F172A;text-decoration:underline;font-weight:600;">Security Team</a>.
             </p>
 
           </td>

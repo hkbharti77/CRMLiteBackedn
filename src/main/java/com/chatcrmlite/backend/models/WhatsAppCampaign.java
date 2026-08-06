@@ -66,6 +66,10 @@ public class WhatsAppCampaign extends BaseTenantEntity {
     @Column(columnDefinition = "TEXT")
     private String variableMappingJson; // Dynamic mapping: {"1": "contact.name", "2": "lead.dealValue"}
 
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean saveImportedRecipients = false;
+
     private LocalDateTime scheduledAt;
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;

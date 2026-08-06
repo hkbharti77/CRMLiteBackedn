@@ -2,6 +2,8 @@ package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.dto.CustomEmailDTO;
 import com.chatcrmlite.backend.dto.CustomEmailRequest;
+import com.chatcrmlite.backend.dto.AiContentResponse;
+import com.chatcrmlite.backend.dto.AiTemplateResponse;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.CustomEmail;
 import com.chatcrmlite.backend.models.CustomEmail.EmailStatus;
@@ -126,34 +128,98 @@ public class CustomEmailService {
     @Autowired
     private ObjectMapper objectMapper;
 
-    public Map<String, String> generateAiContent(User user, String prompt) {
-        if (user.getPlanType() == User.PlanType.FREE) {
-            throw new org.springframework.web.server.ResponseStatusException(
-                org.springframework.http.HttpStatus.PAYMENT_REQUIRED,
-                "AI Email Generation is only available for PRO users and above."
-            );
-        }
-
+    public AiContentResponse generateAiContent(User user, String prompt) {
         aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
 
+        String systemInstruction = 
+            "You are a professional email marketing assistant. " +
+            "Generate email subject, email body, a call-to-action button label, and a call-to-action redirect URL based on the user's instructions. " +
+            "If the user specifies a link in their instruction, extract and return it as 'ctaUrl'. Otherwise, return an empty string. " +
+            "CRITICAL: The 'body' MUST be generated as HTML fragments only (e.g., <p>, <strong>, <br>, <a>, <ul>, <li>). " +
+            "EXPLICITLY PROHIBITED: Do not include <html>, <head>, <body>, <style>, <script>, or <!DOCTYPE>. " +
+            "You must return the result as a valid JSON object with exactly four keys: 'subject', 'body', 'ctaLabel', and 'ctaUrl'.";
+        
+        String userMsg = String.format(
+            "Write email content based on the following instruction: \n\"%s\"\n\nFormat: {\"subject\": \"...\", \"body\": \"...\", \"ctaLabel\": \"...\", \"ctaUrl\": \"...\"}", 
+            prompt
+        );
+
+        Map<String, String> fallback = Map.of(
+            "subject", "Exclusive Offer for {{lead.name}}",
+            "body", "Hi {{lead.name}},<br><br>Thank you for reaching out. In response to: <em>\"" + prompt.replace("<", "&lt;").replace(">", "&gt;") + "\"</em>, we have created this custom campaign for you.<br><br>Contact us today for more details!",
+            "ctaLabel", "Claim Offer →",
+            "ctaUrl", "https://gyanvaniai.com"
+        );
+
+        Map<String, String> result = callAiHelper(user, systemInstruction, userMsg, fallback, prompt);
+        
+        // Sanitize dangerous HTML tags (basic backend sanitization)
+        String sanitizedBody = sanitizeHtml(result.getOrDefault("body", fallback.get("body")));
+
+        return AiContentResponse.builder()
+                .subject(result.getOrDefault("subject", fallback.get("subject")))
+                .htmlContent(sanitizedBody)
+                .ctaLabel(result.getOrDefault("ctaLabel", fallback.get("ctaLabel")))
+                .ctaUrl(result.getOrDefault("ctaUrl", fallback.get("ctaUrl")))
+                .build();
+    }
+
+    public AiTemplateResponse generateAiTemplate(User user, String prompt) {
+        aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
+
+        String systemInstruction = 
+            "You are a professional email marketing assistant and web designer. " +
+            "Generate an email template with a subject and a fully formatted HTML body. " +
+            "CRITICAL: The 'body' MUST be a complete, fully formed HTML5 document starting exactly with <!DOCTYPE html>. " +
+            "It must include <html>, <head>, <style>, and <body> tags. Use email-client-safe markup, favoring table-based layouts and conservative inline CSS compatible with Gmail and Outlook. " +
+            "You MUST strictly follow any color, theme, or layout instructions requested by the user. If they ask for specific color combinations, you MUST apply them. Do not ignore color requests. " +
+            "CRITICAL: The HTML 'body' MUST include a footer section at the very bottom containing an unsubscribe link exactly like this: <a href=\"{{unsubscribe_link}}\">Unsubscribe</a>. " +
+            "You must return the result as a valid JSON object with exactly two keys: 'subject' and 'body'.";
+        
+        String userMsg = String.format(
+            "Design an email template based on the following instruction: \n\"%s\"\n\nFormat: {\"subject\": \"...\", \"body\": \"...\"}", 
+            prompt
+        );
+
+        Map<String, String> fallback = Map.of(
+            "subject", "Template for {{business.name}}",
+            "body", "<!DOCTYPE html><html><body><h2>Welcome</h2><p>This is a fallback template.</p><br><br><footer><a href=\"{{unsubscribe_link}}\">Unsubscribe</a></footer></body></html>"
+        );
+
+        Map<String, String> result = callAiHelper(user, systemInstruction, userMsg, fallback, prompt);
+        String htmlBody = result.getOrDefault("body", fallback.get("body"));
+        
+        // Backend Validation: Enforce unsubscribe link
+        boolean hasUnsubscribe = htmlBody.contains("{{unsubscribe_link}}");
+        if (!hasUnsubscribe) {
+            htmlBody = htmlBody.replace("</body>", "<br><br><div style=\"text-align:center;font-size:12px;color:#888;\"><a href=\"{{unsubscribe_link}}\">Unsubscribe</a></div></body>");
+            hasUnsubscribe = true; // We just injected it
+        }
+
+        // HTML Sanitization
+        htmlBody = sanitizeHtml(htmlBody);
+
+        return AiTemplateResponse.builder()
+                .subject(result.getOrDefault("subject", fallback.get("subject")))
+                .html(htmlBody)
+                .hasUnsubscribeLink(hasUnsubscribe)
+                .build();
+    }
+
+    private String sanitizeHtml(String html) {
+        if (html == null) return "";
+        return html.replaceAll("(?i)<script.*?>.*?</script>", "")
+                   .replaceAll("(?i)on[a-z]+\\s*=\\s*['\"].*?['\"]", "") // remove event handlers like onclick="doSomething()"
+                   .replaceAll("(?i)<iframe.*?>.*?</iframe>", "");
+    }
+
+    private Map<String, String> callAiHelper(User user, String systemInstruction, String userMsg, Map<String, String> fallback, String prompt) {
         if (chatLanguageModel == null) {
             throw new org.springframework.web.server.ResponseStatusException(
                 org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
                 "AI models are currently not configured. Please check back later."
             );
         }
-
-        String systemInstruction = 
-            "You are a professional email marketing assistant. " +
-            "Generate email subject, email body, a call-to-action button label, and a call-to-action redirect URL based on the user's instructions. " +
-            "If the user specifies or mentions a URL, website, or link in their instruction, extract and return it as 'ctaUrl'. Otherwise, return an empty string for 'ctaUrl'. " +
-            "You must return the result as a valid JSON object with exactly four keys: 'subject', 'body', 'ctaLabel', and 'ctaUrl'. " +
-            "Do not include markdown tags (like ```json), styling, formatting or extra text outside the JSON object.";
-        
-        String userMsg = String.format(
-            "Write an email based on the following instruction: \n\"%s\"\n\nFormat: {\"subject\": \"...\", \"body\": \"...\", \"ctaLabel\": \"...\", \"ctaUrl\": \"...\"}", 
-            prompt
-        );
 
         Response<AiMessage> responseObj = null;
         try {
@@ -162,13 +228,8 @@ public class CustomEmailService {
                 UserMessage.from(userMsg)
             ));
         } catch (Exception ex) {
-            log.warn("[AI Email Service] AI Server at 10.118.165.16:8085 offline ({}) — returning fallback template.", ex.getMessage());
-            return Map.of(
-                "subject", "Exclusive Offer for {{lead.name}}",
-                "body", "Hi {{lead.name}},<br><br>Thank you for reaching out to <strong>{{business.name}}</strong>. In response to: <em>\"" + prompt.replace("<", "&lt;").replace(">", "&gt;") + "\"</em>, we have created this custom campaign for you.<br><br>Contact us today for more details!",
-                "ctaLabel", "Claim Offer →",
-                "ctaUrl", "https://gyanvaniai.com"
-            );
+            log.warn("[AI Email Service] AI Server offline ({}) — returning fallback template.", ex.getMessage());
+            return fallback;
         }
         
         String rawResponse = responseObj.content().text().trim();
@@ -183,14 +244,9 @@ public class CustomEmailService {
 
         try {
             String jsonText = rawResponse;
-            if (jsonText.startsWith("```json")) {
-                jsonText = jsonText.substring(7);
-            } else if (jsonText.startsWith("```")) {
-                jsonText = jsonText.substring(3);
-            }
-            if (jsonText.endsWith("```")) {
-                jsonText = jsonText.substring(0, jsonText.length() - 3);
-            }
+            if (jsonText.startsWith("```json")) jsonText = jsonText.substring(7);
+            else if (jsonText.startsWith("```")) jsonText = jsonText.substring(3);
+            if (jsonText.endsWith("```")) jsonText = jsonText.substring(0, jsonText.length() - 3);
             jsonText = jsonText.trim();
 
             try {
@@ -204,12 +260,7 @@ public class CustomEmailService {
             }
         } catch (Exception e) {
             log.error("Failed to parse AI email generation JSON: " + rawResponse, e);
-            return Map.of(
-                "subject", "Special Offer for {{lead.name}}",
-                "body", rawResponse.replace("\n", "<br>"),
-                "ctaLabel", "Learn More",
-                "ctaUrl", "https://gyanvaniai.com"
-            );
+            return fallback;
         }
     }
 

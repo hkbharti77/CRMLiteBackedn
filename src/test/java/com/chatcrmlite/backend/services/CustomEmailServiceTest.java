@@ -23,8 +23,20 @@ import jakarta.mail.internet.MimeMessage;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.chatcrmlite.backend.dto.AiContentResponse;
+import com.chatcrmlite.backend.dto.AiTemplateResponse;
+import com.chatcrmlite.backend.services.AIQuotaService;
+import com.chatcrmlite.backend.services.TokenBudgetService;
+import com.chatcrmlite.backend.services.CostTracker;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.model.output.Response;
+import dev.langchain4j.model.output.TokenUsage;
+import dev.langchain4j.data.message.AiMessage;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -46,6 +58,17 @@ class CustomEmailServiceTest {
     private org.thymeleaf.TemplateEngine templateEngine;
     @Mock
     private EmailTrackingService trackingService;
+    
+    @Mock
+    private AIQuotaService aiQuotaService;
+    @Mock
+    private ChatLanguageModel chatLanguageModel;
+    @Mock
+    private TokenBudgetService tokenBudgetService;
+    @Mock
+    private CostTracker costTracker;
+    @Mock
+    private ObjectMapper objectMapper;
 
     @InjectMocks
     private CustomEmailService customEmailService;
@@ -113,5 +136,37 @@ class CustomEmailServiceTest {
         assertEquals(EmailCampaignRecipient.DeliveryStatus.FAILED, pendingRecipient.getDeliveryStatus());
         assertEquals("Campaign Cancelled", pendingRecipient.getFailureMessage());
         verify(recipientRepository).saveAll(anyList());
+    }
+
+    @Test
+    void testGenerateAiContent_SanitizesHtml() throws Exception {
+        String unsafeJson = "{\"subject\":\"Test\",\"body\":\"<p>Hello</p><script>alert(1)</script>\",\"ctaLabel\":\"\",\"ctaUrl\":\"\"}";
+        AiMessage message = new AiMessage(unsafeJson);
+        Response<AiMessage> mockResponse = new Response<>(message, new TokenUsage(10, 10), null);
+        
+        when(chatLanguageModel.generate(anyList())).thenReturn(mockResponse);
+        when(objectMapper.copy()).thenReturn(new ObjectMapper());
+
+        AiContentResponse result = customEmailService.generateAiContent(owner, "Write an email");
+
+        assertEquals("Test", result.getSubject());
+        assertFalse(result.getHtmlContent().contains("<script>"));
+        assertTrue(result.getHtmlContent().contains("<p>Hello</p>"));
+    }
+
+    @Test
+    void testGenerateAiTemplate_AppendsUnsubscribeAndSanitizes() throws Exception {
+        String templateJson = "{\"subject\":\"Promo\",\"body\":\"<!DOCTYPE html><html><body><h1>Promo!</h1><iframe src='bad'></iframe></body></html>\"}";
+        AiMessage message = new AiMessage(templateJson);
+        Response<AiMessage> mockResponse = new Response<>(message, new TokenUsage(10, 10), null);
+        
+        when(chatLanguageModel.generate(anyList())).thenReturn(mockResponse);
+        when(objectMapper.copy()).thenReturn(new ObjectMapper());
+
+        AiTemplateResponse result = customEmailService.generateAiTemplate(owner, "Make a template");
+
+        assertEquals("Promo", result.getSubject());
+        assertTrue(result.getHtml().contains("{{unsubscribe_link}}"));
+        assertFalse(result.getHtml().contains("<iframe"));
     }
 }

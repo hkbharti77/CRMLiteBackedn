@@ -67,7 +67,7 @@ public class WhatsAppCampaignService {
      */
     @Transactional
     public WhatsAppCampaign createCampaign(String name, String templateIdOrName, WhatsAppCampaign.TargetType targetType,
-                                            String targetFilterJson, String variableMappingJson, User owner) {
+                                            String targetFilterJson, String variableMappingJson, Boolean saveImportedRecipients, User owner) {
 
         if (templateIdOrName == null || templateIdOrName.trim().isEmpty()) {
             throw new IllegalArgumentException("Template ID or template name must be provided");
@@ -121,6 +121,7 @@ public class WhatsAppCampaignService {
                 .targetType(targetType != null ? targetType : WhatsAppCampaign.TargetType.ALL_CONTACTS)
                 .targetFilterJson(targetFilterJson)
                 .variableMappingJson(variableMappingJson)
+                .saveImportedRecipients(saveImportedRecipients != null ? saveImportedRecipients : false)
                 .owner(owner)
                 .build();
 

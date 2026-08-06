@@ -60,6 +60,21 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.BAD_REQUEST, ex.getMessage(), null);
     }
 
+    @ExceptionHandler(DuplicateContactException.class)
+    public ResponseEntity<Map<String, Object>> handleDuplicateContact(
+            DuplicateContactException ex) {
+        return errorResponse(HttpStatus.CONFLICT, ex.getMessage(), null);
+    }
+
+    @ExceptionHandler(org.springframework.dao.DataIntegrityViolationException.class)
+    public ResponseEntity<Map<String, Object>> handleDataIntegrityViolation(
+            org.springframework.dao.DataIntegrityViolationException ex) {
+        if (ex.getMessage() != null && ex.getMessage().contains("uk_contact_waid_owner")) {
+            return errorResponse(HttpStatus.CONFLICT, "A contact with this WhatsApp number already exists.", null);
+        }
+        return errorResponse(HttpStatus.BAD_REQUEST, "Database constraint violation.", null);
+    }
+
     // ── Billing & Quotas ──────────────────────────────────────────────────────
 
     @ExceptionHandler(QuotaEnforcerService.QuotaExceededException.class)

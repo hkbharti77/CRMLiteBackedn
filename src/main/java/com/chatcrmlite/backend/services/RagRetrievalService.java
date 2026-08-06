@@ -17,6 +17,9 @@ import dev.langchain4j.model.output.TokenUsage;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 
+import com.chatcrmlite.backend.models.Tenant;
+import com.chatcrmlite.backend.repositories.TenantRepository;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -42,6 +45,9 @@ public class RagRetrievalService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private TenantRepository tenantRepository;
 
     @Autowired
     private AIQuotaService quotaService;
@@ -104,9 +110,14 @@ public class RagRetrievalService {
             return null; 
         }
 
-        // 5. Build Structured Prompt (Injection Resistant)
-        String niche = user.getBusinessType(); 
-        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche);
+        // 5. Build Structured Prompt (Injection Resistant + Layered Persona)
+        String niche = user.getBusinessType();
+        String tenantPersona = null;
+        Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
+        if (tenant != null) {
+            tenantPersona = tenant.getAiPersonaPrompt();
+        }
+        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche, tenantPersona);
 
         // 6. Generate Response
         Response<AiMessage> responseObj = chatLanguageModel.generate(List.of(UserMessage.from(prompt)));

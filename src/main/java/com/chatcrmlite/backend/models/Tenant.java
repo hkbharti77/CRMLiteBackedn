@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "tenants")
@@ -44,6 +45,16 @@ public class Tenant implements Serializable {
 
     @Column(name = "email_footer_text", columnDefinition = "TEXT")
     private String emailFooterText;
+
+    @Size(max = 4000)
+    @Column(name = "ai_persona_prompt", columnDefinition = "TEXT")
+    private String aiPersonaPrompt;
+
+    @Column(name = "ai_persona_updated_at")
+    private LocalDateTime aiPersonaUpdatedAt;
+
+    @Column(name = "ai_persona_updated_by")
+    private UUID aiPersonaUpdatedBy;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -102,7 +113,7 @@ public class Tenant implements Serializable {
 
     public Tenant() {}
 
-    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, Boolean forceShowBooking, Boolean forceShowAppointment, Boolean forceShowLeads, PrimaryResource primaryResource, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users) {
+    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, Boolean forceShowBooking, Boolean forceShowAppointment, Boolean forceShowLeads, PrimaryResource primaryResource, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users, String aiPersonaPrompt, LocalDateTime aiPersonaUpdatedAt, UUID aiPersonaUpdatedBy) {
         this.id = id;
         this.businessName = businessName;
         this.businessType = businessType;
@@ -121,6 +132,9 @@ public class Tenant implements Serializable {
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.whatsappConfig = whatsappConfig;
         this.users = users != null ? users : new HashSet<>();
+        this.aiPersonaPrompt = aiPersonaPrompt;
+        this.aiPersonaUpdatedAt = aiPersonaUpdatedAt;
+        this.aiPersonaUpdatedBy = aiPersonaUpdatedBy;
     }
 
     public UUID getId() { return id; }
@@ -161,6 +175,15 @@ public class Tenant implements Serializable {
 
     public String getEmailFooterText() { return emailFooterText; }
     public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+
+    public String getAiPersonaPrompt() { return aiPersonaPrompt; }
+    public void setAiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; }
+
+    public LocalDateTime getAiPersonaUpdatedAt() { return aiPersonaUpdatedAt; }
+    public void setAiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; }
+
+    public UUID getAiPersonaUpdatedBy() { return aiPersonaUpdatedBy; }
+    public void setAiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; }
 
     public User.PlanType getPlanType() { return planType; }
     public void setPlanType(User.PlanType planType) { this.planType = planType; }
@@ -230,6 +253,9 @@ public class Tenant implements Serializable {
         private LocalDateTime createdAt;
         private WhatsAppConfig whatsappConfig;
         private Set<User> users;
+        private String aiPersonaPrompt;
+        private LocalDateTime aiPersonaUpdatedAt;
+        private UUID aiPersonaUpdatedBy;
 
         public TenantBuilder id(UUID id) { this.id = id; return this; }
         public TenantBuilder businessName(String businessName) { this.businessName = businessName; return this; }
@@ -251,9 +277,12 @@ public class Tenant implements Serializable {
         public TenantBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public TenantBuilder whatsappConfig(WhatsAppConfig whatsappConfig) { this.whatsappConfig = whatsappConfig; return this; }
         public TenantBuilder users(Set<User> users) { this.users = users; return this; }
+        public TenantBuilder aiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; return this; }
+        public TenantBuilder aiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; return this; }
+        public TenantBuilder aiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; return this; }
 
         public Tenant build() {
-            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users);
+            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users, aiPersonaPrompt, aiPersonaUpdatedAt, aiPersonaUpdatedBy);
         }
     }
 }

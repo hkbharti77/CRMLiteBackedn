@@ -21,8 +21,8 @@ public interface LeadService {
     long getActiveLeadCountByContactId(UUID contactId, User owner);
     long getTotalLeadCount(User owner);
     long getLeadCountByStatus(Lead.LeadStatus status, User owner);
-    Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status);
-    Lead updateStatus(UUID leadId, Lead.LeadStatus status, User owner);
+    Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status, String search);
+    Lead updateStatus(UUID leadId, Lead.LeadStatus status, java.math.BigDecimal dealValue, String lostReason, Lead.PaymentStatus paymentStatus, Boolean sendPaymentLink, String paymentMethod, String paymentLinkUrl, User owner);
     EnquiryDTO addEnquiry(UUID leadId, EnquiryRequest req, User owner);
     EnquiryDTO updateEnquiry(UUID leadId, String enquiryId, EnquiryRequest req, User owner);
     void deleteEnquiry(UUID leadId, String enquiryId, User owner);

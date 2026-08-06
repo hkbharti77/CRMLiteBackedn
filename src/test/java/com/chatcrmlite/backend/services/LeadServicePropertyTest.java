@@ -82,7 +82,7 @@ public class LeadServicePropertyTest {
         Lead.LeadStatus originalStatus = targetLead.getStatus();
 
         // Act: Update one lead's status
-        leadService.updateStatus(targetLead.getId(), newStatus, owner);
+        leadService.updateStatus(targetLead.getId(), newStatus, null, null, null, null, null, null, owner);
 
         // Assert: Other leads remain unchanged
         List<Lead> updatedLeads = leadService.getLeadsByContactId(contact.getId(), owner);
@@ -346,7 +346,7 @@ public class LeadServicePropertyTest {
         }
 
         // Act: Get all leads for the owner
-        List<Lead> allLeads = leadService.getLeadsByUserPaged(owner, 0, 100, null).getContent();
+        List<Lead> allLeads = leadService.getLeadsByUserPaged(owner, 0, 100, null, null).getContent();
 
         // Assert: All leads have valid contact references
         for (Lead lead : allLeads) {

@@ -8,8 +8,6 @@ import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.chatcrmlite.backend.services.campaign.segment.*;
-import com.chatcrmlite.backend.dto.AudienceFilterDTO;
-import org.springframework.data.jpa.domain.Specification;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -27,7 +25,6 @@ public class BaseAudienceResolver {
     protected final TagSegmentParser tagSegmentParser;
     protected final TagSegmentValidator tagSegmentValidator;
     protected final TagSegmentMatcher tagSegmentMatcher;
-    protected final AudienceSpecificationBuilder audienceSpecificationBuilder;
 
     public List<Contact> resolveContacts(User owner, String targetType, String filterJson) {
         if ("ALL_CONTACTS".equals(targetType) || "ALL".equals(targetType)) {
@@ -68,17 +65,6 @@ public class BaseAudienceResolver {
                 }
             }
             return contacts;
-        }
-
-        if ("ADVANCED".equals(targetType)) {
-            try {
-                AudienceFilterDTO filterDTO = objectMapper.readValue(filterJson, AudienceFilterDTO.class);
-                Specification<Contact> spec = audienceSpecificationBuilder.buildSpecification(owner, filterDTO);
-                return contactRepository.findAll(spec);
-            } catch (Exception e) {
-                log.error("Failed to resolve advanced audience", e);
-                return new ArrayList<>();
-            }
         }
 
         return new ArrayList<>();

@@ -3,7 +3,6 @@ package com.chatcrmlite.backend.services.email;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.services.campaign.BaseAudienceResolver;
-import com.chatcrmlite.backend.services.campaign.AudienceSpecificationBuilder;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,8 +18,8 @@ import com.chatcrmlite.backend.services.campaign.segment.TagSegmentValidator;
 @Service
 public class EmailAudienceResolver extends BaseAudienceResolver {
 
-    public EmailAudienceResolver(ContactRepository contactRepository, LeadRepository leadRepository, ObjectMapper objectMapper, TagSegmentParser tagSegmentParser, TagSegmentValidator tagSegmentValidator, TagSegmentMatcher tagSegmentMatcher, AudienceSpecificationBuilder audienceSpecificationBuilder) {
-        super(contactRepository, leadRepository, objectMapper, tagSegmentParser, tagSegmentValidator, tagSegmentMatcher, audienceSpecificationBuilder);
+    public EmailAudienceResolver(ContactRepository contactRepository, LeadRepository leadRepository, ObjectMapper objectMapper, TagSegmentParser tagSegmentParser, TagSegmentValidator tagSegmentValidator, TagSegmentMatcher tagSegmentMatcher) {
+        super(contactRepository, leadRepository, objectMapper, tagSegmentParser, tagSegmentValidator, tagSegmentMatcher);
     }
 
     public List<String> resolveEmailAddresses(User owner, String targetType, String filterJson) {

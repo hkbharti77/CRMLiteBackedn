@@ -31,43 +31,60 @@ public class CampaignAudienceResolver {
     public void resolveAndFreezeAudience(WhatsAppCampaign campaign) {
         log.info("[AudienceResolver] Resolving immutable audience snapshot for campaignId={} targetType={}", campaign.getId(), campaign.getTargetType());
 
-        List<Contact> targetContacts = fetchTargetContacts(campaign);
-        int totalTargeted = targetContacts.size();
+        List<TransientRecipient> targetRecipients = fetchTargetRecipients(campaign);
+        int totalTargeted = targetRecipients.size();
 
         int validCount = 0;
         int skippedCount = 0;
 
         List<WhatsAppCampaignRecipient> recipientsToSave = new ArrayList<>();
+        Set<String> processedPhones = new HashSet<>();
 
-        for (Contact contact : targetContacts) {
-            // Check uniqueness
-            if (recipientRepository.existsByCampaignIdAndContactId(campaign.getId(), contact.getId())) {
-                skippedCount++;
-                continue;
-            }
-
-            // 1. Phone validation
-            String phone = contact.getWaId() != null ? contact.getWaId() : contact.getPhone();
+        for (TransientRecipient tr : targetRecipients) {
+            String phone = tr.getPhone();
             if (phone == null || phone.isBlank() || !isValidPhoneNumber(phone)) {
-                recordSkippedRecipient(campaign, contact, phone, "INVALID_PHONE");
+                recordSkippedRecipient(campaign, tr.getContact(), phone, "INVALID_PHONE");
                 skippedCount++;
                 continue;
             }
 
-            // Normalize phone number
+            // Normalize phone number to E.164
             String normalizedPhone = phone.startsWith("+") ? phone : "+" + phone.replaceAll("[^0-9]", "");
 
-            // 2. Opt-out / DND validation
-            if (Boolean.TRUE.equals(contact.getOptedOut()) || Boolean.TRUE.equals(contact.getBlacklisted())) {
+            // Deduplicate in this campaign
+            if (processedPhones.contains(normalizedPhone)) {
+                skippedCount++;
+                continue;
+            }
+            processedPhones.add(normalizedPhone);
+
+            // Check uniqueness in DB (only if contact is present and persisted)
+            if (tr.getContact() != null && tr.getContact().getId() != null) {
+                if (recipientRepository.existsByCampaignIdAndContactId(campaign.getId(), tr.getContact().getId())) {
+                    skippedCount++;
+                    continue;
+                }
+            } else {
+                // For transient contacts, check by phone number instead
+                // (though the DB unique constraint on (campaign_id, phone_number) will also enforce this)
+            }
+
+            Contact contact = tr.getContact();
+
+            // Opt-out / DND validation
+            if (contact != null && (Boolean.TRUE.equals(contact.getOptedOut()) || Boolean.TRUE.equals(contact.getBlacklisted()))) {
                 recordSkippedRecipient(campaign, contact, normalizedPhone, "OPTED_OUT_OR_BLACK_LISTED");
                 skippedCount++;
                 continue;
             }
 
-            // Fetch primary lead for parameter resolution if available
-            Lead lead = leadRepository.findTopByContactOrderByCreatedAtDesc(contact).orElse(null);
+            // Fetch primary lead for parameter resolution if available (only for persisted contacts)
+            Lead lead = null;
+            if (contact != null && contact.getId() != null) {
+                lead = leadRepository.findTopByContactOrderByCreatedAtDesc(contact).orElse(null);
+            }
 
-            // Pre-render parameter values JSON
+            // Pre-render parameter values JSON. We pass the contact (which might be transient with name/email).
             List<String> renderedParams = personalizationEngine.renderTemplateParameters(
                     campaign.getVariableMappingJson(),
                     contact,
@@ -79,12 +96,12 @@ public class CampaignAudienceResolver {
             try {
                 paramsJson = objectMapper.writeValueAsString(renderedParams);
             } catch (Exception e) {
-                log.warn("[AudienceResolver] Failed to serialize parameters for contact={}", contact.getId());
+                log.warn("[AudienceResolver] Failed to serialize parameters for phone={}", normalizedPhone);
             }
 
             WhatsAppCampaignRecipient recipient = WhatsAppCampaignRecipient.builder()
                     .campaign(campaign)
-                    .contact(contact)
+                    .contact(contact != null && contact.getId() != null ? contact : null) // Only link if it's a persisted contact
                     .phoneNumber(normalizedPhone)
                     .resolvedVariablesJson(paramsJson)
                     .status(WhatsAppCampaignRecipient.RecipientStatus.PENDING)
@@ -116,10 +133,15 @@ public class CampaignAudienceResolver {
                 campaign.getId(), totalTargeted, validCount, skippedCount);
     }
 
-    private List<Contact> fetchTargetContacts(WhatsAppCampaign campaign) {
+    private List<TransientRecipient> fetchTargetRecipients(WhatsAppCampaign campaign) {
         User owner = campaign.getOwner();
+        List<TransientRecipient> result = new ArrayList<>();
+
         if (campaign.getTargetType() == WhatsAppCampaign.TargetType.ALL_CONTACTS) {
-            return contactRepository.findAllByOwner(owner);
+            for (Contact c : contactRepository.findAllByOwner(owner)) {
+                result.add(new TransientRecipient(c, c.getWaId() != null ? c.getWaId() : c.getPhone()));
+            }
+            return result;
         }
 
         if (campaign.getTargetType() == WhatsAppCampaign.TargetType.TAG_BASED) {
@@ -128,10 +150,12 @@ public class CampaignAudienceResolver {
             
             List<Contact> ownerContacts = contactRepository.findAllByOwnerWithTags(owner);
             if (tagIds.isEmpty() && tagNames.isEmpty()) {
-                return ownerContacts;
+                for (Contact c : ownerContacts) {
+                    result.add(new TransientRecipient(c, c.getWaId() != null ? c.getWaId() : c.getPhone()));
+                }
+                return result;
             }
 
-            List<Contact> filtered = new ArrayList<>();
             for (Contact c : ownerContacts) {
                 if (c.getTags() != null) {
                     boolean matchesTag = c.getTags().stream().anyMatch(t -> 
@@ -139,17 +163,20 @@ public class CampaignAudienceResolver {
                         (t.getName() != null && tagNames.stream().anyMatch(tn -> tn.equalsIgnoreCase(t.getName())))
                     );
                     if (matchesTag) {
-                        filtered.add(c);
+                        result.add(new TransientRecipient(c, c.getWaId() != null ? c.getWaId() : c.getPhone()));
                     }
                 }
             }
-            return filtered;
+            return result;
         }
 
         if (campaign.getTargetType() == WhatsAppCampaign.TargetType.LEAD_STATUS_BASED) {
             List<String> statuses = parseStringsFromJson(campaign.getTargetFilterJson(), "leadStatuses");
             if (statuses.isEmpty()) {
-                return contactRepository.findAllByOwner(owner);
+                for (Contact c : contactRepository.findAllByOwner(owner)) {
+                    result.add(new TransientRecipient(c, c.getWaId() != null ? c.getWaId() : c.getPhone()));
+                }
+                return result;
             }
             List<Lead.LeadStatus> leadStatuses = new ArrayList<>();
             for (String s : statuses) {
@@ -158,17 +185,19 @@ public class CampaignAudienceResolver {
                 } catch (Exception ignored) {}
             }
             List<Lead> leads = leadRepository.findByOwnerAndStatusIn(owner, leadStatuses);
-            List<Contact> contacts = new ArrayList<>();
+            Set<UUID> addedContacts = new HashSet<>();
             for (Lead l : leads) {
-                if (l.getContact() != null && !contacts.contains(l.getContact())) {
-                    contacts.add(l.getContact());
+                if (l.getContact() != null && !addedContacts.contains(l.getContact().getId())) {
+                    addedContacts.add(l.getContact().getId());
+                    result.add(new TransientRecipient(l.getContact(), l.getContact().getWaId() != null ? l.getContact().getWaId() : l.getContact().getPhone()));
                 }
             }
-            return contacts;
+            return result;
         }
 
         if (campaign.getTargetType() == WhatsAppCampaign.TargetType.CSV_EXCEL_UPLOAD) {
-            List<Contact> csvContacts = new ArrayList<>();
+            boolean saveImported = Boolean.TRUE.equals(campaign.getSaveImportedRecipients());
+            
             try {
                 if (campaign.getTargetFilterJson() != null && !campaign.getTargetFilterJson().isBlank()) {
                     Map<String, Object> map = objectMapper.readValue(campaign.getTargetFilterJson(), new TypeReference<Map<String, Object>>() {});
@@ -186,6 +215,14 @@ public class CampaignAudienceResolver {
                             if (o instanceof Map) {
                                 Map<?, ?> item = (Map<?, ?>) o;
 
+                                // Defensively lowercase map keys to handle Name, name, NAME seamlessly
+                                Map<String, String> lowerKeysItem = new HashMap<>();
+                                for (Map.Entry<?, ?> entry : item.entrySet()) {
+                                    if (entry.getKey() != null && entry.getValue() != null) {
+                                        lowerKeysItem.put(entry.getKey().toString().toLowerCase().trim(), entry.getValue().toString().trim());
+                                    }
+                                }
+
                                 // Apply column filters using AND / OR logic
                                 if (appliedFilters != null && !appliedFilters.isEmpty()) {
                                     boolean isOrLogic = "OR".equalsIgnoreCase(filterMatchLogic);
@@ -194,12 +231,12 @@ public class CampaignAudienceResolver {
                                     for (Object filterObj : appliedFilters) {
                                         if (filterObj instanceof Map) {
                                             Map<?, ?> filter = (Map<?, ?>) filterObj;
-                                            String filterColumn = filter.get("column") != null ? filter.get("column").toString() : null;
+                                            String filterColumn = filter.get("column") != null ? filter.get("column").toString().toLowerCase().trim() : null;
                                             String filterOperator = filter.get("operator") != null ? filter.get("operator").toString() : "EQUALS";
                                             String filterValue = filter.get("value") != null ? filter.get("value").toString() : "";
 
                                             if (filterColumn != null && !filterValue.isBlank()) {
-                                                String cellValue = item.get(filterColumn) != null ? item.get(filterColumn).toString() : "";
+                                                String cellValue = lowerKeysItem.getOrDefault(filterColumn, "");
                                                 boolean match = matchesFilter(cellValue, filterOperator, filterValue);
                                                 if (isOrLogic) {
                                                     if (match) {
@@ -220,34 +257,66 @@ public class CampaignAudienceResolver {
                                     }
                                 }
 
-                                // Resolve phone number — try dynamic phoneColumn first, then fallbacks
+                                // Resolve phone number
                                 String phone = null;
-                                if (phoneColumn != null && item.get(phoneColumn) != null) {
-                                    phone = item.get(phoneColumn).toString();
+                                if (phoneColumn != null) {
+                                    phone = lowerKeysItem.get(phoneColumn.toLowerCase().trim());
                                 }
                                 if (phone == null || phone.isBlank()) {
-                                    phone = item.get("phone") != null ? item.get("phone").toString() :
-                                           item.get("phoneNumber") != null ? item.get("phoneNumber").toString() : null;
+                                    phone = lowerKeysItem.get("phone");
+                                    if (phone == null || phone.isBlank()) {
+                                        phone = lowerKeysItem.get("phonenumber");
+                                    }
                                 }
 
                                 if (phone != null && !phone.isBlank()) {
                                     String cleanPhone = phone.startsWith("+") ? phone : "+" + phone.replaceAll("[^0-9]", "");
-                                    String name = item.get("name") != null ? item.get("name").toString() : "CSV Recipient";
-                                    String email = item.get("email") != null ? item.get("email").toString() : null;
+                                    
+                                    String name = lowerKeysItem.get("name");
+                                    String email = lowerKeysItem.get("email");
 
-                                    Contact contact = contactRepository.findByWaIdAndOwner(cleanPhone, owner)
-                                            .orElseGet(() -> {
-                                                Contact c = Contact.builder()
-                                                        .waId(cleanPhone)
-                                                        .name(name)
-                                                        .email(email)
-                                                        .owner(owner)
-                                                        .build();
-                                                c.setTenant(owner.getTenant());
-                                                return contactRepository.save(c);
-                                            });
-                                    if (!csvContacts.contains(contact)) {
-                                        csvContacts.add(contact);
+                                    if (saveImported) {
+                                        // Save or Update contact without overwriting existing manual names
+                                        Contact contact = contactRepository.findByWaIdAndOwner(cleanPhone, owner)
+                                                .orElseGet(() -> {
+                                                    Contact c = Contact.builder()
+                                                            .waId(cleanPhone)
+                                                            .name(name)
+                                                            .email(email)
+                                                            .owner(owner)
+                                                            .build();
+                                                    c.setTenant(owner.getTenant());
+                                                    return c;
+                                                });
+                                        
+                                        // If contact already existed, we can fill blank fields safely
+                                        if (contact.getId() != null) {
+                                            boolean updated = false;
+                                            if (name != null && !name.isBlank() && (contact.getName() == null || contact.getName().isBlank())) {
+                                                contact.setName(name);
+                                                updated = true;
+                                            }
+                                            if (email != null && !email.isBlank() && (contact.getEmail() == null || contact.getEmail().isBlank())) {
+                                                contact.setEmail(email);
+                                                updated = true;
+                                            }
+                                            if (updated) {
+                                                contact = contactRepository.save(contact);
+                                            }
+                                        } else {
+                                            // New contact
+                                            contact = contactRepository.save(contact);
+                                        }
+                                        result.add(new TransientRecipient(contact, cleanPhone));
+                                    } else {
+                                        // Do not save to DB. Build a transient contact just for personalization rendering.
+                                        Contact transientContact = Contact.builder()
+                                                .waId(cleanPhone)
+                                                .name(name)
+                                                .email(email)
+                                                .owner(owner)
+                                                .build();
+                                        result.add(new TransientRecipient(transientContact, cleanPhone));
                                     }
                                 }
                             }
@@ -257,15 +326,18 @@ public class CampaignAudienceResolver {
             } catch (Exception e) {
                 log.error("[AudienceResolver] Error parsing CSV recipients for campaignId={}: {}", campaign.getId(), e.getMessage());
             }
-            return csvContacts;
+            return result;
         }
 
-        return contactRepository.findAllByOwner(owner);
+        // Fallback
+        for (Contact c : contactRepository.findAllByOwner(owner)) {
+            result.add(new TransientRecipient(c, c.getWaId() != null ? c.getWaId() : c.getPhone()));
+        }
+        return result;
     }
 
     /**
      * Evaluates whether a cell value matches the given filter operator and value.
-     * Supports: EQUALS, CONTAINS, STARTS_WITH, NOT_EQUALS, IN (comma-separated list).
      */
     private boolean matchesFilter(String cellValue, String operator, String filterValue) {
         if (cellValue == null) cellValue = "";
@@ -300,7 +372,7 @@ public class CampaignAudienceResolver {
     private void recordSkippedRecipient(WhatsAppCampaign campaign, Contact contact, String phone, String reason) {
         WhatsAppCampaignRecipient recipient = WhatsAppCampaignRecipient.builder()
                 .campaign(campaign)
-                .contact(contact)
+                .contact(contact != null && contact.getId() != null ? contact : null)
                 .phoneNumber(phone != null ? phone : "UNKNOWN")
                 .status(WhatsAppCampaignRecipient.RecipientStatus.SKIPPED)
                 .skipReason(reason)
@@ -339,5 +411,12 @@ public class CampaignAudienceResolver {
         } catch (Exception e) {
             return Collections.emptyList();
         }
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    private static class TransientRecipient {
+        private Contact contact;
+        private String phone;
     }
 }

@@ -2,6 +2,8 @@ package com.chatcrmlite.backend.controllers;
 
 import com.chatcrmlite.backend.dto.CustomEmailDTO;
 import com.chatcrmlite.backend.dto.CustomEmailRequest;
+import com.chatcrmlite.backend.dto.AiContentResponse;
+import com.chatcrmlite.backend.dto.AiTemplateResponse;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.CustomEmailService;
@@ -72,13 +74,22 @@ public class CustomEmailController {
         return ResponseEntity.ok(Map.of("message", msg));
     }
 
-    @PostMapping("/generate-ai")
-    public ResponseEntity<Map<String, String>> generateAi(@RequestBody Map<String, String> request) {
+    @PostMapping("/ai/generate-content")
+    public ResponseEntity<AiContentResponse> generateAiContent(@RequestBody Map<String, String> request) {
         String prompt = request.get("prompt");
         if (prompt == null || prompt.isBlank()) {
             return ResponseEntity.badRequest().build();
         }
         return ResponseEntity.ok(customEmailService.generateAiContent(me(), prompt));
+    }
+
+    @PostMapping("/ai/generate-template")
+    public ResponseEntity<AiTemplateResponse> generateAiTemplate(@RequestBody Map<String, String> request) {
+        String prompt = request.get("prompt");
+        if (prompt == null || prompt.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(customEmailService.generateAiTemplate(me(), prompt));
     }
 
     @PostMapping("/audience/preview")
