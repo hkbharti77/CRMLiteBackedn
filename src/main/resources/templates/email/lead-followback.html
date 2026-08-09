@@ -2,41 +2,48 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title th:text="${subject ?: 'Following Up'}">Follow Up</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${subject ?: 'Following Up'}">Following Up</title>
 </head>
-<body>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
-<div th:replace="~{email/base :: header(heading='Following Up',greeting='Hi ' + ${contactName} + ',',intro='')}"></div>
+<div th:replace="~{email/base :: header(
+      heading  = 'Following Up with You',
+      greeting = 'Hi ' + (${contactName} ?: 'there') + ',',
+      intro    = 'Thank you for connecting with us. We wanted to share the following details with you:')}">
+</div>
 
-<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
   <tr>
     <td align="center">
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
         <tr>
-          <td style="padding:0 36px 28px;">
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-            <!-- ── FOLLOWBACK CONTENT CONTAINER ─────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:24px;margin:0 0 24px;">
-              <div th:utext="${content}" class="text-main" style="color:#111827;font-size:15px;line-height:1.7;">
-                Template content goes here.
+            <!-- ── FOLLOWBACK CONTENT CARD ─────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:22px;margin:0 0 20px;">
+              <div th:utext="${content}" class="text-main" style="color:#1E293B;font-size:15px;line-height:1.7;">
+                Template message content...
               </div>
             </div>
 
-            <p class="text-muted" style="color:#4B5563;font-size:14px;line-height:1.5;margin:0;">
-              Best regards,<br/>
-              <strong class="text-main" th:text="${businessName}" style="color:#111827;">Your Business</strong>
+            <!-- Signature -->
+            <p class="text-muted" style="color:#475569;font-size:14px;line-height:1.5;margin:0;">
+              Warm regards,<br/>
+              <strong class="text-main" th:text="${businessName ?: 'Our Team'}" style="color:#0F172A;font-weight:700;">Workspace Team</strong>
             </p>
 
           </td>
         </tr>
       </table>
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       </td>
       </tr>
       </table>
@@ -45,7 +52,11 @@
   </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote='You received this because you contacted us.',ctaLabel=null,ctaUrl=null)}"></div>
+<div th:replace="~{email/base :: footer(
+      footerNote = 'You received this notification because of an active inquiry or interaction with our team.',
+      ctaLabel   = null,
+      ctaUrl     = null)}">
+</div>
 
 </body>
 </html>

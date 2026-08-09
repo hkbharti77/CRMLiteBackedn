@@ -41,6 +41,59 @@ public class PublicChatController {
     @Autowired
     private WebChatService webChatService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.livechat.LiveSupportService liveSupportService;
+
+    @Autowired
+    private com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
+
+    @PostMapping("/livechat/request/{businessId}")
+    public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
+            @PathVariable UUID businessId,
+            @RequestBody Map<String, String> request) {
+
+        String sessionId = request.getOrDefault("sessionId", "web_session_" + UUID.randomUUID().toString());
+        String name = request.getOrDefault("name", "Website Visitor");
+        String email = request.get("email");
+        String phone = request.get("phone");
+
+        User owner = userRepository.findById(businessId).orElse(null);
+        if (owner == null) return ResponseEntity.notFound().build();
+
+        String waId = "web:" + sessionId;
+        com.chatcrmlite.backend.models.Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
+                .orElseGet(() -> {
+                    com.chatcrmlite.backend.models.Contact c = new com.chatcrmlite.backend.models.Contact();
+                    c.setWaId(waId);
+                    c.setName(name);
+                    c.setEmail(email);
+                    c.setOwner(owner);
+                    c.setTenant(owner.getTenant());
+                    c.setSource("WEBCHAT");
+                    return contactRepository.save(c);
+                });
+
+        if (name != null && !name.isBlank()) contact.setName(name);
+        if (email != null && !email.isBlank()) contact.setEmail(email);
+        contactRepository.save(contact);
+
+        com.chatcrmlite.backend.models.livechat.SupportState state = liveSupportService.requestHumanSupport(contact, UUID.randomUUID().toString());
+
+        Map<String, Object> res = new java.util.HashMap<>();
+        res.put("state", state.name());
+        res.put("botPaused", contact.isBotPaused());
+
+        if (state == com.chatcrmlite.backend.models.livechat.SupportState.ASSIGNED) {
+            String agentName = contact.getAssignedAgent() != null ? contact.getAssignedAgent().getDisplayName() : "our agent";
+            res.put("response", "🟢 You are now connected with support agent " + agentName + "! How can we assist you today?");
+            res.put("assignedAgentName", agentName);
+        } else {
+            res.put("response", "⏳ All support agents are currently busy. You have been placed in queue. Expected wait time: 30 to 60 minutes. Please hold on!");
+        }
+
+        return ResponseEntity.ok(res);
+    }
+
     @GetMapping("/config/{businessId}")
     public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
         return userRepository.findById(businessId)

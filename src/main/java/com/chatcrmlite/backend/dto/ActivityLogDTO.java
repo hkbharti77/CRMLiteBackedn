@@ -52,15 +52,41 @@ public class ActivityLogDTO {
      * Safely accesses lazy-loaded relationships within an active session.
      */
     public static ActivityLogDTO fromEntity(ActivityLog log) {
+        // Safely resolve contact name — fall back to waId if name not set
+        String contactName = null;
+        String contactEmail = null;
+        String contactPhone = null;
+        UUID contactId = null;
+        if (log.getContact() != null) {
+            contactId = log.getContact().getId();
+            contactName = log.getContact().getName() != null && !log.getContact().getName().isBlank()
+                    ? log.getContact().getName()
+                    : log.getContact().getWaId();
+            contactEmail = log.getContact().getEmail();
+            contactPhone = log.getContact().getWaId();
+        }
+
+        // Safely resolve owner name — fall back to email if displayName not set
+        String ownerName = null;
+        String ownerEmail = null;
+        UUID ownerId = null;
+        if (log.getOwner() != null) {
+            ownerId = log.getOwner().getId();
+            ownerEmail = log.getOwner().getEmail();
+            ownerName = log.getOwner().getDisplayName() != null && !log.getOwner().getDisplayName().isBlank()
+                    ? log.getOwner().getDisplayName()
+                    : log.getOwner().getEmail();
+        }
+
         return ActivityLogDTO.builder()
                 .id(log.getId())
-                .ownerId(log.getOwner().getId())
-                .ownerEmail(log.getOwner().getEmail())
-                .ownerName(log.getOwner().getDisplayName())
-                .contactId(log.getContact().getId())
-                .contactName(log.getContact().getName())
-                .contactEmail(log.getContact().getEmail())
-                .contactPhone(log.getContact().getWaId())
+                .ownerId(ownerId)
+                .ownerEmail(ownerEmail)
+                .ownerName(ownerName)
+                .contactId(contactId)
+                .contactName(contactName)
+                .contactEmail(contactEmail)
+                .contactPhone(contactPhone)
                 .entityType(log.getEntityType())
                 .entityId(log.getEntityId())
                 .activityType(log.getActivityType())

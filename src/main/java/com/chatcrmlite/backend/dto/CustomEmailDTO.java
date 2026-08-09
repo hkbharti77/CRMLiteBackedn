@@ -7,6 +7,7 @@ import java.util.UUID;
 public class CustomEmailDTO {
 
     private UUID id;
+    private String name;
     private String subject;
     private String body;
     private String ctaLabel;
@@ -43,7 +44,7 @@ public class CustomEmailDTO {
 
     public CustomEmailDTO() {}
 
-    public CustomEmailDTO(UUID id, String subject, String body, String ctaLabel, String ctaUrl, 
+    public CustomEmailDTO(UUID id, String name, String subject, String body, String ctaLabel, String ctaUrl, 
                          CustomEmail.RecipientMode recipientMode, String tagsFilter, CustomEmail.EmailStatus status, 
                          LocalDateTime sentAt, LocalDateTime scheduledAt, LocalDateTime startedAt, LocalDateTime completedAt,
                          LocalDateTime pausedAt, LocalDateTime cancelledAt, int totalRecipients, int processedRecipients,
@@ -52,6 +53,7 @@ public class CustomEmailDTO {
                          double openRate, double clickRate, double clickToOpenRate, double bounceRate, double unsubscribeRate,
                          LocalDateTime createdAt) {
         this.id = id;
+        this.name = name;
         this.subject = subject;
         this.body = body;
         this.ctaLabel = ctaLabel;
@@ -83,6 +85,8 @@ public class CustomEmailDTO {
 
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
     public String getBody() { return body; }
@@ -148,6 +152,7 @@ public class CustomEmailDTO {
 
     public static class CustomEmailDTOBuilder {
         private UUID id;
+        private String name;
         private String subject;
         private String body;
         private String ctaLabel;
@@ -177,6 +182,7 @@ public class CustomEmailDTO {
         private LocalDateTime createdAt;
 
         public CustomEmailDTOBuilder id(UUID id) { this.id = id; return this; }
+        public CustomEmailDTOBuilder name(String name) { this.name = name; return this; }
         public CustomEmailDTOBuilder subject(String subject) { this.subject = subject; return this; }
         public CustomEmailDTOBuilder body(String body) { this.body = body; return this; }
         public CustomEmailDTOBuilder ctaLabel(String ctaLabel) { this.ctaLabel = ctaLabel; return this; }
@@ -206,7 +212,7 @@ public class CustomEmailDTO {
         public CustomEmailDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public CustomEmailDTO build() {
-            return new CustomEmailDTO(id, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
+            return new CustomEmailDTO(id, name, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
                                       sentAt, scheduledAt, startedAt, completedAt, pausedAt, cancelledAt, totalRecipients, processedRecipients,
                                       totalSent, totalFailed, uniqueOpens, uniqueClicks, bounces, unsubscribes, openRate, clickRate, clickToOpenRate, bounceRate, unsubscribeRate, createdAt);
         }

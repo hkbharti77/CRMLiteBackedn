@@ -38,6 +38,9 @@ public class WhatsAppMenuService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.livechat.LiveSupportService liveSupportService;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url}")
     private String appPublicUrl;
 
@@ -272,15 +275,9 @@ public class WhatsAppMenuService {
         }
         if ("get_support".equals(selectionId)) {
             try {
-                String note = config.getSosNote();
-                if (note == null || note.isBlank()) note = "A human agent has been notified and will be with you shortly.";
-                outboundService.sendText(contact, note, config, owner);
-                
-                // Pause the bot so human can take over
-                contact.setBotPaused(true);
-                contactRepository.save(contact);
+                liveSupportService.requestHumanSupport(contact, java.util.UUID.randomUUID().toString());
             } catch (Exception e) {
-                log.error("Failed to send support message", e);
+                log.error("Failed to request human support for contact {}", contact.getId(), e);
             }
             return true;
         }

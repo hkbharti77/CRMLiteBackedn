@@ -55,11 +55,15 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS escalated BOOLEAN DEFAULT FALSE;");
             jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS escalated_at TIMESTAMP;");
             jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS latest_sentiment VARCHAR(255) DEFAULT 'NEUTRAL';");
+            jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS support_state VARCHAR(20) DEFAULT 'IDLE';");
+            jdbcTemplate.execute("ALTER TABLE contacts ADD COLUMN IF NOT EXISTS assigned_agent_id UUID;");
             jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sentiment VARCHAR(255) DEFAULT 'NEUTRAL';");
             jdbcTemplate.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS sentiment_score DOUBLE PRECISION DEFAULT 0.0;");
             jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS score_grade VARCHAR(255) DEFAULT 'COLD';");
             jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_scored_at TIMESTAMP;");
             jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS availability_status VARCHAR(255) DEFAULT 'AVAILABLE';");
+            jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS max_concurrent_chats INT DEFAULT 2;");
+            jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;");
         } catch (Exception e) {
             log.warn("[SchemaMigration] Column auto-migration notice: {}", e.getMessage());
         }
@@ -118,28 +122,28 @@ public class DataInitializer implements CommandLineRunner {
         if (subscriptionPlanRepository.findById("FREE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
                 "FREE", "Free Starter Pack", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                1, 100, 15, 10, 500, false, false, false
+                1, 100, 15, 10, 500, false, false, 0, false, false
             ));
             log.info("[Init] Seeded FREE subscription plan.");
         }
         if (subscriptionPlanRepository.findById("MIN").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
                 "MIN", "Starter Pack", new BigDecimal("1499.00"), new BigDecimal("14390.00"), new BigDecimal("19.99"), new BigDecimal("189.90"),
-                3, 2500, 500, 500, 3000, true, false, false
+                3, 2500, 500, 500, 3000, true, true, 2500, false, false
             ));
             log.info("[Init] Seeded MIN subscription plan.");
         }
         if (subscriptionPlanRepository.findById("PRO").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
                 "PRO", "Scale Professional", new BigDecimal("2499.00"), new BigDecimal("23990.00"), new BigDecimal("29.99"), new BigDecimal("287.90"),
-                10, 25000, 25000, 25000, 15000, true, true, true
+                10, 25000, 25000, 25000, 15000, true, true, 25000, true, true
             ));
             log.info("[Init] Seeded PRO subscription plan.");
         }
         if (subscriptionPlanRepository.findById("ENTERPRISE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
                 "ENTERPRISE", "Enterprise Max", new BigDecimal("6499.00"), new BigDecimal("62390.00"), new BigDecimal("79.99"), new BigDecimal("767.90"),
-                50, 1000000, 1000000, 1000000, 1000000, true, true, true
+                50, 1000000, 1000000, 1000000, 1000000, true, true, 1000000, true, true
             ));
             log.info("[Init] Seeded ENTERPRISE subscription plan.");
         }

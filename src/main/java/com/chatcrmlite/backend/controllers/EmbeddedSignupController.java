@@ -15,9 +15,12 @@ import java.time.LocalDateTime;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @Slf4j
 @RestController
 @RequestMapping("/api/v1/integrations/meta/oauth")
+@PreAuthorize("@perm.has(authentication, 'SETTINGS_WHATSAPP')")
 public class EmbeddedSignupController {
 
     @Autowired

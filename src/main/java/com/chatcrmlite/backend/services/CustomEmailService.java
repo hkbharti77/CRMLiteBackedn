@@ -75,8 +75,11 @@ public class CustomEmailService {
     private final com.chatcrmlite.backend.services.email.EmailProviderService emailProviderService;
     private final com.chatcrmlite.backend.services.email.ProviderFactory providerFactory;
 
-    @Value("${spring.mail.username:noreply@crm.com}")
+    @Value("${SENDER_EMAIL:${spring.mail.username:no-reply@gyanvaniai.online}}")
     private String fromAddress;
+
+    @Value("${PLATFORM_BRAND_URL:${platform.brand.url:https://gyanvaniai.online}}")
+    private String platformBrandUrl;
 
     @Autowired
     public CustomEmailService(CustomEmailRepository customEmailRepository,
@@ -144,11 +147,12 @@ public class CustomEmailService {
             prompt
         );
 
+        String fallbackUrl = (platformBrandUrl != null && !platformBrandUrl.isBlank()) ? platformBrandUrl : "https://gyanvaniai.online";
         Map<String, String> fallback = Map.of(
             "subject", "Exclusive Offer for {{lead.name}}",
             "body", "Hi {{lead.name}},<br><br>Thank you for reaching out. In response to: <em>\"" + prompt.replace("<", "&lt;").replace(">", "&gt;") + "\"</em>, we have created this custom campaign for you.<br><br>Contact us today for more details!",
             "ctaLabel", "Claim Offer →",
-            "ctaUrl", "https://gyanvaniai.com"
+            "ctaUrl", fallbackUrl
         );
 
         Map<String, String> result = callAiHelper(user, systemInstruction, userMsg, fallback, prompt);
@@ -303,6 +307,7 @@ public class CustomEmailService {
     public CustomEmailDTO saveDraft(User owner, CustomEmailRequest req) {
         CustomEmail draft = CustomEmail.builder()
                 .owner(owner)
+                .name(req.getName() != null && !req.getName().isBlank() ? req.getName().trim() : req.getSubject().trim())
                 .subject(req.getSubject().trim())
                 .body(sanitise(req.getBody()))
                 .ctaLabel(req.getCtaLabel())
@@ -318,6 +323,7 @@ public class CustomEmailService {
     public CustomEmail saveCampaign(User owner, CustomEmailRequest req) {
         CustomEmail campaign = CustomEmail.builder()
                 .owner(owner)
+                .name(req.getName() != null && !req.getName().isBlank() ? req.getName().trim() : req.getSubject().trim())
                 .subject(req.getSubject().trim())
                 .body(sanitise(req.getBody()))
                 .ctaLabel(req.getCtaLabel())
@@ -415,6 +421,7 @@ public class CustomEmailService {
         if (campaignId != null) {
             campaign = customEmailRepository.findById(campaignId).orElseThrow(() -> new RuntimeException("Campaign not found"));
             // Update fields if provided in request
+            if (req.getName() != null) campaign.setName(req.getName().trim());
             if (req.getSubject() != null) campaign.setSubject(req.getSubject().trim());
             if (req.getBody() != null) campaign.setBody(sanitise(req.getBody()));
             if (req.getCtaLabel() != null) campaign.setCtaLabel(req.getCtaLabel());
@@ -753,7 +760,8 @@ public class CustomEmailService {
         } else {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-            helper.setFrom(fromAddress);
+            helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, "GyanVaniAi", "UTF-8"));
+            helper.setReplyTo(new jakarta.mail.internet.InternetAddress(fromAddress, "GyanVaniAi", "UTF-8"));
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(html, true);
@@ -885,6 +893,7 @@ public class CustomEmailService {
 
         return CustomEmailDTO.builder()
                 .id(e.getId())
+                .name(e.getName())
                 .subject(e.getSubject())
                 .body(e.getBody())
                 .ctaLabel(e.getCtaLabel())

@@ -33,8 +33,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/whatsapp/campaigns")
+@PreAuthorize("@perm.has(authentication, 'MODULE_CAMPAIGNS')")
 @RequiredArgsConstructor
 public class WhatsAppCampaignController {
 
@@ -62,6 +65,7 @@ public class WhatsAppCampaignController {
                 request.getTargetFilterJson(),
                 request.getVariableMappingJson(),
                 request.getSaveImportedRecipients(),
+                request.getPriority(),
                 user
         );
         return ResponseEntity.ok(campaign);

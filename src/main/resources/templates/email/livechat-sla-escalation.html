@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title>CRITICAL SLA Escalation Alert</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
+
+<div th:replace="~{email/base :: header(
+    heading  = '🚨 URGENT: Support Queue SLA Escalation Alert',
+    greeting = ${greeting},
+    intro    = 'A WhatsApp support request has exceeded the SLA wait threshold without assignment!')}">
+</div>
+
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
+  <tr>
+    <td align="center">
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+        <tr>
+          <td class="content-padding" style="padding:0 32px 24px;">
+
+            <div class="card-subtle" style="background-color:#FEF2F2;border:1px solid #FCA5A5;border-radius:10px;padding:20px;margin:0 0 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:14px;border-bottom:1px solid #FEE2E2;padding-bottom:12px;">
+                <tr>
+                  <td>
+                    <span class="text-main" style="color:#991B1B;font-size:14px;font-weight:700;">
+                      🚨 Queue SLA Exceeded
+                    </span>
+                  </td>
+                  <td align="right">
+                    <span class="pill-badge" style="background-color:#EF4444;color:#FFFFFF;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">
+                      CRITICAL SLA BREACH
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
+                <tr>
+                  <td class="text-muted" style="color:#991B1B;width:140px;padding:4px 0;">Customer Name:</td>
+                  <td class="text-main" style="color:#7F1D1D;font-weight:700;padding:4px 0;" th:text="${customerName}">Customer Name</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#991B1B;padding:4px 0;">WhatsApp Phone:</td>
+                  <td class="text-main" style="color:#7F1D1D;font-weight:600;padding:4px 0;" th:text="${customerPhone}">Phone Number</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#991B1B;padding:4px 0;">Queue SLA Threshold:</td>
+                  <td class="text-main" style="color:#7F1D1D;font-weight:600;padding:4px 0;" th:text="${slaMinutes + ' Minutes'}">30 Minutes</td>
+                </tr>
+              </table>
+            </div>
+
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+<div th:replace="~{email/base :: footer(
+    footerNote = 'Please open the CRM dashboard to manually assign or takeover this queued customer.',
+    ctaLabel   = 'Manage Support Queue',
+    ctaUrl     = '#')}">
+</div>
+
+</body>
+</html>

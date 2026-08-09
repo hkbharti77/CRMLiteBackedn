@@ -32,6 +32,8 @@ public class WhatsAppCampaignService {
     private final WhatsAppCampaignRecipientRepository recipientRepository;
     private final PersonalizationEngine personalizationEngine;
     private final DistributedSchedulerService distributedSchedulerService;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    private final com.chatcrmlite.backend.services.tenant.SubscriptionEntitlementService entitlementService;
 
     /**
      * Creates or updates a template snapshot ensuring immutable version history.
@@ -68,9 +70,21 @@ public class WhatsAppCampaignService {
     @Transactional
     public WhatsAppCampaign createCampaign(String name, String templateIdOrName, WhatsAppCampaign.TargetType targetType,
                                             String targetFilterJson, String variableMappingJson, Boolean saveImportedRecipients, User owner) {
+        return createCampaign(name, templateIdOrName, targetType, targetFilterJson, variableMappingJson, saveImportedRecipients, WhatsAppCampaign.Priority.LOW, owner);
+    }
+
+    @Transactional
+    public WhatsAppCampaign createCampaign(String name, String templateIdOrName, WhatsAppCampaign.TargetType targetType,
+                                            String targetFilterJson, String variableMappingJson, Boolean saveImportedRecipients,
+                                            WhatsAppCampaign.Priority priority, User owner) {
 
         if (templateIdOrName == null || templateIdOrName.trim().isEmpty()) {
             throw new IllegalArgumentException("Template ID or template name must be provided");
+        }
+
+        WhatsAppCampaign.Priority campaignPriority = (priority != null) ? priority : WhatsAppCampaign.Priority.LOW;
+        if (owner.getTenant() != null) {
+            entitlementService.verifyCampaignPriorityAllowed(owner.getTenant().getId(), campaignPriority);
         }
 
         WhatsAppTemplate template = null;
@@ -125,6 +139,7 @@ public class WhatsAppCampaignService {
                 .owner(owner)
                 .build();
 
+        campaign.setPriority(campaignPriority);
         campaign.setTenant(owner.getTenant());
         WhatsAppCampaign saved = campaignRepository.save(campaign);
 
@@ -183,10 +198,17 @@ public class WhatsAppCampaignService {
         }
 
         campaign.setStatus(WhatsAppCampaign.Status.VALIDATING);
+        campaign.setPriorityLocked(true);
         campaignRepository.save(campaign);
 
         // 1. Resolve and freeze immutable audience snapshot
         audienceResolver.resolveAndFreezeAudience(campaign);
+
+        // 1b. Verify WhatsApp Campaign Quota against tenant subscription plan
+        if (campaign.getTenant() != null) {
+            int recipientCount = (int) recipientRepository.countByCampaignId(campaign.getId());
+            quotaEnforcerService.verifyWhatsAppCampaignQuota(campaign.getTenant().getId(), recipientCount);
+        }
 
         // 2. Queue recipients in Redis
         queueProducer.queueCampaignRecipients(campaign);

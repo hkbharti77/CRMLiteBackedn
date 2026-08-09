@@ -21,8 +21,11 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/whatsapp-config")
+@PreAuthorize("@perm.has(authentication, 'SETTINGS_WHATSAPP')")
 public class WhatsAppConfigController {
 
     @Autowired

@@ -22,7 +22,7 @@ public class EmailTrackingService {
     private final EmailCampaignRecipientRepository recipientRepository;
 
     @Value("${app.frontend.url:http://localhost:3000}")
-    private String baseUrl; // This should ideally be the backend tracking domain like track.gyanvaniai.com, but we use api domain
+    private String baseUrl; // This should ideally be the backend tracking domain like track.gyanvaniai.online, but we use api domain
 
     public String generateTrackingToken() {
         return EmailTrackingUtils.generateToken();

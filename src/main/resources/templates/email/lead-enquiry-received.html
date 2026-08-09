@@ -2,10 +2,12 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title th:text="${heading ?: 'Enquiry Received'}">Enquiry Received</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${heading ?: 'We Received Your Enquiry'}">Enquiry Received</title>
 </head>
-<body>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
 <div th:replace="~{email/base :: header(
       heading  = ${heading},
@@ -13,31 +15,32 @@
       intro    = ${intro})}">
 </div>
 
-<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
   <tr>
     <td align="center">
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
         <tr>
-          <td style="padding:0 36px 28px;">
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 28px;">
-              <p class="text-main" style="margin:0 0 10px;color:#111827;font-size:14px;font-weight:700;">
+            <!-- ── SUBMITTED ENQUIRY CARD ──────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:20px;margin:0 0 16px;">
+              <p class="text-main" style="margin:0 0 10px;color:#0F172A;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
                 💬 Your Submitted Message
               </p>
-              <div class="card-bg" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:8px;padding:16px;color:#4B5563;font-size:14px;line-height:1.6;" th:text="${enquiryMessage}">
-                Enquiry message text...
+              <div class="card-bg" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:16px;color:#334155;font-size:14px;line-height:1.6;" th:text="${enquiryMessage}">
+                Enquiry message text submitted by customer...
               </div>
             </div>
 
           </td>
         </tr>
       </table>
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       </td>
       </tr>
       </table>

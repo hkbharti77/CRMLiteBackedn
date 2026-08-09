@@ -16,4 +16,5 @@ public class CreateCampaignRequestDto {
     private String targetFilterJson;
     private String variableMappingJson;
     private Boolean saveImportedRecipients;
+    private WhatsAppCampaign.Priority priority;
 }

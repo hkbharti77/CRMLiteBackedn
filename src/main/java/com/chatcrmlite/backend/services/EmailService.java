@@ -32,11 +32,17 @@ public class EmailService {
     @Autowired private TemplateEngine templateEngine;
 
     /**
-     * SECURITY: Sender email injected from environment — never hardcoded.
+     * SECURITY: Sender email injected from environment — defaults to no-reply@gyanvaniai.online.
      * Set SENDER_EMAIL in your .env or environment variables.
      */
-    @Value("${SENDER_EMAIL}")
+    @Value("${SENDER_EMAIL:no-reply@gyanvaniai.online}")
     private String from;
+
+    @Value("${PLATFORM_BRAND_URL:${platform.brand.url:https://gyanvaniai.online}}")
+    private String platformBrandUrl;
+
+    @Value("${PLATFORM_BRAND_NAME:${platform.brand.name:GyanVaniAi}}")
+    private String platformBrandName;
 
     private static final String BRAND = "GyanVaniAi Connect";
 
@@ -165,6 +171,12 @@ public class EmailService {
             ctx.setVariable("emailHeaderText", tenant.getEmailHeaderText());
             ctx.setVariable("emailFooterText", tenant.getEmailFooterText());
         }
+        if (!ctx.containsVariable("platformBrandUrl")) {
+            ctx.setVariable("platformBrandUrl", platformBrandUrl != null && !platformBrandUrl.isBlank() ? platformBrandUrl : "https://gyanvaniai.online");
+        }
+        if (!ctx.containsVariable("platformBrandName")) {
+            ctx.setVariable("platformBrandName", platformBrandName != null && !platformBrandName.isBlank() ? platformBrandName : "GyanVaniAi");
+        }
     }
 
     // ══════════════════════════════════════════════════════════════════════
@@ -198,6 +210,12 @@ public class EmailService {
         if (ctx.getVariableNames() != null) {
             ctx.getVariableNames().forEach(name -> vars.put(name, ctx.getVariable(name)));
         }
+        if (!vars.containsKey("platformBrandUrl")) {
+            vars.put("platformBrandUrl", platformBrandUrl != null && !platformBrandUrl.isBlank() ? platformBrandUrl : "https://gyanvaniai.online");
+        }
+        if (!vars.containsKey("platformBrandName")) {
+            vars.put("platformBrandName", platformBrandName != null && !platformBrandName.isBlank() ? platformBrandName : "GyanVaniAi");
+        }
 
         com.chatcrmlite.backend.dto.email.EmailJobPayload payload = com.chatcrmlite.backend.dto.email.EmailJobPayload.builder()
                 .toEmail(to)
@@ -220,11 +238,18 @@ public class EmailService {
             return;
         }
         ctx.setVariable("subject", subject);
+        if (!ctx.containsVariable("platformBrandUrl")) {
+            ctx.setVariable("platformBrandUrl", platformBrandUrl != null && !platformBrandUrl.isBlank() ? platformBrandUrl : "https://gyanvaniai.online");
+        }
+        if (!ctx.containsVariable("platformBrandName")) {
+            ctx.setVariable("platformBrandName", platformBrandName != null && !platformBrandName.isBlank() ? platformBrandName : "GyanVaniAi");
+        }
         String html = templateEngine.process("email/" + templateName, ctx);
         MimeMessage mime = mailSender.createMimeMessage();
         MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
-        // SECURITY: 'from' is injected from env — never hardcoded
-        helper.setFrom(from);
+        // SECURITY: 'from' is injected from env — defaults to no-reply@gyanvaniai.online
+        helper.setFrom(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
+        helper.setReplyTo(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
         
         if (to.contains(",")) {
             String[] emails = java.util.Arrays.stream(to.split(","))
@@ -346,6 +371,33 @@ public class EmailService {
         ctx.setVariable("priority",     priority);
         sendTemplate(agentEmail, "[" + BRAND + "] Ticket #" + ticketNumber + " assigned to you",
                 "ticket-assigned-agent", ctx);
+    }
+
+    public void sendLiveChatAssignedNotification(String agentEmail, String agentName, String customerName, String customerPhone) {
+        Context ctx = new Context();
+        ctx.setVariable("greeting", "Hi " + (agentName != null ? agentName : "Agent") + ",");
+        ctx.setVariable("customerName", customerName != null ? customerName : "Customer");
+        ctx.setVariable("customerPhone", customerPhone);
+        sendTemplate(agentEmail, "[" + BRAND + "] Live Support Chat Assigned: " + customerName, "livechat-assigned-agent", ctx);
+    }
+
+    public void sendLiveChatTakeoverNotification(String toEmail, String recipientName, String takeoverByName, String customerName, String customerPhone, String reason) {
+        Context ctx = new Context();
+        ctx.setVariable("greeting", "Hi " + (recipientName != null ? recipientName : "Team") + ",");
+        ctx.setVariable("takeoverByName", takeoverByName);
+        ctx.setVariable("customerName", customerName != null ? customerName : "Customer");
+        ctx.setVariable("customerPhone", customerPhone);
+        ctx.setVariable("reason", reason);
+        sendTemplate(toEmail, "[" + BRAND + "] Chat Taken Over by " + takeoverByName, "livechat-takeover-notification", ctx);
+    }
+
+    public void sendLiveChatSlaEscalationNotification(String toEmail, String recipientName, String customerName, String customerPhone, int slaMinutes) {
+        Context ctx = new Context();
+        ctx.setVariable("greeting", "Hi " + (recipientName != null ? recipientName : "Admin") + ",");
+        ctx.setVariable("customerName", customerName != null ? customerName : "Customer");
+        ctx.setVariable("customerPhone", customerPhone);
+        ctx.setVariable("slaMinutes", String.valueOf(slaMinutes));
+        sendTemplate(toEmail, "URGENT: Live Chat SLA Escalation Alert (" + customerName + ")", "livechat-sla-escalation", ctx);
     }
 
     public void sendTicketCommentNotification(String toEmail, String customerName,
@@ -680,7 +732,8 @@ public class EmailService {
             MimeMessage mimeMessage = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
             
-            helper.setFrom(from, BRAND);
+            helper.setFrom(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
+            helper.setReplyTo(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
             helper.setTo(toEmail);
             helper.setSubject("Payment Request - " + BRAND);
             

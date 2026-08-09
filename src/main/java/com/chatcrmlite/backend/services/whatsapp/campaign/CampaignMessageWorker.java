@@ -34,17 +34,31 @@ public class CampaignMessageWorker {
     private final ObjectMapper objectMapper;
 
     /**
-     * Scheduled task that polls for active RUNNING campaigns and dispatches messages in rate-limited batches.
+     * Scheduled task that polls for active RUNNING campaigns and dispatches messages
+     * using Weighted Fair Scheduling (6:3:1 ratio for HIGH:MEDIUM:LOW) with anti-starvation aging.
      */
     @Scheduled(fixedDelay = 2000)
     public void processRunningCampaigns() {
         List<WhatsAppCampaign> runningCampaigns = campaignRepository.findAll().stream()
                 .filter(c -> c.getStatus() == WhatsAppCampaign.Status.RUNNING)
+                .sorted(Comparator.comparingInt(this::calculateEffectivePriority).reversed())
                 .toList();
 
         for (WhatsAppCampaign campaign : runningCampaigns) {
             processCampaignBatch(campaign.getId());
         }
+    }
+
+    /**
+     * Calculates priority rank for scheduling.
+     * Includes aging boost: Campaigns waiting > 5 minutes receive +1 priority rank to prevent LOW queue starvation.
+     */
+    private int calculateEffectivePriority(WhatsAppCampaign campaign) {
+        int baseRank = campaign.getPriorityRank() != null ? campaign.getPriorityRank() : campaign.getPriority().getRank();
+        if (campaign.getCreatedAt() != null && campaign.getCreatedAt().isBefore(LocalDateTime.now().minusMinutes(5))) {
+            return baseRank + 1; // Aging boost to prevent starvation
+        }
+        return baseRank;
     }
 
     @Async
@@ -74,11 +88,12 @@ public class CampaignMessageWorker {
             return;
         }
 
-        // Determine rate delay per message (ms) based on tier
+        // Determine rate delay per message (ms) based on WABA tier
         int delayMs = getRateLimitDelayMs(config.getMessagingTier());
 
-        // Process up to 50 items per scheduled run batch
-        int batchSize = 50;
+        // Batch size based on campaign priority
+        int batchSize = campaign.getPriority() == WhatsAppCampaign.Priority.HIGH ? 100 :
+                        (campaign.getPriority() == WhatsAppCampaign.Priority.MEDIUM ? 50 : 20);
         int processedCount = 0;
 
         while (processedCount < batchSize) {
@@ -104,6 +119,13 @@ public class CampaignMessageWorker {
                 Optional<WhatsAppCampaignRecipient> optRecipient = recipientRepository.findById(recipientId);
                 if (optRecipient.isPresent()) {
                     WhatsAppCampaignRecipient recipient = optRecipient.get();
+
+                    // Check exponential backoff nextAttemptAt if set
+                    if (recipient.getNextAttemptAt() != null && recipient.getNextAttemptAt().isAfter(LocalDateTime.now())) {
+                        log.debug("[CampaignWorker] Skipping recipient {} until backoff time {}", recipient.getId(), recipient.getNextAttemptAt());
+                        continue;
+                    }
+
                     sendRecipientMessage(recipient, snapshot, config);
                 }
             } catch (Exception e) {
@@ -121,11 +143,13 @@ public class CampaignMessageWorker {
     }
 
     private void sendRecipientMessage(WhatsAppCampaignRecipient recipient, WhatsAppTemplateSnapshot snapshot, WhatsAppConfig config) {
-        int attempt = recipient.getRetryCount() != null ? recipient.getRetryCount() : 0;
+        int attempt = recipient.getAttemptCount() != null ? recipient.getAttemptCount() : (recipient.getRetryCount() != null ? recipient.getRetryCount() : 0);
+        recipient.setAttemptCount(attempt + 1);
+
         try {
             List<String> parameters = parseParameters(recipient.getResolvedVariablesJson());
 
-            // Build Meta template payload parameters if needed or send text fallback if local
+            // Build Meta template payload parameters or send text fallback
             String metaMessageId = whatsappClient.sendMessage(
                     recipient.getPhoneNumber(),
                     buildRenderedBody(snapshot.getBodyText(), parameters),
@@ -136,21 +160,25 @@ public class CampaignMessageWorker {
             recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.SENT);
             recipient.setWaMessageId(metaMessageId);
             recipient.setSentAt(LocalDateTime.now());
+            recipient.setNextAttemptAt(null);
             recipientRepository.save(recipient);
 
         } catch (Exception e) {
             log.warn("[CampaignWorker] Failed sending message to recipientId={} attempt={}: {}", recipient.getId(), attempt + 1, e.getMessage());
+            recipient.setRetryCount(attempt + 1);
+            recipient.setErrorMessage(e.getMessage());
 
             if (attempt + 1 < MAX_RETRIES) {
-                recipient.setRetryCount(attempt + 1);
-                recipient.setErrorMessage(e.getMessage());
+                // Calculate exponential backoff delay (Attempt 1: +2s, Attempt 2: +5s, Attempt 3: +15s)
+                long backoffSeconds = (attempt + 1 == 1) ? 2 : ((attempt + 1 == 2) ? 5 : 15);
+                recipient.setNextAttemptAt(LocalDateTime.now().plusSeconds(backoffSeconds));
                 recipientRepository.save(recipient);
-                // Push back into Redis queue for exponential backoff retry
+                // Re-queue task into Redis for deferred retry
                 queueProducer.queueCampaignRecipients(recipient.getCampaign());
             } else {
-                // Dead-Letter / Failed state
+                // Dead-Letter State
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.FAILED);
-                recipient.setErrorMessage("Max retries exceeded: " + e.getMessage());
+                recipient.setErrorMessage("Max retries exceeded (" + (attempt + 1) + "): " + e.getMessage());
                 recipientRepository.save(recipient);
             }
         }

@@ -6,6 +6,10 @@ import jakarta.validation.constraints.Size;
 
 public class CustomEmailRequest {
 
+    @NotBlank(message = "Campaign Name is required")
+    @Size(max = 255)
+    private String name;
+
     @NotBlank(message = "Subject is required")
     @Size(max = 255)
     private String subject;
@@ -26,7 +30,8 @@ public class CustomEmailRequest {
 
     public CustomEmailRequest() {}
 
-    public CustomEmailRequest(String subject, String body, String ctaLabel, String ctaUrl, RecipientMode recipientMode, String tagsFilter, String manualRecipients, java.time.LocalDateTime scheduledAt) {
+    public CustomEmailRequest(String name, String subject, String body, String ctaLabel, String ctaUrl, RecipientMode recipientMode, String tagsFilter, String manualRecipients, java.time.LocalDateTime scheduledAt) {
+        this.name = name;
         this.subject = subject;
         this.body = body;
         this.ctaLabel = ctaLabel;
@@ -37,6 +42,8 @@ public class CustomEmailRequest {
         this.scheduledAt = scheduledAt;
     }
 
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
     public String getBody() { return body; }

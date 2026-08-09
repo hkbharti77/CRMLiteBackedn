@@ -21,6 +21,7 @@ public interface WhatsAppCampaignRecipientRepository extends JpaRepository<Whats
     org.springframework.data.domain.Page<WhatsAppCampaignRecipient> findByCampaign(WhatsAppCampaign campaign, Pageable pageable);
     Optional<WhatsAppCampaignRecipient> findByWaMessageId(String waMessageId);
     boolean existsByCampaignIdAndContactId(UUID campaignId, UUID contactId);
+    long countByCampaignId(UUID campaignId);
     long countByCampaignAndStatus(WhatsAppCampaign campaign, WhatsAppCampaignRecipient.RecipientStatus status);
     long countByCampaignAndStatusIn(WhatsAppCampaign campaign, java.util.Collection<WhatsAppCampaignRecipient.RecipientStatus> statuses);
 }

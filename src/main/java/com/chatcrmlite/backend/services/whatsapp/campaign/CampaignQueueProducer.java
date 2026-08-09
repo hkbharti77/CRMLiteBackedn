@@ -40,6 +40,12 @@ public class CampaignQueueProducer {
 
             for (WhatsAppCampaignRecipient recipient : batch) {
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.QUEUED);
+                if (recipient.getAvailableAt() == null) {
+                    recipient.setAvailableAt(java.time.LocalDateTime.now());
+                }
+                String tenantIdStr = campaign.getTenant() != null ? campaign.getTenant().getId().toString() : "global";
+                int attempt = recipient.getAttemptCount() != null ? recipient.getAttemptCount() : 0;
+                recipient.setIdempotencyKey(tenantIdStr + ":" + campaign.getId() + ":" + recipient.getId() + ":" + attempt);
                 stringRedisTemplate.opsForList().rightPush(queueKey, recipient.getId().toString());
                 totalQueued++;
             }

@@ -65,7 +65,14 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
     @Builder.Default
     private Integer retryCount = 0;
 
+    @Builder.Default
+    private Integer attemptCount = 0;
+
     private String errorMessage;
+
+    private LocalDateTime availableAt;
+    private LocalDateTime nextAttemptAt;
+    private String idempotencyKey;
 
     private LocalDateTime sentAt;
     private LocalDateTime deliveredAt;
@@ -83,6 +90,12 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
         }
         if (retryCount == null) {
             retryCount = 0;
+        }
+        if (attemptCount == null) {
+            attemptCount = 0;
+        }
+        if (availableAt == null) {
+            availableAt = LocalDateTime.now();
         }
     }
 }

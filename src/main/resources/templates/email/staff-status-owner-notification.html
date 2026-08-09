@@ -2,10 +2,12 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
   <title th:text="${heading ?: 'Staff Status Change Alert'}">Admin Notification</title>
 </head>
-<body>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
 <div th:replace="~{email/base :: header(
       heading  = ${heading},
@@ -13,54 +15,54 @@
       intro    = ${intro})}">
 </div>
 
-<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
   <tr>
     <td align="center">
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
         <tr>
-          <td style="padding:0 36px 28px;">
+          <td class="content-padding" style="padding:0 32px 24px;">
 
             <!-- ── DETAILS CARD ───────────────────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 28px;">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:12px;">
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:20px;margin:0 0 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:12px;border-bottom:1px solid #F1F5F9;padding-bottom:10px;">
                 <tr>
                   <td>
-                    <span class="text-main" style="color:#111827;font-size:14px;font-weight:700;">
+                    <span class="text-main" style="color:#0F172A;font-size:14px;font-weight:700;">
                       👤 Affected Staff Member
                     </span>
                   </td>
                   <td align="right">
-                    <span th:if="${status == 'Blocked'}" class="pill-badge" style="background-color:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5;font-size:11px;font-weight:700;padding:3px 10px;border-radius:9999px;">
+                    <span th:if="${status == 'Blocked'}" class="pill-badge" style="background-color:#FFF1F2;color:#DC2626;border:1px solid #FECDD3;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">
                       BLOCKED
                     </span>
-                    <span th:if="${status != 'Blocked'}" class="pill-badge" style="background-color:#F0FDF4;color:#16A34A;border:1px solid #DCFCE7;font-size:11px;font-weight:700;padding:3px 10px;border-radius:9999px;">
-                      UNBLOCKED
+                    <span th:if="${status != 'Blocked'}" class="pill-badge" style="background-color:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">
+                      ACTIVE
                     </span>
                   </td>
                 </tr>
               </table>
 
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;width:110px;padding:4px 0;">Name:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${employeeName}">Staff Name</td>
+                  <td class="text-muted" style="color:#64748B;width:120px;padding:4px 0;">Staff Name:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${employeeName}">Staff Name</td>
                 </tr>
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Email:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${employeeEmail}">staff@example.com</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Staff Email:</td>
+                  <td class="text-main" style="color:#2563EB;font-weight:600;padding:4px 0;" th:text="${employeeEmail}">staff@example.com</td>
                 </tr>
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Action Taken:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${status}">Blocked</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Action Taken:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${status}">Blocked</td>
                 </tr>
-                <tr>
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Reason:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${reason}">Reason</td>
+                <tr th:if="${reason != null and !#strings.isEmpty(reason)}">
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Reason:</td>
+                  <td class="text-muted" style="color:#475569;padding:4px 0;" th:text="${reason}">Reason</td>
                 </tr>
               </table>
             </div>
@@ -68,7 +70,7 @@
           </td>
         </tr>
       </table>
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       </td>
       </tr>
       </table>

@@ -20,6 +20,9 @@ public class CustomEmail {
     @Column(nullable = false)
     private String subject;
 
+    @Column(name = "campaign_name")
+    private String name;
+
     @Column(columnDefinition = "TEXT", nullable = false)
     private String body;
 
@@ -63,7 +66,7 @@ public class CustomEmail {
 
     public CustomEmail() {}
 
-    public CustomEmail(UUID id, User owner, String subject, String body, String ctaLabel, String ctaUrl,
+    public CustomEmail(UUID id, User owner, String name, String subject, String body, String ctaLabel, String ctaUrl,
                        RecipientMode recipientMode, String tagsFilter, EmailStatus status,
                        LocalDateTime scheduledAt, LocalDateTime startedAt, LocalDateTime completedAt,
                        LocalDateTime pausedAt, LocalDateTime cancelledAt, LocalDateTime sentAt,
@@ -71,6 +74,7 @@ public class CustomEmail {
                        UUID snapshotId, int version, LocalDateTime createdAt, LocalDateTime updatedAt) {
         this.id = id;
         this.owner = owner;
+        this.name = name;
         this.subject = subject;
         this.body = body;
         this.ctaLabel = ctaLabel;
@@ -100,6 +104,8 @@ public class CustomEmail {
     public void setOwner(User owner) { this.owner = owner; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getBody() { return body; }
     public void setBody(String body) { this.body = body; }
     public String getCtaLabel() { return ctaLabel; }
@@ -152,6 +158,7 @@ public class CustomEmail {
     public static class CustomEmailBuilder {
         private UUID id;
         private User owner;
+        private String name;
         private String subject;
         private String body;
         private String ctaLabel;
@@ -176,6 +183,7 @@ public class CustomEmail {
 
         public CustomEmailBuilder id(UUID id) { this.id = id; return this; }
         public CustomEmailBuilder owner(User owner) { this.owner = owner; return this; }
+        public CustomEmailBuilder name(String name) { this.name = name; return this; }
         public CustomEmailBuilder subject(String subject) { this.subject = subject; return this; }
         public CustomEmailBuilder body(String body) { this.body = body; return this; }
         public CustomEmailBuilder ctaLabel(String ctaLabel) { this.ctaLabel = ctaLabel; return this; }
@@ -202,7 +210,7 @@ public class CustomEmail {
         public CustomEmailBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
         public CustomEmail build() {
-            return new CustomEmail(id, owner, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
+            return new CustomEmail(id, owner, name, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
                                    scheduledAt, startedAt, completedAt, pausedAt, cancelledAt, sentAt, 
                                    totalRecipients, processedRecipients, totalSent, totalFailed, 
                                    snapshotId, version, createdAt, updatedAt);

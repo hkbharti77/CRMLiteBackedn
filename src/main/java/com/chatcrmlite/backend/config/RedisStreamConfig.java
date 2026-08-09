@@ -91,7 +91,10 @@ public class RedisStreamConfig {
                         .batchSize(10)
                         .targetType(String.class)
                         .errorHandler(t -> {
-                            if (t instanceof NullPointerException && t.getStackTrace() != null && t.getStackTrace().length > 0 && t.getStackTrace()[0].getClassName().contains("StreamPollTask")) {
+                            String msg = t != null ? t.getMessage() : "";
+                            if (msg != null && (msg.contains("Redisson is shutdown") || msg.contains("RedissonShutdownException"))) {
+                                log.debug("Redis stream worker [{}] stopped gracefully (Redisson shutdown).", consumerName);
+                            } else if (t instanceof NullPointerException && t.getStackTrace() != null && t.getStackTrace().length > 0 && t.getStackTrace()[0].getClassName().contains("StreamPollTask")) {
                                 log.trace("Redis stream poll timeout for [{}] on stream '{}'", consumerName, stream);
                             } else {
                                 log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}", consumerName, stream, t.getMessage(), t);

@@ -25,6 +25,7 @@ public interface ContactRepository extends JpaRepository<Contact, UUID>, JpaSpec
     List<Contact> findAllByOwner(User owner);
     Optional<Contact> findByWaId(String waId);
     List<Contact> findByName(String name);
+    List<Contact> findAllByTenant(com.chatcrmlite.backend.models.Tenant tenant);
     
     /**
      * Fetch all contacts for a user matching any of the given tag IDs.

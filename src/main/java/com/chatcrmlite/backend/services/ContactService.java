@@ -38,8 +38,8 @@ public class ContactService {
     @Transactional(readOnly = true)
     public List<ContactDTO> getContactsByUser(User user) {
         List<Contact> contacts;
-        if (isAdmin(user)) {
-            contacts = contactRepository.findAllWithTags();
+        if (user.getTenant() != null) {
+            contacts = contactRepository.findAllByTenant(user.getTenant());
         } else {
             contacts = contactRepository.findAllByOwnerWithTags(user);
         }
@@ -128,14 +128,47 @@ public class ContactService {
         contactRepository.save(contact);
     }
     
+    @Autowired
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService whatsappOutboundService;
+
+    @Autowired
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
+
     @Transactional
     public void toggleBotPaused(UUID contactId, boolean botPaused, User owner) {
         Contact contact = contactRepository.findById(contactId)
                 .filter(c -> c.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
                 .orElseThrow(() -> new RuntimeException("Contact not found"));
         
+        boolean wasPaused = contact.isBotPaused();
         contact.setBotPaused(botPaused);
         contactRepository.save(contact);
+
+        // Send a WhatsApp notification message when switching to Human Mode (botPaused transitions to true)
+        if (botPaused && !wasPaused) {
+            try {
+                String agentName = owner.getDisplayName() != null && !owner.getDisplayName().isBlank()
+                        ? owner.getDisplayName()
+                        : owner.getEmail();
+                String role = owner.getRole() != null ? owner.getRole().name() : "Representative";
+                String companyName = owner.getBusinessName() != null && !owner.getBusinessName().isBlank()
+                        ? owner.getBusinessName()
+                        : "our team";
+
+                String introMessage = String.format(
+                        "Hello! 👋 You have been connected with %s (%s) from %s. I will be assisting you personally now.",
+                        agentName, role, companyName
+                );
+
+                whatsappConfigRepository.findByTenantId(owner.getTenant().getId()).ifPresent(config -> {
+                    whatsappOutboundService.sendText(contact, introMessage, config, owner);
+                });
+            } catch (Exception e) {
+                // Log and swallow error so bot toggling succeeds even if notification dispatch fails
+                org.slf4j.LoggerFactory.getLogger(ContactService.class)
+                        .error("Failed to send human takeover WhatsApp notification to contact {}", contactId, e);
+            }
+        }
     }
 
     @Transactional

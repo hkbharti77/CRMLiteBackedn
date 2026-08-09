@@ -52,4 +52,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query(value = "SELECT id FROM app_users WHERE tenant_id = :tenantId LIMIT 1", nativeQuery = true)
     Optional<UUID> findFirstUserIdByTenantId(@Param("tenantId") UUID tenantId);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT u FROM User u WHERE u.tenant = :tenant AND u.role = :role AND u.accountStatus = 'ACTIVE' AND u.availabilityStatus = 'AVAILABLE' AND (u.lastSeenAt IS NULL OR u.lastSeenAt >= :threshold) ORDER BY u.createdAt ASC")
+    java.util.List<User> findCandidateStaffWithLock(@Param("tenant") com.chatcrmlite.backend.models.Tenant tenant, @Param("role") User.Role role, @Param("threshold") java.time.LocalDateTime threshold);
+
+    @Query("SELECT u FROM User u WHERE u.tenant = :tenant AND u.role IN :roles AND u.accountStatus = 'ACTIVE'")
+    java.util.List<User> findStaffByTenantAndRoles(@Param("tenant") com.chatcrmlite.backend.models.Tenant tenant, @Param("roles") java.util.Collection<User.Role> roles);
 }

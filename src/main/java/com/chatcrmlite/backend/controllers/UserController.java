@@ -19,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -56,6 +57,9 @@ public class UserController {
 
     @Autowired
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+
+    @Autowired
+    private com.chatcrmlite.backend.services.AgentPermissionService agentPermissionService;
 
     @GetMapping("/me")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -149,6 +153,19 @@ public class UserController {
             return ResponseEntity.badRequest().body(new MessageResponse("User with this email already exists."));
         }
 
+        List<String> initialPermissions = new java.util.ArrayList<>();
+        if (targetRole == User.Role.AGENT) {
+            if (request.getPermissions() != null && !request.getPermissions().isEmpty()) {
+                try {
+                    initialPermissions = agentPermissionService.validateAndNormalizePermissions(request.getPermissions());
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+                }
+            } else {
+                initialPermissions = java.util.List.of("MODULE_INBOX", "MODULE_LEADS", "MODULE_SETTINGS", "SETTINGS_PROFILE");
+            }
+        }
+
         User staffUser = User.builder()
                 .email(request.getEmail().trim().toLowerCase())
                 .displayName(request.getDisplayName().trim())
@@ -158,6 +175,8 @@ public class UserController {
                 .accountStatus(User.AccountStatus.ACTIVE)
                 .onboardingCompleted(true) // Automatically complete onboarding for new staff members
                 .build();
+
+        staffUser.setPermissions(initialPermissions);
 
         userRepository.save(staffUser);
 
@@ -290,6 +309,73 @@ public class UserController {
         User caller = userRepository.findByEmail(email).orElseThrow();
         securityService.updateStaffStatus(caller, staffId, status, reason);
         return ResponseEntity.ok("Staff member status updated to: " + status);
+    }
+
+    @PatchMapping("/staff/{agentId}/permissions")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
+    public ResponseEntity<?> updateAgentPermissions(
+            @AuthenticationPrincipal String callerEmail,
+            @PathVariable UUID agentId,
+            @RequestBody UpdateAgentPermissionsRequest request,
+            @RequestHeader(value = "X-Reason", required = false) String headerReason,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+
+        User caller = userRepository.findByEmail(callerEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+
+        String reason = request.getReason() != null && !request.getReason().isBlank() ? request.getReason() : headerReason;
+        String ipAddress = httpRequest.getRemoteAddr();
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        try {
+            User updatedAgent = agentPermissionService.updateAgentPermissions(
+                    caller,
+                    agentId,
+                    request.getPermissions(),
+                    request.getExpectedVersion(),
+                    reason,
+                    ipAddress,
+                    userAgent
+            );
+            return ResponseEntity.ok(UserProfileDto.from(updatedAgent));
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            return ResponseEntity.status(409).body(new MessageResponse("Stale permission state. Concurrent update detected."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(new MessageResponse(e.getMessage()));
+        }
+    }
+
+    @GetMapping("/staff/{agentId}/permissions/audits")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
+    public ResponseEntity<?> getAgentPermissionAuditLogs(
+            @AuthenticationPrincipal String callerEmail,
+            @PathVariable UUID agentId) {
+
+        User caller = userRepository.findByEmail(callerEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+
+        return ResponseEntity.ok(agentPermissionService.getAuditLogsForAgent(caller, agentId));
+    }
+
+    @PatchMapping("/staff/{staffId}/role")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<?> updateStaffRole(
+            @AuthenticationPrincipal String email,
+            @PathVariable UUID staffId,
+            @RequestParam User.Role role) {
+        User caller = userRepository.findByEmail(email).orElseThrow();
+        User target = userRepository.findById(staffId)
+                .orElseThrow(() -> new RuntimeException("Staff member not found"));
+
+        if (!target.getTenant().getId().equals(caller.getTenant().getId())) {
+            return ResponseEntity.status(403).body("Unauthorized");
+        }
+
+        target.setRole(role);
+        userRepository.save(target);
+        return ResponseEntity.ok(Map.of("success", true, "role", role.name()));
     }
 
     // ─── DTOS ─────────────────────────────────────────────────────────────
@@ -565,6 +651,14 @@ public class UserController {
         public String getEmailFooterText() { return emailFooterText; }
         public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
 
+        private List<String> permissions;
+        private Integer permissionVersion;
+
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+        public Integer getPermissionVersion() { return permissionVersion; }
+        public void setPermissionVersion(Integer permissionVersion) { this.permissionVersion = permissionVersion; }
+
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
             dto.setId(user.getId().toString());
@@ -589,6 +683,8 @@ public class UserController {
             dto.setForceShowLeads(user.getForceShowLeads());
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
+            dto.setPermissions(user.getPermissions());
+            dto.setPermissionVersion(user.getPermissionVersion());
             
             // Fix: Pull plan type from Tenant if available, fallback to user's plan type
             if (user.getTenant() != null && user.getTenant().getPlanType() != null) {
@@ -608,6 +704,7 @@ public class UserController {
         private String displayName;
         private String role;
         private String phone;
+        private List<String> permissions;
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
@@ -617,6 +714,21 @@ public class UserController {
         public void setRole(String role) { this.role = role; }
         public String getPhone() { return phone; }
         public void setPhone(String phone) { this.phone = phone; }
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+    }
+
+    public static class UpdateAgentPermissionsRequest {
+        private List<String> permissions;
+        private Integer expectedVersion;
+        private String reason;
+
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+        public Integer getExpectedVersion() { return expectedVersion; }
+        public void setExpectedVersion(Integer expectedVersion) { this.expectedVersion = expectedVersion; }
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
     }
 
     public static class MessageResponse {

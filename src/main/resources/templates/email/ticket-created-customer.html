@@ -2,10 +2,12 @@
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title th:text="${subject ?: 'Support Ticket Received'}">Ticket Received</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${subject ?: 'Support Ticket Received'}">Support Ticket Received</title>
 </head>
-<body>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
 <div th:replace="~{email/base :: header(
     heading  = ${heading},
@@ -13,68 +15,68 @@
     intro    = ${intro})}">
 </div>
 
-<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;padding:0 16px;">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
   <tr>
     <td align="center">
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
       <tr>
       <td align="center" valign="top" width="600">
       <![endif]-->
-      <table class="card-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;background-color:#FFFFFF;border-left:1px solid #E5E7EB;border-right:1px solid #E5E7EB;">
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
         <tr>
-          <td style="padding:0 36px 28px;">
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-            <!-- ── TICKET DETAILS CARD ──────────────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E5E7EB;border-radius:12px;padding:20px 24px;margin:0 0 28px;">
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:14px;">
+            <!-- ── TICKET DETAILS SUMMARY CARD ──────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:20px;margin:0 0 24px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:14px;border-bottom:1px solid #F1F5F9;padding-bottom:12px;">
                 <tr>
                   <td>
-                    <span class="text-main" style="color:#111827;font-size:14px;font-weight:700;">
+                    <span class="text-main" style="color:#0F172A;font-size:14px;font-weight:700;letter-spacing:-0.2px;">
                       🎫 Ticket #<span th:text="${ticketNumber}">TKT-0001</span>
                     </span>
                   </td>
                   <td align="right">
-                    <span th:if="${priority == 'HIGH'}" class="pill-badge" style="background-color:#FEF2F2;color:#DC2626;border:1px solid #FCA5A5;font-size:11px;font-weight:700;padding:3px 10px;border-radius:9999px;">
+                    <span th:if="${priority == 'HIGH'}" class="pill-badge" style="background-color:#FFF1F2;color:#DC2626;border:1px solid #FECDD3;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">
                       HIGH PRIORITY
                     </span>
-                    <span th:if="${priority != 'HIGH'}" class="pill-badge" style="background-color:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;font-size:11px;font-weight:700;padding:3px 10px;border-radius:9999px;" th:text="${priority ?: 'MEDIUM'}">
-                      MEDIUM PRIORITY
+                    <span th:if="${priority != 'HIGH'}" class="pill-badge" style="background-color:#EFF6FF;color:#2563EB;border:1px solid #BFDBFE;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;" th:text="${priority ?: 'MEDIUM'}">
+                      MEDIUM
                     </span>
                   </td>
                 </tr>
               </table>
 
-              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.8;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;width:110px;padding:4px 0;">Subject:</td>
-                  <td class="text-main" style="color:#111827;font-weight:600;padding:4px 0;" th:text="${subject}">Subject</td>
+                  <td class="text-muted" style="color:#64748B;width:110px;padding:4px 0;">Subject:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${ticketTitle ?: subject}">Subject Title</td>
                 </tr>
                 <tr>
-                  <td class="text-muted" style="color:#6B7280;padding:4px 0;">Status:</td>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Current Status:</td>
                   <td style="padding:4px 0;">
-                    <span class="pill-badge" style="background-color:#F0FDF4;color:#16A34A;border:1px solid #DCFCE7;font-size:11px;font-weight:700;padding:2px 10px;border-radius:9999px;">
-                      OPEN
+                    <span style="background-color:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:11px;font-weight:700;padding:2px 8px;border-radius:4px;">
+                      ● OPEN &amp; QUEUED
                     </span>
                   </td>
                 </tr>
               </table>
             </div>
 
-            <!-- ── CUSTOMER MESSAGE CALLOUT ───────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E5E7EB;border-left:4px solid #16A34A;border-radius:6px;padding:18px 20px;margin:0 0 24px;">
-              <p class="text-muted" style="margin:0 0 6px;color:#6B7280;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+            <!-- ── CUSTOMER MESSAGE CALLOUT CARD ───────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-left:4px solid #2563EB;border-radius:6px;padding:16px 20px;margin:0 0 16px;">
+              <p class="text-subtle" style="margin:0 0 6px;color:#64748B;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
                 Your Description
               </p>
-              <div class="text-main" style="color:#111827;font-size:14px;line-height:1.6;" th:text="${description}">
-                Ticket description text...
+              <div class="text-main" style="color:#1E293B;font-size:14px;line-height:1.6;" th:text="${ticketDescription ?: description}">
+                Detailed message submitted with the support request...
               </div>
             </div>
 
           </td>
         </tr>
       </table>
-      <!--[if mso]>
+      <!--[if (gte mso 9)|(IE)]>
       </td>
       </tr>
       </table>

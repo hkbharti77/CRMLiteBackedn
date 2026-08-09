@@ -52,6 +52,12 @@ public class SubscriptionPlan implements Serializable {
     @Column(name = "has_whatsapp", nullable = false)
     private boolean hasWhatsapp = false;
 
+    @Column(name = "has_whatsapp_campaign", nullable = false)
+    private boolean hasWhatsappCampaign = false;
+
+    @Column(name = "whatsapp_campaign_limit", nullable = false)
+    private int whatsappCampaignLimit = 0;
+
     @Column(name = "has_custom_widget", nullable = false)
     private boolean hasCustomWidget = false;
 
@@ -64,6 +70,10 @@ public class SubscriptionPlan implements Serializable {
     public SubscriptionPlan() {}
 
     public SubscriptionPlan(String id, String name, BigDecimal priceMonthly, BigDecimal priceYearly, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasCustomWidget, boolean hasRagLlm) {
+        this(id, name, priceMonthly, priceYearly, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasWhatsapp, hasWhatsapp ? 25000 : 0, hasCustomWidget, hasRagLlm);
+    }
+
+    public SubscriptionPlan(String id, String name, BigDecimal priceMonthly, BigDecimal priceYearly, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasWhatsappCampaign, int whatsappCampaignLimit, boolean hasCustomWidget, boolean hasRagLlm) {
         this.id = id;
         this.name = name;
         this.priceMonthly = priceMonthly;
@@ -76,12 +86,18 @@ public class SubscriptionPlan implements Serializable {
         this.ticketLimit = ticketLimit;
         this.emailLimit = emailLimit;
         this.hasWhatsapp = hasWhatsapp;
+        this.hasWhatsappCampaign = hasWhatsappCampaign;
+        this.whatsappCampaignLimit = whatsappCampaignLimit;
         this.hasCustomWidget = hasCustomWidget;
         this.hasRagLlm = hasRagLlm;
         this.isContactUs = "ENTERPRISE".equalsIgnoreCase(id);
     }
 
     public SubscriptionPlan(String id, String name, BigDecimal priceMonthlyInr, BigDecimal priceYearlyInr, BigDecimal priceMonthlyUsd, BigDecimal priceYearlyUsd, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasCustomWidget, boolean hasRagLlm) {
+        this(id, name, priceMonthlyInr, priceYearlyInr, priceMonthlyUsd, priceYearlyUsd, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasWhatsapp, hasWhatsapp ? 25000 : 0, hasCustomWidget, hasRagLlm);
+    }
+
+    public SubscriptionPlan(String id, String name, BigDecimal priceMonthlyInr, BigDecimal priceYearlyInr, BigDecimal priceMonthlyUsd, BigDecimal priceYearlyUsd, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasWhatsappCampaign, int whatsappCampaignLimit, boolean hasCustomWidget, boolean hasRagLlm) {
         this.id = id;
         this.name = name;
         this.priceMonthlyInr = priceMonthlyInr;
@@ -96,6 +112,8 @@ public class SubscriptionPlan implements Serializable {
         this.ticketLimit = ticketLimit;
         this.emailLimit = emailLimit;
         this.hasWhatsapp = hasWhatsapp;
+        this.hasWhatsappCampaign = hasWhatsappCampaign;
+        this.whatsappCampaignLimit = whatsappCampaignLimit;
         this.hasCustomWidget = hasCustomWidget;
         this.hasRagLlm = hasRagLlm;
         this.isContactUs = "ENTERPRISE".equalsIgnoreCase(id);
@@ -143,6 +161,12 @@ public class SubscriptionPlan implements Serializable {
     public boolean isHasWhatsapp() { return hasWhatsapp; }
     public void setHasWhatsapp(boolean hasWhatsapp) { this.hasWhatsapp = hasWhatsapp; }
 
+    public boolean isHasWhatsappCampaign() { return hasWhatsappCampaign; }
+    public void setHasWhatsappCampaign(boolean hasWhatsappCampaign) { this.hasWhatsappCampaign = hasWhatsappCampaign; }
+
+    public int getWhatsappCampaignLimit() { return whatsappCampaignLimit; }
+    public void setWhatsappCampaignLimit(int whatsappCampaignLimit) { this.whatsappCampaignLimit = whatsappCampaignLimit; }
+
     public boolean isHasCustomWidget() { return hasCustomWidget; }
     public void setHasCustomWidget(boolean hasCustomWidget) { this.hasCustomWidget = hasCustomWidget; }
 
@@ -171,6 +195,8 @@ public class SubscriptionPlan implements Serializable {
         private int ticketLimit;
         private int emailLimit;
         private boolean hasWhatsapp;
+        private boolean hasWhatsappCampaign;
+        private int whatsappCampaignLimit;
         private boolean hasCustomWidget;
         private boolean hasRagLlm = true;
 
@@ -188,11 +214,13 @@ public class SubscriptionPlan implements Serializable {
         public SubscriptionPlanBuilder ticketLimit(int ticketLimit) { this.ticketLimit = ticketLimit; return this; }
         public SubscriptionPlanBuilder emailLimit(int emailLimit) { this.emailLimit = emailLimit; return this; }
         public SubscriptionPlanBuilder hasWhatsapp(boolean hasWhatsapp) { this.hasWhatsapp = hasWhatsapp; return this; }
+        public SubscriptionPlanBuilder hasWhatsappCampaign(boolean hasWhatsappCampaign) { this.hasWhatsappCampaign = hasWhatsappCampaign; return this; }
+        public SubscriptionPlanBuilder whatsappCampaignLimit(int whatsappCampaignLimit) { this.whatsappCampaignLimit = whatsappCampaignLimit; return this; }
         public SubscriptionPlanBuilder hasCustomWidget(boolean hasCustomWidget) { this.hasCustomWidget = hasCustomWidget; return this; }
         public SubscriptionPlanBuilder hasRagLlm(boolean hasRagLlm) { this.hasRagLlm = hasRagLlm; return this; }
 
         public SubscriptionPlan build() {
-            SubscriptionPlan plan = new SubscriptionPlan(id, name, priceMonthlyInr, priceYearlyInr, priceMonthlyUsd, priceYearlyUsd, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasCustomWidget, hasRagLlm);
+            SubscriptionPlan plan = new SubscriptionPlan(id, name, priceMonthlyInr, priceYearlyInr, priceMonthlyUsd, priceYearlyUsd, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasWhatsappCampaign, whatsappCampaignLimit, hasCustomWidget, hasRagLlm);
             if (priceMonthly != null) plan.setPriceMonthly(priceMonthly);
             if (priceYearly != null) plan.setPriceYearly(priceYearly);
             return plan;

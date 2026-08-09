@@ -27,8 +27,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/leads")
+@PreAuthorize("@perm.has(authentication, 'MODULE_LEADS')")
 public class LeadController {
 
     @Autowired private LeadService leadService;

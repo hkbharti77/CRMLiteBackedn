@@ -172,10 +172,19 @@
 
         _suggestSupport() {
             if (this.supportConfig && !this.supportConfig.enabled) return;
-            this._addBotBubble('Need technical help? You can open a support ticket directly here.');
+            this._addBotBubble('Need technical help? You can open a support ticket or talk directly with a live support agent.');
             
             const container = document.createElement('div');
             container.className = 'flow-buttons';
+
+            const liveAgentBtn = document.createElement('button');
+            liveAgentBtn.className = 'flow-btn';
+            liveAgentBtn.style.cssText = 'background: #10b981; color: #ffffff; margin-bottom: 4px;';
+            liveAgentBtn.textContent = '💬 Connect with Live Agent';
+            liveAgentBtn.onclick = () => {
+                container.remove();
+                this.requestLiveSupport();
+            };
 
             const supportBtn = document.createElement('button');
             supportBtn.className = 'flow-btn';
@@ -184,9 +193,44 @@
                 container.remove();
                 this.startSupportFlow();
             };
+            container.appendChild(liveAgentBtn);
             container.appendChild(supportBtn);
             this._messages.appendChild(container);
             this._messages.scrollTop = this._messages.scrollHeight;
+        },
+
+        async requestLiveSupport() {
+            this._addUserBubble('💬 Connect with Live Agent');
+            this._setTyping(true);
+            try {
+                let sessionId = localStorage.getItem(`crm_chat_session_${businessId}`);
+                if (!sessionId) {
+                    sessionId = 'web_' + Math.random().toString(36).substring(2, 9) + Date.now().toString(36);
+                    localStorage.setItem(`crm_chat_session_${businessId}`, sessionId);
+                }
+
+                const res = await fetch(`${API_BASE}/livechat/request/${businessId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        sessionId: sessionId,
+                        name: this.collectedData.name || 'Website Visitor',
+                        email: this.collectedData.email || '',
+                        phone: this.collectedData.phone || ''
+                    })
+                });
+                this._setTyping(false);
+                if (res.ok) {
+                    const data = await res.json();
+                    this._addBotBubble(data.response || 'Connected with live support agent.');
+                    this.mode = 'live_human';
+                } else {
+                    this._addBotBubble('⚠️ Support team currently unavailable. Please open a support ticket.');
+                }
+            } catch (e) {
+                this._setTyping(false);
+                this._addBotBubble('⚠️ Connection error. Please try again.');
+            }
         },
 
         // ── Support Flow Steps — mirrors support.json exactly ────────────────

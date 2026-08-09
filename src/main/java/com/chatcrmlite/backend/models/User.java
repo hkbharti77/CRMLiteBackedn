@@ -2,11 +2,15 @@ package com.chatcrmlite.backend.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "app_users", indexes = {
@@ -50,6 +54,12 @@ public class User implements Serializable {
     @Column(name = "availability_status", columnDefinition = "VARCHAR(255) DEFAULT 'AVAILABLE'")
     private AvailabilityStatus availabilityStatus = AvailabilityStatus.AVAILABLE;
 
+    @Column(name = "max_concurrent_chats", columnDefinition = "INT DEFAULT 2")
+    private Integer maxConcurrentChats = 2;
+
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_ip_whitelist", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "ip_address")
@@ -58,6 +68,14 @@ public class User implements Serializable {
 
     private Boolean biometricsEnabled = false;
     private Boolean loginAlertsEnabled = false;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "permissions", columnDefinition = "jsonb")
+    private List<String> permissions = new ArrayList<>();
+
+    @Version
+    @Column(name = "permission_version", nullable = false)
+    private Integer permissionVersion = 1;
 
     @Transient
     private WhatsAppConfig whatsappConfig;
@@ -162,11 +180,23 @@ public class User implements Serializable {
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
 
+    public List<String> getPermissions() { return permissions != null ? permissions : new ArrayList<>(); }
+    public void setPermissions(List<String> permissions) { this.permissions = permissions != null ? permissions : new ArrayList<>(); }
+
+    public Integer getPermissionVersion() { return permissionVersion != null ? permissionVersion : 1; }
+    public void setPermissionVersion(Integer permissionVersion) { this.permissionVersion = permissionVersion; }
+
     public AccountStatus getAccountStatus() { return accountStatus; }
     public void setAccountStatus(AccountStatus accountStatus) { this.accountStatus = accountStatus; }
 
     public AvailabilityStatus getAvailabilityStatus() { return availabilityStatus != null ? availabilityStatus : AvailabilityStatus.AVAILABLE; }
     public void setAvailabilityStatus(AvailabilityStatus availabilityStatus) { this.availabilityStatus = availabilityStatus; }
+
+    public Integer getMaxConcurrentChats() { return maxConcurrentChats != null ? maxConcurrentChats : 2; }
+    public void setMaxConcurrentChats(Integer maxConcurrentChats) { this.maxConcurrentChats = maxConcurrentChats; }
+
+    public LocalDateTime getLastSeenAt() { return lastSeenAt; }
+    public void setLastSeenAt(LocalDateTime lastSeenAt) { this.lastSeenAt = lastSeenAt; }
 
     public Set<String> getIpWhitelist() { return ipWhitelist; }
     public void setIpWhitelist(Set<String> ipWhitelist) { this.ipWhitelist = ipWhitelist; }
