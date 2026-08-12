@@ -279,6 +279,13 @@ public class LeadController {
 
     // ── Reassign & Activity Log ───────────────────────────────────────────
 
+    @PostMapping("/{id}/claim")
+    public ResponseEntity<LeadDTO> claimLead(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        Lead lead = leadService.claimLead(id, user);
+        return ResponseEntity.ok(toDTO(lead, user));
+    }
+
     @PatchMapping("/{id}/assign")
     public ResponseEntity<LeadDTO> reassignLead(
             @PathVariable UUID id,

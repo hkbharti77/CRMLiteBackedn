@@ -194,4 +194,22 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.tenant.id = :tenantId")
     long countByTenantId(@Param("tenantId") UUID tenantId);
+
+    // ── Auto-Assignment Methods ──
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "UPDATE leads SET assigned_agent_id = :agentId, assigned_at = :assignedAt, assignment_source = :source, assignment_status = 'ASSIGNED' WHERE id = :leadId AND assigned_agent_id IS NULL AND tenant_id = :tenantId", nativeQuery = true)
+    int atomicAssignLead(@Param("leadId") UUID leadId, @Param("agentId") UUID agentId, @Param("tenantId") UUID tenantId, @Param("assignedAt") java.time.LocalDateTime assignedAt, @Param("source") String source);
+
+    @Query(value = "SELECT u.id " +
+           "FROM app_users u " +
+           "LEFT JOIN lead_assignments la ON u.id = la.agent_id AND la.assigned_at >= :todayStart " +
+           "WHERE u.role = 'AGENT' AND u.account_status = 'ACTIVE' AND u.tenant_id = :tenantId " +
+           "GROUP BY u.id, u.daily_lead_limit " +
+           "HAVING COUNT(la.id) < COALESCE(u.daily_lead_limit, :defaultLimit) " +
+           "ORDER BY COUNT(la.id) ASC " +
+           "LIMIT 1", nativeQuery = true)
+    Optional<UUID> findBestEligibleAgentForTenant(@Param("tenantId") UUID tenantId, @Param("defaultLimit") int defaultLimit, @Param("todayStart") java.time.LocalDateTime todayStart);
+    @Query(value = "SELECT l.id FROM leads l WHERE l.tenant_id = :tenantId AND l.assignment_status IN ('UNASSIGNED', 'LIMIT_REACHED') AND l.pool_entry_time < :cutoffTime AND l.assigned_agent_id IS NULL ORDER BY l.pool_entry_time ASC LIMIT 100", nativeQuery = true)
+    List<UUID> findLeadsForAutoAssignment(@Param("tenantId") UUID tenantId, @Param("cutoffTime") java.time.LocalDateTime cutoffTime);
 }

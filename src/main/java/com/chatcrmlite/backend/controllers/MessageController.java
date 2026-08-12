@@ -23,6 +23,9 @@ public class MessageController {
     private MessageRepository messageRepository;
 
     @Autowired
+    private com.chatcrmlite.backend.repositories.LeadRepository leadRepository;
+
+    @Autowired
     private ContactRepository contactRepository;
 
     @Autowired
@@ -78,6 +81,13 @@ public class MessageController {
                     chat.put("messageCount", messages.size());
                     chat.put("supportState", contact.getSupportState() != null ? contact.getSupportState().name() : "IDLE");
                     chat.put("assignedAgentId", contact.getAssignedAgent() != null ? contact.getAssignedAgent().getId() : null);
+
+                    // Add lead info if contact has an associated lead
+                    leadRepository.findTopByContactOrderByCreatedAtDesc(contact).ifPresent(lead -> {
+                        chat.put("leadId", lead.getId());
+                        chat.put("leadStatus", lead.getStatus() != null ? lead.getStatus().name() : null);
+                        chat.put("assignedAgentName", lead.getAssignedAgent() != null ? lead.getAssignedAgent().getDisplayName() : null);
+                    });
                     return chat;
                 })
                 .filter(Objects::nonNull)

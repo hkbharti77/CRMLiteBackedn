@@ -50,6 +50,7 @@ public class WhatsAppConfigController {
     private String publicAppUrl;
 
     @GetMapping("/feature-labels")
+    @PreAuthorize("isAuthenticated()")
     public ResponseEntity<Map<String, String>> getFeatureLabels() {
         Map<String, String> labels = new HashMap<>();
         labels.put("SOS", com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService.SOS_LABEL);

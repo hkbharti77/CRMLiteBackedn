@@ -14,6 +14,7 @@ public class ThemeConfigDTO {
     private String returningMessage;
     private String businessSubType;
     private String logoUrl;
+    private String widgetIconUrl;
     private Boolean showWatermark;
     private List<WidgetCtaDTO> ctaButtons;
     private List<MenuSectionDTO> menuSections;
@@ -69,6 +70,8 @@ public class ThemeConfigDTO {
     public void setBusinessSubType(String businessSubType) { this.businessSubType = businessSubType; }
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public String getWidgetIconUrl() { return widgetIconUrl; }
+    public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
     public Boolean getShowWatermark() { return showWatermark; }
     public void setShowWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; }
     public List<WidgetCtaDTO> getCtaButtons() { return ctaButtons; }
@@ -104,6 +107,7 @@ public class ThemeConfigDTO {
         private String returningMessage;
         private String businessSubType;
         private String logoUrl;
+        private String widgetIconUrl;
         private Boolean showWatermark;
         private List<WidgetCtaDTO> ctaButtons;
         private List<MenuSectionDTO> menuSections;
@@ -125,6 +129,7 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder returningMessage(String returningMessage) { this.returningMessage = returningMessage; return this; }
         public ThemeConfigDTOBuilder businessSubType(String businessSubType) { this.businessSubType = businessSubType; return this; }
         public ThemeConfigDTOBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
+        public ThemeConfigDTOBuilder widgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; return this; }
         public ThemeConfigDTOBuilder showWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; return this; }
         public ThemeConfigDTOBuilder ctaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; return this; }
         public ThemeConfigDTOBuilder menuSections(List<MenuSectionDTO> menuSections) { this.menuSections = menuSections; return this; }
@@ -137,6 +142,7 @@ public class ThemeConfigDTO {
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
+            dto.setWidgetIconUrl(this.widgetIconUrl);
             dto.setGuardrailMessageAbuse(this.guardrailMessageAbuse);
             dto.setGuardrailMessageGibberish(this.guardrailMessageGibberish);
             return dto;

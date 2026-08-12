@@ -108,6 +108,14 @@ public class GlobalExceptionHandler {
 
     // ── File upload ───────────────────────────────────────────────────────────
 
+    @ExceptionHandler(org.springframework.web.HttpMediaTypeNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMediaTypeNotSupported(
+            org.springframework.web.HttpMediaTypeNotSupportedException ex) {
+        log.warn("[HttpMediaTypeNotSupportedException] Content type not supported: {}", ex.getMessage());
+        return errorResponse(HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+                "Content-Type '" + ex.getContentType() + "' is not supported. Supported media types: " + ex.getSupportedMediaTypes(), null);
+    }
+
     @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
     public ResponseEntity<Map<String, Object>> handleMaxSizeException(
             org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
@@ -158,6 +166,24 @@ public class GlobalExceptionHandler {
         return errorResponse(org.springframework.http.HttpStatus.valueOf(ex.getStatusCode().value()), ex.getReason(), null);
     }
 
+    // ── Network & Client Disconnects ─────────────────────────────────────────
+
+    /**
+     * Client closed/aborted the connection (e.g. browser refresh, tab closed, network drop).
+     * Normal operational event — do not log as 500 error or attempt to write response to aborted socket.
+     */
+    @ExceptionHandler(org.apache.catalina.connector.ClientAbortException.class)
+    public void handleClientAbortException(org.apache.catalina.connector.ClientAbortException ex) {
+        log.debug("[ClientAbort] Client disconnected / aborted connection: {}", ex.getMessage());
+    }
+
+    @ExceptionHandler(org.springframework.web.context.request.async.AsyncRequestTimeoutException.class)
+    public ResponseEntity<Void> handleAsyncRequestTimeoutException(
+            org.springframework.web.context.request.async.AsyncRequestTimeoutException ex) {
+        log.debug("[AsyncTimeout] Async request timed out: {}", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
 
     /**
@@ -166,6 +192,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(RuntimeException.class)
     public ResponseEntity<Map<String, Object>> handleRuntimeException(RuntimeException ex) {
+        if (isClientAbort(ex)) {
+            log.debug("[ClientAbort] Client aborted connection during runtime execution: {}", ex.getMessage());
+            return null;
+        }
         String errorId = getErrorId();
         log.error("[Error={}] Unhandled RuntimeException", errorId, ex);
         return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -174,6 +204,10 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Throwable.class)
     public ResponseEntity<Map<String, Object>> handleGeneralException(Throwable ex) {
+        if (isClientAbort(ex)) {
+            log.debug("[ClientAbort] Client aborted connection: {}", ex.getMessage());
+            return null;
+        }
         String errorId = getErrorId();
         log.error("[Error={}] Unhandled Throwable", errorId, ex);
         return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR,
@@ -181,6 +215,20 @@ public class GlobalExceptionHandler {
     }
 
     // ── Shared helpers ────────────────────────────────────────────────────────
+
+    private boolean isClientAbort(Throwable ex) {
+        Throwable current = ex;
+        while (current != null) {
+            String name = current.getClass().getName();
+            String msg = current.getMessage();
+            if (name.contains("ClientAbortException")
+                    || (msg != null && (msg.contains("Broken pipe") || msg.contains("connection was aborted")))) {
+                return true;
+            }
+            current = current.getCause();
+        }
+        return false;
+    }
 
     private ResponseEntity<Map<String, Object>> errorResponse(HttpStatus status, String message, String errorId) {
         Map<String, Object> body = new LinkedHashMap<>();
@@ -196,7 +244,9 @@ public class GlobalExceptionHandler {
         if (traceId != null) {
             body.put("traceId", traceId);
         }
-        return new ResponseEntity<>(body, status);
+        return ResponseEntity.status(status)
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .body(body);
     }
 
     /** Use traceId from MDC (OTEL) if available, otherwise generate a UUID. */

@@ -118,6 +118,9 @@ public class SecurityConfig {
                     "/api/v1/public/**",
                     "/api/v1/test-emails/**", // TEMPORARY — remove after testing
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
+                    "/api/v1/integrations/meta/gateway/**", // Meta WhatsApp Gateway launcher & callbacks
+                    "/api/v1/business-categories/**",
+                    "/api/v1/categories/**",
                     "/webhook/**",
                     "/whatsapp/**",
                     "/ws/**",
@@ -129,7 +132,7 @@ public class SecurityConfig {
                 // In a true production deploy, remove these lines or add IP-based restriction
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 // Static resources
-                .requestMatchers("/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json").permitAll()
+                .requestMatchers("/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json", "/widget/**").permitAll()
                 // OPTIONS preflight — must be permitted for CORS to work
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 // Actuator — require authentication; role-based health detail is configured in properties

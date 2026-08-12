@@ -8,7 +8,9 @@ import com.chatcrmlite.backend.event.LeadStatusChangedEvent;
 import com.chatcrmlite.backend.models.Lead;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.Contact;
-import com.chatcrmlite.backend.models.LeadEnquiry;
+import com.chatcrmlite.backend.models.LeadAssignment;
+import com.chatcrmlite.backend.models.AssignmentSource;
+import com.chatcrmlite.backend.repositories.LeadAssignmentRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +37,7 @@ public class LeadServiceImpl implements LeadService {
 
     private final LeadRepository leadRepository;
     private final ContactRepository contactRepository;
+    private final LeadAssignmentRepository leadAssignmentRepository;
     private final LeadValidator leadValidator;
     private final LeadEnquiryService leadEnquiryService;
     private final ApplicationEventPublisher eventPublisher;
@@ -65,7 +68,7 @@ public class LeadServiceImpl implements LeadService {
     private Lead findOwnedLead(UUID leadId, User owner) {
         Lead lead = leadRepository.findByIdWithOwnerAndTenant(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead not found"));
-        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+        if (lead.getOwner() == null || lead.getOwner().getTenant() == null || owner == null || owner.getTenant() == null || !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
             throw new RuntimeException("Lead not found");
         }
         return lead;
@@ -76,7 +79,7 @@ public class LeadServiceImpl implements LeadService {
     public Lead getLeadByLeadNumber(String leadNumber, User owner) {
         Lead lead = leadRepository.findByLeadNumber(leadNumber)
                 .orElseThrow(() -> new RuntimeException("Lead not found with number: " + leadNumber));
-        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+        if (lead.getOwner() == null || lead.getOwner().getTenant() == null || owner == null || owner.getTenant() == null || !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
             throw new RuntimeException("Lead not found");
         }
         initializeLead(lead);
@@ -593,5 +596,88 @@ public class LeadServiceImpl implements LeadService {
                 .createdAt(LocalDateTime.now())
                 .build();
         leadActivityRepository.save(activity);
+    }
+
+    @Override
+    @Transactional
+    public Lead claimLead(UUID leadId, User caller) {
+        if (caller.getRole() != User.Role.AGENT && caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized to claim lead.");
+        }
+
+        // 1. Lock the user to prevent concurrent TOCTOU race conditions when checking capacity
+        User agent = userRepository.findByIdWithPessimisticWriteLock(caller.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Agent not found"));
+        
+        if (agent.getTenant() == null) {
+            throw new IllegalArgumentException("Agent has no tenant assigned.");
+        }
+
+        // 2. Check daily capacity
+        int dailyLimit = agent.getDailyLeadLimit() != null ? agent.getDailyLeadLimit() 
+                : (agent.getTenant().getDefaultDailyLeadLimit() != null ? agent.getTenant().getDefaultDailyLeadLimit() : 20);
+
+        LocalDateTime todayStart = LocalDateTime.now().with(java.time.LocalTime.MIN);
+        // Note: We could count from LeadAssignmentRepository here. 
+        // For simplicity, we just count the user's assignments today.
+        long todayCount = leadAssignmentRepository.findAll().stream() // In prod, this should be a DB count query, but for now we'll do a quick count.
+                .filter(la -> la.getAgent().getId().equals(agent.getId()) && la.getAssignedAt().isAfter(todayStart))
+                .count();
+
+        if (todayCount >= dailyLimit) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT, "Daily lead limit reached.");
+        }
+
+        // 3. Atomic Assignment Update
+        LocalDateTime now = LocalDateTime.now();
+        int rowsUpdated = leadRepository.atomicAssignLead(
+                leadId, agent.getId(), agent.getTenant().getId(), now, AssignmentSource.MANUAL.name());
+
+        if (rowsUpdated == 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT, "Lead is no longer available for claiming.");
+        }
+
+        // 4. Record history
+        Lead lead = leadRepository.findById(leadId).orElseThrow();
+        LeadAssignment history = new LeadAssignment(lead, agent, now, agent, AssignmentSource.MANUAL);
+        leadAssignmentRepository.save(history);
+
+        logActivity(lead, agent, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + agent.getEmail() + "\"}");
+        
+        initializeLead(lead);
+        return lead;
+    }
+
+    @Override
+    @Transactional
+    public void autoAssignLead(UUID leadId, com.chatcrmlite.backend.models.Tenant tenant) {
+        Lead lead = leadRepository.findById(leadId).orElse(null);
+        if (lead == null) return;
+        
+        int defaultLimit = tenant.getDefaultDailyLeadLimit() != null ? tenant.getDefaultDailyLeadLimit() : 20;
+        LocalDateTime todayStart = LocalDateTime.now().with(java.time.LocalTime.MIN);
+        
+        java.util.Optional<UUID> bestAgentIdOpt = leadRepository.findBestEligibleAgentForTenant(tenant.getId(), defaultLimit, todayStart);
+        
+        if (bestAgentIdOpt.isPresent()) {
+            User agent = userRepository.findById(bestAgentIdOpt.get()).orElseThrow();
+            
+            LocalDateTime now = LocalDateTime.now();
+            int rowsUpdated = leadRepository.atomicAssignLead(
+                    leadId, agent.getId(), tenant.getId(), now, AssignmentSource.AUTO.name());
+
+            if (rowsUpdated == 1) {
+                LeadAssignment history = new LeadAssignment(lead, agent, now, null, AssignmentSource.AUTO);
+                leadAssignmentRepository.save(history);
+                
+                logActivity(lead, agent, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + agent.getEmail() + "\",\"source\":\"AUTO\"}");
+            }
+        } else {
+            // No eligible agents found. Mark as LIMIT_REACHED
+            lead.setAssignmentStatus(com.chatcrmlite.backend.models.LeadAssignmentStatus.LIMIT_REACHED);
+            leadRepository.save(lead);
+        }
     }
 }

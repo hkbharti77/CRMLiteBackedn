@@ -57,6 +57,9 @@ public class User implements Serializable {
     @Column(name = "max_concurrent_chats", columnDefinition = "INT DEFAULT 2")
     private Integer maxConcurrentChats = 2;
 
+    @Column(name = "daily_lead_limit")
+    private Integer dailyLeadLimit;
+
     @Column(name = "last_seen_at")
     private LocalDateTime lastSeenAt;
 
@@ -139,6 +142,7 @@ public class User implements Serializable {
     public Double getLatitude() { return isTenantInitialized() ? tenant.getLatitude() : null; }
     public Double getLongitude() { return isTenantInitialized() ? tenant.getLongitude() : null; }
     public String getLogoUrl() { return isTenantInitialized() ? tenant.getLogoUrl() : null; }
+    public String getWidgetIconUrl() { return isTenantInitialized() ? tenant.getWidgetIconUrl() : null; }
     public Boolean getOnboardingCompleted() { return isTenantInitialized() ? tenant.getOnboardingCompleted() : false; }
     public PlanType getPlanType() { return isTenantInitialized() && tenant.getPlanType() != null ? PlanType.valueOf(tenant.getPlanType().name()) : PlanType.FREE; }
 
@@ -151,6 +155,7 @@ public class User implements Serializable {
     public void setLatitude(Double lat) { if (isTenantInitialized()) tenant.setLatitude(lat); }
     public void setLongitude(Double lon) { if (isTenantInitialized()) tenant.setLongitude(lon); }
     public void setLogoUrl(String url) { if (isTenantInitialized()) tenant.setLogoUrl(url); }
+    public void setWidgetIconUrl(String url) { if (isTenantInitialized()) tenant.setWidgetIconUrl(url); }
     public void setOnboardingCompleted(Boolean comp) { if (isTenantInitialized()) tenant.setOnboardingCompleted(comp); }
     public void setPlanType(PlanType plan) { if (isTenantInitialized()) tenant.setPlanType(com.chatcrmlite.backend.models.User.PlanType.valueOf(plan.name())); }
     public void setForceShowBooking(Boolean val) { if (isTenantInitialized()) tenant.setForceShowBooking(val); }
@@ -194,6 +199,9 @@ public class User implements Serializable {
 
     public Integer getMaxConcurrentChats() { return maxConcurrentChats != null ? maxConcurrentChats : 2; }
     public void setMaxConcurrentChats(Integer maxConcurrentChats) { this.maxConcurrentChats = maxConcurrentChats; }
+
+    public Integer getDailyLeadLimit() { return dailyLeadLimit; }
+    public void setDailyLeadLimit(Integer dailyLeadLimit) { this.dailyLeadLimit = dailyLeadLimit; }
 
     public LocalDateTime getLastSeenAt() { return lastSeenAt; }
     public void setLastSeenAt(LocalDateTime lastSeenAt) { this.lastSeenAt = lastSeenAt; }
@@ -281,6 +289,7 @@ public class User implements Serializable {
         private String googleRefreshToken;
         private LocalDateTime googleTokenExpiry;
         private LocalDateTime createdAt;
+        private Integer dailyLeadLimit;
 
         // Support backward compatible builder fields
         private String businessName;
@@ -306,6 +315,7 @@ public class User implements Serializable {
         public UserBuilder googleRefreshToken(String googleRefreshToken) { this.googleRefreshToken = googleRefreshToken; return this; }
         public UserBuilder googleTokenExpiry(LocalDateTime googleTokenExpiry) { this.googleTokenExpiry = googleTokenExpiry; return this; }
         public UserBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public UserBuilder dailyLeadLimit(Integer dailyLeadLimit) { this.dailyLeadLimit = dailyLeadLimit; return this; }
 
         public UserBuilder businessName(String businessName) { this.businessName = businessName; return this; }
         public UserBuilder businessType(String businessType) { this.businessType = businessType; return this; }
@@ -324,7 +334,9 @@ public class User implements Serializable {
                         .onboardingCompleted(onboardingCompleted != null && onboardingCompleted)
                         .build();
             }
-            return new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, googleAccessToken, googleRefreshToken, googleTokenExpiry, createdAt);
+            User u = new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, googleAccessToken, googleRefreshToken, googleTokenExpiry, createdAt);
+            u.setDailyLeadLimit(this.dailyLeadLimit);
+            return u;
         }
     }
 }

@@ -120,10 +120,10 @@ public class AuthController {
                         .email(request.getEmail())
                         .displayName(StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName().trim() : null)
                         .businessName(isSuperAdminUser ? "Platform Control Center" : defaultBiz)
-                        .onboardingCompleted(true)
+                        .onboardingCompleted(isSuperAdminUser)
                         .role(isSuperAdminUser ? User.Role.SUPER_ADMIN : User.Role.OWNER)
                         .build();
-                userRepository.save(user);
+                user = userRepository.saveAndFlush(user);
                 log.info("[Auth] New user registered from ip={} (role={})", clientIp, user.getRole());
             } else {
                 user = userOpt.get();
@@ -136,7 +136,7 @@ public class AuthController {
                 if (StringUtils.hasText(request.getBusinessName()) && ("My Business".equals(user.getBusinessName()) || !StringUtils.hasText(user.getBusinessName()))) {
                     user.setBusinessName(request.getBusinessName().trim());
                 }
-                userRepository.save(user);
+                user = userRepository.saveAndFlush(user);
             }
 
             String sessionId = UUID.randomUUID().toString();

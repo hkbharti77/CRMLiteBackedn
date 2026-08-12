@@ -90,6 +90,7 @@ public class UserController {
             if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
             if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
             if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
+            if (request.getWidgetIconUrl() != null) user.setWidgetIconUrl(request.getWidgetIconUrl());
             if (request.getPrimaryColor() != null && user.getTenant() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
             if (request.getSecondaryColor() != null && user.getTenant() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
             if (request.getCountry() != null && user.getTenant() != null) user.getTenant().setCountry(request.getCountry());
@@ -102,11 +103,146 @@ public class UserController {
             if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
             if (request.getEmailHeaderText() != null && user.getTenant() != null) user.getTenant().setEmailHeaderText(request.getEmailHeaderText());
             if (request.getEmailFooterText() != null && user.getTenant() != null) user.getTenant().setEmailFooterText(request.getEmailFooterText());
+            if (request.getDefaultDailyLeadLimit() != null && user.getTenant() != null) user.getTenant().setDefaultDailyLeadLimit(request.getDefaultDailyLeadLimit());
+            if (request.getAutoAssignmentDelayMinutes() != null && user.getTenant() != null) user.getTenant().setAutoAssignmentDelayMinutes(request.getAutoAssignmentDelayMinutes());
         }
 
         userRepository.save(user);
 
         return ResponseEntity.ok(UserProfileDto.from(user));
+    }
+
+    @PostMapping(value = "/me/widget-icon", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> uploadWidgetIcon(
+            @AuthenticationPrincipal String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only Owner or Admin can upload custom widget icons"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please select a PNG file to upload"));
+        }
+
+        // Strict PNG format validation
+        String contentType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        boolean isPngContentType = contentType != null && contentType.equalsIgnoreCase("image/png");
+        boolean isPngExtension = originalFilename != null && originalFilename.toLowerCase().endsWith(".png");
+
+        if (!isPngContentType && !isPngExtension) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Only PNG image format (.png) is supported for the widget icon"));
+        }
+
+        if (file.getSize() > 2 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Image file size must not exceed 2MB"));
+        }
+
+        try {
+            String uploadsDir = "./uploads/widget-icons/";
+            java.nio.file.Path dirPath = java.nio.file.Paths.get(uploadsDir);
+            if (!java.nio.file.Files.exists(dirPath)) {
+                java.nio.file.Files.createDirectories(dirPath);
+            }
+
+            String filename = "widget_icon_" + (user.getTenant() != null ? user.getTenant().getId() : user.getId()) + "_" + System.currentTimeMillis() + ".png";
+            java.nio.file.Path filePath = dirPath.resolve(filename);
+            java.nio.file.Files.copy(file.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            String iconUrl = "/uploads/widget-icons/" + filename;
+            user.setWidgetIconUrl(iconUrl);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Widget icon updated successfully",
+                "widgetIconUrl", iconUrl
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to save widget icon: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/me/logo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> uploadCompanyLogo(
+            @AuthenticationPrincipal String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only Owner or Admin can upload company logo"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please select an image file to upload"));
+        }
+
+        String contentType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        
+        boolean isValidType = contentType != null && (
+                contentType.startsWith("image/") ||
+                contentType.equalsIgnoreCase("image/png") ||
+                contentType.equalsIgnoreCase("image/jpeg") ||
+                contentType.equalsIgnoreCase("image/jpg") ||
+                contentType.equalsIgnoreCase("image/webp") ||
+                contentType.equalsIgnoreCase("image/svg+xml") ||
+                contentType.equalsIgnoreCase("image/gif")
+        );
+
+        if (!isValidType && originalFilename != null) {
+            String lowerName = originalFilename.toLowerCase();
+            isValidType = lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || 
+                          lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") || 
+                          lowerName.endsWith(".svg") || lowerName.endsWith(".gif");
+        }
+
+        if (!isValidType) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Supported image formats are PNG, JPG, JPEG, WebP, SVG, and GIF"));
+        }
+
+        if (file.getSize() > 5 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Image file size must not exceed 5MB"));
+        }
+
+        try {
+            String uploadsDir = "./uploads/logos/";
+            java.nio.file.Path dirPath = java.nio.file.Paths.get(uploadsDir);
+            if (!java.nio.file.Files.exists(dirPath)) {
+                java.nio.file.Files.createDirectories(dirPath);
+            }
+
+            String ext = "png";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
+            }
+
+            String filename = "logo_" + (user.getTenant() != null ? user.getTenant().getId() : user.getId()) + "_" + System.currentTimeMillis() + "." + ext;
+            java.nio.file.Path filePath = dirPath.resolve(filename);
+            java.nio.file.Files.copy(file.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+
+            String logoUrl = "/uploads/logos/" + filename;
+            user.setLogoUrl(logoUrl);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Company header logo updated successfully",
+                "logoUrl", logoUrl
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to save company logo: " + e.getMessage()));
+        }
     }
 
     @PostMapping("/staff")
@@ -374,8 +510,28 @@ public class UserController {
         }
 
         target.setRole(role);
-        userRepository.save(target);
-        return ResponseEntity.ok(Map.of("success", true, "role", role.name()));
+        User saved = userRepository.save(target);
+        return ResponseEntity.ok(Map.of("success", true, "role", saved.getRole().name()));
+    }
+
+    @PatchMapping("/staff/{staffId}/daily-limit")
+    public ResponseEntity<?> updateDailyLimit(
+            @PathVariable UUID staffId,
+            @RequestParam(required = false) Integer limit) {
+        User caller = userRepository.findByEmailWithTenant(org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString()).orElseThrow();
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
+        User staff = userRepository.findById(staffId).orElseThrow();
+        if (staff.getTenant() == null || caller.getTenant() == null || !staff.getTenant().getId().equals(caller.getTenant().getId())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
+        staff.setDailyLeadLimit(limit);
+        userRepository.save(staff);
+
+        return ResponseEntity.ok(java.util.Map.of("success", true, "dailyLeadLimit", limit != null ? limit : "null"));
     }
 
     // ─── DTOS ─────────────────────────────────────────────────────────────
@@ -518,6 +674,7 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String widgetIconUrl;
         private String primaryColor;
         private String secondaryColor;
         private String country;
@@ -528,6 +685,8 @@ public class UserController {
         private Boolean forceShowLeads;
         private String emailHeaderText;
         private String emailFooterText;
+        private Integer defaultDailyLeadLimit;
+        private Integer autoAssignmentDelayMinutes;
 
         public UpdateUserRequest() {}
         public String getDisplayName() { return displayName; }
@@ -550,6 +709,8 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getWidgetIconUrl() { return widgetIconUrl; }
+        public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
@@ -570,6 +731,10 @@ public class UserController {
         public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
         public String getEmailFooterText() { return emailFooterText; }
         public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+        public Integer getDefaultDailyLeadLimit() { return defaultDailyLeadLimit; }
+        public void setDefaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; }
+        public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes; }
+        public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }
     }
 
     public static class UserProfileDto {
@@ -585,6 +750,7 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String widgetIconUrl;
         private String primaryColor;
         private String secondaryColor;
         private String country;
@@ -598,6 +764,9 @@ public class UserController {
         private String planType;
         private String emailHeaderText;
         private String emailFooterText;
+        private UUID tenantId;
+        private Integer defaultDailyLeadLimit;
+        private Integer autoAssignmentDelayMinutes;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -624,6 +793,8 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getWidgetIconUrl() { return widgetIconUrl; }
+        public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
@@ -673,6 +844,7 @@ public class UserController {
             dto.setLatitude(user.getLatitude());
             dto.setLongitude(user.getLongitude());
             dto.setLogoUrl(user.getLogoUrl());
+            dto.setWidgetIconUrl(user.getWidgetIconUrl());
             dto.setPrimaryColor(user.getTenant() != null ? user.getTenant().getPrimaryColor() : null);
             dto.setSecondaryColor(user.getTenant() != null ? user.getTenant().getSecondaryColor() : null);
             dto.setCountry(user.getTenant() != null ? user.getTenant().getCountry() : "IN");

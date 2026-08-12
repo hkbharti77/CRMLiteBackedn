@@ -45,4 +45,7 @@ public interface LeadService {
     Lead reassignLeadOwner(UUID leadId, UUID newOwnerId, User caller);
     Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO> getActivitiesPaged(UUID leadId, int page, int size, User caller);
     void logActivity(Lead lead, User actor, com.chatcrmlite.backend.models.LeadActivity.ActivityType type, String metadataJson);
+
+    Lead claimLead(UUID leadId, User caller);
+    void autoAssignLead(UUID leadId, com.chatcrmlite.backend.models.Tenant tenant);
 }

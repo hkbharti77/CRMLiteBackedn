@@ -223,16 +223,18 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public List<Appointment> getAllAppointments(User owner) {
-        if (isAdmin(owner)) {
-            return appointmentRepository.findAllOrderByAppointmentDateTimeAsc();
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findAllByTenantIdOrderByAppointmentDateTimeAsc(tenantId);
         }
         return appointmentRepository.findByOwner_IdOrderByAppointmentDateTimeAsc(owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Appointment> getAppointmentsForContact(UUID contactId, User owner) {
-        if (isAdmin(owner)) {
-            return appointmentRepository.findByContact_IdOrderByAppointmentDateTimeAsc(contactId);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findByContactIdAndTenantIdOrderByAppointmentDateTimeAsc(contactId, tenantId);
         }
         return appointmentRepository.findByContact_IdAndOwner_IdOrderByAppointmentDateTimeAsc(contactId, owner.getId());
     }
@@ -242,9 +244,10 @@ public class AppointmentService {
         // Next 7 days (excludes today — already shown separately)
         LocalDateTime startOfTomorrow = LocalDate.now().plusDays(1).atStartOfDay();
         LocalDateTime endOfWeek = LocalDate.now().plusDays(7).atTime(23, 59, 59);
-        if (isAdmin(owner)) {
-            return appointmentRepository.findByAppointmentDateTimeBetweenAndStatus(
-                    startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findByTenantIdAndAppointmentDateTimeBetweenAndStatus(
+                    tenantId, startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
         }
         return appointmentRepository.findByOwner_IdAndAppointmentDateTimeBetweenAndStatus(
                 owner.getId(), startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);

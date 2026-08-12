@@ -121,26 +121,35 @@ public class BookingService {
         return saved;
     }
 
+    private UUID resolveTenantId(User owner) {
+        if (owner == null) return null;
+        if (owner.getTenant() != null) return owner.getTenant().getId();
+        return owner.getId();
+    }
+
     @Transactional(readOnly = true)
     public List<Booking> getAllBookings(User owner) {
-        if (isAdmin(owner)) {
-            return bookingRepository.findAllOrderByCreatedAtDesc();
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return bookingRepository.findAllByTenantIdOrderByCreatedAtDesc(tenantId);
         }
         return bookingRepository.findByOwner_IdOrderByCreatedAtDesc(owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Booking> getBookingsForContact(UUID contactId, User owner) {
-        if (isAdmin(owner)) {
-            return bookingRepository.findByContact_IdOrderByCreatedAtDesc(contactId);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return bookingRepository.findByContactIdAndTenantIdOrderByCreatedAtDesc(contactId, tenantId);
         }
         return bookingRepository.findByContact_IdAndOwner_IdOrderByCreatedAtDesc(contactId, owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Booking> getBookingsByStatus(Booking.BookingStatus status, User owner) {
-        if (isAdmin(owner)) {
-            return bookingRepository.findByStatus(status);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return bookingRepository.findByTenantIdAndStatus(tenantId, status);
         }
         return bookingRepository.findByOwner_IdAndStatus(owner.getId(), status);
     }
@@ -173,8 +182,9 @@ public class BookingService {
     }
 
     private Booking getOwned(UUID id, User owner) {
+        UUID tenantId = resolveTenantId(owner);
         return bookingRepository.findByIdWithContact(id)
-                .filter(b -> b.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
+                .filter(b -> b.getOwner() != null && b.getOwner().getTenant() != null && b.getOwner().getTenant().getId().equals(tenantId))
                 .orElseThrow(() -> new RuntimeException("Booking not found or access denied"));
     }
 }

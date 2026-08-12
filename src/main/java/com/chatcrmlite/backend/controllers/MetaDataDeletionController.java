@@ -20,7 +20,7 @@ public class MetaDataDeletionController {
 
     private static final Logger logger = LoggerFactory.getLogger(MetaDataDeletionController.class);
 
-    @Value("${meta.app.secret:}")
+    @Value("${meta.app-secret:${meta.app.secret:}}")
     private String appSecret;
 
     @Autowired

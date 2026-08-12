@@ -34,6 +34,9 @@ public class Tenant implements Serializable {
     private Double longitude;
     private String logoUrl;
 
+    @Column(name = "widget_icon_url", columnDefinition = "TEXT")
+    private String widgetIconUrl;
+
     @Column(name = "primary_color", length = 20)
     private String primaryColor;
 
@@ -66,6 +69,12 @@ public class Tenant implements Serializable {
     private Boolean forceShowBooking = null;
     private Boolean forceShowAppointment = null;
     private Boolean forceShowLeads = null;
+
+    @Column(name = "auto_assignment_delay_minutes", nullable = false)
+    private Integer autoAssignmentDelayMinutes = 5;
+
+    @Column(name = "default_daily_lead_limit", nullable = false)
+    private Integer defaultDailyLeadLimit = 20;
 
     public enum PrimaryResource {
         LEAD,
@@ -135,6 +144,8 @@ public class Tenant implements Serializable {
         this.aiPersonaPrompt = aiPersonaPrompt;
         this.aiPersonaUpdatedAt = aiPersonaUpdatedAt;
         this.aiPersonaUpdatedBy = aiPersonaUpdatedBy;
+        this.autoAssignmentDelayMinutes = 5;
+        this.defaultDailyLeadLimit = 20;
     }
 
     public UUID getId() { return id; }
@@ -163,6 +174,9 @@ public class Tenant implements Serializable {
 
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+
+    public String getWidgetIconUrl() { return widgetIconUrl; }
+    public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
 
     public String getPrimaryColor() { return primaryColor; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
@@ -199,6 +213,12 @@ public class Tenant implements Serializable {
 
     public Boolean getForceShowLeads() { return forceShowLeads; }
     public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+
+    public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes != null ? autoAssignmentDelayMinutes : 5; }
+    public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }
+
+    public Integer getDefaultDailyLeadLimit() { return defaultDailyLeadLimit != null ? defaultDailyLeadLimit : 20; }
+    public void setDefaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; }
 
     public String getCountry() { return country != null ? country : "IN"; }
     public void setCountry(String country) { this.country = country; }
@@ -256,6 +276,8 @@ public class Tenant implements Serializable {
         private String aiPersonaPrompt;
         private LocalDateTime aiPersonaUpdatedAt;
         private UUID aiPersonaUpdatedBy;
+        private Integer autoAssignmentDelayMinutes = 5;
+        private Integer defaultDailyLeadLimit = 20;
 
         public TenantBuilder id(UUID id) { this.id = id; return this; }
         public TenantBuilder businessName(String businessName) { this.businessName = businessName; return this; }
@@ -280,9 +302,14 @@ public class Tenant implements Serializable {
         public TenantBuilder aiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; return this; }
         public TenantBuilder aiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; return this; }
         public TenantBuilder aiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; return this; }
+        public TenantBuilder autoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; return this; }
+        public TenantBuilder defaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; return this; }
 
         public Tenant build() {
-            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users, aiPersonaPrompt, aiPersonaUpdatedAt, aiPersonaUpdatedBy);
+            Tenant t = new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users, aiPersonaPrompt, aiPersonaUpdatedAt, aiPersonaUpdatedBy);
+            if (this.autoAssignmentDelayMinutes != null) t.setAutoAssignmentDelayMinutes(this.autoAssignmentDelayMinutes);
+            if (this.defaultDailyLeadLimit != null) t.setDefaultDailyLeadLimit(this.defaultDailyLeadLimit);
+            return t;
         }
     }
 }

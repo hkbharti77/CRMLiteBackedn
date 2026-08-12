@@ -59,4 +59,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
     @Query("SELECT u FROM User u WHERE u.tenant = :tenant AND u.role IN :roles AND u.accountStatus = 'ACTIVE'")
     java.util.List<User> findStaffByTenantAndRoles(@Param("tenant") com.chatcrmlite.backend.models.Tenant tenant, @Param("roles") java.util.Collection<User.Role> roles);
+    @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.id = :id")
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    Optional<User> findByIdWithPessimisticWriteLock(@org.springframework.data.repository.query.Param("id") UUID id);
 }
