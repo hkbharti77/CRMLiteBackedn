@@ -233,7 +233,7 @@ public class LeadController {
     }
 
     @org.springframework.beans.factory.annotation.Autowired
-    private com.chatcrmlite.backend.services.storage.S3StorageService s3StorageService;
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
 
     @GetMapping("/{id}/attachments/{attachmentId}/download")
     public ResponseEntity<org.springframework.core.io.Resource> downloadAttachment(
@@ -242,14 +242,14 @@ public class LeadController {
         User user = getAuthenticatedUser();
         com.chatcrmlite.backend.models.LeadAttachment attachment = leadService.getAttachmentEntity(id, attachmentId, user);
 
-        if (attachment.getStorageType() == com.chatcrmlite.backend.models.LeadAttachment.StorageType.S3) {
+        if (attachment.getStorageType() == com.chatcrmlite.backend.models.LeadAttachment.StorageType.CLOUDINARY) {
             try {
-                byte[] s3Bytes = s3StorageService.downloadFile(attachment.getStoragePath());
-                org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(s3Bytes);
+                byte[] cloudBytes = cloudinaryStorageService.downloadFile(attachment.getStoragePath());
+                org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(cloudBytes);
                 return ResponseEntity.ok()
                         .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getFileName() + "\"")
                         .contentType(org.springframework.http.MediaType.parseMediaType(attachment.getFileType()))
-                        .contentLength(s3Bytes.length)
+                        .contentLength(cloudBytes.length)
                         .body(resource);
             } catch (Exception e) {
                 return ResponseEntity.notFound().build();

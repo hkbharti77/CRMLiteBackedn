@@ -25,6 +25,32 @@ export async function initWidget({ businessId, apiBase } = {}) {
     let ui = null;
     let flowEngine = null;
     let catalogManager = null;
+    
+    let inactivityTimer = null;
+
+    const resetInactivityTimer = () => {
+        if (inactivityTimer) clearTimeout(inactivityTimer);
+        // 30 minutes timeout
+        inactivityTimer = setTimeout(() => {
+            if (flowEngine && ui) {
+                const timeoutPrompt = "It seems you've been inactive for a while. Would you like to connect with our team directly via Contact Sales, or do you have More Questions?";
+                const timeoutCtas = [
+                    { label: "Book Enquiry", action: "ENQUIRY" },
+                    { label: "Have a question", action: "SUPPORT" }
+                ];
+                
+                const entry = { text: timeoutPrompt, sender: 'bot', time: Date.now(), ctas: timeoutCtas };
+                const history = storage.loadHistory();
+                history.push(entry);
+                storage.saveHistory(history);
+                
+                ui.renderBotBubbleWithCTAs(timeoutPrompt, timeoutCtas, (btnConfig) => {
+                    resetInactivityTimer();
+                    flowEngine.handleCtaAction(btnConfig);
+                });
+            }
+        }, 30 * 60 * 1000);
+    };
 
     const sendMessage = async () => {
         const { input } = ui.getElements();
@@ -37,6 +63,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
         if (!val) return;
 
+        resetInactivityTimer();
+
         flowEngine.addUserBubble(val);
         if (input) input.value = '';
         ui.setTyping(true);
@@ -47,7 +75,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
             const chatHistory = storage.loadHistory();
             const isReturning = chatHistory.length > 2;
 
-            const data = await apiClient.sendChatMessage(val, isReturning);
+            const data = await apiClient.sendChatMessage(val, isReturning, storage.getSessionId());
 
             if (data.ctaButtons !== undefined) {
                 theme.ctaButtons = data.ctaButtons;
@@ -160,7 +188,13 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
         const chatHistory = storage.loadHistory();
         if (chatHistory.length > 0) {
-            chatHistory.forEach(m => ui.renderMessageBubble(m));
+            chatHistory.forEach(m => {
+                if (m.ctas && m.ctas.length > 0) {
+                    ui.renderBotBubbleWithCTAs(m.text, m.ctas, (btnConfig) => flowEngine.handleCtaAction(btnConfig));
+                } else {
+                    ui.renderMessageBubble(m);
+                }
+            });
             flowEngine.showDynamicCTAs();
         } else {
             let wm = theme.welcomeMessage;
@@ -169,6 +203,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
         }
 
         ui.setInputEnabled(true, 'Ask me anything...');
+        resetInactivityTimer();
     } catch (e) {
         console.error('CRM Chat: Bootstrap failed', e);
         flowEngine.addBotBubble("System offline. Please refresh.");

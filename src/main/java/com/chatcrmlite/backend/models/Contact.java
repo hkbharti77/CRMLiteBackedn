@@ -65,6 +65,9 @@ public class Contact extends BaseTenantEntity {
     @Column(name = "escalated_at")
     private java.time.LocalDateTime escalatedAt;
 
+    @Column(name = "last_agent_reply_at")
+    private java.time.LocalDateTime lastAgentReplyAt;
+
     public Contact() {}
 
     public Contact(UUID id, String waId, String displayId, String name, String email, List<Tag> tags, String source, User owner, boolean botPaused) {
@@ -124,6 +127,9 @@ public class Contact extends BaseTenantEntity {
     public void setEscalated(boolean escalated) { this.escalated = escalated; }
     public java.time.LocalDateTime getEscalatedAt() { return escalatedAt; }
     public void setEscalatedAt(java.time.LocalDateTime escalatedAt) { this.escalatedAt = escalatedAt; }
+
+    public java.time.LocalDateTime getLastAgentReplyAt() { return lastAgentReplyAt; }
+    public void setLastAgentReplyAt(java.time.LocalDateTime lastAgentReplyAt) { this.lastAgentReplyAt = lastAgentReplyAt; }
 
     public String getPhone() { return waId; }
     public Boolean getOptedOut() { return false; }

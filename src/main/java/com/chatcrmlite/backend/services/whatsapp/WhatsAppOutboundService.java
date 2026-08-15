@@ -61,6 +61,30 @@ public class WhatsAppOutboundService {
     }
 
     @Transactional
+    public Message sendFlow(Contact contact, String headerText, String bodyText, String footerText,
+                            String metaFlowId, String ctaText, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendFlowMessage(
+                    contact.getWaId(),
+                    headerText,
+                    bodyText,
+                    footerText,
+                    metaFlowId,
+                    ctaText,
+                    "flow_session_" + contact.getId() + "_" + System.currentTimeMillis(),
+                    "MAIN_SCREEN",
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + bodyText + ")", metaMessageId, "FLOW");
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send FLOW to contact={} owner={}: {}",
+                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional
     public Message sendInteractiveMenu(Contact contact, MenuDto menu, WhatsAppConfig config, User owner) {
         return sendInteractiveMenu(contact, menu, describeMenu(menu), config, owner);
     }

@@ -108,6 +108,9 @@ public class MetaGatewayController {
         String stateToken = UUID.randomUUID().toString();
         String verifyToken = "crm_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
 
+        String launcherBase = (publicAppUrl != null && !publicAppUrl.isBlank()) ? publicAppUrl.replaceAll("/+$", "") : "";
+        String launcherUrl = launcherBase + "/api/v1/integrations/meta/gateway/launch";
+
         Map<String, Object> sessionData = new HashMap<>();
         sessionData.put("appId", metaAppId);
         sessionData.put("configId", metaConfigId);
@@ -117,6 +120,8 @@ public class MetaGatewayController {
         sessionData.put("sessionInfoVersion", "3");
         sessionData.put("userEmail", user.getEmail());
         sessionData.put("tenantId", user.getTenant() != null ? user.getTenant().getId().toString() : user.getId().toString());
+        sessionData.put("launcherUrl", launcherUrl);
+        sessionData.put("publicAppUrl", publicAppUrl);
 
         return ResponseEntity.ok(sessionData);
     }
@@ -273,23 +278,37 @@ public class MetaGatewayController {
             const APP_ID = '__APP_ID__';
             const CONFIG_ID = '__CONFIG_ID__';
             const TOKEN = '__TOKEN__';
+            const CALLBACK_URL = window.location.origin + '/api/v1/integrations/meta/gateway/callback';
+            let sdkReady = false;
 
             window.fbAsyncInit = function() {
-              FB.init({
-                appId: APP_ID,
-                cookie: true,
-                xfbml: true,
-                version: 'v20.0'
-              });
+              try {
+                FB.init({
+                  appId: APP_ID,
+                  cookie: true,
+                  xfbml: false,
+                  version: 'v20.0'
+                });
+                sdkReady = true;
+                const btn = document.getElementById('connectBtn');
+                btn.disabled = false;
+                btn.innerHTML = '<svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg> <span>Connect with Facebook</span>';
+              } catch (e) {
+                console.warn('FB.init error:', e);
+              }
             };
 
-            (function(d, s, id) {
-              var js, fjs = d.getElementsByTagName(s)[0];
-              if (d.getElementById(id)) return;
-              js = d.createElement(s); js.id = id;
-              js.src = "https://connect.facebook.net/en_US/sdk.js";
-              fjs.parentNode.insertBefore(js, fjs);
-            }(document, 'script', 'facebook-jssdk'));
+            // Direct OAuth dialog fallback (Ad-block safe)
+            function launchDirectOAuth() {
+              const oauthUrl = 'https://www.facebook.com/v20.0/dialog/oauth?' + 
+                'client_id=' + encodeURIComponent(APP_ID) + 
+                '&redirect_uri=' + encodeURIComponent(CALLBACK_URL) + 
+                '&config_id=' + encodeURIComponent(CONFIG_ID) + 
+                '&response_type=code' + 
+                '&state=' + encodeURIComponent(TOKEN);
+              setStatus('loading', 'Redirecting to Meta authorization dialog...');
+              window.location.href = oauthUrl;
+            }
 
             function setStatus(type, html) {
               const box = document.getElementById('statusBox');
@@ -299,17 +318,16 @@ public class MetaGatewayController {
             }
 
             function launchFacebookLogin() {
+              if (!sdkReady || typeof FB === 'undefined' || !FB.login) {
+                // Fallback to direct OAuth URL immediately
+                launchDirectOAuth();
+                return;
+              }
+
               const btn = document.getElementById('connectBtn');
               btn.disabled = true;
               btn.innerHTML = '<span class="spinner"></span> <span>Connecting to Meta...</span>';
               setStatus('loading', 'Opening official Meta authorization dialog...');
-
-              if (!window.FB) {
-                setStatus('error', 'Facebook SDK could not be loaded. Please ensure popup / script permissions are allowed.');
-                btn.disabled = false;
-                btn.innerHTML = 'Retry Connection';
-                return;
-              }
 
               FB.login(function(response) {
                 if (response.authResponse && response.authResponse.code) {
@@ -350,7 +368,7 @@ public class MetaGatewayController {
                     btn.innerHTML = 'Retry Connection';
                   });
                 } else {
-                  setStatus('error', 'Meta login was cancelled or authorization was denied.');
+                  setStatus('error', 'Meta login was cancelled or authorization was denied.<br/><a href="#" onclick="launchDirectOAuth(); return false;" style="color:#1877F2;font-weight:bold;text-decoration:underline;margin-top:6px;display:inline-block;">👉 Or Click Here to Connect via Direct Meta Dialog</a>');
                   btn.disabled = false;
                   btn.innerHTML = 'Connect with Facebook';
                 }
@@ -366,6 +384,7 @@ public class MetaGatewayController {
               });
             }
           </script>
+          <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
         </body>
         </html>
         """
@@ -514,5 +533,132 @@ public class MetaGatewayController {
         status.put("verificationStatus", config.getVerificationStatus());
 
         return ResponseEntity.ok(status);
+    }
+
+    /**
+     * Step 5: Direct OAuth Redirect Callback Handler
+     * Handles direct Meta OAuth redirect when JS SDK is blocked by browser ad-blocker.
+     */
+    @GetMapping(value = {"/callback", "/oauth/callback"}, produces = MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> handleDirectOAuthCallback(
+            @RequestParam(required = false) String code,
+            @RequestParam(required = false) String state,
+            @RequestParam(required = false) String error,
+            @RequestParam(name = "error_description", required = false) String errorDescription) {
+
+        if (StringUtils.hasText(error) || !StringUtils.hasText(code)) {
+            String errMsg = StringUtils.hasText(errorDescription) ? errorDescription : (error != null ? error : "Authorization was denied");
+            String errHtml = """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:sans-serif;text-align:center;padding:40px;background:#F8FAFC;">
+              <h2 style="color:#DC2626;">Connection Cancelled</h2>
+              <p style="color:#64748B;">__ERROR__</p>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'META_GATEWAY_ERROR', error: '__ERROR__' }, '*');
+                }
+                setTimeout(() => window.close(), 3000);
+              </script>
+            </body>
+            </html>
+            """.replace("__ERROR__", errMsg);
+            return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(errHtml);
+        }
+
+        User user = resolveUser(state);
+        if (user == null) {
+            String unauthHtml = """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:sans-serif;text-align:center;padding:40px;">
+              <h2 style="color:#DC2626;">Authentication Required</h2>
+              <p>Please log in to your CRM account and try again.</p>
+            </body>
+            </html>
+            """;
+            return ResponseEntity.status(401).contentType(MediaType.TEXT_HTML).body(unauthHtml);
+        }
+
+        try {
+            // Exchange code
+            String longLivedToken = metaOnboardingClient.exchangeForLongLivedToken(code);
+            Map<String, Object> debugData = metaOnboardingClient.debugToken(longLivedToken);
+            String businessId = (String) debugData.get("businessId");
+            LocalDateTime tokenExpiry = (LocalDateTime) debugData.get("tokenExpiry");
+            String wabaId = (String) debugData.get("wabaId");
+            if (!StringUtils.hasText(wabaId) && StringUtils.hasText(businessId)) {
+                wabaId = metaOnboardingClient.fetchWabaId(businessId, longLivedToken);
+            }
+
+            Map<String, String> phoneDetails = new HashMap<>();
+            if (StringUtils.hasText(wabaId)) {
+                try {
+                    phoneDetails = metaOnboardingClient.fetchPhoneNumberDetails(wabaId, longLivedToken);
+                } catch (Exception e) {
+                    log.warn("[MetaGateway Callback] Could not fetch phone details immediately: {}", e.getMessage());
+                }
+            }
+
+            if (StringUtils.hasText(wabaId) && StringUtils.hasText(longLivedToken)) {
+                try {
+                    String subscribeUrl = String.format("https://graph.facebook.com/v19.0/%s/subscribed_apps?access_token=%s", wabaId, longLivedToken);
+                    restTemplate.postForEntity(subscribeUrl, null, String.class);
+                } catch (Exception e) {
+                    log.warn("[MetaGateway Callback] Auto-subscription warning: {}", e.getMessage());
+                }
+            }
+
+            WhatsAppConfig config = whatsappConfigRepository.findByUserId(user.getId()).orElse(new WhatsAppConfig());
+            config.setUser(user);
+            config.setConnectionType("EMBEDDED_SIGNUP_COEXISTENCE");
+            config.setAccessToken(longLivedToken);
+            config.setTokenExpiry(tokenExpiry);
+            config.setBusinessId(businessId);
+            config.setWabaId(wabaId);
+            if (phoneDetails.containsKey("phoneNumberId")) config.setPhoneNumberId(phoneDetails.get("phoneNumberId"));
+            if (phoneDetails.containsKey("displayPhoneNumber")) config.setDisplayPhoneNumber(phoneDetails.get("displayPhoneNumber"));
+            if (phoneDetails.containsKey("verifiedName")) config.setVerifiedName(phoneDetails.get("verifiedName"));
+            if (phoneDetails.containsKey("qualityRating")) config.setQualityRating(phoneDetails.get("qualityRating"));
+            config.setVerificationStatus("VERIFIED");
+            config.setAccountStatus("ACTIVE");
+            if (!StringUtils.hasText(config.getVerifyToken())) {
+                config.setVerifyToken("crm_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+            }
+            whatsappConfigRepository.save(config);
+
+            String successHtml = """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:-apple-system,sans-serif;text-align:center;padding:50px;background:#F8FAFC;">
+              <div style="background:#fff;border:1px solid #E2E8F0;border-radius:20px;padding:30px;max-width:400px;margin:0 auto;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
+                <div style="font-size:40px;margin-bottom:10px;">✅</div>
+                <h2 style="color:#059669;margin-bottom:8px;">Connected Successfully!</h2>
+                <p style="color:#475569;font-size:14px;">Your WhatsApp Coexistence is active. Returning to CRM...</p>
+              </div>
+              <script>
+                if (window.opener) {
+                  window.opener.postMessage({ type: 'META_WHATSAPP_CONNECTED', success: true }, '*');
+                }
+                setTimeout(() => window.close(), 1800);
+              </script>
+            </body>
+            </html>
+            """;
+            return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(successHtml);
+
+        } catch (Exception e) {
+            log.error("[MetaGateway Callback] Failed direct OAuth exchange", e);
+            String failHtml = """
+            <!DOCTYPE html>
+            <html>
+            <body style="font-family:sans-serif;text-align:center;padding:40px;">
+              <h2 style="color:#DC2626;">Connection Failed</h2>
+              <p style="color:#64748B;">__ERROR__</p>
+            </body>
+            </html>
+            """.replace("__ERROR__", e.getMessage());
+            return ResponseEntity.status(500).contentType(MediaType.TEXT_HTML).body(failHtml);
+        }
     }
 }

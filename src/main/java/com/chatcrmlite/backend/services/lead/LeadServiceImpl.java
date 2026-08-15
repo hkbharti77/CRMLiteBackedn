@@ -431,7 +431,7 @@ public class LeadServiceImpl implements LeadService {
     );
 
     @org.springframework.beans.factory.annotation.Autowired
-    private com.chatcrmlite.backend.services.storage.S3StorageService s3StorageService;
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
 
     @Override
     @Transactional
@@ -472,14 +472,14 @@ public class LeadServiceImpl implements LeadService {
         String storagePath;
         com.chatcrmlite.backend.models.LeadAttachment.StorageType storageType;
 
-        if (s3StorageService != null && s3StorageService.isConfigured()) {
-            String s3Key = "leads/" + caller.getTenant().getId() + "/" + lead.getId() + "/" + UUID.randomUUID() + "_" + sanitizedFilename;
+        if (cloudinaryStorageService != null && cloudinaryStorageService.isConfigured()) {
+            String key = cloudinaryStorageService.buildTenantKey(caller.getTenant().getId(), "leads/" + lead.getId(), sanitizedFilename);
             try {
-                storagePath = s3StorageService.uploadFile(s3Key, file);
-                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.S3;
-                log.info("Uploaded lead attachment to AWS S3: {}", s3Key);
+                storagePath = cloudinaryStorageService.uploadFile(key, file);
+                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.CLOUDINARY;
+                log.info("Uploaded lead attachment to Cloudinary: {}", key);
             } catch (Exception e) {
-                log.error("Failed to upload file to S3, falling back to local storage: {}", e.getMessage());
+                log.error("Failed to upload file to Cloudinary, falling back to local storage: {}", e.getMessage());
                 storagePath = saveToLocalStorage(caller.getTenant().getId().toString(), lead.getId().toString(), sanitizedFilename, file);
                 storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.LOCAL;
             }

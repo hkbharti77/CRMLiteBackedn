@@ -28,6 +28,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import com.chatcrmlite.backend.models.SessionStatus;
+import java.util.Optional;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -46,21 +49,61 @@ public class FlowStateMachine {
     @Transactional
     public boolean processFlow(Contact contact, User owner, String messageText, String selectionId, boolean isInteractiveSelection) {
         // 1. Check if starting a new flow FIRST — overrides any existing active state
-        if (isInteractiveSelection && selectionId != null && selectionId.startsWith("trigger_flow")) {
-            log.debug("[StateMachine] Starting new flow for contact={}", contact.getWaId());
+        if (isInteractiveSelection && selectionId != null && (selectionId.startsWith("trigger_flow") || selectionId.startsWith("trigger_"))) {
+            log.info("[StateMachine] Starting new flow for contact={}, selectionId={}", contact.getWaId(), selectionId);
             String suffix = null;
             if (selectionId.startsWith("trigger_flow_")) {
                 suffix = selectionId.substring("trigger_flow_".length());
+            } else if (selectionId.startsWith("trigger_")) {
+                suffix = selectionId.substring("trigger_".length());
             }
             return startFlow(contact, owner, messageText, suffix);
         }
 
-        Optional<ConversationState> existingStateOpt = stateRepository.findByContact(contact);
+        Optional<ConversationState> existingStateOpt = stateRepository.findActiveByContact(contact);
 
         if (existingStateOpt.isPresent()) {
             ConversationState state = existingStateOpt.get();
             log.debug("[StateMachine] Processing flow for contact={}, currentState={}, input={}", 
                     contact.getWaId(), state.getCurrentState(), messageText);
+
+            // Timeout resumption logic
+            if (state.getSessionStatus() == SessionStatus.PENDING_TIMEOUT) {
+                if (isInteractiveSelection) {
+                    if ("timeout_yes".equals(selectionId)) {
+                        state.setSessionStatus(SessionStatus.CLOSED);
+                        state.setClosedAt(LocalDateTime.now());
+                        state.setCloseReason("TIMEOUT_FEEDBACK_YES");
+                        stateRepository.save(state);
+                        WhatsAppConfig config = configRepository.findByUserId(owner.getId()).orElse(null);
+                        if (config != null) {
+                            try {
+                                outboundService.sendText(contact, "Thank you, I am glad to help you.", config, owner);
+                            } catch (Exception e) {}
+                        }
+                        return true;
+                    } else if ("timeout_no".equals(selectionId)) {
+                        state.setSessionStatus(SessionStatus.ACTIVE);
+                        state.setTimeoutStartedAt(null);
+                        state.setLastActivityAt(LocalDateTime.now());
+                        state.setCurrentState(state.getPreviousState() != null ? state.getPreviousState() : "START");
+                        stateRepository.save(state);
+                        
+                        // Send main menu by simulating a MENU request, or reset
+                        resetFlow(contact);
+                        return false; 
+                    }
+                }
+                
+                // Normal text during pending timeout: reactivate and continue processing
+                state.setSessionStatus(SessionStatus.ACTIVE);
+                state.setTimeoutStartedAt(null);
+                state.setCurrentState(state.getPreviousState() != null ? state.getPreviousState() : "START");
+            }
+            
+            // Update last activity
+            state.setLastActivityAt(LocalDateTime.now());
+            stateRepository.save(state);
 
             // Pagination handling for dynamic lists
             if (isInteractiveSelection && selectionId != null && selectionId.startsWith("flow_page_")) {
@@ -73,9 +116,11 @@ public class FlowStateMachine {
                 }
                 StateDef currentStateDef = machineDefOpt.get().getStates().get(state.getCurrentState());
                 if (currentStateDef == null) {
-                    log.warn("[StateMachine] State definition {} not found. Deleting stale ConversationState for contact={}",
-                            state.getCurrentState(), contact.getWaId());
-                    stateRepository.delete(state);
+                    log.warn("[StateMachine] State definition {} not found. Deleting stale ConversationState for contact={}", state.getCurrentState(), contact.getWaId());
+                    state.setSessionStatus(SessionStatus.CLOSED);
+                    state.setClosedAt(LocalDateTime.now());
+                    state.setCloseReason("MISSING_DEF_PAGINATION");
+                    stateRepository.save(state);
                     return false;
                 }
                 log.debug("[StateMachine] Pagination request for state={}, page={}", state.getCurrentState(), nextPg);
@@ -230,17 +275,21 @@ public class FlowStateMachine {
         if (machineDefOpt.isEmpty()) {
             log.error("[StateMachine] Flow definition missing for in-progress state. contact={}, owner={}, flowType={}",
                     contact.getWaId(), owner.getId(), state.getFlowType());
-            // Clean up the orphaned state and complete flow gracefully
-            stateRepository.delete(state);
+            state.setSessionStatus(SessionStatus.CLOSED);
+            state.setClosedAt(LocalDateTime.now());
+            state.setCloseReason("MISSING_DEF");
+            stateRepository.save(state);
             completeFlow(state, contact, owner, state.getFlowType());
             return;
         }
         FlowMachineDef machineDef = machineDefOpt.get();
         StateDef currentStateDef = machineDef.getStates().get(state.getCurrentState());
         if (currentStateDef == null) {
-            log.warn("[StateMachine] State definition {} not found in machine def for contact={}. Completing flow.",
-                    state.getCurrentState(), contact.getWaId());
-            stateRepository.delete(state);
+            log.warn("[StateMachine] State definition {} not found in machine def for contact={}. Completing flow.", state.getCurrentState(), contact.getWaId());
+            state.setSessionStatus(SessionStatus.CLOSED);
+            state.setClosedAt(LocalDateTime.now());
+            state.setCloseReason("MISSING_STATE");
+            stateRepository.save(state);
             completeFlow(state, contact, owner, state.getFlowType());
             return;
         }
@@ -317,8 +366,10 @@ public class FlowStateMachine {
         appendHistory(state, nextStateName);
 
         if (nextStateDef.getType() == StateDef.StateType.END) {
-            log.info("[StateMachine] Flow completed for contact={}, deleting state", contact.getWaId());
-            stateRepository.delete(state);
+            state.setSessionStatus(SessionStatus.CLOSED);
+            state.setClosedAt(LocalDateTime.now());
+            state.setCloseReason("COMPLETED");
+            stateRepository.save(state);
             completeFlow(state, contact, owner, state.getFlowType());
         } else {
             stateRepository.save(state);
@@ -519,7 +570,7 @@ public class FlowStateMachine {
 
     @Transactional
     public void resetFlow(Contact contact) {
-        stateRepository.deleteByContact(contact);
+        stateRepository.closeActiveByContact(contact);
     }
 
     @Scheduled(fixedDelay = 3_600_000) // every 1 hour
@@ -527,8 +578,54 @@ public class FlowStateMachine {
     @Transactional
     public void cleanupStaleFlows() {
         LocalDateTime cutoff = LocalDateTime.now().minusHours(24);
-        stateRepository.deleteStaleFlows(cutoff);
+        stateRepository.markStaleFlowsClosed(cutoff, LocalDateTime.now());
         log.info("[StateMachine] Stale flow cleanup completed (cutoff={})", cutoff);
+    }
+
+    @Scheduled(fixedDelay = 60000) // every 1 minute
+    @SchedulerLock(name = "FlowStateMachine_processTimeouts", lockAtMostFor = "5m", lockAtLeastFor = "30s")
+    @Transactional
+    public void processTimeouts() {
+        LocalDateTime now = LocalDateTime.now();
+        // 1. Claim inactive flows (15 mins inactivity)
+        LocalDateTime inactiveCutoff = now.minusMinutes(15);
+        int claimed = stateRepository.claimTimeout(inactiveCutoff, now);
+        
+        if (claimed > 0) {
+            List<ConversationState> pendingFlows = stateRepository.findByTimeoutStartedAt(now);
+            for (ConversationState state : pendingFlows) {
+                // Save current state as previous state
+                state.setPreviousState(state.getCurrentState());
+                state.setCurrentState("SYSTEM_TIMEOUT_FEEDBACK");
+                stateRepository.save(state);
+                
+                try {
+                    WhatsAppConfig config = configRepository.findByUserId(state.getContact().getOwner().getId())
+                        .orElseGet(() -> configRepository.findByTenantId(state.getContact().getTenant().getId()).orElse(null));
+                    if (config != null) {
+                        com.chatcrmlite.backend.dto.MenuDto menu = com.chatcrmlite.backend.dto.MenuDto.builder()
+                            .type("button")
+                            .bodyText("Was I able to assist you with your query?")
+                            .sections(java.util.List.of(
+                                com.chatcrmlite.backend.dto.MenuDto.MenuSectionDto.builder()
+                                    .title("Response")
+                                    .rows(java.util.List.of(
+                                        com.chatcrmlite.backend.dto.MenuDto.MenuRowDto.builder().id("timeout_yes").title("Yes").build(),
+                                        com.chatcrmlite.backend.dto.MenuDto.MenuRowDto.builder().id("timeout_no").title("No").build()
+                                    )).build()
+                            )).build();
+                        
+                        outboundService.sendInteractiveMenu(state.getContact(), menu, null, config, state.getContact().getOwner());
+                    }
+                } catch (Exception e) {
+                    log.error("Failed to send timeout menu for state: " + state.getId(), e);
+                }
+            }
+        }
+        
+        // 2. Close hard timeouts (15 mins after pending timeout)
+        LocalDateTime hardCloseCutoff = now.minusMinutes(15);
+        stateRepository.closeHardTimeouts(hardCloseCutoff, now);
     }
 
     private String getDefaultGreetingForFlow(ConversationState.FlowType flowType) {

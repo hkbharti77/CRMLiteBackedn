@@ -166,6 +166,9 @@ public class User implements Serializable {
     public Boolean getForceShowAppointment() { return isTenantInitialized() ? tenant.getForceShowAppointment() : null; }
     public Boolean getForceShowLeads() { return isTenantInitialized() ? tenant.getForceShowLeads() : null; }
 
+    public String getWebFlowsRoutingConfigJson() { return isTenantInitialized() ? tenant.getWebFlowsRoutingConfigJson() : null; }
+    public void setWebFlowsRoutingConfigJson(String val) { if (isTenantInitialized()) tenant.setWebFlowsRoutingConfigJson(val); }
+
     public LocalDateTime getConsentAt() { return consentAt; }
     public void setConsentAt(LocalDateTime consentAt) { this.consentAt = consentAt; }
 

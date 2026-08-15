@@ -28,20 +28,29 @@ public class PublicImageController {
     private MenuMediaRepository menuMediaRepository;
 
     @GetMapping("/{id}")
-    public ResponseEntity<byte[]> getImage(@PathVariable UUID id) {
+    public ResponseEntity<?> getImage(@PathVariable UUID id) {
         Optional<BusinessService> opt = serviceRepository.findById(id);
-        
-        if (opt.isEmpty() || opt.get().getImageData() == null) {
+        if (opt.isEmpty()) {
             return ResponseEntity.notFound().build();
         }
         
         BusinessService saved = opt.get();
+        if (saved.getImageData() != null && saved.getImageData().length > 0) {
+            String contentType = saved.getImageContentType() != null ? saved.getImageContentType() : "image/jpeg";
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.parseMediaType(contentType));
+            return new ResponseEntity<>(saved.getImageData(), headers, HttpStatus.OK);
+        }
 
-        String contentType = saved.getImageContentType() != null ? saved.getImageContentType() : "image/jpeg";
-        HttpHeaders headers = new HttpHeaders();
-        headers.setContentType(MediaType.parseMediaType(contentType));
+        if (saved.getImageUrl() != null && !saved.getImageUrl().isBlank()) {
+            if (saved.getImageUrl().startsWith("http://") || saved.getImageUrl().startsWith("https://")) {
+                return ResponseEntity.status(HttpStatus.FOUND)
+                        .header(HttpHeaders.LOCATION, saved.getImageUrl())
+                        .build();
+            }
+        }
         
-        return new ResponseEntity<>(saved.getImageData(), headers, HttpStatus.OK);
+        return ResponseEntity.notFound().build();
     }
 
     @GetMapping("/menu/{id}")

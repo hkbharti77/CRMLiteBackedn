@@ -46,6 +46,9 @@ public class WhatsAppConfigController {
     @Autowired
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
     @Value("${app.public.url:}")
     private String publicAppUrl;
 
@@ -64,9 +67,22 @@ public class WhatsAppConfigController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        return whatsappConfigRepository.findByUserId(user.getId())
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(user.getTenant().getId())
+                .orElseGet(() -> {
+                    WhatsAppConfig defaultConf = new WhatsAppConfig();
+                    defaultConf.setTenant(user.getTenant());
+                    defaultConf.setUser(user);
+                    defaultConf.setWelcomeMessage("Hello {{name}}! Welcome to {{business}}. How can we assist you today?");
+                    defaultConf.setReturningMessage("Welcome back {{name}}! Great to see you again at {{business}}. Choose an option below:");
+                    defaultConf.setShowAboutContact(true);
+                    defaultConf.setShowSosButton(true);
+                    defaultConf.setShowSupportFormButton(true);
+                    defaultConf.setThirdButtonType("ABOUT");
+                    defaultConf.setConnectionType("LEGACY");
+                    return defaultConf;
+                });
+
+        return ResponseEntity.ok(config);
     }
 
     @PostMapping
@@ -77,85 +93,119 @@ public class WhatsAppConfigController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        // Enforce WhatsApp integration plan limits
-        quotaEnforcerService.verifyWhatsAppIntegrationAllowed(user.getTenant().getId());
+        // Only enforce WhatsApp integration quota when connecting a live phone number
+        if (body.containsKey("phoneNumberId") && body.get("phoneNumberId") != null && !((String) body.get("phoneNumberId")).isBlank()) {
+            quotaEnforcerService.verifyWhatsAppIntegrationAllowed(user.getTenant().getId());
+        }
 
-        String phoneNumberId = (String) body.get("phoneNumberId");
-        String wabaId = (String) body.get("wabaId");
-        String accessToken = (String) body.get("accessToken");
-        String verifyToken = (String) body.get("verifyToken");
-        String appSecret = (String) body.get("appSecret");
-        String interactiveMenuJson = (String) body.get("interactiveMenuJson");
-        String welcomeMessage = (String) body.get("welcomeMessage");
-        String returningMessage = (String) body.get("returningMessage");
-        Boolean showAboutContact= (Boolean) body.get("showAboutContact");
-        String portfolioUrl     = (String) body.get("portfolioUrl");
-        String sosNote          = (String) body.get("sosNote");
-        String thirdButtonType   = (String) body.get("thirdButtonType");
-        Boolean showSosButton    = (Boolean) body.get("showSosButton");
-        String customSubMenusJson = (String) body.get("customSubMenusJson");
-        String customMessagesJson = (String) body.get("customMessagesJson");
-        String flowCancelMenuJson = (String) body.get("flowCancelMenuJson");
-        String flowCompletionMenuJson = (String) body.get("flowCompletionMenuJson");
-        String aiResponseMenuJson = (String) body.get("aiResponseMenuJson");
-        String guardrailMessageAbuse = (String) body.get("guardrailMessageAbuse");
-        String guardrailMessageGibberish = (String) body.get("guardrailMessageGibberish");
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(user.getTenant().getId())
+                .orElseGet(() -> {
+                    WhatsAppConfig nc = new WhatsAppConfig();
+                    nc.setTenant(user.getTenant());
+                    nc.setUser(user);
+                    nc.setPhoneNumberId("pending_" + user.getTenant().getId());
+                    nc.setWelcomeMessage("Hello {{name}}! Welcome to {{business}}. How can we assist you today?");
+                    nc.setReturningMessage("Welcome back {{name}}! Great to see you again at {{business}}. Choose an option below:");
+                    nc.setShowAboutContact(true);
+                    nc.setShowSosButton(true);
+                    nc.setShowSupportFormButton(true);
+                    nc.setThirdButtonType("ABOUT");
+                    nc.setConnectionType("LEGACY");
+                    return nc;
+                });
 
-        String connectionType = (String) body.get("connectionType");
-        String embeddedBusinessId = (String) body.get("embeddedBusinessId");
-        String embeddedWabaId = (String) body.get("embeddedWabaId");
-        String embeddedPhoneId = (String) body.get("embeddedPhoneId");
+        config.setUser(user);
 
-        if (interactiveMenuJson != null && !interactiveMenuJson.isBlank()) {
-            try {
-                com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
-                        interactiveMenuJson, 
-                        com.chatcrmlite.backend.dto.MenuDto.class);
-                whatsappMenuService.validateMenu(menu);
-            } catch (Exception e) {
-                return ResponseEntity.badRequest().body("Menu validation failed: " + e.getMessage());
+        // Safe partial updates — only overwrite properties that are explicitly present in the request body
+        if (body.containsKey("welcomeMessage")) {
+            config.setWelcomeMessage((String) body.get("welcomeMessage"));
+        }
+        if (body.containsKey("returningMessage")) {
+            config.setReturningMessage((String) body.get("returningMessage"));
+        }
+        if (body.containsKey("showAboutContact")) {
+            config.setShowAboutContact((Boolean) body.get("showAboutContact"));
+        }
+        if (body.containsKey("showSosButton")) {
+            config.setShowSosButton((Boolean) body.get("showSosButton"));
+        }
+        if (body.containsKey("showSupportFormButton")) {
+            config.setShowSupportFormButton((Boolean) body.get("showSupportFormButton"));
+        }
+        if (body.containsKey("sosNote")) {
+            config.setSosNote((String) body.get("sosNote"));
+        }
+        if (body.containsKey("thirdButtonType")) {
+            config.setThirdButtonType((String) body.get("thirdButtonType"));
+        }
+        if (body.containsKey("portfolioUrl")) {
+            config.setPortfolioUrl((String) body.get("portfolioUrl"));
+        }
+        if (body.containsKey("customSubMenusJson")) {
+            config.setCustomSubMenusJson((String) body.get("customSubMenusJson"));
+        }
+        if (body.containsKey("customMessagesJson")) {
+            config.setCustomMessagesJson((String) body.get("customMessagesJson"));
+        }
+        if (body.containsKey("flowCancelMenuJson")) {
+            config.setFlowCancelMenuJson((String) body.get("flowCancelMenuJson"));
+        }
+        if (body.containsKey("flowCompletionMenuJson")) {
+            config.setFlowCompletionMenuJson((String) body.get("flowCompletionMenuJson"));
+        }
+        if (body.containsKey("aiResponseMenuJson")) {
+            config.setAiResponseMenuJson((String) body.get("aiResponseMenuJson"));
+        }
+        if (body.containsKey("guardrailMessageAbuse")) {
+            config.setGuardrailMessageAbuse((String) body.get("guardrailMessageAbuse"));
+        }
+        if (body.containsKey("guardrailMessageGibberish")) {
+            config.setGuardrailMessageGibberish((String) body.get("guardrailMessageGibberish"));
+        }
+        if (body.containsKey("interactiveMenuJson")) {
+            String menuJson = (String) body.get("interactiveMenuJson");
+            config.setInteractiveMenuJson(menuJson != null && !menuJson.isBlank() ? menuJson.trim() : null);
+        }
+        if (body.containsKey("phoneNumberId")) {
+            String phoneNumberId = (String) body.get("phoneNumberId");
+            if (phoneNumberId != null && !phoneNumberId.isBlank()) config.setPhoneNumberId(phoneNumberId.trim());
+        }
+        if (body.containsKey("wabaId")) {
+            String wabaId = (String) body.get("wabaId");
+            if (wabaId != null && !wabaId.isBlank()) config.setWabaId(wabaId.trim());
+        }
+        if (body.containsKey("accessToken")) {
+            String accessToken = (String) body.get("accessToken");
+            if (accessToken != null && !accessToken.isBlank()) config.setAccessToken(accessToken.trim());
+        }
+        if (body.containsKey("verifyToken")) {
+            String verifyToken = (String) body.get("verifyToken");
+            if (verifyToken != null && !verifyToken.isBlank()) config.setVerifyToken(verifyToken.trim());
+        }
+        if (body.containsKey("appSecret")) {
+            String appSecret = (String) body.get("appSecret");
+            if (appSecret != null && !appSecret.isBlank()) config.setAppSecret(appSecret.trim());
+        }
+        if (body.containsKey("connectionType")) {
+            String connectionType = (String) body.get("connectionType");
+            if (connectionType != null && !connectionType.isBlank()) config.setConnectionType(connectionType.trim());
+        }
+        if (body.containsKey("embeddedBusinessId")) config.setEmbeddedBusinessId((String) body.get("embeddedBusinessId"));
+        if (body.containsKey("embeddedWabaId")) config.setEmbeddedWabaId((String) body.get("embeddedWabaId"));
+        if (body.containsKey("embeddedPhoneId")) config.setEmbeddedPhoneId((String) body.get("embeddedPhoneId"));
+        if (body.containsKey("flowsRoutingConfigJson")) {
+            Object routing = body.get("flowsRoutingConfigJson");
+            if (routing instanceof String str) {
+                config.setFlowsRoutingConfigJson(str);
+            } else if (routing != null) {
+                try {
+                    config.setFlowsRoutingConfigJson(objectMapper.writeValueAsString(routing));
+                } catch (Exception ignored) {}
             }
         }
 
-        WhatsAppConfig config = whatsappConfigRepository.findByUserId(user.getId())
-                .orElse(new WhatsAppConfig());
-
-        config.setUser(user);
-        config.setConnectionType(connectionType != null && !connectionType.isBlank() ? connectionType : "LEGACY");
-        config.setPhoneNumberId(phoneNumberId != null ? phoneNumberId.trim() : null);
-        config.setWabaId(wabaId != null ? wabaId.trim() : null);
-        config.setAccessToken(accessToken != null ? accessToken.trim() : null);
-        config.setVerifyToken(verifyToken != null ? verifyToken.trim() : null);
-        config.setAppSecret(appSecret != null ? appSecret.trim() : null);
-        if (embeddedBusinessId != null) config.setEmbeddedBusinessId(embeddedBusinessId);
-        if (embeddedWabaId != null) config.setEmbeddedWabaId(embeddedWabaId);
-        if (embeddedPhoneId != null) config.setEmbeddedPhoneId(embeddedPhoneId);
-
-        config.setInteractiveMenuJson(interactiveMenuJson != null && !interactiveMenuJson.isBlank() ? interactiveMenuJson.trim() : null);
-        config.setWelcomeMessage(welcomeMessage);
-        config.setReturningMessage(returningMessage);
-        config.setCustomSubMenusJson(customSubMenusJson != null && !customSubMenusJson.isBlank() ? customSubMenusJson.trim() : null);
-        config.setCustomMessagesJson(customMessagesJson != null && !customMessagesJson.isBlank() ? customMessagesJson.trim() : null);
-        config.setFlowCancelMenuJson(flowCancelMenuJson != null && !flowCancelMenuJson.isBlank() ? flowCancelMenuJson.trim() : null);
-        config.setFlowCompletionMenuJson(flowCompletionMenuJson != null && !flowCompletionMenuJson.isBlank() ? flowCompletionMenuJson.trim() : null);
-        config.setAiResponseMenuJson(aiResponseMenuJson != null && !aiResponseMenuJson.isBlank() ? aiResponseMenuJson.trim() : null);
-        config.setGuardrailMessageAbuse(guardrailMessageAbuse);
-        config.setGuardrailMessageGibberish(guardrailMessageGibberish);
-        
-        // Dynamic Buttons Data
-        config.setPortfolioUrl(portfolioUrl);
-        config.setSosNote(sosNote);
-        config.setThirdButtonType(thirdButtonType);
-
-        if (showAboutContact != null) {
-            config.setShowAboutContact(showAboutContact);
-        }
-        if (showSosButton != null) {
-            config.setShowSosButton(showSosButton);
-        }
-
-        whatsappConfigRepository.save(config);
-        return ResponseEntity.ok("Config saved");
+        WhatsAppConfig saved = whatsappConfigRepository.save(config);
+        return ResponseEntity.ok(Map.of("message", "Configuration saved successfully", "config", saved));
     }
 
     @PostMapping("/embedded-signup/callback")
@@ -206,9 +256,23 @@ public class WhatsAppConfigController {
         if (user == null) return ResponseEntity.notFound().build();
 
         if (file.isEmpty()) return ResponseEntity.badRequest().body("File is empty");
-        if (file.getSize() > 5 * 1024 * 1024) return ResponseEntity.badRequest().body("File too large (max 5MB)");
+        if (file.getSize() > 50L * 1024 * 1024) return ResponseEntity.badRequest().body("File too large (max 50MB)");
 
         try {
+            if (cloudinaryStorageService.isConfigured()) {
+                String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "whatsapp_media";
+                String sanitized = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+                java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+                String key = cloudinaryStorageService.buildTenantKey(tenantId, "whatsapp-media", sanitized);
+                String mediaUrl = cloudinaryStorageService.uploadFile(key, file);
+
+                Map<String, Object> resp = new HashMap<>();
+                resp.put("url", mediaUrl);
+                resp.put("key", key);
+                resp.put("filename", originalFilename);
+                return ResponseEntity.ok(resp);
+            }
+
             MenuMedia media = MenuMedia.builder()
                     .owner(user)
                     .imageData(file.getBytes())

@@ -173,6 +173,7 @@ public class NicheThemeService {
                 .flowCompletionMenuJson(config != null ? config.getFlowCompletionMenuJson() : null)
                 .guardrailMessageAbuse(config != null ? config.getGuardrailMessageAbuse() : null)
                 .guardrailMessageGibberish(config != null ? config.getGuardrailMessageGibberish() : null)
+                .webFlowsRoutingConfigJson(user.getWebFlowsRoutingConfigJson())
                 .build();
     }
 

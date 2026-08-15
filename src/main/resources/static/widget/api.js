@@ -30,11 +30,18 @@ export function createApiClient(apiBase, businessId) {
             };
         },
 
-        async sendChatMessage(message, isReturning) {
+        async sendChatMessage(message, isReturning, sessionId) {
+            const payload = {
+                message,
+                isReturning: String(isReturning)
+            };
+            if (sessionId) {
+                payload.sessionId = sessionId;
+            }
             const res = await fetch(`${base}/chat/${businessId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message, isReturning: String(isReturning) })
+                body: JSON.stringify(payload)
             });
             if (!res.ok) {
                 throw new Error(`Chat API error: ${res.status}`);
@@ -77,11 +84,15 @@ export function createApiClient(apiBase, businessId) {
             return await res.json();
         },
 
-        async submitFlow(endpoint, data) {
+        async submitFlow(endpoint, data, sessionId) {
+            const payloadData = { ...(data || {}) };
+            if (sessionId) {
+                payloadData.sessionId = sessionId;
+            }
             const res = await fetch(`${base}/${endpoint}/${businessId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ data })
+                body: JSON.stringify({ data: payloadData })
             });
             const result = await res.json().catch(() => ({}));
             return {

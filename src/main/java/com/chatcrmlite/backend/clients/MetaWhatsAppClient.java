@@ -500,4 +500,77 @@ public class MetaWhatsAppClient implements WhatsAppClient {
             throw new RuntimeException("Meta API Error: " + metaError);
         }
     }
+
+    @Override
+    public String sendFlowMessage(String to, String headerText, String bodyText, String footerText,
+                                  String metaFlowId, String ctaText, String flowToken, String screen,
+                                  String accessToken, String phoneNumberId) {
+        String url = String.format(META_URL, phoneNumberId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
+        body.put("to", to);
+        body.put("type", "interactive");
+
+        Map<String, Object> interactive = new HashMap<>();
+        interactive.put("type", "flow");
+
+        if (headerText != null && !headerText.isBlank()) {
+            Map<String, String> header = new HashMap<>();
+            header.put("type", "text");
+            header.put("text", headerText);
+            interactive.put("header", header);
+        }
+
+        Map<String, String> bodyMap = new HashMap<>();
+        bodyMap.put("text", (bodyText != null && !bodyText.isBlank()) ? bodyText : "Please complete the form below:");
+        interactive.put("body", bodyMap);
+
+        if (footerText != null && !footerText.isBlank()) {
+            Map<String, String> footer = new HashMap<>();
+            footer.put("text", footerText);
+            interactive.put("footer", footer);
+        }
+
+        Map<String, Object> action = new HashMap<>();
+        action.put("name", "flow");
+
+        Map<String, Object> parameters = new HashMap<>();
+        parameters.put("flow_message_version", "3");
+        parameters.put("flow_token", (flowToken != null && !flowToken.isBlank()) ? flowToken : "flow_token_" + System.currentTimeMillis());
+        parameters.put("flow_id", metaFlowId);
+        parameters.put("flow_cta", (ctaText != null && !ctaText.isBlank()) ? ctaText : "Open Form");
+        parameters.put("flow_action", "navigate");
+
+        Map<String, Object> flowActionPayload = new HashMap<>();
+        flowActionPayload.put("screen", (screen != null && !screen.isBlank()) ? screen : "MAIN_SCREEN");
+        parameters.put("flow_action_payload", flowActionPayload);
+
+        action.put("parameters", parameters);
+        interactive.put("action", action);
+        body.put("interactive", interactive);
+
+        try {
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+
+            if (response != null && response.containsKey("messages")) {
+                Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
+                return (String) messages.iterator().next().get("id");
+            }
+            return "unknown_id";
+        } catch (HttpStatusCodeException e) {
+            String errorResponse = e.getResponseBodyAsString();
+            log.error("❌ [MetaWhatsAppClient] Failed to send interactive Flow message: {}", errorResponse);
+            throw new RuntimeException("Failed to send WhatsApp Flow message: " + parseMetaError(errorResponse, e.getStatusCode().toString()));
+        } catch (Exception e) {
+            log.error("❌ [MetaWhatsAppClient] Error sending Flow message: {}", e.getMessage());
+            throw new RuntimeException("Error communicating with WhatsApp Cloud API to send Flow message");
+        }
+    }
 }

@@ -69,7 +69,7 @@ public class LeadAttachment {
     private User deletedBy;
 
     public enum StorageType {
-        LOCAL, S3
+        LOCAL, CLOUDINARY
     }
 
     @PrePersist

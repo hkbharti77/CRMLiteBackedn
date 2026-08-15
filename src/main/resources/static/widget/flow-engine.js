@@ -93,12 +93,12 @@ export function createFlowEngine({
         },
 
         suggestForm() {
-            addBotBubble('💡 Tip: Want a quick response? You can fill a short form and we\'ll get back to you!');
+            addBotBubble('Tip: Want a quick response? You can fill a short form and we\'ll get back to you.');
             formSuggested = true;
 
-            ui.renderButtons(['📋 Fill Quick Form', 'Keep chatting'], (val) => {
-                if (val === '📋 Fill Quick Form') {
-                    addUserBubble('📋 Fill Quick Form');
+            ui.renderButtons(['Fill Quick Form', 'Keep chatting'], (val) => {
+                if (val === 'Fill Quick Form') {
+                    addUserBubble('Fill Quick Form');
                     mode = 'flow';
                     ui.setInputEnabled(false);
                     this.renderStep(0);
@@ -110,17 +110,17 @@ export function createFlowEngine({
             if (supportConfig && supportConfig.enabled === false) return;
             addBotBubble('Need technical help? You can open a support ticket or talk directly with a live support agent.');
 
-            ui.renderButtons(['💬 Connect with Live Agent', '🎫 Open Support Ticket'], (val) => {
-                if (val === '💬 Connect with Live Agent') {
+            ui.renderButtons(['Connect with Live Agent', 'Open Support Ticket'], (val) => {
+                if (val === 'Connect with Live Agent') {
                     this.requestLiveSupport();
-                } else if (val === '🎫 Open Support Ticket') {
+                } else if (val === 'Open Support Ticket') {
                     this.startSupportFlow();
                 }
             });
         },
 
         async requestLiveSupport() {
-            addUserBubble('💬 Connect with Live Agent');
+            addUserBubble('Connect with Live Agent');
             ui.setTyping(true);
 
             try {
@@ -137,20 +137,108 @@ export function createFlowEngine({
                     addBotBubble(result.data.response || 'Connected with live support agent.');
                     mode = 'live_human';
                 } else {
-                    addBotBubble('⚠️ Support team currently unavailable. Please open a support ticket.');
+                    addBotBubble('Support team is currently unavailable. Please open a support ticket.');
                 }
             } catch (e) {
                 ui.setTyping(false);
-                addBotBubble('⚠️ Connection error. Please try again.');
+                addBotBubble('Connection error. Please try again.');
             }
         },
 
-        startSupportFlow() {
-            addUserBubble('🎫 Open Support Ticket');
-            mode = 'support';
-            currentStep = 0;
-            collectedData = {};
-            this.renderSupportStep(0);
+        getWebFlowRoutingMode(category) {
+            try {
+                const currentTheme = getTheme() || {};
+                const routingJson = currentTheme.webFlowsRoutingConfigJson;
+                if (!routingJson) return 'WEB_FLOW';
+                const routing = typeof routingJson === 'string' ? JSON.parse(routingJson) : routingJson;
+                
+                const cat = (category || '').toLowerCase();
+                if (cat.includes('appt') || cat.includes('appointment')) return routing.appointments || routing.appointment || 'WEB_FLOW';
+                if (cat.includes('book')) return routing.bookings || routing.booking || 'WEB_FLOW';
+                if (cat.includes('lead') || cat.includes('enquiry')) return routing.leadGen || routing.lead || 'WEB_FLOW';
+                if (cat.includes('supp') || cat.includes('ticket')) return routing.support || 'WEB_FLOW';
+                if (cat.includes('feed') || cat.includes('survey')) return routing.feedback || 'WEB_FLOW';
+                return routing.default || 'WEB_FLOW';
+            } catch (e) {
+                return 'WEB_FLOW';
+            }
+        },
+
+        async startSupportFlow() {
+            addUserBubble('Open Support Ticket');
+            const routingMode = this.getWebFlowRoutingMode('support');
+
+            if (routingMode === 'CHATBOT') {
+                mode = 'support';
+                currentStep = 0;
+                collectedData = {};
+                this.renderSupportStep(0);
+            } else {
+                mode = 'rag';
+                ui.setInputEnabled(true, 'Ask me anything...');
+
+                const categories = await this.loadSupportCategories();
+                const supportSteps = [
+                    { dataKey: 'name', question: 'Your Full Name', fieldType: 'TEXT', required: true },
+                    { dataKey: 'email', question: 'Email Address', fieldType: 'EMAIL', required: true },
+                    { dataKey: 'phone', question: 'Phone Number', fieldType: 'PHONE', required: false },
+                    { dataKey: 'category', question: 'Issue Category', fieldType: 'OPTIONS', options: categories || ['General', 'Technical', 'Billing'], required: true },
+                    { dataKey: 'subject', question: 'Subject / Summary', fieldType: 'TEXT', required: true },
+                    { dataKey: 'description', question: 'Detailed Description', fieldType: 'TEXTAREA', required: true }
+                ];
+
+                const openSupportModal = () => {
+                    ui.renderWebFlowModal({
+                        title: 'Support Ticket Request',
+                        subtitle: 'Customer Care & Grievances',
+                        steps: supportSteps,
+                        onSubmit: async (formData, { close, reset }) => {
+                            try {
+                                const res = await apiClient.submitSupportTicket({
+                                    name: formData.name,
+                                    email: formData.email,
+                                    phone: formData.phone || '',
+                                    subject: formData.subject,
+                                    description: formData.description,
+                                    category: formData.category,
+                                    priority: 'MEDIUM'
+                                });
+                                if (res.ok) {
+                                    close();
+                                    const ticketNum = res.data && res.data.ticketNumber ? ` (Ticket: #${res.data.ticketNumber})` : '';
+                                    ui.renderWebFlowSuccessCard({
+                                        title: `🎫 Support Ticket Created${ticketNum}!`,
+                                        details: `Your ticket has been logged with our team. A confirmation email with resolution details has been sent to ${formData.email}.`
+                                    });
+                                    mode = 'rag';
+                                    ui.setInputEnabled(true, 'Ask me anything...');
+                                } else {
+                                    reset();
+                                    ui.showValidationError('Failed to submit ticket. Please check your fields and try again.');
+                                }
+                            } catch (err) {
+                                reset();
+                                ui.showValidationError('Network error submitting ticket. Please try again.');
+                            }
+                        },
+                        onCancel: () => {
+                            mode = 'rag';
+                            ui.setInputEnabled(true, 'Ask me anything...');
+                        }
+                    });
+                };
+
+                ui.renderWebFlowCtaCard({
+                    title: 'Customer Support Request',
+                    subtitle: 'Submit your issue directly to our dedicated support agents with real-time ticket tracking.',
+                    badgeText: 'SUPPORT TICKET',
+                    buttonText: 'Open Support Form',
+                    onOpen: openSupportModal
+                });
+
+                // Auto-open modal immediately for seamless UX
+                openSupportModal();
+            }
         },
 
         async startFlow(actionType, label) {
@@ -166,16 +254,70 @@ export function createFlowEngine({
                     config = flow;
                     currentStep = 0;
                     collectedData = {};
-                    mode = 'flow';
-                    this.renderStep(0);
+
+                    const routingMode = this.getWebFlowRoutingMode(actionType);
+                    if (routingMode === 'CHATBOT') {
+                        // Conversational mode (one question bubble at a time)
+                        mode = 'flow';
+                        this.renderStep(0);
+                    } else {
+                        // Web Flow mode (Interactive In-Chat Sheet with 1-to-1 WhatsApp parity)
+                        mode = 'rag';
+                        ui.setInputEnabled(true, 'Ask me anything...');
+
+                        const openFlowModal = () => {
+                            ui.renderWebFlowModal({
+                                title: label || 'Interactive Form',
+                                subtitle: flow.flowType || 'Direct Request',
+                                steps: flow.steps || [],
+                                onSubmit: async (formData, { close, reset }) => {
+                                    try {
+                                        const ep = ENDPOINT_MAP[actionType] || (actionType ? actionType.toLowerCase() : 'lead');
+                                        const sessionId = storage.getSessionId();
+                                        const res = await apiClient.submitFlow(ep, formData, sessionId);
+                                        if (res.ok) {
+                                            close();
+                                            ui.renderWebFlowSuccessCard({
+                                                title: '🎉 Request Submitted Successfully!',
+                                                details: `Thank you! Your information has been securely recorded. A confirmation email has been dispatched to ${formData.email || 'your email'}.`
+                                            });
+                                            mode = 'rag';
+                                            ui.setInputEnabled(true, 'Ask me anything...');
+                                        } else {
+                                            reset();
+                                            ui.showValidationError('Submission error. Please check the required fields and try again.');
+                                        }
+                                    } catch (err) {
+                                        reset();
+                                        ui.showValidationError('Network connection error. Please try again.');
+                                    }
+                                },
+                                onCancel: () => {
+                                    mode = 'rag';
+                                    ui.setInputEnabled(true, 'Ask me anything...');
+                                }
+                            });
+                        };
+
+                        ui.renderWebFlowCtaCard({
+                            title: `${label || 'Booking & Inquiry'}`,
+                            subtitle: flow.greetingMessage || 'Click below to open the interactive form and submit your request in seconds.',
+                            badgeText: 'INTERACTIVE FORM',
+                            buttonText: `Open ${label || 'Form'}`,
+                            onOpen: openFlowModal
+                        });
+
+                        // Auto-open modal sheet immediately on screen
+                        openFlowModal();
+                    }
                 } else {
-                    addBotBubble('⚠️ This form is not configured yet.');
+                    addBotBubble('This form is not configured yet.');
                     ui.setInputEnabled(true);
                     mode = 'rag';
                 }
             } catch (e) {
                 ui.setTyping(false);
-                addBotBubble('⚠️ Connection error. Please try again.');
+                addBotBubble('Connection error. Please try again.');
                 ui.setInputEnabled(true);
                 mode = 'rag';
             }
@@ -200,7 +342,7 @@ export function createFlowEngine({
                 }
             } catch (e) {
                 ui.setTyping(false);
-                addBotBubble('⚠️ Connection error. Please try again.');
+                addBotBubble('Connection error. Please try again.');
                 ui.setInputEnabled(true);
                 mode = 'rag';
             }
@@ -226,9 +368,16 @@ export function createFlowEngine({
             const step = steps[index];
             currentStep = index;
 
-            let greetingMsg = (supportConfig && supportConfig.greetingMessage)
-                ? supportConfig.greetingMessage
-                : 'Welcome to our Support channel! Please provide a few details so we can assist you better.';
+            let greetingMsg = 'Welcome to our Support channel. Please provide a few details so we can assist you.';
+            if (supportConfig) {
+                if (supportConfig.greetingMessage && String(supportConfig.greetingMessage).trim()) {
+                    greetingMsg = supportConfig.greetingMessage;
+                } else if (supportConfig.formDescription && String(supportConfig.formDescription).trim()) {
+                    greetingMsg = supportConfig.formDescription;
+                } else if (supportConfig.formTitle && String(supportConfig.formTitle).trim()) {
+                    greetingMsg = supportConfig.formTitle;
+                }
+            }
 
             const bubbleText = (index === 0)
                 ? greetingMsg + '\n\n' + step.q
@@ -502,14 +651,14 @@ export function createFlowEngine({
             const endpoint = ENDPOINT_MAP[config.flowType] || 'enquiry';
 
             try {
-                const result = await apiClient.submitFlow(endpoint, collectedData);
+                const result = await apiClient.submitFlow(endpoint, collectedData, storage.getSessionId());
                 ui.setTyping(false);
                 if (result.ok) {
                     mode = 'rag';
                     setTimeout(() => {
                         ui.setInputEnabled(true, 'Ask me anything...');
                         const currentTheme = getTheme();
-                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, result.data.message || '✅ Thank you! We\'ll be in touch.', false, currentTheme, (id, title) => {
+                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, result.data.message || 'Thank you! We\'ll be in touch.', false, currentTheme, (id, title) => {
                             this.handleMenuAction(id, title);
                         });
                         if (menuEntry) {
@@ -519,12 +668,12 @@ export function createFlowEngine({
                         }
                     }, 800);
                 } else {
-                    addBotBubble('⚠️ Submission failed. Please try again later.');
+                    addBotBubble('Submission failed. Please try again later.');
                     ui.setInputEnabled(true);
                 }
             } catch (e) {
                 ui.setTyping(false);
-                addBotBubble('⚠️ Connection error. Please try again.');
+                addBotBubble('Connection error. Please try again.');
             }
         },
 
@@ -532,7 +681,7 @@ export function createFlowEngine({
             const validation = validateSupportPayload(collectedData);
 
             if (!validation.isValid) {
-                addBotBubble(`⚠️ Please provide your ${validation.missing.join(', ')} before submitting.`);
+                addBotBubble(`Please provide your ${validation.missing.join(', ')} before submitting.`);
                 mode = 'support';
                 const stepKeys = SUPPORT_STEPS.map(s => s.key);
                 const firstMissingStep = stepKeys.findIndex(k => !collectedData[k] || !collectedData[k].trim());
@@ -557,7 +706,7 @@ export function createFlowEngine({
                     setTimeout(() => {
                         ui.setInputEnabled(true, 'Ask me anything...');
                         const currentTheme = getTheme();
-                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, data.message || '✅ Support ticket created successfully!', false, currentTheme, (id, title) => {
+                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, data.message || 'Support ticket created successfully.', false, currentTheme, (id, title) => {
                             this.handleMenuAction(id, title);
                         });
                         if (menuEntry) {
@@ -568,21 +717,21 @@ export function createFlowEngine({
                     }, 1000);
                 } else if (result.status === 400) {
                     const errMsg = data.error || data.message || (data.errors && Object.values(data.errors).join(', ')) || 'Some required fields are missing. Please check your inputs.';
-                    addBotBubble(`⚠️ ${errMsg}`);
+                    addBotBubble(errMsg);
                     mode = 'support';
                     ui.setInputEnabled(true);
                 } else if (result.status === 429) {
-                    addBotBubble('⚠️ Too many requests. Please wait a moment and try again.');
+                    addBotBubble('Too many requests. Please wait a moment and try again.');
                     mode = 'rag';
                     ui.setInputEnabled(true);
                 } else {
-                    addBotBubble(`⚠️ ${data.error || 'Failed to create ticket. Please try again.'}`);
+                    addBotBubble(data.error || 'Failed to create ticket. Please try again.');
                     mode = 'support';
                     ui.setInputEnabled(true);
                 }
             } catch (e) {
                 ui.setTyping(false);
-                addBotBubble('⚠️ Connection error. Please check your connection and try again.');
+                addBotBubble('Connection error. Please check your connection and try again.');
                 mode = 'support';
                 ui.setInputEnabled(true);
             }
@@ -608,12 +757,11 @@ export function createFlowEngine({
 
             if (currentTheme.ctaButtons && currentTheme.ctaButtons.length > 0) {
                 const container = document.createElement('div');
-                container.className = 'flow-buttons';
+                container.className = 'flow-buttons flow-buttons--outline';
                 currentTheme.ctaButtons.forEach(btnConfig => {
                     const btn = document.createElement('button');
-                    btn.className = 'flow-btn';
-                    btn.style.cssText = 'background:transparent; border:1px solid var(--primary-color); color:var(--primary-color); font-size:12px; margin-right: 5px; margin-bottom: 5px;';
-                    btn.textContent = btnConfig.label;
+                    btn.className = 'flow-btn flow-btn--outline';
+                    btn.innerHTML = `<span class="btn-text">${btnConfig.label}</span>`;
                     btn.onclick = () => {
                         container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
                         this.handleCtaAction(btnConfig);

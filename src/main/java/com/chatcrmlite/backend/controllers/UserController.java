@@ -59,6 +59,9 @@ public class UserController {
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
+    @Autowired
     private com.chatcrmlite.backend.services.AgentPermissionService agentPermissionService;
 
     @GetMapping("/me")
@@ -105,6 +108,7 @@ public class UserController {
             if (request.getEmailFooterText() != null && user.getTenant() != null) user.getTenant().setEmailFooterText(request.getEmailFooterText());
             if (request.getDefaultDailyLeadLimit() != null && user.getTenant() != null) user.getTenant().setDefaultDailyLeadLimit(request.getDefaultDailyLeadLimit());
             if (request.getAutoAssignmentDelayMinutes() != null && user.getTenant() != null) user.getTenant().setAutoAssignmentDelayMinutes(request.getAutoAssignmentDelayMinutes());
+            if (request.getWebFlowsRoutingConfigJson() != null) user.setWebFlowsRoutingConfigJson(request.getWebFlowsRoutingConfigJson());
         }
 
         userRepository.save(user);
@@ -145,17 +149,15 @@ public class UserController {
         }
 
         try {
-            String uploadsDir = "./uploads/widget-icons/";
-            java.nio.file.Path dirPath = java.nio.file.Paths.get(uploadsDir);
-            if (!java.nio.file.Files.exists(dirPath)) {
-                java.nio.file.Files.createDirectories(dirPath);
+            if (!cloudinaryStorageService.isConfigured()) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Cloudinary Storage is not configured on the server."));
             }
 
-            String filename = "widget_icon_" + (user.getTenant() != null ? user.getTenant().getId() : user.getId()) + "_" + System.currentTimeMillis() + ".png";
-            java.nio.file.Path filePath = dirPath.resolve(filename);
-            java.nio.file.Files.copy(file.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+            String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "widget_icon.png");
+            String iconUrl = cloudinaryStorageService.uploadFile(key, file);
 
-            String iconUrl = "/uploads/widget-icons/" + filename;
             user.setWidgetIconUrl(iconUrl);
             userRepository.save(user);
 
@@ -216,10 +218,9 @@ public class UserController {
         }
 
         try {
-            String uploadsDir = "./uploads/logos/";
-            java.nio.file.Path dirPath = java.nio.file.Paths.get(uploadsDir);
-            if (!java.nio.file.Files.exists(dirPath)) {
-                java.nio.file.Files.createDirectories(dirPath);
+            if (!cloudinaryStorageService.isConfigured()) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Cloudinary Storage is not configured on the server."));
             }
 
             String ext = "png";
@@ -227,11 +228,10 @@ public class UserController {
                 ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
             }
 
-            String filename = "logo_" + (user.getTenant() != null ? user.getTenant().getId() : user.getId()) + "_" + System.currentTimeMillis() + "." + ext;
-            java.nio.file.Path filePath = dirPath.resolve(filename);
-            java.nio.file.Files.copy(file.getInputStream(), filePath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+            String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "logo." + ext);
+            String logoUrl = cloudinaryStorageService.uploadFile(key, file);
 
-            String logoUrl = "/uploads/logos/" + filename;
             user.setLogoUrl(logoUrl);
             userRepository.save(user);
 
@@ -735,6 +735,9 @@ public class UserController {
         public void setDefaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; }
         public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes; }
         public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }
+        public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+        public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+        private String webFlowsRoutingConfigJson;
     }
 
     public static class UserProfileDto {
@@ -821,6 +824,9 @@ public class UserController {
         public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
         public String getEmailFooterText() { return emailFooterText; }
         public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+        public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+        public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+        private String webFlowsRoutingConfigJson;
 
         private List<String> permissions;
         private Integer permissionVersion;
@@ -853,6 +859,7 @@ public class UserController {
             dto.setForceShowBooking(user.getForceShowBooking());
             dto.setForceShowAppointment(user.getForceShowAppointment());
             dto.setForceShowLeads(user.getForceShowLeads());
+            dto.setWebFlowsRoutingConfigJson(user.getWebFlowsRoutingConfigJson());
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
             dto.setPermissions(user.getPermissions());

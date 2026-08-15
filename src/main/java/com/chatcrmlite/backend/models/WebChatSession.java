@@ -27,6 +27,23 @@ public class WebChatSession implements Serializable {
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 
+    // ── Session Timeout Fields ───────────────────────────────────────────────
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    private SessionStatus status = SessionStatus.ACTIVE;
+
+    @Column(name = "last_activity_at", nullable = false)
+    private LocalDateTime lastActivityAt = LocalDateTime.now();
+
+    @Column(name = "timeout_started_at")
+    private LocalDateTime timeoutStartedAt;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Column(name = "close_reason")
+    private String closeReason;
+
     public WebChatSession() {}
 
     public WebChatSession(User owner, String sessionId) {
@@ -59,4 +76,19 @@ public class WebChatSession implements Serializable {
     
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public SessionStatus getStatus() { return status; }
+    public void setStatus(SessionStatus status) { this.status = status; }
+
+    public LocalDateTime getLastActivityAt() { return lastActivityAt; }
+    public void setLastActivityAt(LocalDateTime lastActivityAt) { this.lastActivityAt = lastActivityAt; }
+
+    public LocalDateTime getTimeoutStartedAt() { return timeoutStartedAt; }
+    public void setTimeoutStartedAt(LocalDateTime timeoutStartedAt) { this.timeoutStartedAt = timeoutStartedAt; }
+
+    public LocalDateTime getClosedAt() { return closedAt; }
+    public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
+
+    public String getCloseReason() { return closeReason; }
+    public void setCloseReason(String closeReason) { this.closeReason = closeReason; }
 }

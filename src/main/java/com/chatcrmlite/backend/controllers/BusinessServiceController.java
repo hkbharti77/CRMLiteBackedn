@@ -32,7 +32,8 @@ public class BusinessServiceController {
     @Autowired
     private UserRepository userRepository;
 
-    private static final String UPLOAD_DIR = "./uploads/";
+    @Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
 
     @GetMapping
     public ResponseEntity<?> getAllServices(@AuthenticationPrincipal String email) {
@@ -42,6 +43,13 @@ public class BusinessServiceController {
         if (user == null) return ResponseEntity.notFound().build();
 
         List<BusinessService> services = serviceRepository.findByOwner(user);
+        for (BusinessService s : services) {
+            if ((s.getImageUrl() == null || s.getImageUrl().isBlank()) && s.getImageData() != null) {
+                String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+                s.setImageUrl(baseUrl + "/public/images/" + s.getId());
+            }
+            s.setImageData(null);
+        }
         return ResponseEntity.ok(services);
     }
 
@@ -66,26 +74,34 @@ public class BusinessServiceController {
                 .build();
 
         if (file != null && !file.isEmpty()) {
-            System.out.println("[Service] Image: " + file.getOriginalFilename() + " (" + (file.getSize()/1024) + " KB)");
-            // 5MB Limit check
-            if (file.getSize() > 5 * 1024 * 1024) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Image size must not exceed 5 MB");
+            if (file.getSize() > 50L * 1024 * 1024) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File size must not exceed 50 MB");
             }
             try {
-                businessService.setImageData(file.getBytes());
-                businessService.setImageContentType(file.getContentType());
-            } catch (IOException e) {
+                if (cloudinaryStorageService.isConfigured()) {
+                    String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "product_file";
+                    String sanitized = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+                    java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+                    String key = cloudinaryStorageService.buildTenantKey(tenantId, "catalog", sanitized);
+                    String mediaUrl = cloudinaryStorageService.uploadFile(key, file);
+                    businessService.setImageUrl(mediaUrl);
+                } else {
+                    businessService.setImageData(file.getBytes());
+                    businessService.setImageContentType(file.getContentType());
+                }
+            } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Failed to read image data: " + e.getMessage());
+                        .body("Failed to upload file: " + e.getMessage());
             }
         }
 
         BusinessService saved = serviceRepository.save(businessService);
         
-        // Build image URL
-        String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
-        saved.setImageUrl(baseUrl + "/public/images/" + saved.getId());
-        serviceRepository.save(saved);
+        if (saved.getImageUrl() == null && saved.getImageData() != null) {
+            String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+            saved.setImageUrl(baseUrl + "/public/images/" + saved.getId());
+            serviceRepository.save(saved);
+        }
         
         saved.setImageData(null); 
         return ResponseEntity.status(HttpStatus.CREATED).body(saved);
@@ -112,18 +128,27 @@ public class BusinessServiceController {
         existing.setDescription(description != null ? description : "");
 
         if (file != null && !file.isEmpty()) {
-            System.out.println("[Service] Updating Image: " + file.getOriginalFilename() + " (" + (file.getSize()/1024) + " KB)");
-            if (file.getSize() > 5 * 1024 * 1024) {
-                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Image size must not exceed 5 MB");
+            if (file.getSize() > 50L * 1024 * 1024) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("File size must not exceed 50 MB");
             }
             try {
-                existing.setImageData(file.getBytes());
-                existing.setImageContentType(file.getContentType());
-                String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
-                existing.setImageUrl(baseUrl + "/public/images/" + existing.getId());
-            } catch (IOException e) {
+                if (cloudinaryStorageService.isConfigured()) {
+                    String originalFilename = file.getOriginalFilename() != null ? file.getOriginalFilename() : "product_file";
+                    String sanitized = originalFilename.replaceAll("[^a-zA-Z0-9._-]", "_");
+                    java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+                    String key = cloudinaryStorageService.buildTenantKey(tenantId, "catalog", sanitized);
+                    String mediaUrl = cloudinaryStorageService.uploadFile(key, file);
+                    existing.setImageUrl(mediaUrl);
+                    existing.setImageData(null);
+                } else {
+                    existing.setImageData(file.getBytes());
+                    existing.setImageContentType(file.getContentType());
+                    String baseUrl = ServletUriComponentsBuilder.fromCurrentContextPath().build().toUriString();
+                    existing.setImageUrl(baseUrl + "/public/images/" + existing.getId());
+                }
+            } catch (Exception e) {
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("Failed to read image data: " + e.getMessage());
+                        .body("Failed to upload file: " + e.getMessage());
             }
         }
 

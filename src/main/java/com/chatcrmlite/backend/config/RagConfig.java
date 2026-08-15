@@ -104,46 +104,66 @@ public class RagConfig {
     public AiProvider chatLanguageModelAiProvider(
             @org.springframework.context.annotation.Lazy ChatLanguageModel chatLanguageModel,
             ModelHealthMonitor healthMonitor) {
-        return new AiProvider() {
-            @Override
-            public AiResponse generate(AiRequest request) {
-                if (chatLanguageModel == null) {
-                    throw new IllegalStateException("No active ChatLanguageModel bean configured!");
-                }
-                long start = System.currentTimeMillis();
-                List<dev.langchain4j.data.message.ChatMessage> messages = new java.util.ArrayList<>();
-                if (request.getSystemInstruction() != null && !request.getSystemInstruction().isBlank()) {
-                    messages.add(SystemMessage.from(request.getSystemInstruction()));
-                }
-                messages.add(UserMessage.from(request.getPrompt()));
+        return new ChatLanguageModelAiProvider(chatLanguageModel, healthMonitor, aiProvider, modelName, openAiModelName);
+    }
 
-                Response<AiMessage> response = chatLanguageModel.generate(messages);
-                long duration = System.currentTimeMillis() - start;
+    public static class ChatLanguageModelAiProvider implements AiProvider {
+        private final ChatLanguageModel chatLanguageModel;
+        private final ModelHealthMonitor healthMonitor;
+        private final String aiProvider;
+        private final String modelName;
+        private final String openAiModelName;
 
-                int tokens = response.tokenUsage() != null ? response.tokenUsage().totalTokenCount() : 0;
+        public ChatLanguageModelAiProvider(ChatLanguageModel chatLanguageModel,
+                                           ModelHealthMonitor healthMonitor,
+                                           String aiProvider,
+                                           String modelName,
+                                           String openAiModelName) {
+            this.chatLanguageModel = chatLanguageModel;
+            this.healthMonitor = healthMonitor;
+            this.aiProvider = aiProvider;
+            this.modelName = modelName;
+            this.openAiModelName = openAiModelName;
+        }
 
-                return AiResponse.builder()
-                        .content(response.content().text())
-                        .tokensUsed(tokens)
-                        .latencyMs(duration)
-                        .provider(aiProvider)
-                        .build();
+        @Override
+        public AiResponse generate(AiRequest request) {
+            if (chatLanguageModel == null) {
+                throw new IllegalStateException("No active ChatLanguageModel bean configured!");
             }
-
-            @Override
-            public String getModelName() {
-                return "google".equalsIgnoreCase(aiProvider) ? modelName : openAiModelName;
+            long start = System.currentTimeMillis();
+            List<dev.langchain4j.data.message.ChatMessage> messages = new java.util.ArrayList<>();
+            if (request.getSystemInstruction() != null && !request.getSystemInstruction().isBlank()) {
+                messages.add(SystemMessage.from(request.getSystemInstruction()));
             }
+            messages.add(UserMessage.from(request.getPrompt()));
 
-            @Override
-            public boolean isHealthy() {
-                return chatLanguageModel != null && !healthMonitor.isCircuitOpen(getModelName());
-            }
+            Response<AiMessage> response = chatLanguageModel.generate(messages);
+            long duration = System.currentTimeMillis() - start;
 
-            @Override
-            public double getCostPer1kTokens() {
-                return "google".equalsIgnoreCase(aiProvider) ? 0.00015 : 0.0;
-            }
-        };
+            int tokens = response.tokenUsage() != null ? response.tokenUsage().totalTokenCount() : 0;
+
+            return AiResponse.builder()
+                    .content(response.content().text())
+                    .tokensUsed(tokens)
+                    .latencyMs(duration)
+                    .provider(aiProvider)
+                    .build();
+        }
+
+        @Override
+        public String getModelName() {
+            return "google".equalsIgnoreCase(aiProvider) ? modelName : openAiModelName;
+        }
+
+        @Override
+        public boolean isHealthy() {
+            return chatLanguageModel != null && (healthMonitor == null || !healthMonitor.isCircuitOpen(getModelName()));
+        }
+
+        @Override
+        public double getCostPer1kTokens() {
+            return "google".equalsIgnoreCase(aiProvider) ? 0.00015 : 0.0;
+        }
     }
 }

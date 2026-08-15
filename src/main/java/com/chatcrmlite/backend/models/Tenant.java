@@ -70,6 +70,9 @@ public class Tenant implements Serializable {
     private Boolean forceShowAppointment = null;
     private Boolean forceShowLeads = null;
 
+    @Column(name = "web_flows_routing_config_json", columnDefinition = "TEXT")
+    private String webFlowsRoutingConfigJson;
+
     @Column(name = "auto_assignment_delay_minutes", nullable = false)
     private Integer autoAssignmentDelayMinutes = 5;
 
@@ -213,6 +216,9 @@ public class Tenant implements Serializable {
 
     public Boolean getForceShowLeads() { return forceShowLeads; }
     public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+
+    public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+    public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
 
     public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes != null ? autoAssignmentDelayMinutes : 5; }
     public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }

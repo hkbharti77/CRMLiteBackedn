@@ -42,20 +42,29 @@ public class WorkflowOrchestrator {
 
         // Routing logic based on type
         String type = (String) context.getMetadata().get("type");
+        String text = (String) context.getMetadata().get("text");
+        boolean isEcho = Boolean.TRUE.equals(context.getMetadata().get("isEcho"));
+        boolean isFlowNfmReply = Boolean.TRUE.equals(context.getMetadata().get("isFlowNfmReply"));
         boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
         boolean botPaused = Boolean.TRUE.equals(context.getMetadata().get("botPaused"));
 
-        if (botPaused) {
-            log.info("⏸️ [Workflow] Bot is paused for contact {}. Skipping AI/Flow routing.", context.getWaId());
+        if (isEcho || botPaused || isFlowNfmReply) {
+            log.info("⏸️ [Workflow] SMB Echo, Bot Paused, or Flow nfm_reply for contact {}. Skipping AI/Flow routing.", context.getWaId());
             completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
             return;
         }
 
+        // Check if message is a flow trigger, navigation command, or form cancel
+        String lower = (text != null ? text.trim().toLowerCase() : "");
+        boolean isCommandOrIntent = lower.matches("^(cancel|stop|exit|quit|terminate|menu|options|help|start|services|show|hi|hello|hey|namaste)$")
+                || lower.matches(".*(appointment|doctor|clinic|consultation|checkup|specialist|dentist|physician|salon|spa|booking|reserve|slot|table|haircut|facial|massage|reservation|quote|pricing|inquiry|inquire|lead|enquiry|estimate|catalog|feedback|rating|review|survey|complaint|support).*");
+
         // Route to flow worker if:
-        //   1. The message is an interactive selection (button/list tap), OR
-        //   2. The contact is currently mid-flow (free-text reply during a flow step), OR
-        //   3. The tenant's plan does not support AI (RAG LLM).
-        boolean routeToFlow = "interactive".equals(type) || hasActiveFlow;
+        //   1. An active form/flow is currently running for this contact (PRIORITY: isolates active form from RAG/AI), OR
+        //   2. The message is an interactive selection (button/list tap), OR
+        //   3. The message is a command or trigger intent (cancel, menu, appointment, booking, lead, etc.), OR
+        //   4. The tenant's plan does not support AI (RAG LLM).
+        boolean routeToFlow = hasActiveFlow || "interactive".equals(type) || isCommandOrIntent;
         
         if (!routeToFlow) {
             try {
@@ -74,6 +83,9 @@ public class WorkflowOrchestrator {
         }
 
         if (routeToFlow) {
+            if (hasActiveFlow) {
+                log.info("🔒 [Workflow] Active form in progress for contact {}. Directing exclusively to FlowWorker (AI/RAG suppressed).", context.getWaId());
+            }
             router.routeToFlow(context);
         } else {
             router.routeToAi(context);

@@ -213,7 +213,7 @@ public class LeadScoringService {
             AiResponse response = aiOrchestrator.execute(request);
             return parseAiResponse(response.getContent());
         } catch (Exception e) {
-            log.error("Failed to calculate AI score for lead " + lead.getId(), e);
+            log.warn("⚠️ [LeadScoring] AI scoring offline for lead {}: {}. Falling back to default scoring.", lead.getId(), e.getMessage());
             return new AiEvaluation(0, "General", true);
         }
     }

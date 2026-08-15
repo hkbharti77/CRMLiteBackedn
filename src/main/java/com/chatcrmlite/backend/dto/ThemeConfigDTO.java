@@ -24,6 +24,7 @@ public class ThemeConfigDTO {
     private String flowCompletionMenuJson;
     private String guardrailMessageAbuse;
     private String guardrailMessageGibberish;
+    private String webFlowsRoutingConfigJson;
 
     public ThemeConfigDTO() {}
 
@@ -90,6 +91,8 @@ public class ThemeConfigDTO {
     public void setGuardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; }
     public String getGuardrailMessageGibberish() { return guardrailMessageGibberish; }
     public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
+    public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+    public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -117,6 +120,7 @@ public class ThemeConfigDTO {
         private String flowCompletionMenuJson;
         private String guardrailMessageAbuse;
         private String guardrailMessageGibberish;
+        private String webFlowsRoutingConfigJson;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -139,12 +143,14 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder flowCompletionMenuJson(String flowCompletionMenuJson) { this.flowCompletionMenuJson = flowCompletionMenuJson; return this; }
         public ThemeConfigDTOBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
         public ThemeConfigDTOBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
+        public ThemeConfigDTOBuilder webFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; return this; }
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
             dto.setWidgetIconUrl(this.widgetIconUrl);
             dto.setGuardrailMessageAbuse(this.guardrailMessageAbuse);
             dto.setGuardrailMessageGibberish(this.guardrailMessageGibberish);
+            dto.setWebFlowsRoutingConfigJson(this.webFlowsRoutingConfigJson);
             return dto;
         }
     }
