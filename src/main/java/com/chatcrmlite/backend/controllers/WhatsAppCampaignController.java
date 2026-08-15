@@ -1,33 +1,51 @@
 package com.chatcrmlite.backend.controllers;
 
+import com.chatcrmlite.backend.dto.BroadcastCsvUploadResultDTO;
+import com.chatcrmlite.backend.dto.BroadcastFilterConfigDTO;
 import com.chatcrmlite.backend.dtos.CreateCampaignRequestDto;
 import com.chatcrmlite.backend.dtos.DryRunRequestDto;
 import com.chatcrmlite.backend.dtos.ScheduleCampaignRequestDto;
+import com.chatcrmlite.backend.models.BroadcastUploadFilterConfig;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppCampaign;
 import com.chatcrmlite.backend.models.WhatsAppCampaignAnalytics;
 import com.chatcrmlite.backend.models.WhatsAppCampaignAuditLog;
+import com.chatcrmlite.backend.repositories.BroadcastUploadFilterConfigRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.services.whatsapp.campaign.BroadcastCsvParserService;
 import com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppCampaignService;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/whatsapp/campaigns")
+@PreAuthorize("@perm.has(authentication, 'MODULE_CAMPAIGNS')")
 @RequiredArgsConstructor
 public class WhatsAppCampaignController {
 
     private final WhatsAppCampaignService campaignService;
     private final UserRepository userRepository;
+    private final BroadcastCsvParserService csvParserService;
+    private final BroadcastUploadFilterConfigRepository filterConfigRepository;
+    private final ObjectMapper objectMapper;
 
     private User getAuthenticatedUser(String email) {
         return userRepository.findByEmail(email)
@@ -46,6 +64,8 @@ public class WhatsAppCampaignController {
                 request.getTargetType(),
                 request.getTargetFilterJson(),
                 request.getVariableMappingJson(),
+                request.getSaveImportedRecipients(),
+                request.getPriority(),
                 user
         );
         return ResponseEntity.ok(campaign);
@@ -121,5 +141,126 @@ public class WhatsAppCampaignController {
     @GetMapping("/{id}/audit-logs")
     public ResponseEntity<List<WhatsAppCampaignAuditLog>> getAuditLogs(@PathVariable UUID id) {
         return ResponseEntity.ok(campaignService.getAuditLogs(id));
+    }
+
+    @GetMapping("/{id}/recipients")
+    public ResponseEntity<Page<com.chatcrmlite.backend.models.WhatsAppCampaignRecipient>> getRecipients(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size) {
+        return ResponseEntity.ok(campaignService.getRecipients(id, PageRequest.of(page, size)));
+    }
+
+    // ── CSV Upload Endpoint ──────────────────────────────────────────────────
+
+    /**
+     * Parses and validates a CSV/XLSX file for broadcast audience targeting.
+     * Does NOT create a campaign — just returns parsed columns, validation stats, and sample rows.
+     */
+    @PostMapping(value = "/upload-csv", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<BroadcastCsvUploadResultDTO> uploadCsvForBroadcast(
+            @RequestPart("file") MultipartFile file,
+            @AuthenticationPrincipal String email) {
+        getAuthenticatedUser(email); // verify auth
+        BroadcastCsvUploadResultDTO result = csvParserService.parseAndValidate(file);
+        return ResponseEntity.ok(result);
+    }
+
+    // ── Filter Config Endpoints ──────────────────────────────────────────────
+
+    /**
+     * Returns the admin-defined broadcast upload filter configuration for this tenant.
+     */
+    @GetMapping("/filter-config")
+    public ResponseEntity<BroadcastFilterConfigDTO> getFilterConfig(
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : null;
+
+        if (tenantId == null) {
+            return ResponseEntity.ok(BroadcastFilterConfigDTO.builder()
+                    .filterColumns(Collections.emptyList())
+                    .filterRules(Collections.emptyList())
+                    .build());
+        }
+
+        return filterConfigRepository.findByTenantId(tenantId)
+                .map(config -> {
+                    List<String> columns = parseJsonList(config.getFilterColumnsJson());
+                    List<BroadcastFilterConfigDTO.FilterRuleDTO> rules = parseFilterRules(config.getFilterRulesJson());
+                    return ResponseEntity.ok(BroadcastFilterConfigDTO.builder()
+                            .filterColumns(columns)
+                            .filterRules(rules)
+                            .build());
+                })
+                .orElse(ResponseEntity.ok(BroadcastFilterConfigDTO.builder()
+                        .filterColumns(Collections.emptyList())
+                        .filterRules(Collections.emptyList())
+                        .build()));
+    }
+
+    /**
+     * Updates the broadcast upload filter configuration. Restricted to OWNER and ADMIN roles.
+     */
+    @PutMapping("/filter-config")
+    public ResponseEntity<BroadcastFilterConfigDTO> updateFilterConfig(
+            @RequestBody BroadcastFilterConfigDTO dto,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                    "Only OWNER or ADMIN users can update the broadcast filter config");
+        }
+
+        UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : null;
+        if (tenantId == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has no tenant");
+        }
+
+        BroadcastUploadFilterConfig config = filterConfigRepository.findByTenantId(tenantId)
+                .orElseGet(() -> {
+                    BroadcastUploadFilterConfig c = new BroadcastUploadFilterConfig();
+                    c.setTenantId(tenantId);
+                    return c;
+                });
+
+        try {
+            config.setFilterColumnsJson(
+                    dto.getFilterColumns() != null ? objectMapper.writeValueAsString(dto.getFilterColumns()) : "[]");
+            config.setFilterRulesJson(
+                    dto.getFilterRules() != null ? objectMapper.writeValueAsString(dto.getFilterRules()) : "[]");
+        } catch (JsonProcessingException e) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid JSON in filter config");
+        }
+
+        filterConfigRepository.save(config);
+
+        return ResponseEntity.ok(BroadcastFilterConfigDTO.builder()
+                .filterColumns(dto.getFilterColumns() != null ? dto.getFilterColumns() : Collections.emptyList())
+                .filterRules(dto.getFilterRules() != null ? dto.getFilterRules() : Collections.emptyList())
+                .build());
+    }
+
+    // ── JSON Helpers ─────────────────────────────────────────────────────────
+
+    private List<String> parseJsonList(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                    .constructCollectionType(List.class, String.class));
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private List<BroadcastFilterConfigDTO.FilterRuleDTO> parseFilterRules(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, objectMapper.getTypeFactory()
+                    .constructCollectionType(List.class, BroadcastFilterConfigDTO.FilterRuleDTO.class));
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
     }
 }

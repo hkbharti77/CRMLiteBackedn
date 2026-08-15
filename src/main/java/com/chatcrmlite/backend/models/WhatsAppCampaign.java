@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -16,6 +17,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class WhatsAppCampaign extends BaseTenantEntity {
 
     public enum Status {
@@ -39,6 +41,22 @@ public class WhatsAppCampaign extends BaseTenantEntity {
         CUSTOM_SEGMENT
     }
 
+    public enum Priority {
+        LOW(1),
+        MEDIUM(2),
+        HIGH(3);
+
+        private final int rank;
+
+        Priority(int rank) {
+            this.rank = rank;
+        }
+
+        public int getRank() {
+            return rank;
+        }
+    }
+
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
@@ -58,11 +76,28 @@ public class WhatsAppCampaign extends BaseTenantEntity {
     @Column(nullable = false)
     private TargetType targetType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    @Builder.Default
+    private Priority priority = Priority.LOW;
+
+    @Column(name = "priority_rank", nullable = false)
+    @Builder.Default
+    private Integer priorityRank = 1;
+
+    @Column(name = "priority_locked", nullable = false)
+    @Builder.Default
+    private Boolean priorityLocked = false;
+
     @Column(columnDefinition = "TEXT")
     private String targetFilterJson; // Tags list, lead statuses list, etc.
 
     @Column(columnDefinition = "TEXT")
     private String variableMappingJson; // Dynamic mapping: {"1": "contact.name", "2": "lead.dealValue"}
+
+    @Column(nullable = false, columnDefinition = "boolean default false")
+    @Builder.Default
+    private Boolean saveImportedRecipients = false;
 
     private LocalDateTime scheduledAt;
     private LocalDateTime startedAt;
@@ -71,6 +106,7 @@ public class WhatsAppCampaign extends BaseTenantEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
+    @JsonIgnoreProperties({"password", "tenant", "ipWhitelist", "googleAccessToken", "googleRefreshToken", "hibernateLazyInitializer", "handler"})
     private User owner;
 
     @PrePersist
@@ -84,6 +120,19 @@ public class WhatsAppCampaign extends BaseTenantEntity {
         }
         if (targetType == null) {
             targetType = TargetType.ALL_CONTACTS;
+        }
+        if (priority == null) {
+            priority = Priority.LOW;
+        }
+        if (priorityRank == null) {
+            priorityRank = priority.getRank();
+        }
+    }
+
+    public void setPriority(Priority priority) {
+        this.priority = priority;
+        if (priority != null) {
+            this.priorityRank = priority.getRank();
         }
     }
 }

@@ -1,66 +1,83 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">Booking Confirmed</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${heading ?: 'Booking Confirmed'}">Booking Confirmed</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
-<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+<div th:replace="~{email/base :: header(
+      heading  = ${heading},
+      greeting = ${greeting}, 
+      intro    = ${intro})}">
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
+  <tr>
+    <td align="center">
+      <!--[if (gte mso 9)|(IE)]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+        <tr>
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-        <div style="background:#ffffff;border:1px solid #000000;border-radius:8px;
-                    padding:20px;margin:0 0 20px;text-align:center">
-          <div style="font-size:36px;margin:0 0 8px">&#128197;</div>
-          <p style="margin:0;color:#000000;font-size:16px;font-weight:700" th:text="${service}">Service</p>
-          <p th:if="${preferredSlot != null and !#strings.isEmpty(preferredSlot)}"
-             style="margin:8px 0 0;color:#008000;font-size:15px" th:text="${preferredSlot}">Slot</p>
-        </div>
+            <!-- ── BOOKING HERO CARD ────────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#ECFDF5;border:1px solid #A7F3D0;border-radius:12px;padding:24px 20px;text-align:center;margin:0 0 20px;">
+              <span class="pill-badge" style="background-color:#FFFFFF;color:#059669;border:1px solid #A7F3D0;font-size:11px;font-weight:700;padding:4px 14px;border-radius:20px;display:inline-block;letter-spacing:0.6px;text-transform:uppercase;">
+                ✓ BOOKING CONFIRMED
+              </span>
+              <h2 class="text-main" th:text="${service}" style="margin:12px 0 6px;color:#0F172A;font-size:20px;font-weight:700;">
+                Service Name
+              </h2>
+              <p class="otp-code" th:text="${preferredSlot}" style="margin:6px 0 0;color:#047857;font-size:16px;font-weight:700;">
+                Preferred Time Slot
+              </p>
+            </div>
 
-        <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Service</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${service}">Service</td>
-          </tr>
-          <tr th:if="${preferredSlot != null and !#strings.isEmpty(preferredSlot)}">
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Preferred Slot</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${preferredSlot}">Slot</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">With</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${businessName}">Business</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Status</td>
-            <td style="padding:9px 14px;font-size:13px;border:1px solid #000000">
-              <span style="background:#008000;color:#fff;padding:2px 10px;
-                           border-radius:12px;font-size:12px;font-weight:600">CONFIRMED</span>
-            </td>
-          </tr>
-        </table>
+            <!-- ── DETAILS CARD ───────────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:18px 20px;margin:0 0 16px;">
+              <p class="text-main" style="margin:0 0 12px;color:#0F172A;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+                📋 Service Summary
+              </p>
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
+                <tr>
+                  <td class="text-muted" style="color:#64748B;width:120px;padding:4px 0;">Service:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${service}">Service</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Selected Slot:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${preferredSlot}">Preferred Slot</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Service Provider:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${businessName}">Business</td>
+                </tr>
+              </table>
+            </div>
 
-        <div style="background:#ffffff;border:1px solid #000000;border-radius:6px;padding:12px 16px">
-          <p style="margin:0;color:#000000;font-size:13px">
-            &#128204; Please arrive a few minutes early. Contact us if you need to reschedule.
-          </p>
-        </div>
-
-      </td></tr>
-    </table>
-  </td></tr>
+          </td>
+        </tr>
+      </table>
+      <!--[if (gte mso 9)|(IE)]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=null,ctaUrl=null)}"></div>
+<div th:replace="~{email/base :: footer(
+      footerNote = ${footerNote},
+      ctaLabel   = ${ctaLabel},
+      ctaUrl     = ${ctaUrl})}">
+</div>
 
 </body>
 </html>

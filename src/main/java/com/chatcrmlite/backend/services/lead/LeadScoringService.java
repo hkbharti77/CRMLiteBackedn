@@ -60,14 +60,18 @@ public class LeadScoringService {
      * Calculates dynamic quality score (0–100) for a lead and updates Lead entity.
      */
     @Transactional
-    public LeadScoreResult calculateAndUpdateLeadScore(Lead lead) {
-        if (lead == null) {
+    public LeadScoreResult calculateAndUpdateLeadScore(Lead leadInput) {
+        if (leadInput == null) {
             return LeadScoreResult.builder()
                     .totalScore(0)
                     .scoreGrade(Lead.ScoreGrade.COLD)
                     .calculatedAt(LocalDateTime.now())
                     .build();
         }
+
+        Lead lead = (leadInput.getId() != null && leadRepository != null)
+                ? leadRepository.findById(leadInput.getId()).orElse(leadInput)
+                : leadInput;
 
         Contact contact = lead.getContact();
 
@@ -209,7 +213,7 @@ public class LeadScoringService {
             AiResponse response = aiOrchestrator.execute(request);
             return parseAiResponse(response.getContent());
         } catch (Exception e) {
-            log.error("Failed to calculate AI score for lead " + lead.getId(), e);
+            log.warn("⚠️ [LeadScoring] AI scoring offline for lead {}: {}. Falling back to default scoring.", lead.getId(), e.getMessage());
             return new AiEvaluation(0, "General", true);
         }
     }

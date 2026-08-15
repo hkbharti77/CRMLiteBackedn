@@ -43,11 +43,12 @@ public class LeadScoringController {
     }
 
     @GetMapping("/leads/{id}/score")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<LeadScoringService.LeadScoreResult> getLeadScore(@PathVariable UUID id) {
         User user = getAuthenticatedUser();
         Lead lead = leadRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Lead not found with id: " + id));
-        if (!lead.getOwner().getId().equals(user.getId())) {
+        if (lead.getTenant() != null && user.getTenant() != null && !lead.getTenant().getId().equals(user.getTenant().getId())) {
             return ResponseEntity.status(403).build();
         }
         LeadScoringService.LeadScoreResult result = leadScoringService.calculateAndUpdateLeadScore(lead);
@@ -55,6 +56,7 @@ public class LeadScoringController {
     }
 
     @PostMapping("/leads/{id}/recalculate-score")
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<LeadScoringService.LeadScoreResult> recalculateLeadScore(@PathVariable UUID id) {
         return getLeadScore(id);
     }

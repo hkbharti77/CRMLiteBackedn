@@ -2,13 +2,11 @@ package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
-import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
 import org.springframework.dao.DataIntegrityViolationException;
 
 import java.util.Optional;
@@ -25,11 +23,7 @@ public class ContactResolutionServiceImpl implements ContactResolutionService {
         Optional<Contact> existing = contactRepository.findByWaIdAndOwner(waId, owner);
         if (existing.isPresent()) {
             Contact c = existing.get();
-            if (profileName != null && !profileName.isBlank() && 
-                (c.getName() == null || c.getName().isBlank() || 
-                 c.getName().startsWith("WhatsApp User") || 
-                 c.getName().startsWith("Test User") || 
-                 !profileName.equals(c.getName()))) {
+            if (profileName != null && !profileName.isBlank() && isFallbackName(c.getName(), c.getWaId(), c.getPhone())) {
                 log.info("[ContactResolution] Auto-updating contact name from '{}' to '{}' for waId={}", c.getName(), profileName, waId);
                 c.setName(profileName);
                 contactRepository.save(c);
@@ -50,6 +44,23 @@ public class ContactResolutionServiceImpl implements ContactResolutionService {
             return contactRepository.findByWaIdAndOwner(waId, owner)
                     .orElseThrow(() -> new RuntimeException("Contact creation failed and not found: " + waId));
         }
+    }
+
+    private boolean isFallbackName(String currentName, String waId, String phone) {
+        if (currentName == null || currentName.isBlank()) {
+            return true;
+        }
+        String lowerName = currentName.trim().toLowerCase();
+        if (lowerName.startsWith("whatsapp user") || lowerName.startsWith("test user") || lowerName.equals("csv recipient")) {
+            return true;
+        }
+        // Check if the current name is essentially just the phone number
+        String cleanName = currentName.replaceAll("[^0-9+]", "");
+        if (!cleanName.isBlank()) {
+            if (waId != null && waId.contains(cleanName)) return true;
+            if (phone != null && phone.contains(cleanName)) return true;
+        }
+        return false;
     }
 
     @Override

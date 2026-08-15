@@ -21,8 +21,8 @@ public interface LeadService {
     long getActiveLeadCountByContactId(UUID contactId, User owner);
     long getTotalLeadCount(User owner);
     long getLeadCountByStatus(Lead.LeadStatus status, User owner);
-    Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status);
-    Lead updateStatus(UUID leadId, Lead.LeadStatus status, User owner);
+    Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status, String search);
+    Lead updateStatus(UUID leadId, Lead.LeadStatus status, java.math.BigDecimal dealValue, String lostReason, Lead.PaymentStatus paymentStatus, Boolean sendPaymentLink, String paymentMethod, String paymentLinkUrl, User owner);
     EnquiryDTO addEnquiry(UUID leadId, EnquiryRequest req, User owner);
     EnquiryDTO updateEnquiry(UUID leadId, String enquiryId, EnquiryRequest req, User owner);
     void deleteEnquiry(UUID leadId, String enquiryId, User owner);
@@ -31,4 +31,21 @@ public interface LeadService {
     RevenueReportDTO getRevenueReport(User owner);
     void appendEnquiryToLead(Lead lead, String message, String type, String source, java.util.Map<String, String> collectedData);
     Lead rescoreLead(UUID leadId, User owner);
+
+    // Notes, Attachments, Activities, Reassign
+    com.chatcrmlite.backend.dto.LeadNoteResponseDTO addNote(UUID leadId, String content, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> getNotesPaged(UUID leadId, int page, int size, User caller);
+    void softDeleteNote(UUID leadId, UUID noteId, User caller);
+
+    com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO uploadAttachment(UUID leadId, org.springframework.web.multipart.MultipartFile file, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> getAttachmentsPaged(UUID leadId, int page, int size, User caller);
+    com.chatcrmlite.backend.models.LeadAttachment getAttachmentEntity(UUID leadId, UUID attachmentId, User caller);
+    void softDeleteAttachment(UUID leadId, UUID attachmentId, User caller);
+
+    Lead reassignLeadOwner(UUID leadId, UUID newOwnerId, User caller);
+    Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO> getActivitiesPaged(UUID leadId, int page, int size, User caller);
+    void logActivity(Lead lead, User actor, com.chatcrmlite.backend.models.LeadActivity.ActivityType type, String metadataJson);
+
+    Lead claimLead(UUID leadId, User caller);
+    void autoAssignLead(UUID leadId, com.chatcrmlite.backend.models.Tenant tenant);
 }

@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.repositories;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -10,17 +11,21 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-public interface ContactRepository extends JpaRepository<Contact, UUID> {
+public interface ContactRepository extends JpaRepository<Contact, UUID>, JpaSpecificationExecutor<Contact> {
 
     /**
      * Check if a contact with the given email exists for the given tenant.
      * Uses the ManyToOne tenant relationship on BaseTenantEntity (column: tenant_id).
      */
     boolean existsByEmailAndTenant_Id(String email, UUID tenantId);
+    Optional<Contact> findFirstByEmailAndTenant_Id(String email, UUID tenantId);
+    boolean existsByWaIdAndTenant_Id(String waId, UUID tenantId);
+    Optional<Contact> findByWaIdAndTenant_Id(String waId, UUID tenantId);
     Optional<Contact> findByWaIdAndOwner(String waId, User owner);
     List<Contact> findAllByOwner(User owner);
     Optional<Contact> findByWaId(String waId);
     List<Contact> findByName(String name);
+    List<Contact> findAllByTenant(com.chatcrmlite.backend.models.Tenant tenant);
     
     /**
      * Fetch all contacts for a user matching any of the given tag IDs.

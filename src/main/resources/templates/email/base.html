@@ -1,66 +1,154 @@
 <!DOCTYPE html>
-<!--
-  base.html — ChatCRM Lite Email Base Layout
-  ==========================================
-  Exposes two fragments used by every child template:
-
-    th:fragment="header(heading, greeting, intro)"
-      → renders the full outer wrapper + indigo header bar
-        + body cell open with heading/greeting/intro pre-filled
-
-    th:fragment="footer(footerNote, ctaLabel, ctaUrl)"
-      → renders optional CTA button + footer note
-        + closes body cell + footer bar + outer wrapper
-
-  Child template pattern:
-  ─────────────────────────────────────────────────────────────
-  <div th:replace="~{email/base :: header(
-        heading  = 'Booking Confirmed',
-        greeting = 'Hi Rahul,',
-        intro    = 'Your booking has been confirmed.')}">
-  </div>
-
-  ... detail tables, blockquotes, etc. ...
-
-  <div th:replace="~{email/base :: footer(
-        footerNote = 'We look forward to serving you.',
-        ctaLabel   = 'View Booking',
-        ctaUrl     = 'https://example.com')}">
-  </div>
-  ─────────────────────────────────────────────────────────────
--->
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/></head>
-<body>
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${subject ?: 'GyanVaniAi Connect Notification'}">GyanVaniAi Connect</title>
+  <!--[if mso]>
+  <noscript>
+    <xml>
+      <o:OfficeDocumentSettings>
+        <o:PixelsPerInch>96</o:PixelsPerInch>
+      </o:OfficeDocumentSettings>
+    </xml>
+  </noscript>
+  <![endif]-->
+  <style>
+    /* ── RESET & BASE STYLES ────────────────────────────────────────── */
+    :root { color-scheme: light dark; supported-color-schemes: light dark; }
+    html, body {
+      margin: 0 !important;
+      padding: 0 !important;
+      width: 100% !important;
+      min-width: 100% !important;
+      height: 100% !important;
+      background-color: #F8FAFC !important;
+      -webkit-text-size-adjust: 100% !important;
+      -ms-text-size-adjust: 100% !important;
+    }
+    div[style*="margin: 16px 0"] { margin: 0 !important; }
+    table, td {
+      mso-table-lspace: 0pt !important;
+      mso-table-rspace: 0pt !important;
+      border-collapse: collapse !important;
+    }
+    img {
+      border: 0 !important;
+      height: auto !important;
+      line-height: 100% !important;
+      outline: none !important;
+      text-decoration: none !important;
+      -ms-interpolation-mode: bicubic !important;
+    }
+    a { text-decoration: none; color: inherit; }
+    a[x-apple-data-detectors] {
+      color: inherit !important;
+      text-decoration: none !important;
+      font-size: inherit !important;
+      font-family: inherit !important;
+      font-weight: inherit !important;
+      line-height: inherit !important;
+    }
+    
+    /* ── TYPOGRAPHY ─────────────────────────────────────────────────── */
+    body, table, td, p, a, li, blockquote, span, h1, h2, h3 {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif !important;
+    }
+    
+    /* ── DARK MODE MEDIA QUERIES ────────────────────────────────────── */
+    @media (prefers-color-scheme: dark) {
+      .body-bg { background-color: #0B0F19 !important; }
+      .card-bg { background-color: #151E2E !important; border-color: #26334D !important; }
+      .card-subtle { background-color: #1A2438 !important; border-color: #2E3E5B !important; }
+      .brand-header-bg { background-color: #151E2E !important; border-color: #26334D !important; }
+      .footer-bg { background-color: #101726 !important; border-color: #26334D !important; }
+      .text-main { color: #F1F5F9 !important; }
+      .text-muted { color: #94A3B8 !important; }
+      .text-subtle { color: #64748B !important; }
+      .border-color { border-color: #26334D !important; }
+      .divider-line { border-top-color: #26334D !important; }
+      .pill-badge { background-color: #1E293B !important; color: #94A3B8 !important; border-color: #334155 !important; }
+      .otp-container { background-color: #0F172A !important; border-color: #334155 !important; }
+      .otp-code { color: #38BDF8 !important; }
+      .info-box { background-color: #132238 !important; border-color: #1E3A5F !important; }
+    }
+    
+    /* Outlook & Gmail Dark Mode Attribute Selectors */
+    [data-ogsc] .body-bg { background-color: #0B0F19 !important; }
+    [data-ogsc] .card-bg { background-color: #151E2E !important; border-color: #26334D !important; }
+    [data-ogsc] .text-main { color: #F1F5F9 !important; }
+    [data-ogsc] .text-muted { color: #94A3B8 !important; }
+    [data-ogsc] .otp-code { color: #38BDF8 !important; }
+
+    /* ── MOBILE RESPONSIVE MEDIA QUERIES ────────────────────────────── */
+    @media only screen and (max-width: 600px) {
+      .fluid-container { width: 100% !important; max-width: 100% !important; }
+      .header-padding { padding: 20px 16px 14px !important; }
+      .content-padding { padding: 0 16px 20px !important; }
+      .footer-padding { padding: 18px 16px !important; }
+      .btn-cta { width: 100% !important; display: block !important; box-sizing: border-box !important; text-align: center !important; }
+      .otp-code { font-size: 32px !important; letter-spacing: 6px !important; }
+      .mobile-stack { display: block !important; width: 100% !important; }
+      .mobile-hide { display: none !important; }
+      .mobile-center { text-align: center !important; }
+    }
+  </style>
+</head>
+<body class="body-bg" style="margin:0;padding:0;background-color:#F8FAFC;word-spacing:normal;">
 
 <!-- ════════════════════════════════════════════════════════════════ -->
-<!--  HEADER fragment                                                -->
+<!--  HEADER FRAGMENT                                                -->
 <!--  Parameters: heading, greeting, intro                          -->
 <!-- ════════════════════════════════════════════════════════════════ -->
-<table th:fragment="header(heading, greeting, intro)"
-       width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:40px 16px;font-family:Arial,Helvetica,sans-serif">
+<table th:fragment="header(heading, greeting, intro)" class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:32px 12px 0;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;border-radius:10px;overflow:hidden;
-                    box-shadow:0 4px 16px rgba(0,0,0,1);max-width:600px;width:100%">
-
-        <!-- Brand header bar -->
+      <!--[if (gte mso 9)|(IE)]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border:1px solid #E2E8F0;border-bottom:none;border-radius:12px 12px 0 0;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);">
+        
+        <!-- Top Accent Bar (Gradient / Brand Color) -->
         <tr>
-          <td style="background:#000000;
-                     padding:26px 36px">
+          <td height="4" th:style="'height:4px;background-color:' + (${primaryColor} ?: '#2563EB') + ';background-image:linear-gradient(90deg, ' + (${primaryColor} ?: '#2563EB') + ' 0%, #4F46E5 50%, #06B6D4 100%);'"></td>
+        </tr>
+
+        <!-- Brand Header Bar -->
+        <tr>
+          <td class="brand-header-bg header-padding" style="background-color:#FFFFFF;padding:24px 32px 16px;border-bottom:1px solid #F1F5F9;">
             <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
               <tr>
-                <td>
-                  <span style="color:#ffffff;font-size:21px;font-weight:700;
-                               letter-spacing:-0.4px">
-                    &#128172; ChatCRM Lite
-                  </span>
+                <td valign="middle" align="left">
+                  <table cellpadding="0" cellspacing="0" role="presentation">
+                    <tr>
+                      <td valign="middle" style="padding-right:12px;">
+                        <!-- Dynamic Logo -->
+                        <div th:if="${logoUrl != null and !#strings.isEmpty(logoUrl)}">
+                           <img th:src="${logoUrl}" alt="Logo" style="height:40px;width:auto;max-width:180px;object-fit:contain;display:block;border:0;" />
+                        </div>
+                        <!-- Fallback Brand Logo -->
+                        <div th:unless="${logoUrl != null and !#strings.isEmpty(logoUrl)}">
+                           <img src="https://www.gyanvaniai.online/logo.webp" alt="GyanVaniAi Connect" style="height:36px;width:auto;max-width:180px;object-fit:contain;display:block;border:0;" />
+                        </div>
+                      </td>
+                      <td valign="middle">
+                        <span class="text-main" th:text="${businessName ?: 'GyanVaniAi Connect'}" style="color:#0F172A;font-size:16px;font-weight:700;letter-spacing:-0.3px;display:block;line-height:1.2;">
+                          GyanVaniAi Connect
+                        </span>
+                        <span th:if="${businessName == null or businessName == 'GyanVaniAi Connect'}" class="text-subtle" style="color:#64748B;font-size:11px;font-weight:600;letter-spacing:0.5px;text-transform:uppercase;display:block;margin-top:2px;">
+                          Enterprise CRM Platform
+                        </span>
+                      </td>
+                    </tr>
+                  </table>
                 </td>
-                <td align="right">
-                  <span style="color:#ffffff;font-size:11px">
-                    Smart CRM &middot; Powered by AI
+                <td valign="middle" align="right">
+                  <span class="pill-badge" style="background-color:#F8FAFC;color:#334155;border:1px solid #E2E8F0;font-size:10px;font-weight:700;padding:4px 8px;border-radius:6px;display:inline-block;letter-spacing:0.8px;text-transform:uppercase;">
+                    VERIFIED
                   </span>
                 </td>
               </tr>
@@ -68,94 +156,130 @@
           </td>
         </tr>
 
-        <!-- Body cell -->
-        <tr>
-          <td style="padding:36px">
+        <!-- Custom Email Header Text (Tenant-defined) -->
+        <tr th:if="${emailHeaderText != null and !#strings.isEmpty(emailHeaderText)}">
+          <td class="header-padding" style="padding:14px 32px 0;">
+            <p class="text-muted" th:text="${emailHeaderText}" style="color:#64748B;font-size:13px;margin:0;line-height:1.5;text-align:center;font-style:italic;">
+              Custom header text
+            </p>
+            <div class="divider-line" style="border-top:1px solid #F1F5F9;margin:12px 0 0;"></div>
+          </td>
+        </tr>
 
+        <!-- Main Heading & Intro Section -->
+        <tr>
+          <td class="header-padding" style="padding:28px 32px 12px;">
+            
             <!-- Heading -->
-            <h2 th:if="${heading != null and !#strings.isEmpty(heading)}"
-                th:text="${heading}"
-                style="margin:0 0 6px;color:#000000;font-size:22px;font-weight:700;
-                       line-height:1.3">
-              Heading
-            </h2>
-            <!-- Accent line -->
-            <div th:if="${heading != null and !#strings.isEmpty(heading)}"
-                 style="width:48px;height:3px;background:#008000;
-                        border-radius:2px;margin:0 0 20px"></div>
+            <h1 class="text-main" th:if="${heading != null and !#strings.isEmpty(heading)}" th:text="${heading}" style="margin:0 0 10px;color:#0F172A;font-size:22px;font-weight:700;line-height:1.35;letter-spacing:-0.02em;">
+              Notification Heading
+            </h1>
 
             <!-- Greeting -->
-            <p th:text="${greeting}"
-               style="color:#000000;margin:0 0 8px;font-size:15px">
-              Hi,
+            <p class="text-main" th:if="${greeting != null and !#strings.isEmpty(greeting)}" th:text="${greeting}" style="color:#1E293B;margin:0 0 10px;font-size:15px;font-weight:600;line-height:1.5;">
+              Hi there,
             </p>
 
-            <!-- Intro -->
-            <p th:text="${intro}"
-               style="color:#000000;margin:0 0 20px;font-size:15px;line-height:1.6">
-              Intro text.
+            <!-- Intro text -->
+            <p class="text-muted" th:if="${intro != null and !#strings.isEmpty(intro)}" th:text="${intro}" style="color:#475569;margin:0 0 16px;font-size:14px;line-height:1.6;">
+              Introductory text explaining the event or notification.
             </p>
 
           </td>
         </tr>
       </table>
+      <!--[if (gte mso 9)|(IE)]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
     </td>
   </tr>
 </table>
 
 
 <!-- ════════════════════════════════════════════════════════════════ -->
-<!--  FOOTER fragment                                                -->
+<!--  FOOTER FRAGMENT                                                -->
 <!--  Parameters: footerNote, ctaLabel (nullable), ctaUrl (nullable)-->
 <!-- ════════════════════════════════════════════════════════════════ -->
-<table th:fragment="footer(footerNote, ctaLabel, ctaUrl)"
-       width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px 40px;font-family:Arial,Helvetica,sans-serif">
+<table th:fragment="footer(footerNote, ctaLabel, ctaUrl)" class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px 32px;">
   <tr>
     <td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-             style="background:#ffffff;border-radius:0 0 10px 10px;
-                    max-width:600px;width:100%">
+      <!--[if (gte mso 9)|(IE)]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border:1px solid #E2E8F0;border-top:none;border-radius:0 0 12px 12px;overflow:hidden;box-shadow:0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -2px rgba(0,0,0,0.05);">
 
-        <!-- CTA button (optional) -->
-        <tr th:if="${ctaLabel != null and !#strings.isEmpty(ctaLabel)}">
-          <td style="padding:0 36px 24px;text-align:center">
-            <a th:href="${ctaUrl ?: '#'}"
-               th:text="${ctaLabel}"
-               style="display:inline-block;background:#008000;color:#ffffff;
-                      padding:13px 32px;border-radius:7px;text-decoration:none;
-                      font-weight:700;font-size:14px;
-                      box-shadow:0 2px 8px rgba(0,128,0,1)">
+        <!-- Optional Primary CTA Button -->
+        <tr th:if="${ctaLabel != null and !#strings.isEmpty(ctaLabel) and ctaLabel != 'null'}">
+          <td class="content-padding" style="padding:12px 32px 24px;text-align:center;">
+            <!--[if mso]>
+            <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" xmlns:w="urn:schemas-microsoft-com:office:word" th:href="${ctaUrl ?: '#'}" style="height:44px;v-text-anchor:middle;width:240px;" arcsize="14%" stroke="f" th:attr="fillcolor=${primaryColor ?: '#2563EB'}">
+              <w:anchorlock/>
+              <center style="color:#ffffff;font-family:sans-serif;font-size:14px;font-weight:bold;" th:text="${ctaLabel}">Action</center>
+            </v:roundrect>
+            <![endif]-->
+            <!--[if !mso]><!-->
+            <a class="btn-cta" th:href="${ctaUrl ?: '#'}" th:text="${ctaLabel}" th:style="'display:inline-block;background-color:' + (${primaryColor} ?: '#2563EB') + ';color:#FFFFFF !important;padding:12px 32px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;line-height:1.2;box-shadow:0 2px 4px rgba(37,99,235,0.2);letter-spacing:0.2px;transition:all 0.2s ease;'">
               Action
             </a>
+            <!--<![endif]-->
           </td>
         </tr>
 
-        <!-- Footer note -->
-        <tr>
-          <td style="padding:0 36px 28px">
-            <p th:text="${footerNote}"
-               style="color:#000000;font-size:13px;margin:0;line-height:1.5">
-              Footer note.
-            </p>
+        <!-- Footer Note Box -->
+        <tr th:if="${footerNote != null and !#strings.isEmpty(footerNote)}">
+          <td class="content-padding" style="padding:0 32px 24px;">
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;padding:14px 18px;text-align:center;">
+              <p class="text-muted" th:text="${footerNote}" style="color:#475569;font-size:13px;margin:0;line-height:1.5;">
+                Footer note.
+              </p>
+            </div>
           </td>
         </tr>
 
-        <!-- Footer bar -->
+        <!-- Enterprise Footer Links & Copyright -->
         <tr>
-          <td style="background:#ffffff;padding:18px 36px;
-                     border-top:1px solid #000000;
-                     border-radius:0 0 10px 10px">
-            <p style="margin:0 0 4px;color:#000000;font-size:12px;text-align:center">
-              &copy; 2026 ChatCRM Lite &middot; All rights reserved
+          <td class="footer-bg footer-padding" style="background-color:#F8FAFC;padding:24px 32px;border-top:1px solid #F1F5F9;text-align:center;">
+            
+            <!-- Custom Email Footer Text (Tenant-defined) -->
+            <p th:if="${emailFooterText != null and !#strings.isEmpty(emailFooterText)}" class="text-muted" th:text="${emailFooterText}" style="color:#64748B;font-size:12px;margin:0 0 10px;line-height:1.5;">
+              Custom footer text
             </p>
-            <p style="margin:0;color:#000000;font-size:11px;text-align:center">
-              This is an automated notification. Please do not reply to this email.
+
+            <p class="text-subtle" style="margin:0 0 6px;color:#94A3B8;font-size:12px;line-height:1.4;">
+              &copy; <span th:text="${#dates.year(#dates.createNow())}">2026</span> <strong class="text-muted" th:text="${businessName ?: 'GyanVaniAi Connect'}" style="color:#64748B;">GyanVaniAi Connect</strong>. All rights reserved.
+            </p>
+            <p th:if="${businessAddress != null and !#strings.isEmpty(businessAddress)}" class="text-subtle" style="margin:0 0 6px;color:#94A3B8;font-size:11px;line-height:1.4;" th:text="${businessAddress}">
+              Enterprise Business Address
+            </p>
+            <p class="text-subtle" style="margin:0;color:#94A3B8;font-size:11px;line-height:1.4;">
+              Automated system notification. Replies to this address are monitored by automated support.
             </p>
           </td>
         </tr>
 
       </table>
+      <!--[if (gte mso 9)|(IE)]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+
+      <!-- ⚡ Permanent Platform Watermark (Clean and Modern) -->
+      <table class="fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;">
+        <tr>
+          <td align="center" style="padding:16px 0 0;">
+            <a th:href="${platformBrandUrl ?: 'https://gyanvaniai.online'}" href="https://gyanvaniai.online" target="_blank" style="text-decoration:none;display:inline-block;padding:4px 12px;border-radius:20px;background-color:#F1F5F9;border:1px solid #E2E8F0;">
+              <span style="color:#64748B;font-size:11px;font-weight:500;">⚡ Powered by </span>
+              <span style="color:#0F172A;font-size:11px;font-weight:700;" th:text="${platformBrandName ?: 'GyanVaniAi'}">GyanVaniAi</span>
+            </a>
+          </td>
+        </tr>
+      </table>
+
     </td>
   </tr>
 </table>

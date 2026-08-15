@@ -1,71 +1,84 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">Ticket Status Updated</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${subject ?: 'Ticket Status Updated'}">Status Updated</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
-<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+<div th:replace="~{email/base :: header(
+    heading  = ${heading},
+    greeting = ${greeting},
+    intro    = ${intro})}">
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
+  <tr>
+    <td align="center">
+      <!--[if (gte mso 9)|(IE)]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+        <tr>
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-        <table style="width:100%;border-collapse:collapse;margin:0 0 20px">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Ticket #</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;
-                       border:1px solid #000000;font-family:monospace"
-                th:text="${ticketNumber}">TKT-0001</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Subject</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${subject}">Subject</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Previous Status</td>
-            <td style="padding:9px 14px;font-size:13px;border:1px solid #000000">
-              <span th:text="${oldStatus}"
-                    style="background:#000000;color:#fff;padding:2px 10px;
-                           border-radius:12px;font-size:12px;font-weight:600">OLD</span>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">New Status</td>
-            <td style="padding:9px 14px;font-size:13px;border:1px solid #000000">
-              <span th:text="${newStatus}"
-                    th:style="'background:' +
-                      (${newStatus} == 'RESOLVED'             ? '#008000' :
-                       ${newStatus} == 'CLOSED'               ? '#000000' :
-                       ${newStatus} == 'IN_PROGRESS'          ? '#ff0000' :
-                       ${newStatus} == 'WAITING_FOR_CUSTOMER' ? '#ff0000' :
-                                                                '#008000') +
-                      ';color:#fff;padding:2px 10px;border-radius:12px;font-size:12px;font-weight:600'">
-                NEW
-              </span>
-            </td>
-          </tr>
-        </table>
+            <!-- ── STATUS TRANSITION HERO CARD ──────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:24px 20px;text-align:center;margin:0 0 24px;">
+              <p class="text-subtle" style="margin:0 0 10px;color:#64748B;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
+                Ticket #<span th:text="${ticketNumber}">TKT-0001</span> Status Update
+              </p>
 
-        <div th:if="${statusMessage != null}"
-             style="background:#ffffff;border:1px solid #008000;border-radius:6px;
-                    padding:12px 16px;margin:0">
-          <p th:text="${statusMessage}"
-             style="margin:0;color:#008000;font-size:14px;line-height:1.5">Status message.</p>
-        </div>
+              <div style="margin:12px 0;">
+                <span class="pill-badge" style="background-color:#F1F5F9;color:#475569;border:1px solid #CBD5E1;font-size:12px;font-weight:600;padding:5px 12px;border-radius:20px;display:inline-block;" th:text="${oldStatus}">
+                  PREVIOUS
+                </span>
+                <span style="color:#94A3B8;font-size:16px;margin:0 8px;font-weight:bold;">&rarr;</span>
+                <span class="pill-badge" style="background-color:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:13px;font-weight:700;padding:5px 14px;border-radius:20px;display:inline-block;" th:text="${newStatus}">
+                  NEW_STATUS
+                </span>
+              </div>
+            </div>
 
-      </td></tr>
-    </table>
-  </td></tr>
+            <!-- ── DETAIL CARD ─────────────────────────────────────────────── -->
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:18px 20px;margin:0 0 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
+                <tr>
+                  <td class="text-muted" style="color:#64748B;width:120px;padding:4px 0;">Ticket Subject:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${subject}">Subject</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Current Status:</td>
+                  <td class="text-main" style="color:#059669;font-weight:700;padding:4px 0;" th:text="${newStatus}">RESOLVED</td>
+                </tr>
+                <tr th:if="${statusMessage != null and !#strings.isEmpty(statusMessage)}">
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Update Details:</td>
+                  <td class="text-muted" style="color:#475569;padding:4px 0;" th:text="${statusMessage}">Our team is actively working on your ticket.</td>
+                </tr>
+              </table>
+            </div>
+
+          </td>
+        </tr>
+      </table>
+      <!--[if (gte mso 9)|(IE)]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=${ctaLabel},ctaUrl=${ctaUrl})}"></div>
+<div th:replace="~{email/base :: footer(
+    footerNote = ${footerNote},
+    ctaLabel   = ${ctaLabel},
+    ctaUrl     = ${ctaUrl})}">
+</div>
 
 </body>
 </html>

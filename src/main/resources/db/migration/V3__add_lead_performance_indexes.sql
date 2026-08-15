@@ -1,6 +1,11 @@
--- Migration: Add performance indexes for multiple leads per contact feature
--- Version: V3
--- Description: Adds indexes to optimize lead queries for multiple leads per contact
+-- Ensure leads table exists before creating performance indexes on fresh database
+CREATE TABLE IF NOT EXISTS leads (
+    id UUID PRIMARY KEY,
+    contact_id UUID,
+    owner_id UUID,
+    status VARCHAR(255),
+    created_at TIMESTAMP
+);
 
 -- Index for finding leads by contact ordered by creation date
 -- Optimizes: findAllByContact, findTopByContactOrderByCreatedAtDesc

@@ -185,14 +185,14 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         // Close the first lead so the next enquiry creates a new lead
         Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
         Lead lead1 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
-        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, testUser);
+        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, null, null, null, null, null, null, testUser);
 
         Thread.sleep(100); // Ensure different timestamps
         processWebhook(enquiry2);
 
         // Close the second lead
         Lead lead2 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
-        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, testUser);
+        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, null, null, null, null, null, null, testUser);
 
         Thread.sleep(100);
         processWebhook(enquiry3);
@@ -321,7 +321,7 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         Lead savedLead2 = leadRepository.save(lead2);
 
         // Act: Update one lead's status
-        leadService.updateStatus(savedLead1.getId(), Lead.LeadStatus.FOLLOW_UP, testUser);
+        leadService.updateStatus(savedLead1.getId(), Lead.LeadStatus.FOLLOW_UP, null, null, null, null, null, null, testUser);
 
         // Assert: Other lead remains unchanged
         List<Lead> leads = leadService.getLeadsByContactId(contact.getId(), testUser);
@@ -349,13 +349,13 @@ public class WhatsAppMultipleLeadsIntegrationTest {
         
         Contact contact = contactRepository.findByWaIdAndOwner(TEST_WA_ID, testUser).orElseThrow();
         Lead lead1 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
-        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, testUser);
+        leadService.updateStatus(lead1.getId(), Lead.LeadStatus.CLOSED_WON, null, null, null, null, null, null, testUser);
 
         Thread.sleep(100);
         processWebhook(enquiry2);
 
         Lead lead2 = leadService.getLatestLeadByContactId(contact.getId(), testUser);
-        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, testUser);
+        leadService.updateStatus(lead2.getId(), Lead.LeadStatus.CLOSED_LOST, null, null, null, null, null, null, testUser);
 
         Thread.sleep(100);
         processWebhook(enquiry3);

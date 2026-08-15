@@ -31,18 +31,54 @@ public class WhatsAppOutboundService {
     private final MessageRepository messageRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
 
+    private String convertToWhatsAppMarkdown(String text) {
+        if (text == null) return null;
+        return text
+                .replaceAll("(?s)\\*\\*(.*?)\\*\\*", "*$1*") // **bold** -> *bold*
+                .replaceAll("(?s)~~(.*?)~~", "~$1~")         // ~~strike~~ -> ~strike~
+                .replaceAll("(?m)^\\s*-\\s+", "• ")          // list bullets
+                .replaceAll("(?m)^###\\s+(.*?)$", "*$1*")    // headers -> bold
+                .replaceAll("(?m)^##\\s+(.*?)$", "*$1*")     // headers -> bold
+                .replaceAll("(?m)^#\\s+(.*?)$", "*$1*");      // headers -> bold
+    }
+
     @Transactional
     public Message sendText(Contact contact, String text, WhatsAppConfig config, User owner) {
         try {
+            String formattedText = convertToWhatsAppMarkdown(text);
             String metaMessageId = whatsappClient.sendMessage(
                     contact.getWaId(),
-                    text,
+                    formattedText,
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
             return recordOutgoing(contact, owner, text, metaMessageId, "TEXT");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send TEXT reply to contact={} owner={}: {}",
+                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional
+    public Message sendFlow(Contact contact, String headerText, String bodyText, String footerText,
+                            String metaFlowId, String ctaText, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendFlowMessage(
+                    contact.getWaId(),
+                    headerText,
+                    bodyText,
+                    footerText,
+                    metaFlowId,
+                    ctaText,
+                    "flow_session_" + contact.getId() + "_" + System.currentTimeMillis(),
+                    "MAIN_SCREEN",
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + bodyText + ")", metaMessageId, "FLOW");
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send FLOW to contact={} owner={}: {}",
                     contact.getWaId(), owner.getId(), e.getMessage(), e);
             throw e;
         }

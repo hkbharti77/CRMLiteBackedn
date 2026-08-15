@@ -14,6 +14,7 @@ public class ThemeConfigDTO {
     private String returningMessage;
     private String businessSubType;
     private String logoUrl;
+    private String widgetIconUrl;
     private Boolean showWatermark;
     private List<WidgetCtaDTO> ctaButtons;
     private List<MenuSectionDTO> menuSections;
@@ -23,6 +24,7 @@ public class ThemeConfigDTO {
     private String flowCompletionMenuJson;
     private String guardrailMessageAbuse;
     private String guardrailMessageGibberish;
+    private String webFlowsRoutingConfigJson;
 
     public ThemeConfigDTO() {}
 
@@ -69,6 +71,8 @@ public class ThemeConfigDTO {
     public void setBusinessSubType(String businessSubType) { this.businessSubType = businessSubType; }
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+    public String getWidgetIconUrl() { return widgetIconUrl; }
+    public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
     public Boolean getShowWatermark() { return showWatermark; }
     public void setShowWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; }
     public List<WidgetCtaDTO> getCtaButtons() { return ctaButtons; }
@@ -87,6 +91,8 @@ public class ThemeConfigDTO {
     public void setGuardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; }
     public String getGuardrailMessageGibberish() { return guardrailMessageGibberish; }
     public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
+    public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+    public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -104,6 +110,7 @@ public class ThemeConfigDTO {
         private String returningMessage;
         private String businessSubType;
         private String logoUrl;
+        private String widgetIconUrl;
         private Boolean showWatermark;
         private List<WidgetCtaDTO> ctaButtons;
         private List<MenuSectionDTO> menuSections;
@@ -113,6 +120,7 @@ public class ThemeConfigDTO {
         private String flowCompletionMenuJson;
         private String guardrailMessageAbuse;
         private String guardrailMessageGibberish;
+        private String webFlowsRoutingConfigJson;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -125,6 +133,7 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder returningMessage(String returningMessage) { this.returningMessage = returningMessage; return this; }
         public ThemeConfigDTOBuilder businessSubType(String businessSubType) { this.businessSubType = businessSubType; return this; }
         public ThemeConfigDTOBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
+        public ThemeConfigDTOBuilder widgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; return this; }
         public ThemeConfigDTOBuilder showWatermark(Boolean showWatermark) { this.showWatermark = showWatermark; return this; }
         public ThemeConfigDTOBuilder ctaButtons(List<WidgetCtaDTO> ctaButtons) { this.ctaButtons = ctaButtons; return this; }
         public ThemeConfigDTOBuilder menuSections(List<MenuSectionDTO> menuSections) { this.menuSections = menuSections; return this; }
@@ -134,11 +143,14 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder flowCompletionMenuJson(String flowCompletionMenuJson) { this.flowCompletionMenuJson = flowCompletionMenuJson; return this; }
         public ThemeConfigDTOBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
         public ThemeConfigDTOBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
+        public ThemeConfigDTOBuilder webFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; return this; }
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
+            dto.setWidgetIconUrl(this.widgetIconUrl);
             dto.setGuardrailMessageAbuse(this.guardrailMessageAbuse);
             dto.setGuardrailMessageGibberish(this.guardrailMessageGibberish);
+            dto.setWebFlowsRoutingConfigJson(this.webFlowsRoutingConfigJson);
             return dto;
         }
     }

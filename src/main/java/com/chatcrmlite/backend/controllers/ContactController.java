@@ -20,6 +20,9 @@ public class ContactController {
     private ContactService contactService;
 
     @Autowired
+    private com.chatcrmlite.backend.services.TagService tagService;
+
+    @Autowired
     private UserRepository userRepository;
 
     private User getAuthenticatedUser() {
@@ -31,6 +34,17 @@ public class ContactController {
     @GetMapping
     public ResponseEntity<List<ContactDTO>> getContacts() {
         return ResponseEntity.ok(contactService.getContactsByUser(getAuthenticatedUser()));
+    }
+
+    @PostMapping
+    public ResponseEntity<ContactDTO> createContact(
+            @jakarta.validation.Valid @RequestBody com.chatcrmlite.backend.dto.ContactCreateRequestDTO request) {
+        return ResponseEntity.ok(contactService.createContact(request, getAuthenticatedUser()));
+    }
+
+    @GetMapping("/tags/all")
+    public ResponseEntity<List<String>> getAllContactTags() {
+        return ResponseEntity.ok(tagService.getAllContactTags(getAuthenticatedUser()));
     }
 
     @GetMapping("/{id}")
@@ -51,5 +65,31 @@ public class ContactController {
             contactService.toggleBotPaused(id, botPaused, getAuthenticatedUser());
         }
         return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteContact(@PathVariable UUID id) {
+        contactService.deleteContact(id, getAuthenticatedUser());
+        return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/import")
+    public ResponseEntity<com.chatcrmlite.backend.dto.ImportResultDTO> importContacts(
+            @RequestBody com.chatcrmlite.backend.dto.ContactImportBatchRequestDTO request) {
+        return ResponseEntity.ok(contactService.importContacts(request, getAuthenticatedUser()));
+    }
+
+    @GetMapping("/export")
+    public ResponseEntity<byte[]> exportContacts(
+            @RequestParam(required = false) String search,
+            @RequestParam(required = false) String source,
+            @RequestParam(required = false) String botStatus) {
+        String csv = contactService.exportContacts(search, source, botStatus, getAuthenticatedUser());
+        
+        org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+        headers.setContentType(org.springframework.http.MediaType.parseMediaType("text/csv"));
+        headers.setContentDispositionFormData("attachment", "contacts.csv");
+        
+        return new ResponseEntity<>(csv.getBytes(java.nio.charset.StandardCharsets.UTF_8), headers, org.springframework.http.HttpStatus.OK);
     }
 }

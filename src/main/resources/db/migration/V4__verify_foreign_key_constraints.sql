@@ -1,6 +1,11 @@
--- Migration: Add performance indexes for leads (contact_id, status)
--- Version: V4
--- Description: Safe index additions only — no FK constraint changes (JPA manages those)
+-- Ensure leads table exists before creating performance indexes on fresh database
+CREATE TABLE IF NOT EXISTS leads (
+    id UUID PRIMARY KEY,
+    contact_id UUID,
+    owner_id UUID,
+    status VARCHAR(255),
+    created_at TIMESTAMP
+);
 
 -- Index for finding active leads by contact and status
 -- Optimizes: findTopByContactAndStatusNotInOrderByCreatedAtDesc

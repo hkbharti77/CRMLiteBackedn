@@ -46,7 +46,7 @@ public class EmailNotificationListener {
     // ══════════════════════════════════════════════════════════════════════
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onTicketCreated(TicketCreatedEvent event) {
         Ticket t = event.getTicket();
         log.debug("[EmailListener] TicketCreatedEvent ticket={}", t.getTicketNumber());
@@ -79,7 +79,7 @@ public class EmailNotificationListener {
     }
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onTicketStatusChanged(TicketStatusChangedEvent event) {
         Ticket t = event.getTicket();
         log.debug("[EmailListener] TicketStatusChangedEvent ticket={} {} → {}",
@@ -98,7 +98,7 @@ public class EmailNotificationListener {
     }
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onTicketAssigned(TicketAssignedEvent event) {
         Ticket t = event.getTicket();
         User agent = event.getAgent();
@@ -117,7 +117,7 @@ public class EmailNotificationListener {
     }
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onTicketCommentAdded(TicketCommentAddedEvent event) {
         Ticket t = event.getTicket();
         log.debug("[EmailListener] TicketCommentAddedEvent ticket={}", t.getTicketNumber());
@@ -232,7 +232,7 @@ public class EmailNotificationListener {
     }
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onLeadStatusChanged(LeadStatusChangedEvent event) {
         Lead lead = event.getLead();
         log.debug("[EmailListener] LeadStatusChangedEvent lead={} {} → {}",
@@ -270,7 +270,7 @@ public class EmailNotificationListener {
     // ══════════════════════════════════════════════════════════════════════
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onAppointmentScheduled(AppointmentScheduledEvent event) {
         Appointment appt = event.getAppointment();
         log.info("[EmailListener] AppointmentScheduledEvent appt={} status={}",
@@ -329,7 +329,7 @@ public class EmailNotificationListener {
     // ══════════════════════════════════════════════════════════════════════
 
     @EventListener
-    @Transactional(readOnly = true)
+    @Transactional(propagation = org.springframework.transaction.annotation.Propagation.REQUIRES_NEW, readOnly = true)
     public void onBookingConfirmed(BookingConfirmedEvent event) {
         Booking booking = event.getBooking();
         log.info("[EmailListener] BookingConfirmedEvent booking={} status={}",

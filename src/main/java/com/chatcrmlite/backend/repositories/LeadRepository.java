@@ -32,11 +32,22 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
            "ORDER BY l.lastActivity DESC")
     List<Lead> findAllByStatusAndOwner(@Param("status") Lead.LeadStatus status, @Param("owner") User owner);
 
-    @Query("SELECT DISTINCT l FROM Lead l " +
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
            "JOIN FETCH l.contact c " +
            "LEFT JOIN FETCH c.tags " +
            "WHERE l.status = :status AND l.owner = :owner " +
-           "ORDER BY l.lastActivity DESC")
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.status = :status AND l.owner = :owner " +
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Lead> findAllByStatusAndOwnerAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, @Param("search") String search, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.status = :status AND l.owner = :owner " +
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.status = :status AND l.owner = :owner")
     Page<Lead> findAllByStatusAndOwnerPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, Pageable pageable);
 
     List<Lead> findAllByOwnerAndDeletedTrue(User owner);
@@ -57,12 +68,23 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
             Contact contact, List<Lead.LeadStatus> excludedStatuses);
 
     /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
-    @Query("SELECT DISTINCT l FROM Lead l " +
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
            "JOIN FETCH l.contact c " +
            "LEFT JOIN FETCH c.tags " +
            "WHERE l.owner = :owner " +
-           "ORDER BY l.lastActivity DESC")
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner")
     Page<Lead> findAllByOwnerPaged(@Param("owner") User owner, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.owner = :owner " +
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.owner = :owner " +
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Lead> findAllByOwnerAndSearchPaged(@Param("owner") User owner, @Param("search") String search, Pageable pageable);
 
     /** Optimized: fetch leads with contact eagerly to avoid N+1 queries */
     @Query("SELECT l FROM Lead l JOIN FETCH l.contact WHERE l.owner = :owner ORDER BY l.lastActivity DESC")
@@ -123,18 +145,39 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
 
     /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
-    @Query("SELECT DISTINCT l FROM Lead l " +
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
            "JOIN FETCH l.contact c " +
            "LEFT JOIN FETCH c.tags " +
-           "ORDER BY l.lastActivity DESC")
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l")
     Page<Lead> findAllPaged(Pageable pageable);
 
-    @Query("SELECT DISTINCT l FROM Lead l " +
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE " +
+           "(LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Lead> findAllAndSearchPaged(@Param("search") String search, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
            "JOIN FETCH l.contact c " +
            "LEFT JOIN FETCH c.tags " +
            "WHERE l.status = :status " +
-           "ORDER BY l.lastActivity DESC")
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.status = :status")
     Page<Lead> findAllByStatusPaged(@Param("status") Lead.LeadStatus status, Pageable pageable);
+
+    @Query(value = "SELECT DISTINCT l FROM Lead l " +
+           "JOIN FETCH l.contact c " +
+           "LEFT JOIN FETCH c.tags " +
+           "WHERE l.status = :status " +
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
+           "ORDER BY l.lastActivity DESC",
+           countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.status = :status " +
+           "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
+    Page<Lead> findAllByStatusAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("search") String search, Pageable pageable);
 
     @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
            "COALESCE(SUM(l.dealValue), 0), " +
@@ -151,4 +194,22 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     @Query("SELECT COUNT(l) FROM Lead l WHERE l.tenant.id = :tenantId")
     long countByTenantId(@Param("tenantId") UUID tenantId);
+
+    // ── Auto-Assignment Methods ──
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query(value = "UPDATE leads SET assigned_agent_id = :agentId, assigned_at = :assignedAt, assignment_source = :source, assignment_status = 'ASSIGNED' WHERE id = :leadId AND assigned_agent_id IS NULL AND tenant_id = :tenantId", nativeQuery = true)
+    int atomicAssignLead(@Param("leadId") UUID leadId, @Param("agentId") UUID agentId, @Param("tenantId") UUID tenantId, @Param("assignedAt") java.time.LocalDateTime assignedAt, @Param("source") String source);
+
+    @Query(value = "SELECT u.id " +
+           "FROM app_users u " +
+           "LEFT JOIN lead_assignments la ON u.id = la.agent_id AND la.assigned_at >= :todayStart " +
+           "WHERE u.role = 'AGENT' AND u.account_status = 'ACTIVE' AND u.tenant_id = :tenantId " +
+           "GROUP BY u.id, u.daily_lead_limit " +
+           "HAVING COUNT(la.id) < COALESCE(u.daily_lead_limit, :defaultLimit) " +
+           "ORDER BY COUNT(la.id) ASC " +
+           "LIMIT 1", nativeQuery = true)
+    Optional<UUID> findBestEligibleAgentForTenant(@Param("tenantId") UUID tenantId, @Param("defaultLimit") int defaultLimit, @Param("todayStart") java.time.LocalDateTime todayStart);
+    @Query(value = "SELECT l.id FROM leads l WHERE l.tenant_id = :tenantId AND l.assignment_status IN ('UNASSIGNED', 'LIMIT_REACHED') AND l.pool_entry_time < :cutoffTime AND l.assigned_agent_id IS NULL ORDER BY l.pool_entry_time ASC LIMIT 100", nativeQuery = true)
+    List<UUID> findLeadsForAutoAssignment(@Param("tenantId") UUID tenantId, @Param("cutoffTime") java.time.LocalDateTime cutoffTime);
 }

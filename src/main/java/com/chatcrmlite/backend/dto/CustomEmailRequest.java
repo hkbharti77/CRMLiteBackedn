@@ -6,6 +6,10 @@ import jakarta.validation.constraints.Size;
 
 public class CustomEmailRequest {
 
+    @NotBlank(message = "Campaign Name is required")
+    @Size(max = 255)
+    private String name;
+
     @NotBlank(message = "Subject is required")
     @Size(max = 255)
     private String subject;
@@ -22,9 +26,12 @@ public class CustomEmailRequest {
 
     private String manualRecipients;
 
+    private java.time.LocalDateTime scheduledAt;
+
     public CustomEmailRequest() {}
 
-    public CustomEmailRequest(String subject, String body, String ctaLabel, String ctaUrl, RecipientMode recipientMode, String tagsFilter, String manualRecipients) {
+    public CustomEmailRequest(String name, String subject, String body, String ctaLabel, String ctaUrl, RecipientMode recipientMode, String tagsFilter, String manualRecipients, java.time.LocalDateTime scheduledAt) {
+        this.name = name;
         this.subject = subject;
         this.body = body;
         this.ctaLabel = ctaLabel;
@@ -32,8 +39,11 @@ public class CustomEmailRequest {
         this.recipientMode = recipientMode != null ? recipientMode : RecipientMode.ALL;
         this.tagsFilter = tagsFilter;
         this.manualRecipients = manualRecipients;
+        this.scheduledAt = scheduledAt;
     }
 
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
     public String getSubject() { return subject; }
     public void setSubject(String subject) { this.subject = subject; }
     public String getBody() { return body; }
@@ -48,4 +58,6 @@ public class CustomEmailRequest {
     public void setTagsFilter(String tagsFilter) { this.tagsFilter = tagsFilter; }
     public String getManualRecipients() { return manualRecipients; }
     public void setManualRecipients(String manualRecipients) { this.manualRecipients = manualRecipients; }
+    public java.time.LocalDateTime getScheduledAt() { return scheduledAt; }
+    public void setScheduledAt(java.time.LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
 }

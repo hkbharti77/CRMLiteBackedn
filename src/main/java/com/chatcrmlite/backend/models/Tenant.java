@@ -1,15 +1,18 @@
 package com.chatcrmlite.backend.models;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import jakarta.validation.constraints.Size;
 
 @Entity
 @Table(name = "tenants")
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class Tenant implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -31,11 +34,30 @@ public class Tenant implements Serializable {
     private Double longitude;
     private String logoUrl;
 
+    @Column(name = "widget_icon_url", columnDefinition = "TEXT")
+    private String widgetIconUrl;
+
     @Column(name = "primary_color", length = 20)
     private String primaryColor;
 
     @Column(name = "secondary_color", length = 20)
     private String secondaryColor;
+
+    @Column(name = "email_header_text", columnDefinition = "TEXT")
+    private String emailHeaderText;
+
+    @Column(name = "email_footer_text", columnDefinition = "TEXT")
+    private String emailFooterText;
+
+    @Size(max = 4000)
+    @Column(name = "ai_persona_prompt", columnDefinition = "TEXT")
+    private String aiPersonaPrompt;
+
+    @Column(name = "ai_persona_updated_at")
+    private LocalDateTime aiPersonaUpdatedAt;
+
+    @Column(name = "ai_persona_updated_by")
+    private UUID aiPersonaUpdatedBy;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -48,11 +70,29 @@ public class Tenant implements Serializable {
     private Boolean forceShowAppointment = null;
     private Boolean forceShowLeads = null;
 
+    @Column(name = "web_flows_routing_config_json", columnDefinition = "TEXT")
+    private String webFlowsRoutingConfigJson;
+
+    @Column(name = "auto_assignment_delay_minutes", nullable = false)
+    private Integer autoAssignmentDelayMinutes = 5;
+
+    @Column(name = "default_daily_lead_limit", nullable = false)
+    private Integer defaultDailyLeadLimit = 20;
+
     public enum PrimaryResource {
         LEAD,
         APPOINTMENT,
         BOOKING
     }
+
+    @Column(name = "country", length = 10)
+    private String country = "IN";
+
+    @Column(name = "currency", length = 10)
+    private String currency = "INR";
+
+    @Column(name = "timezone", length = 50)
+    private String timezone = "Asia/Kolkata";
 
     @Enumerated(EnumType.STRING)
     @Column(name = "primary_resource", nullable = false)
@@ -85,7 +125,7 @@ public class Tenant implements Serializable {
 
     public Tenant() {}
 
-    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, Boolean forceShowBooking, Boolean forceShowAppointment, Boolean forceShowLeads, PrimaryResource primaryResource, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users) {
+    public Tenant(UUID id, String businessName, String businessType, String businessSubType, String address, String aboutUs, Double latitude, Double longitude, String logoUrl, User.PlanType planType, Boolean onboardingCompleted, Boolean forceShowBooking, Boolean forceShowAppointment, Boolean forceShowLeads, PrimaryResource primaryResource, LocalDateTime createdAt, WhatsAppConfig whatsappConfig, Set<User> users, String aiPersonaPrompt, LocalDateTime aiPersonaUpdatedAt, UUID aiPersonaUpdatedBy) {
         this.id = id;
         this.businessName = businessName;
         this.businessType = businessType;
@@ -104,6 +144,11 @@ public class Tenant implements Serializable {
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
         this.whatsappConfig = whatsappConfig;
         this.users = users != null ? users : new HashSet<>();
+        this.aiPersonaPrompt = aiPersonaPrompt;
+        this.aiPersonaUpdatedAt = aiPersonaUpdatedAt;
+        this.aiPersonaUpdatedBy = aiPersonaUpdatedBy;
+        this.autoAssignmentDelayMinutes = 5;
+        this.defaultDailyLeadLimit = 20;
     }
 
     public UUID getId() { return id; }
@@ -133,11 +178,29 @@ public class Tenant implements Serializable {
     public String getLogoUrl() { return logoUrl; }
     public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
 
+    public String getWidgetIconUrl() { return widgetIconUrl; }
+    public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
+
     public String getPrimaryColor() { return primaryColor; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
 
     public String getSecondaryColor() { return secondaryColor; }
     public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+
+    public String getEmailHeaderText() { return emailHeaderText; }
+    public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+
+    public String getEmailFooterText() { return emailFooterText; }
+    public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+
+    public String getAiPersonaPrompt() { return aiPersonaPrompt; }
+    public void setAiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; }
+
+    public LocalDateTime getAiPersonaUpdatedAt() { return aiPersonaUpdatedAt; }
+    public void setAiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; }
+
+    public UUID getAiPersonaUpdatedBy() { return aiPersonaUpdatedBy; }
+    public void setAiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; }
 
     public User.PlanType getPlanType() { return planType; }
     public void setPlanType(User.PlanType planType) { this.planType = planType; }
@@ -153,6 +216,24 @@ public class Tenant implements Serializable {
 
     public Boolean getForceShowLeads() { return forceShowLeads; }
     public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+
+    public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+    public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+
+    public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes != null ? autoAssignmentDelayMinutes : 5; }
+    public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }
+
+    public Integer getDefaultDailyLeadLimit() { return defaultDailyLeadLimit != null ? defaultDailyLeadLimit : 20; }
+    public void setDefaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; }
+
+    public String getCountry() { return country != null ? country : "IN"; }
+    public void setCountry(String country) { this.country = country; }
+
+    public String getCurrency() { return currency != null ? currency : "INR"; }
+    public void setCurrency(String currency) { this.currency = currency; }
+
+    public String getTimezone() { return timezone != null ? timezone : "Asia/Kolkata"; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
 
     public PrimaryResource getPrimaryResource() { return primaryResource; }
     public void setPrimaryResource(PrimaryResource primaryResource) { this.primaryResource = primaryResource; }
@@ -187,6 +268,8 @@ public class Tenant implements Serializable {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String emailHeaderText;
+        private String emailFooterText;
         private User.PlanType planType = User.PlanType.FREE;
         private Boolean onboardingCompleted = false;
         private Boolean forceShowBooking;
@@ -196,6 +279,11 @@ public class Tenant implements Serializable {
         private LocalDateTime createdAt;
         private WhatsAppConfig whatsappConfig;
         private Set<User> users;
+        private String aiPersonaPrompt;
+        private LocalDateTime aiPersonaUpdatedAt;
+        private UUID aiPersonaUpdatedBy;
+        private Integer autoAssignmentDelayMinutes = 5;
+        private Integer defaultDailyLeadLimit = 20;
 
         public TenantBuilder id(UUID id) { this.id = id; return this; }
         public TenantBuilder businessName(String businessName) { this.businessName = businessName; return this; }
@@ -206,6 +294,8 @@ public class Tenant implements Serializable {
         public TenantBuilder latitude(Double latitude) { this.latitude = latitude; return this; }
         public TenantBuilder longitude(Double longitude) { this.longitude = longitude; return this; }
         public TenantBuilder logoUrl(String logoUrl) { this.logoUrl = logoUrl; return this; }
+        public TenantBuilder emailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; return this; }
+        public TenantBuilder emailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; return this; }
         public TenantBuilder planType(User.PlanType planType) { this.planType = planType; return this; }
         public TenantBuilder onboardingCompleted(Boolean onboardingCompleted) { this.onboardingCompleted = onboardingCompleted; return this; }
         public TenantBuilder forceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; return this; }
@@ -215,9 +305,17 @@ public class Tenant implements Serializable {
         public TenantBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public TenantBuilder whatsappConfig(WhatsAppConfig whatsappConfig) { this.whatsappConfig = whatsappConfig; return this; }
         public TenantBuilder users(Set<User> users) { this.users = users; return this; }
+        public TenantBuilder aiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; return this; }
+        public TenantBuilder aiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; return this; }
+        public TenantBuilder aiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; return this; }
+        public TenantBuilder autoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; return this; }
+        public TenantBuilder defaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; return this; }
 
         public Tenant build() {
-            return new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users);
+            Tenant t = new Tenant(id, businessName, businessType, businessSubType, address, aboutUs, latitude, longitude, logoUrl, planType, onboardingCompleted, forceShowBooking, forceShowAppointment, forceShowLeads, primaryResource, createdAt, whatsappConfig, users, aiPersonaPrompt, aiPersonaUpdatedAt, aiPersonaUpdatedBy);
+            if (this.autoAssignmentDelayMinutes != null) t.setAutoAssignmentDelayMinutes(this.autoAssignmentDelayMinutes);
+            if (this.defaultDailyLeadLimit != null) t.setDefaultDailyLeadLimit(this.defaultDailyLeadLimit);
+            return t;
         }
     }
 }

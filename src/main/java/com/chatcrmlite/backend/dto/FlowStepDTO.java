@@ -35,6 +35,9 @@ public class FlowStepDTO {
     @Builder.Default
     private boolean dynamicSource = false;
 
+    @Builder.Default
+    private com.chatcrmlite.backend.dto.flow.FlowFieldConfig.OptionSource optionSource = com.chatcrmlite.backend.dto.flow.FlowFieldConfig.OptionSource.AUTO_DETECT;
+
     @JsonSetter(nulls = Nulls.AS_EMPTY)
     @Builder.Default
     private List<String> options = new ArrayList<>();

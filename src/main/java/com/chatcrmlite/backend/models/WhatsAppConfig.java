@@ -119,6 +119,10 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "guardrail_message_gibberish", columnDefinition = "TEXT")
     private String guardrailMessageGibberish;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "flows_routing_config_json", columnDefinition = "jsonb")
+    private String flowsRoutingConfigJson;
+
     private Boolean showAboutContact = true;
     private Boolean showSosButton = true;
     private Boolean showSupportFormButton = true;
@@ -199,7 +203,9 @@ public class WhatsAppConfig implements Serializable {
                     return users.stream()
                             .filter(u -> u.getRole() == User.Role.OWNER)
                             .findFirst()
-                            .orElseGet(() -> users.stream().findFirst().orElse(null));
+                            .orElseGet(() -> users.stream().filter(u -> u.getRole() == User.Role.SUPER_ADMIN).findFirst()
+                            .orElseGet(() -> users.stream().filter(u -> u.getRole() == User.Role.ADMIN).findFirst()
+                            .orElseGet(() -> users.stream().sorted(java.util.Comparator.comparing(u -> u.getId().toString())).findFirst().orElse(null))));
                 }
             } catch (org.hibernate.LazyInitializationException e) {
                 // FIX #8: Log lazy initialization error instead of crashing
@@ -251,6 +257,8 @@ public class WhatsAppConfig implements Serializable {
     public void setAiResponseMenuJson(String aiResponseMenuJson) { this.aiResponseMenuJson = aiResponseMenuJson; }
     public void setGuardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; }
     public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
+    public String getFlowsRoutingConfigJson() { return flowsRoutingConfigJson; }
+    public void setFlowsRoutingConfigJson(String flowsRoutingConfigJson) { this.flowsRoutingConfigJson = flowsRoutingConfigJson; }
     public void setShowAboutContact(Boolean showAboutContact) { this.showAboutContact = showAboutContact; }
     public void setShowSosButton(Boolean showSosButton) { this.showSosButton = showSosButton; }
     public void setShowSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; }
@@ -279,6 +287,7 @@ public class WhatsAppConfig implements Serializable {
         private String aiResponseMenuJson;
         private String guardrailMessageAbuse;
         private String guardrailMessageGibberish;
+        private String flowsRoutingConfigJson;
         private Boolean showAboutContact = true;
         private Boolean showSosButton = true;
         private Boolean showSupportFormButton = true;
@@ -310,12 +319,14 @@ public class WhatsAppConfig implements Serializable {
         public WhatsAppConfigBuilder aiResponseMenuJson(String aiResponseMenuJson) { this.aiResponseMenuJson = aiResponseMenuJson; return this; }
         public WhatsAppConfigBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
         public WhatsAppConfigBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
+        public WhatsAppConfigBuilder flowsRoutingConfigJson(String flowsRoutingConfigJson) { this.flowsRoutingConfigJson = flowsRoutingConfigJson; return this; }
         public WhatsAppConfigBuilder showAboutContact(Boolean showAboutContact) { this.showAboutContact = showAboutContact; return this; }
         public WhatsAppConfigBuilder showSosButton(Boolean showSosButton) { this.showSosButton = showSosButton; return this; }
         public WhatsAppConfigBuilder showSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; return this; }
 
         public WhatsAppConfig build() {
             WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, portfolioUrl, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showSosButton, showSupportFormButton);
+            config.setFlowsRoutingConfigJson(flowsRoutingConfigJson);
             if (user != null) {
                 config.setUser(user);
             }

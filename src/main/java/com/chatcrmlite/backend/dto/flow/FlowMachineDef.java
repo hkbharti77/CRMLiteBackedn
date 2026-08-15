@@ -13,6 +13,7 @@ import java.util.Map;
 @NoArgsConstructor
 @AllArgsConstructor
 public class FlowMachineDef {
+    private java.util.UUID id;
     private String initialState;
     private Map<String, StateDef> states;
 

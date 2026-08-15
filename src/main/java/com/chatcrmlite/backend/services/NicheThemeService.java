@@ -133,13 +133,14 @@ public class NicheThemeService {
 
         UUID tenantIdForQuota = user.getTenant() != null ? user.getTenant().getId() : user.getId();
         boolean allowBranding = quotaEnforcerService.isCustomWidgetBrandingAllowed(tenantIdForQuota);
-        String finalLogoUrl = allowBranding ? user.getLogoUrl() : null;
+        String finalLogoUrl = user.getLogoUrl() != null && !user.getLogoUrl().isBlank() ? user.getLogoUrl() : null;
+        String finalWidgetIconUrl = user.getWidgetIconUrl() != null && !user.getWidgetIconUrl().isBlank() ? user.getWidgetIconUrl() : null;
         boolean showWatermark = !allowBranding;
 
         String finalPrimary = theme.primary;
         String finalSecondary = theme.secondary;
         
-        if (allowBranding && user.getTenant() != null) {
+        if (user.getTenant() != null) {
             if (user.getTenant().getPrimaryColor() != null && !user.getTenant().getPrimaryColor().isBlank()) {
                 finalPrimary = user.getTenant().getPrimaryColor();
             }
@@ -162,6 +163,7 @@ public class NicheThemeService {
                 .returningMessage(returning)
                 .businessSubType(slug)
                 .logoUrl(finalLogoUrl)
+                .widgetIconUrl(finalWidgetIconUrl)
                 .showWatermark(showWatermark)
                 .ctaButtons(ctaButtons)
                 .menuSections(menuSections)
@@ -171,6 +173,7 @@ public class NicheThemeService {
                 .flowCompletionMenuJson(config != null ? config.getFlowCompletionMenuJson() : null)
                 .guardrailMessageAbuse(config != null ? config.getGuardrailMessageAbuse() : null)
                 .guardrailMessageGibberish(config != null ? config.getGuardrailMessageGibberish() : null)
+                .webFlowsRoutingConfigJson(user.getWebFlowsRoutingConfigJson())
                 .build();
     }
 

@@ -41,6 +41,7 @@ public class PaymentWebhookController {
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final BillingTransactionRepository billingTransactionRepository;
     private final UserRepository userRepository;
+    private final TenantRepository tenantRepository;
     private final QuotaEnforcerService quotaEnforcerService;
     private final LeadRepository leadRepository;
     private final BookingRepository bookingRepository;
@@ -52,6 +53,29 @@ public class PaymentWebhookController {
 
     @Value("${razorpay.webhook.secret}")
     private String razorpayWebhookSecret;
+
+    @Value("${razorpay.key.id:}")
+    private String razorpayKeyId;
+
+    @Value("${razorpay.key.secret:}")
+    private String razorpayKeySecret;
+
+    @GetMapping("/api/v1/billing/plans")
+    public ResponseEntity<List<SubscriptionPlan>> getAvailablePlans(@RequestParam(required = false) String currency) {
+        List<SubscriptionPlan> plans = subscriptionPlanRepository.findAll();
+        if ("INR".equalsIgnoreCase(currency)) {
+            plans.forEach(p -> {
+                if (p.getPriceMonthlyInr() != null) p.setPriceMonthly(p.getPriceMonthlyInr());
+                if (p.getPriceYearlyInr() != null) p.setPriceYearly(p.getPriceYearlyInr());
+            });
+        } else if ("USD".equalsIgnoreCase(currency)) {
+            plans.forEach(p -> {
+                if (p.getPriceMonthlyUsd() != null) p.setPriceMonthly(p.getPriceMonthlyUsd());
+                if (p.getPriceYearlyUsd() != null) p.setPriceYearly(p.getPriceYearlyUsd());
+            });
+        }
+        return ResponseEntity.ok(plans);
+    }
 
     @GetMapping("/api/v1/billing/subscription")
     public ResponseEntity<?> getSubscriptionStatus(@AuthenticationPrincipal String email) {
@@ -87,6 +111,7 @@ public class PaymentWebhookController {
         limits.put("emailLimit", sub.getPlan().getEmailLimit());
         limits.put("hasWhatsapp", sub.getPlan().isHasWhatsapp());
         limits.put("hasCustomWidget", sub.getPlan().isHasCustomWidget());
+        limits.put("hasRagLlm", sub.getPlan().isHasRagLlm());
         response.put("limits", limits);
 
         Map<String, Object> usage = new HashMap<>();
@@ -123,6 +148,7 @@ public class PaymentWebhookController {
         String planId = request.get("planId");
         String billingCycleStr = request.get("billingCycle"); // MONTHLY or YEARLY
         String gatewayStr = request.get("gateway"); // STRIPE or RAZORPAY
+        String currency = request.getOrDefault("currency", gatewayStr != null && gatewayStr.equalsIgnoreCase("RAZORPAY") ? "INR" : "USD");
 
         if (planId == null || billingCycleStr == null || gatewayStr == null) {
             return ResponseEntity.badRequest().body("planId, billingCycle, and gateway are required.");
@@ -131,7 +157,16 @@ public class PaymentWebhookController {
         SubscriptionPlan plan = subscriptionPlanRepository.findById(planId.toUpperCase())
                 .orElseThrow(() -> new RuntimeException("Subscription plan not found: " + planId));
 
-        BigDecimal price = billingCycleStr.equalsIgnoreCase("YEARLY") ? plan.getPriceYearly() : plan.getPriceMonthly();
+        BigDecimal price;
+        if ("INR".equalsIgnoreCase(currency)) {
+            price = billingCycleStr.equalsIgnoreCase("YEARLY") ? 
+                    (plan.getPriceYearlyInr() != null ? plan.getPriceYearlyInr() : plan.getPriceYearly()) : 
+                    (plan.getPriceMonthlyInr() != null ? plan.getPriceMonthlyInr() : plan.getPriceMonthly());
+        } else {
+            price = billingCycleStr.equalsIgnoreCase("YEARLY") ? 
+                    (plan.getPriceYearlyUsd() != null ? plan.getPriceYearlyUsd() : plan.getPriceYearly()) : 
+                    (plan.getPriceMonthlyUsd() != null ? plan.getPriceMonthlyUsd() : plan.getPriceMonthly());
+        }
         
         // --- PRORATION LOGIC ---
         try {
@@ -145,8 +180,16 @@ public class PaymentWebhookController {
                     long totalDays = Duration.between(start, end).toDays();
                     if (totalDays > 0) {
                         long remainingDays = Duration.between(now, end).toDays();
-                        BigDecimal currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
-                                currentSub.getPlan().getPriceYearly() : currentSub.getPlan().getPriceMonthly();
+                        BigDecimal currentPlanPrice;
+                        if ("INR".equalsIgnoreCase(currency)) {
+                            currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
+                                    (currentSub.getPlan().getPriceYearlyInr() != null ? currentSub.getPlan().getPriceYearlyInr() : currentSub.getPlan().getPriceYearly()) : 
+                                    (currentSub.getPlan().getPriceMonthlyInr() != null ? currentSub.getPlan().getPriceMonthlyInr() : currentSub.getPlan().getPriceMonthly());
+                        } else {
+                            currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
+                                    (currentSub.getPlan().getPriceYearlyUsd() != null ? currentSub.getPlan().getPriceYearlyUsd() : currentSub.getPlan().getPriceYearly()) : 
+                                    (currentSub.getPlan().getPriceMonthlyUsd() != null ? currentSub.getPlan().getPriceMonthlyUsd() : currentSub.getPlan().getPriceMonthly());
+                        }
 
                         BigDecimal unusedValue = currentPlanPrice
                                 .divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP)
@@ -168,18 +211,19 @@ public class PaymentWebhookController {
         }
         // --- END PRORATION LOGIC ---
 
-        String currency = "INR"; // Default currency
-
-        log.info("💰 Initiating checkout for tenant: {}, plan: {}, gateway: {}, finalPrice: {}", tenantId, planId, gatewayStr, price);
+        log.info("💰 Initiating checkout for tenant: {}, plan: {}, gateway: {}, currency: {}, finalPrice: {}", 
+                tenantId, planId, gatewayStr, currency, price);
 
         try {
             if (gatewayStr.equalsIgnoreCase("STRIPE")) {
                 String checkoutUrl = stripePaymentService.createCheckoutSession(
                         tenantId, plan.getId(), billingCycleStr.toUpperCase(), price, currency);
                 
-                Map<String, String> response = new HashMap<>();
+                Map<String, Object> response = new HashMap<>();
                 response.put("checkoutUrl", checkoutUrl);
                 response.put("gateway", "STRIPE");
+                response.put("planId", plan.getId());
+                response.put("planName", plan.getName());
                 return ResponseEntity.ok(response);
             } else if (gatewayStr.equalsIgnoreCase("RAZORPAY")) {
                 // Generate a unique transaction/receipt ID
@@ -197,12 +241,17 @@ public class PaymentWebhookController {
                         .build();
                 billingTransactionRepository.save(transaction);
 
+                String resolvedKeyId = (razorpayKeyId != null && !razorpayKeyId.isBlank()) ? 
+                        razorpayKeyId : razorpayPaymentService.getKeyId();
+
                 Map<String, Object> response = new HashMap<>();
                 response.put("orderId", orderId);
                 response.put("amount", price.multiply(BigDecimal.valueOf(100)).intValue()); // in paise for frontend SDK
                 response.put("currency", currency);
                 response.put("gateway", "RAZORPAY");
-                response.put("keyId", System.getenv("RAZORPAY_KEY_ID")); // pass key id for SDK initialization
+                response.put("keyId", resolvedKeyId);
+                response.put("planId", plan.getId());
+                response.put("planName", plan.getName());
                 return ResponseEntity.ok(response);
             } else {
                 return ResponseEntity.badRequest().body("Unsupported gateway: " + gatewayStr);
@@ -211,6 +260,65 @@ public class PaymentWebhookController {
             log.error("❌ Checkout session initiation failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }
+    }
+
+    /**
+     * Client-side Razorpay payment verification endpoint.
+     */
+    @PostMapping("/api/v1/billing/verify-razorpay")
+    public ResponseEntity<?> verifyRazorpayPayment(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> request) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        UUID tenantId = user.getTenant().getId();
+
+        String orderId = request.get("razorpayOrderId");
+        String paymentId = request.get("razorpayPaymentId");
+        String signature = request.get("razorpaySignature");
+        String planId = request.get("planId");
+        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
+
+        if (orderId == null || paymentId == null || signature == null || planId == null) {
+            return ResponseEntity.badRequest().body("razorpayOrderId, razorpayPaymentId, razorpaySignature, and planId are required.");
+        }
+
+        boolean isValid = razorpayPaymentService.verifyPaymentSignature(orderId, paymentId, signature);
+        if (!isValid) {
+            log.warn("⚠️ Invalid Razorpay payment signature for tenant: {}, orderId: {}, paymentId: {}", tenantId, orderId, paymentId);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid payment signature verification.");
+        }
+
+        log.info("✅ Verified Razorpay payment signature for tenant: {}, order: {}, payment: {}, plan: {}", 
+                tenantId, orderId, paymentId, planId);
+
+        // Find or create transaction record
+        BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
+                .orElse(null);
+
+        if (transaction != null) {
+            transaction.setStatus(TransactionStatus.SUCCESS);
+            transaction.setGatewayTransactionId(paymentId);
+            billingTransactionRepository.save(transaction);
+        } else {
+            SubscriptionPlan plan = subscriptionPlanRepository.findById(planId.toUpperCase()).orElse(null);
+            BigDecimal price = plan != null ? 
+                    (billingCycleStr.equalsIgnoreCase("YEARLY") ? 
+                            (plan.getPriceYearlyInr() != null ? plan.getPriceYearlyInr() : plan.getPriceYearly()) : 
+                            (plan.getPriceMonthlyInr() != null ? plan.getPriceMonthlyInr() : plan.getPriceMonthly())) : BigDecimal.ZERO;
+            
+            saveBillingTransaction(tenantId, price, "INR", paymentId, PaymentGateway.RAZORPAY, TransactionStatus.SUCCESS);
+        }
+
+        // Upgrade subscription
+        updateTenantSubscription(tenantId, planId.toUpperCase(), billingCycleStr.toUpperCase(), null, orderId);
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("success", true);
+        response.put("message", "Payment verified and subscription activated successfully!");
+        response.put("planId", planId.toUpperCase());
+        return ResponseEntity.ok(response);
     }
 
     /**
@@ -384,6 +492,18 @@ public class PaymentWebhookController {
         if (razorpaySubId != null) sub.setRazorpaySubscriptionId(razorpaySubId);
 
         tenantSubscriptionRepository.save(sub);
+
+        // Sync legacy Tenant.planType field so profile-based plan checks are consistent
+        tenantRepository.findById(tenantId).ifPresent(t -> {
+            try {
+                User.PlanType legacyPlan = User.PlanType.valueOf(planId.toUpperCase());
+                t.setPlanType(legacyPlan);
+                tenantRepository.save(t);
+            } catch (IllegalArgumentException e) {
+                log.warn("⚠️ Plan ID '{}' has no matching legacy PlanType enum — skipping Tenant.planType sync", planId);
+            }
+        });
+
         eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         log.info("✅ Tenant {} subscription updated to plan: {} until {}", tenantId, planId, sub.getCurrentPeriodEnd());
     }
@@ -413,13 +533,17 @@ public class PaymentWebhookController {
         transaction.setGatewayTransactionId("mock_tx_" + System.currentTimeMillis());
         billingTransactionRepository.save(transaction);
         
-        // Upgrade subscription (PRO vs ENTERPRISE based on price/amount)
-        String planId = "PRO";
-        if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
-            planId = "ENTERPRISE";
+        // Upgrade subscription (PRO vs ENTERPRISE based on price/amount or request parameter)
+        String planId = request.get("planId");
+        if (planId == null || planId.isBlank()) {
+            planId = "PRO";
+            if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
+                planId = "ENTERPRISE";
+            }
         }
+        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
         
-        updateTenantSubscription(tenantId, planId, "MONTHLY", null, orderId);
+        updateTenantSubscription(tenantId, planId, billingCycleStr, null, orderId);
         
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Mock payment processed successfully");

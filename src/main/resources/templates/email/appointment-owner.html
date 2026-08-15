@@ -1,48 +1,85 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org" lang="en">
-<head><meta charset="UTF-8"/><title th:text="${subject}">New Appointment</title></head>
-<body style="margin:0;padding:0;background:#ffffff;font-family:Arial,Helvetica,sans-serif">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title th:text="${heading ?: 'New Appointment Scheduled'}">New Appointment Alert</title>
+</head>
+<body style="margin:0;padding:0;background-color:#F8FAFC;">
 
-<div th:replace="~{email/base :: header(heading=${heading},greeting=${greeting},intro=${intro})}"></div>
+<div th:replace="~{email/base :: header(
+      heading  = ${heading},
+      greeting = ${greeting}, 
+      intro    = ${intro})}">
+</div>
 
-<table width="100%" cellpadding="0" cellspacing="0" role="presentation"
-       style="background:#ffffff;padding:0 16px;font-family:Arial,Helvetica,sans-serif">
-  <tr><td align="center">
-    <table width="600" cellpadding="0" cellspacing="0" role="presentation"
-           style="background:#ffffff;max-width:600px;width:100%">
-      <tr><td style="padding:0 36px 24px">
+<table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
+  <tr>
+    <td align="center">
+      <!--[if (gte mso 9)|(IE)]>
+      <table align="center" width="600" cellpadding="0" cellspacing="0" role="presentation" style="width:600px;">
+      <tr>
+      <td align="center" valign="top" width="600">
+      <![endif]-->
+      <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
+        <tr>
+          <td class="content-padding" style="padding:0 32px 24px;">
 
-        <table style="width:100%;border-collapse:collapse">
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;width:36%;border:1px solid #000000">Customer</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000">
-              <span th:text="${contactName}">Name</span>
-              &nbsp;&middot;&nbsp;
-              <a th:href="'mailto:' + ${contactEmail}" th:text="${contactEmail}"
-                 style="color:#008000;text-decoration:none">email</a>
-            </td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Appointment</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${title}">Title</td>
-          </tr>
-          <tr>
-            <td style="padding:9px 14px;background:#ffffff;font-weight:600;color:#000000;
-                       font-size:13px;border:1px solid #000000">Date &amp; Time</td>
-            <td style="padding:9px 14px;color:#000000;font-size:13px;border:1px solid #000000"
-                th:text="${dateTime}">DateTime</td>
-          </tr>
-        </table>
+            <div class="card-subtle" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:10px;padding:20px;margin:0 0 16px;">
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="margin-bottom:12px;border-bottom:1px solid #F1F5F9;padding-bottom:10px;">
+                <tr>
+                  <td>
+                    <span class="text-main" style="color:#0F172A;font-size:14px;font-weight:700;">
+                      📅 Calendar Booking Details
+                    </span>
+                  </td>
+                  <td align="right">
+                    <span class="pill-badge" style="background-color:#ECFDF5;color:#059669;border:1px solid #A7F3D0;font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;">
+                      NEW EVENT
+                    </span>
+                  </td>
+                </tr>
+              </table>
 
-      </td></tr>
-    </table>
-  </td></tr>
+              <table width="100%" cellpadding="0" cellspacing="0" role="presentation" style="font-size:13px;line-height:1.7;">
+                <tr>
+                  <td class="text-muted" style="color:#64748B;width:120px;padding:4px 0;">Event Title:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${title}">Title</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Date &amp; Time:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${dateTime}">Date &amp; Time</td>
+                </tr>
+                <tr>
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Client Name:</td>
+                  <td class="text-main" style="color:#0F172A;font-weight:600;padding:4px 0;" th:text="${contactName}">Client Name</td>
+                </tr>
+                <tr th:if="${contactEmail != null and !#strings.isEmpty(contactEmail)}">
+                  <td class="text-muted" style="color:#64748B;padding:4px 0;">Client Email:</td>
+                  <td class="text-main" style="color:#2563EB;font-weight:600;padding:4px 0;" th:text="${contactEmail}">client@example.com</td>
+                </tr>
+              </table>
+            </div>
+
+          </td>
+        </tr>
+      </table>
+      <!--[if (gte mso 9)|(IE)]>
+      </td>
+      </tr>
+      </table>
+      <![endif]-->
+    </td>
+  </tr>
 </table>
 
-<div th:replace="~{email/base :: footer(footerNote=${footerNote},ctaLabel=${ctaLabel},ctaUrl=${ctaUrl})}"></div>
+<div th:replace="~{email/base :: footer(
+      footerNote = ${footerNote},
+      ctaLabel   = ${ctaLabel},
+      ctaUrl     = ${ctaUrl})}">
+</div>
 
 </body>
 </html>

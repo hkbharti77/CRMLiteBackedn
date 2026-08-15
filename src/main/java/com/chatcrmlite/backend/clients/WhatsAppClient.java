@@ -45,5 +45,12 @@ public interface WhatsAppClient {
      * Sends a catalog message through the WhatsApp Business API.
      */
     String sendCatalogMessage(String to, String text, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends an interactive WhatsApp Flow message to a recipient.
+     */
+    String sendFlowMessage(String to, String headerText, String bodyText, String footerText,
+                           String metaFlowId, String ctaText, String flowToken, String screen,
+                           String accessToken, String phoneNumberId);
 }
 

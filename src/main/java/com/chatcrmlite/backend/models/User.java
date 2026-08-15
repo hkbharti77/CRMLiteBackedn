@@ -1,16 +1,22 @@
 package com.chatcrmlite.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 import java.io.Serializable;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.List;
+import java.util.ArrayList;
 
 @Entity
 @Table(name = "app_users", indexes = {
     @Index(name = "idx_user_email", columnList = "email")
 })
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
@@ -21,6 +27,7 @@ public class User implements Serializable {
     @Column(unique = true, nullable = false)
     private String email;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String password;
 
     @ManyToOne(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE})
@@ -47,19 +54,42 @@ public class User implements Serializable {
     @Column(name = "availability_status", columnDefinition = "VARCHAR(255) DEFAULT 'AVAILABLE'")
     private AvailabilityStatus availabilityStatus = AvailabilityStatus.AVAILABLE;
 
+    @Column(name = "max_concurrent_chats", columnDefinition = "INT DEFAULT 2")
+    private Integer maxConcurrentChats = 2;
+
+    @Column(name = "daily_lead_limit")
+    private Integer dailyLeadLimit;
+
+    @Column(name = "last_seen_at")
+    private LocalDateTime lastSeenAt;
+
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "user_ip_whitelist", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "ip_address")
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private Set<String> ipWhitelist = new HashSet<>();
 
     private Boolean biometricsEnabled = false;
     private Boolean loginAlertsEnabled = false;
 
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "permissions", columnDefinition = "jsonb")
+    private List<String> permissions = new ArrayList<>();
+
+    @Version
+    @Column(name = "permission_version", nullable = false)
+    private Integer permissionVersion = 1;
+
     @Transient
     private WhatsAppConfig whatsappConfig;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String googleAccessToken;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private String googleRefreshToken;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
     private LocalDateTime googleTokenExpiry;
 
     private LocalDateTime createdAt;
@@ -99,36 +129,45 @@ public class User implements Serializable {
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
 
+    private boolean isTenantInitialized() {
+        return tenant != null && org.hibernate.Hibernate.isInitialized(tenant);
+    }
+
     // ── Backward Compatibility Delegation Getters ──
-    public String getBusinessName() { return tenant != null ? tenant.getBusinessName() : null; }
-    public String getBusinessType() { return tenant != null ? tenant.getBusinessType() : null; }
-    public String getBusinessSubType() { return tenant != null ? tenant.getBusinessSubType() : null; }
-    public String getAddress() { return tenant != null ? tenant.getAddress() : null; }
-    public String getAboutUs() { return tenant != null ? tenant.getAboutUs() : null; }
-    public Double getLatitude() { return tenant != null ? tenant.getLatitude() : null; }
-    public Double getLongitude() { return tenant != null ? tenant.getLongitude() : null; }
-    public String getLogoUrl() { return tenant != null ? tenant.getLogoUrl() : null; }
-    public Boolean getOnboardingCompleted() { return tenant != null ? tenant.getOnboardingCompleted() : false; }
-    public PlanType getPlanType() { return tenant != null ? PlanType.valueOf(tenant.getPlanType().name()) : PlanType.FREE; }
+    public String getBusinessName() { return isTenantInitialized() ? tenant.getBusinessName() : null; }
+    public String getBusinessType() { return isTenantInitialized() ? tenant.getBusinessType() : null; }
+    public String getBusinessSubType() { return isTenantInitialized() ? tenant.getBusinessSubType() : null; }
+    public String getAddress() { return isTenantInitialized() ? tenant.getAddress() : null; }
+    public String getAboutUs() { return isTenantInitialized() ? tenant.getAboutUs() : null; }
+    public Double getLatitude() { return isTenantInitialized() ? tenant.getLatitude() : null; }
+    public Double getLongitude() { return isTenantInitialized() ? tenant.getLongitude() : null; }
+    public String getLogoUrl() { return isTenantInitialized() ? tenant.getLogoUrl() : null; }
+    public String getWidgetIconUrl() { return isTenantInitialized() ? tenant.getWidgetIconUrl() : null; }
+    public Boolean getOnboardingCompleted() { return isTenantInitialized() ? tenant.getOnboardingCompleted() : false; }
+    public PlanType getPlanType() { return isTenantInitialized() && tenant.getPlanType() != null ? PlanType.valueOf(tenant.getPlanType().name()) : PlanType.FREE; }
 
     // ── Backward Compatibility Delegation Setters ──
-    public void setBusinessName(String name) { if (tenant != null) tenant.setBusinessName(name); }
-    public void setBusinessType(String type) { if (tenant != null) tenant.setBusinessType(type); }
-    public void setBusinessSubType(String subType) { if (tenant != null) tenant.setBusinessSubType(subType); }
-    public void setAddress(String addr) { if (tenant != null) tenant.setAddress(addr); }
-    public void setAboutUs(String about) { if (tenant != null) tenant.setAboutUs(about); }
-    public void setLatitude(Double lat) { if (tenant != null) tenant.setLatitude(lat); }
-    public void setLongitude(Double lon) { if (tenant != null) tenant.setLongitude(lon); }
-    public void setLogoUrl(String url) { if (tenant != null) tenant.setLogoUrl(url); }
-    public void setOnboardingCompleted(Boolean comp) { if (tenant != null) tenant.setOnboardingCompleted(comp); }
-    public void setPlanType(PlanType plan) { if (tenant != null) tenant.setPlanType(com.chatcrmlite.backend.models.User.PlanType.valueOf(plan.name())); }
-    public void setForceShowBooking(Boolean val) { if (tenant != null) tenant.setForceShowBooking(val); }
-    public void setForceShowAppointment(Boolean val) { if (tenant != null) tenant.setForceShowAppointment(val); }
-    public void setForceShowLeads(Boolean val) { if (tenant != null) tenant.setForceShowLeads(val); }
+    public void setBusinessName(String name) { if (isTenantInitialized()) tenant.setBusinessName(name); }
+    public void setBusinessType(String type) { if (isTenantInitialized()) tenant.setBusinessType(type); }
+    public void setBusinessSubType(String subType) { if (isTenantInitialized()) tenant.setBusinessSubType(subType); }
+    public void setAddress(String addr) { if (isTenantInitialized()) tenant.setAddress(addr); }
+    public void setAboutUs(String about) { if (isTenantInitialized()) tenant.setAboutUs(about); }
+    public void setLatitude(Double lat) { if (isTenantInitialized()) tenant.setLatitude(lat); }
+    public void setLongitude(Double lon) { if (isTenantInitialized()) tenant.setLongitude(lon); }
+    public void setLogoUrl(String url) { if (isTenantInitialized()) tenant.setLogoUrl(url); }
+    public void setWidgetIconUrl(String url) { if (isTenantInitialized()) tenant.setWidgetIconUrl(url); }
+    public void setOnboardingCompleted(Boolean comp) { if (isTenantInitialized()) tenant.setOnboardingCompleted(comp); }
+    public void setPlanType(PlanType plan) { if (isTenantInitialized()) tenant.setPlanType(com.chatcrmlite.backend.models.User.PlanType.valueOf(plan.name())); }
+    public void setForceShowBooking(Boolean val) { if (isTenantInitialized()) tenant.setForceShowBooking(val); }
+    public void setForceShowAppointment(Boolean val) { if (isTenantInitialized()) tenant.setForceShowAppointment(val); }
+    public void setForceShowLeads(Boolean val) { if (isTenantInitialized()) tenant.setForceShowLeads(val); }
 
-    public Boolean getForceShowBooking() { return tenant != null ? tenant.getForceShowBooking() : null; }
-    public Boolean getForceShowAppointment() { return tenant != null ? tenant.getForceShowAppointment() : null; }
-    public Boolean getForceShowLeads() { return tenant != null ? tenant.getForceShowLeads() : null; }
+    public Boolean getForceShowBooking() { return isTenantInitialized() ? tenant.getForceShowBooking() : null; }
+    public Boolean getForceShowAppointment() { return isTenantInitialized() ? tenant.getForceShowAppointment() : null; }
+    public Boolean getForceShowLeads() { return isTenantInitialized() ? tenant.getForceShowLeads() : null; }
+
+    public String getWebFlowsRoutingConfigJson() { return isTenantInitialized() ? tenant.getWebFlowsRoutingConfigJson() : null; }
+    public void setWebFlowsRoutingConfigJson(String val) { if (isTenantInitialized()) tenant.setWebFlowsRoutingConfigJson(val); }
 
     public LocalDateTime getConsentAt() { return consentAt; }
     public void setConsentAt(LocalDateTime consentAt) { this.consentAt = consentAt; }
@@ -149,11 +188,26 @@ public class User implements Serializable {
     public Role getRole() { return role; }
     public void setRole(Role role) { this.role = role; }
 
+    public List<String> getPermissions() { return permissions != null ? permissions : new ArrayList<>(); }
+    public void setPermissions(List<String> permissions) { this.permissions = permissions != null ? permissions : new ArrayList<>(); }
+
+    public Integer getPermissionVersion() { return permissionVersion != null ? permissionVersion : 1; }
+    public void setPermissionVersion(Integer permissionVersion) { this.permissionVersion = permissionVersion; }
+
     public AccountStatus getAccountStatus() { return accountStatus; }
     public void setAccountStatus(AccountStatus accountStatus) { this.accountStatus = accountStatus; }
 
     public AvailabilityStatus getAvailabilityStatus() { return availabilityStatus != null ? availabilityStatus : AvailabilityStatus.AVAILABLE; }
     public void setAvailabilityStatus(AvailabilityStatus availabilityStatus) { this.availabilityStatus = availabilityStatus; }
+
+    public Integer getMaxConcurrentChats() { return maxConcurrentChats != null ? maxConcurrentChats : 2; }
+    public void setMaxConcurrentChats(Integer maxConcurrentChats) { this.maxConcurrentChats = maxConcurrentChats; }
+
+    public Integer getDailyLeadLimit() { return dailyLeadLimit; }
+    public void setDailyLeadLimit(Integer dailyLeadLimit) { this.dailyLeadLimit = dailyLeadLimit; }
+
+    public LocalDateTime getLastSeenAt() { return lastSeenAt; }
+    public void setLastSeenAt(LocalDateTime lastSeenAt) { this.lastSeenAt = lastSeenAt; }
 
     public Set<String> getIpWhitelist() { return ipWhitelist; }
     public void setIpWhitelist(Set<String> ipWhitelist) { this.ipWhitelist = ipWhitelist; }
@@ -164,9 +218,10 @@ public class User implements Serializable {
     public Boolean getLoginAlertsEnabled() { return loginAlertsEnabled; }
     public void setLoginAlertsEnabled(Boolean loginAlertsEnabled) { this.loginAlertsEnabled = loginAlertsEnabled; }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public WhatsAppConfig getWhatsappConfig() {
         if (whatsappConfig != null) return whatsappConfig;
-        return tenant != null ? tenant.getWhatsappConfig() : null;
+        return (tenant != null && org.hibernate.Hibernate.isInitialized(tenant)) ? tenant.getWhatsappConfig() : null;
     }
     public void setWhatsappConfig(WhatsAppConfig whatsappConfig) {
         this.whatsappConfig = whatsappConfig;
@@ -210,7 +265,7 @@ public class User implements Serializable {
     }
 
     public enum Role {
-        OWNER, ADMIN, AGENT
+        OWNER, ADMIN, AGENT, SUPER_ADMIN
     }
 
     public enum PlanType {
@@ -237,6 +292,7 @@ public class User implements Serializable {
         private String googleRefreshToken;
         private LocalDateTime googleTokenExpiry;
         private LocalDateTime createdAt;
+        private Integer dailyLeadLimit;
 
         // Support backward compatible builder fields
         private String businessName;
@@ -262,6 +318,7 @@ public class User implements Serializable {
         public UserBuilder googleRefreshToken(String googleRefreshToken) { this.googleRefreshToken = googleRefreshToken; return this; }
         public UserBuilder googleTokenExpiry(LocalDateTime googleTokenExpiry) { this.googleTokenExpiry = googleTokenExpiry; return this; }
         public UserBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public UserBuilder dailyLeadLimit(Integer dailyLeadLimit) { this.dailyLeadLimit = dailyLeadLimit; return this; }
 
         public UserBuilder businessName(String businessName) { this.businessName = businessName; return this; }
         public UserBuilder businessType(String businessType) { this.businessType = businessType; return this; }
@@ -280,7 +337,9 @@ public class User implements Serializable {
                         .onboardingCompleted(onboardingCompleted != null && onboardingCompleted)
                         .build();
             }
-            return new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, googleAccessToken, googleRefreshToken, googleTokenExpiry, createdAt);
+            User u = new User(id, email, password, builtTenant, consentAt, displayName, phone, role, accountStatus, ipWhitelist, biometricsEnabled, loginAlertsEnabled, whatsappConfig, googleAccessToken, googleRefreshToken, googleTokenExpiry, createdAt);
+            u.setDailyLeadLimit(this.dailyLeadLimit);
+            return u;
         }
     }
 }

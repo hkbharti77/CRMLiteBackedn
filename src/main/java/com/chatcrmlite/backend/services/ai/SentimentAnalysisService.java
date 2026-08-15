@@ -32,7 +32,7 @@ public class SentimentAnalysisService {
 
     private static final List<String> FRUSTRATED_KEYWORDS = Arrays.asList(
             "angry", "frustrated", "terrible", "worst", "useless", "refund", "scam", "fraud",
-            "sue", "lawyer", "horrible", "waste", "cancel", "unacceptable", "bad service", "hate",
+            "sue", "lawyer", "horrible", "waste", "unacceptable", "bad service", "hate",
             "disappointed", "complaint", "cheat", "cheating", "money back", "fake"
     );
 

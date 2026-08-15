@@ -17,6 +17,9 @@ import dev.langchain4j.model.output.TokenUsage;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 
+import com.chatcrmlite.backend.models.Tenant;
+import com.chatcrmlite.backend.repositories.TenantRepository;
+
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -44,6 +47,9 @@ public class RagRetrievalService {
     private UserRepository userRepository;
 
     @Autowired
+    private TenantRepository tenantRepository;
+
+    @Autowired
     private AIQuotaService quotaService;
 
     @Autowired
@@ -57,6 +63,9 @@ public class RagRetrievalService {
 
     @Autowired
     private EmbeddingModel embeddingModel;
+
+    @Autowired
+    private FaqMatchingService faqMatchingService;
 
     /**
      * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker, 
@@ -78,6 +87,14 @@ public class RagRetrievalService {
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
+        // 2b. FAQ High-Confidence Fast Path (Direct Answer if score >= 85%)
+        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
+        if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
+            log.info("[FAQ-FastPath] High-confidence match (Score: {}) for tenant {} | Direct FAQ response returned.",
+                    String.format("%.4f", faqMatch.getScore()), tenantId);
+            return faqMatch.getFaqItem().getAnswer();
+        }
+
         // 3. Semantic Cache Check (O(log N) in DB)
         String cachedResponse = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);
         if (cachedResponse != null) {
@@ -93,9 +110,14 @@ public class RagRetrievalService {
             return null; 
         }
 
-        // 5. Build Structured Prompt (Injection Resistant)
-        String niche = user.getBusinessType(); 
-        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche);
+        // 5. Build Structured Prompt (Injection Resistant + Layered Persona)
+        String niche = user.getBusinessType();
+        String tenantPersona = null;
+        Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
+        if (tenant != null) {
+            tenantPersona = tenant.getAiPersonaPrompt();
+        }
+        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche, tenantPersona);
 
         // 6. Generate Response
         Response<AiMessage> responseObj = chatLanguageModel.generate(List.of(UserMessage.from(prompt)));

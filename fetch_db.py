@@ -3,48 +3,30 @@ import os
 
 try:
     conn = psycopg2.connect(
-        host="10.85.229.4",
+        host="10.215.46.176",
         port="5432",
         database="chatcrmdb",
         user="u0_a425",
         password="Root@123"
     )
-    
     cur = conn.cursor()
     
-    # First, let's find the user and their tenant_id
-    cur.execute("SELECT id, email, tenant_id FROM app_users WHERE email = 'gyanvaniai@gmail.com'")
-    user_row = cur.fetchone()
+    print("=== All WhatsApp Configs ===")
+    cur.execute("SELECT id, tenant_id, phone_number_id, business_id, access_token IS NOT NULL AS has_token FROM whatsapp_configs")
+    configs = cur.fetchall()
+    for c in configs:
+        print(f"ID: {c[0]}, TenantID: {c[1]}, PhoneNumberID: {c[2]}, BusinessID: {c[3]}, HasToken: {c[4]}")
     
-    if user_row:
-        user_id, email, tenant_id = user_row
-        print("=== User Details ===")
-        print(f"User ID: {user_id}")
-        print(f"Email: {email}")
-        print(f"Tenant ID: {tenant_id}")
-        print("\n")
-        
-        # Now fetch the whatsapp_configs for this tenant
-        cur.execute("""
-            SELECT *
-            FROM whatsapp_configs 
-            WHERE tenant_id = %s
-        """, (tenant_id,))
-        
-        wa_config = cur.fetchone()
-        if wa_config:
-            # Let's get column names
-            col_names = [desc[0] for desc in cur.description]
-            print("=== WhatsApp Configuration ===")
-            for name, val in zip(col_names, wa_config):
-                if name == 'access_token' and val:
-                    val = val[:15] + "..."
-                print(f"{name}: {val}")
-        else:
-            print("No WhatsApp Configuration found for this user's Tenant ID.")
-            
-    else:
-        print("User 'gyanvaniai@gmail.com' not found in the database.")
+    print("\n=== Contacts & Bot Status ===")
+    cur.execute("SELECT id, name, wa_id, bot_paused, escalated, latest_sentiment FROM contacts ORDER BY id DESC LIMIT 10")
+    contacts = cur.fetchall()
+    for ct in contacts:
+        print(f"Contact ID: {ct[0]}, Name: {ct[1]}, WA_ID: {ct[2]}, BotPaused: {ct[3]}, Escalated: {ct[4]}, Sentiment: {ct[5]}")
+
+    cur.close()
+    conn.close()
+except Exception as e:
+    print(f"Error querying database: {e}")
         
     cur.close()
     conn.close()

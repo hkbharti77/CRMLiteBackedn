@@ -32,7 +32,7 @@ public class AiOrchestrator {
             return response;
             
         } catch (Exception e) {
-            log.error("❌ [AI-Orchestrator] Provider {} failed, triggering fallback", selectedProvider.getModelName(), e);
+            log.warn("⚠️ [AI-Orchestrator] Provider {} unavailable ({}). Triggering fallback...", selectedProvider.getModelName(), e.getMessage());
             healthMonitor.recordFailure(selectedProvider.getModelName());
             return fallback(request, selectedProvider);
         }

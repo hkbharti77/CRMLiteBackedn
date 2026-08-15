@@ -31,8 +31,8 @@ public class WhatsAppFlowHandler {
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
-            Contact contact = contactRepository.findByWaIdAndOwner(context.getWaId(), owner)
-                    .orElseThrow(() -> new RuntimeException("Contact not found"));
+            Contact contact = contactRepository.findByWaIdAndTenant_Id(context.getWaId(), context.getTenantId())
+                    .orElseThrow(() -> new RuntimeException("Contact not found for tenant: " + context.getTenantId()));
 
             String text = (String) context.getMetadata().get("text");
             if (text == null) {
@@ -52,10 +52,10 @@ public class WhatsAppFlowHandler {
                 isInteractiveSelection = true;
             }
 
-            // Keyword check (Greeting/Menu)
+            // Keyword check (Greeting/Menu/Cancel)
             String lower = text.trim().toLowerCase();
             boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
-            boolean isCancel = lower.equals("cancel");
+            boolean isCancel = lower.matches("^(cancel|stop|exit|quit|terminate)$") || "cancel_flow".equals(selectionId);
 
             if (hasActiveFlow) {
                 if (isCancel) {
@@ -80,11 +80,18 @@ public class WhatsAppFlowHandler {
                 // Do not intercept other keywords if a flow is active. Let the flow validate the input.
             } else {
                 boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
-                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
+                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show|cancel|exit|stop)$");
 
                 if ("text".equals(type) && (isGreeting || isNavCommand)) {
                     flowStateMachine.resetFlow(contact);
                     context.getMetadata().put("responseType", isGreeting ? "GREETING" : "MENU");
+                    return;
+                }
+
+                // Check Enterprise Native Flow Router before conversational bot
+                boolean routedToFlow = tryRouteToNativeFlow(contact, owner, config, text, selectionId);
+                if (routedToFlow) {
+                    context.getMetadata().put("responseType", "FLOW_CONSUMED");
                     return;
                 }
             }
@@ -113,5 +120,69 @@ public class WhatsAppFlowHandler {
         } catch (Exception e) {
             log.error("❌ [Flow-Stage] Failed for {}", context.getMessageId(), e);
         }
+    }
+
+    private boolean tryRouteToNativeFlow(Contact contact, User owner, WhatsAppConfig config, String text, String selectionId) {
+        String intentKey = detectIntent(text, selectionId);
+        if (intentKey == null) {
+            return false;
+        }
+
+        String routingJson = config.getFlowsRoutingConfigJson();
+        if (routingJson != null && !routingJson.isBlank()) {
+            try {
+                JsonNode routingNode = objectMapper.readTree(routingJson);
+                if (routingNode.has(intentKey)) {
+                    JsonNode targetConfig = routingNode.get(intentKey);
+                    boolean enabled = targetConfig.path("enabled").asBoolean(true);
+                    String mode = targetConfig.path("mode").asText("CHATBOT");
+                    String metaFlowId = targetConfig.path("metaFlowId").asText(null);
+
+                    if (enabled) {
+                        if ("NATIVE_FLOW".equalsIgnoreCase(mode) && metaFlowId != null && !metaFlowId.isBlank()) {
+                            String ctaText = targetConfig.path("ctaText").asText("Open Form");
+                            String promptText = targetConfig.path("promptText").asText("Please complete the form below:");
+                            String headerText = targetConfig.path("headerText").asText(null);
+                            String footerText = targetConfig.path("footerText").asText(config.getVerifiedName());
+
+                            log.info("🎯 [FlowRouter] Dispatching Native Flow '{}' for intent '{}' to {}", metaFlowId, intentKey, contact.getWaId());
+                            outboundService.sendFlow(contact, headerText, promptText, footerText, metaFlowId, ctaText, config, owner);
+                            return true;
+                        } else if ("CHATBOT".equalsIgnoreCase(mode)) {
+                            log.info("🤖 [FlowRouter] Starting Chatbot flow for intent '{}' to {}", intentKey, contact.getWaId());
+                            return flowStateMachine.startFlow(contact, owner, text, intentKey);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ [FlowRouter] Error evaluating flow routing config: {}", e.getMessage());
+            }
+        }
+
+        // Fallback default: start conversational chatbot flow for this intent
+        log.info("🤖 [FlowRouter] Starting default Chatbot flow for intent '{}' to {}", intentKey, contact.getWaId());
+        return flowStateMachine.startFlow(contact, owner, text, intentKey);
+    }
+
+    private String detectIntent(String text, String selectionId) {
+        String combined = ((text != null ? text : "") + " " + (selectionId != null ? selectionId : "")).toLowerCase();
+        
+        // Appointment keywords & triggers
+        if (combined.matches(".*(appointment|doctor|clinic|consultation|checkup|specialist|dentist|physician|trigger_flow_appointment).*")) {
+            return "appointments";
+        }
+        // Booking keywords & triggers
+        if (combined.matches(".*(salon|spa|booking|reserve|slot|table|haircut|facial|massage|reservation|trigger_flow_booking).*")) {
+            return "bookings";
+        }
+        // Lead / Enquiry keywords & triggers
+        if (combined.matches(".*(quote|pricing|inquiry|inquire|lead|enquiry|enquire|estimate|catalog|trigger_flow_lead|trigger_flow|trigger_0).*")) {
+            return "leadGen";
+        }
+        // Feedback & Support keywords & triggers
+        if (combined.matches(".*(feedback|rating|review|survey|complaint|support|trigger_flow_support).*")) {
+            return "feedback";
+        }
+        return null;
     }
 }

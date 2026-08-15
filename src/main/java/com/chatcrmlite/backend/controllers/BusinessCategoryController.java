@@ -17,7 +17,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 @RestController
-@RequestMapping("/api/v1/business-categories")
+@RequestMapping({"/api/v1/business-categories", "/api/v1/categories"})
 public class BusinessCategoryController {
 
     @Autowired

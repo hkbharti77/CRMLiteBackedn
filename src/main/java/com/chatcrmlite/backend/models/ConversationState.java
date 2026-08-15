@@ -48,6 +48,26 @@ public class ConversationState implements Serializable {
     @Column(name = "collected_data", columnDefinition = "jsonb")
     private String collectedData = "{}";
 
+    // ── Session Timeout Fields ───────────────────────────────────────────────
+    @Enumerated(EnumType.STRING)
+    @Column(name = "session_status", nullable = false)
+    private SessionStatus sessionStatus = SessionStatus.ACTIVE;
+
+    @Column(name = "last_activity_at", nullable = false)
+    private LocalDateTime lastActivityAt = LocalDateTime.now();
+
+    @Column(name = "timeout_started_at")
+    private LocalDateTime timeoutStartedAt;
+
+    @Column(name = "closed_at")
+    private LocalDateTime closedAt;
+
+    @Column(name = "close_reason")
+    private String closeReason;
+
+    @Column(name = "previous_state")
+    private String previousState;
+
     // ── Timestamps ───────────────────────────────────────────────────────────
     private LocalDateTime startedAt = LocalDateTime.now();
     private LocalDateTime lastUpdatedAt = LocalDateTime.now();
@@ -80,6 +100,12 @@ public class ConversationState implements Serializable {
     public String getCollectedData() { return collectedData; }
     public LocalDateTime getStartedAt() { return startedAt; }
     public LocalDateTime getLastUpdatedAt() { return lastUpdatedAt; }
+    public SessionStatus getSessionStatus() { return sessionStatus; }
+    public LocalDateTime getLastActivityAt() { return lastActivityAt; }
+    public LocalDateTime getTimeoutStartedAt() { return timeoutStartedAt; }
+    public LocalDateTime getClosedAt() { return closedAt; }
+    public String getCloseReason() { return closeReason; }
+    public String getPreviousState() { return previousState; }
 
     public void setId(UUID id) { this.id = id; }
     public void setContact(Contact contact) { this.contact = contact; }
@@ -90,6 +116,12 @@ public class ConversationState implements Serializable {
     public void setCollectedData(String collectedData) { this.collectedData = collectedData; }
     public void setStartedAt(LocalDateTime startedAt) { this.startedAt = startedAt; }
     public void setLastUpdatedAt(LocalDateTime lastUpdatedAt) { this.lastUpdatedAt = lastUpdatedAt; }
+    public void setSessionStatus(SessionStatus sessionStatus) { this.sessionStatus = sessionStatus; }
+    public void setLastActivityAt(LocalDateTime lastActivityAt) { this.lastActivityAt = lastActivityAt; }
+    public void setTimeoutStartedAt(LocalDateTime timeoutStartedAt) { this.timeoutStartedAt = timeoutStartedAt; }
+    public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
+    public void setCloseReason(String closeReason) { this.closeReason = closeReason; }
+    public void setPreviousState(String previousState) { this.previousState = previousState; }
 
     // ── Flow Types ───────────────────────────────────────────────────────────
     public enum FlowType {
@@ -110,6 +142,12 @@ public class ConversationState implements Serializable {
         private String collectedData;
         private LocalDateTime startedAt;
         private LocalDateTime lastUpdatedAt;
+        private SessionStatus sessionStatus;
+        private LocalDateTime lastActivityAt;
+        private LocalDateTime timeoutStartedAt;
+        private LocalDateTime closedAt;
+        private String closeReason;
+        private String previousState;
 
         public ConversationStateBuilder id(UUID id) { this.id = id; return this; }
         public ConversationStateBuilder contact(Contact contact) { this.contact = contact; return this; }
@@ -120,9 +158,22 @@ public class ConversationState implements Serializable {
         public ConversationStateBuilder collectedData(String collectedData) { this.collectedData = collectedData; return this; }
         public ConversationStateBuilder startedAt(LocalDateTime startedAt) { this.startedAt = startedAt; return this; }
         public ConversationStateBuilder lastUpdatedAt(LocalDateTime lastUpdatedAt) { this.lastUpdatedAt = lastUpdatedAt; return this; }
+        public ConversationStateBuilder sessionStatus(SessionStatus sessionStatus) { this.sessionStatus = sessionStatus; return this; }
+        public ConversationStateBuilder lastActivityAt(LocalDateTime lastActivityAt) { this.lastActivityAt = lastActivityAt; return this; }
+        public ConversationStateBuilder timeoutStartedAt(LocalDateTime timeoutStartedAt) { this.timeoutStartedAt = timeoutStartedAt; return this; }
+        public ConversationStateBuilder closedAt(LocalDateTime closedAt) { this.closedAt = closedAt; return this; }
+        public ConversationStateBuilder closeReason(String closeReason) { this.closeReason = closeReason; return this; }
+        public ConversationStateBuilder previousState(String previousState) { this.previousState = previousState; return this; }
 
         public ConversationState build() {
-            return new ConversationState(id, contact, flowType, currentState, flowDefinitionId, stateHistory, collectedData, startedAt, lastUpdatedAt);
+            ConversationState state = new ConversationState(id, contact, flowType, currentState, flowDefinitionId, stateHistory, collectedData, startedAt, lastUpdatedAt);
+            if (sessionStatus != null) state.setSessionStatus(sessionStatus);
+            if (lastActivityAt != null) state.setLastActivityAt(lastActivityAt);
+            if (timeoutStartedAt != null) state.setTimeoutStartedAt(timeoutStartedAt);
+            if (closedAt != null) state.setClosedAt(closedAt);
+            if (closeReason != null) state.setCloseReason(closeReason);
+            if (previousState != null) state.setPreviousState(previousState);
+            return state;
         }
     }
 }

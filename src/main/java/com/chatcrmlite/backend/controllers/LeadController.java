@@ -27,8 +27,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import org.springframework.security.access.prepost.PreAuthorize;
+
 @RestController
 @RequestMapping("/api/v1/leads")
+@PreAuthorize("@perm.has(authentication, 'MODULE_LEADS')")
 public class LeadController {
 
     @Autowired private LeadService leadService;
@@ -49,7 +52,7 @@ public class LeadController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
             @RequestParam(defaultValue = "csv") String format) {
         User user = getAuthenticatedUser();
-        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null).getContent();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null, null).getContent();
 
         // Filter by Date Range (inclusive)
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
@@ -92,15 +95,16 @@ public class LeadController {
 
     // ── Lead Queries ───────────────────────────────────────────────────────
 
-    /** GET /api/v1/leads/paged?page=0&size=20&status=NEW — paginated for large datasets */
+    /** GET /api/v1/leads/paged?page=0&size=20&status=NEW&search=foo — paginated for large datasets */
     @GetMapping("/paged")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getLeadsPaged(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-            @RequestParam(required = false) Lead.LeadStatus status) {
+            @RequestParam(required = false) Lead.LeadStatus status,
+            @RequestParam(required = false) String search) {
         User user = getAuthenticatedUser();
-        var pagedResult = leadService.getLeadsByUserPaged(user, page, size, status);
+        var pagedResult = leadService.getLeadsByUserPaged(user, page, size, status, search);
         return ResponseEntity.ok(java.util.Map.of(
                 "content",       pagedResult.getContent().stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()),
                 "totalElements", pagedResult.getTotalElements(),
@@ -114,7 +118,7 @@ public class LeadController {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<LeadDTO>> getLeadsByStatus(@PathVariable Lead.LeadStatus status) {
         User user = getAuthenticatedUser();
-        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status).getContent();
+        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, status, null).getContent();
         return ResponseEntity.ok(leads.stream().map(lead -> toDTO(lead, user)).collect(Collectors.toList()));
     }
 
@@ -159,12 +163,18 @@ public class LeadController {
     // ── Status ─────────────────────────────────────────────────────────────
 
     @PatchMapping("/{id}/status")
-    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<LeadDTO> updateStatus(
             @PathVariable UUID id,
-            @RequestParam Lead.LeadStatus status) {
+            @RequestParam("status") Lead.LeadStatus status,
+            @RequestParam(value = "dealValue", required = false) java.math.BigDecimal dealValue,
+            @RequestParam(value = "lostReason", required = false) String lostReason,
+            @RequestParam(value = "paymentStatus", required = false) Lead.PaymentStatus paymentStatus,
+            @RequestParam(value = "sendPaymentLink", required = false) Boolean sendPaymentLink,
+            @RequestParam(value = "paymentMethod", required = false) String paymentMethod,
+            @RequestParam(value = "paymentLinkUrl", required = false) String paymentLinkUrl) {
         User user = getAuthenticatedUser();
-        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, user), user));
+        return ResponseEntity.ok(toDTO(leadService.updateStatus(id, status, dealValue, lostReason, paymentStatus, sendPaymentLink, paymentMethod, paymentLinkUrl, user), user));
     }
 
     @PostMapping("/{id}/rescore")
@@ -172,6 +182,134 @@ public class LeadController {
     public ResponseEntity<LeadDTO> rescoreLead(@PathVariable UUID id) {
         User user = getAuthenticatedUser();
         return ResponseEntity.ok(toDTO(leadService.rescoreLead(id, user), user));
+    }
+
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/notes")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO>> getNotes(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getNotesPaged(id, page, size, user));
+    }
+
+    @PostMapping("/{id}/notes")
+    public ResponseEntity<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> addNote(
+            @PathVariable UUID id,
+            @RequestBody java.util.Map<String, String> body) {
+        User user = getAuthenticatedUser();
+        String content = body.get("content");
+        return ResponseEntity.ok(leadService.addNote(id, content, user));
+    }
+
+    @DeleteMapping("/{id}/notes/{noteId}")
+    public ResponseEntity<Void> deleteNote(
+            @PathVariable UUID id,
+            @PathVariable UUID noteId) {
+        User user = getAuthenticatedUser();
+        leadService.softDeleteNote(id, noteId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Attachments ───────────────────────────────────────────────────────
+
+    @GetMapping("/{id}/attachments")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO>> getAttachments(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getAttachmentsPaged(id, page, size, user));
+    }
+
+    @PostMapping(value = "/{id}/attachments", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> uploadAttachment(
+            @PathVariable UUID id,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.uploadAttachment(id, file, user));
+    }
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
+    @GetMapping("/{id}/attachments/{attachmentId}/download")
+    public ResponseEntity<org.springframework.core.io.Resource> downloadAttachment(
+            @PathVariable UUID id,
+            @PathVariable UUID attachmentId) {
+        User user = getAuthenticatedUser();
+        com.chatcrmlite.backend.models.LeadAttachment attachment = leadService.getAttachmentEntity(id, attachmentId, user);
+
+        if (attachment.getStorageType() == com.chatcrmlite.backend.models.LeadAttachment.StorageType.CLOUDINARY) {
+            try {
+                byte[] cloudBytes = cloudinaryStorageService.downloadFile(attachment.getStoragePath());
+                org.springframework.core.io.ByteArrayResource resource = new org.springframework.core.io.ByteArrayResource(cloudBytes);
+                return ResponseEntity.ok()
+                        .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getFileName() + "\"")
+                        .contentType(org.springframework.http.MediaType.parseMediaType(attachment.getFileType()))
+                        .contentLength(cloudBytes.length)
+                        .body(resource);
+            } catch (Exception e) {
+                return ResponseEntity.notFound().build();
+            }
+        }
+
+        java.io.File file = new java.io.File(attachment.getStoragePath());
+        if (!file.exists()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        org.springframework.core.io.FileSystemResource resource = new org.springframework.core.io.FileSystemResource(file);
+        return ResponseEntity.ok()
+                .header(org.springframework.http.HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + attachment.getFileName() + "\"")
+                .contentType(org.springframework.http.MediaType.parseMediaType(attachment.getFileType()))
+                .body(resource);
+    }
+
+    @DeleteMapping("/{id}/attachments/{attachmentId}")
+    public ResponseEntity<Void> deleteAttachment(
+            @PathVariable UUID id,
+            @PathVariable UUID attachmentId) {
+        User user = getAuthenticatedUser();
+        leadService.softDeleteAttachment(id, attachmentId, user);
+        return ResponseEntity.noContent().build();
+    }
+
+    // ── Reassign & Activity Log ───────────────────────────────────────────
+
+    @PostMapping("/{id}/claim")
+    public ResponseEntity<LeadDTO> claimLead(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        Lead lead = leadService.claimLead(id, user);
+        return ResponseEntity.ok(toDTO(lead, user));
+    }
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<LeadDTO> reassignLead(
+            @PathVariable UUID id,
+            @RequestParam UUID agentId) {
+        User user = getAuthenticatedUser();
+        Lead updated = leadService.reassignLeadOwner(id, agentId, user);
+        return ResponseEntity.ok(toDTO(updated, user));
+    }
+
+    @GetMapping("/{id}/activities")
+    public ResponseEntity<org.springframework.data.domain.Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO>> getActivities(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(leadService.getActivitiesPaged(id, page, size, user));
+    }
+
+    @PostMapping("/{id}/call-log")
+    public ResponseEntity<Void> logCallActivity(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        Lead lead = leadService.getLeadById(id, user);
+        leadService.logActivity(lead, user, com.chatcrmlite.backend.models.LeadActivity.ActivityType.CALL_INITIATED, "{\"phoneNumber\":\"" + (lead.getContact() != null ? lead.getContact().getPhone() : "") + "\"}");
+        return ResponseEntity.ok().build();
     }
 
 

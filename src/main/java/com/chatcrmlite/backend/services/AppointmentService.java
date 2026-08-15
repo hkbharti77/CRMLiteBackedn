@@ -36,8 +36,28 @@ public class AppointmentService {
     @Autowired private com.chatcrmlite.backend.services.FlowConfigService flowConfigService;
     @Autowired private com.chatcrmlite.backend.services.GoogleCalendarService googleCalendarService;
 
+    @Autowired(required = false) private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsAppConfigRepository;
+    @Autowired(required = false) private com.chatcrmlite.backend.clients.WhatsAppClient whatsAppClient;
+    @Autowired(required = false) private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     private boolean isAdmin(User user) {
         return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
+    }
+
+    private UUID resolveTenantId(User owner) {
+        if (owner == null) return null;
+        if (owner.getTenant() != null) {
+            return owner.getTenant().getId();
+        }
+        if (tenantRepository != null && owner.getId() != null) {
+            try {
+                java.util.Optional<com.chatcrmlite.backend.models.Tenant> tenantOpt = tenantRepository.findById(owner.getId());
+                if (tenantOpt.isPresent()) {
+                    return tenantOpt.get().getId();
+                }
+            } catch (Exception ignored) {}
+        }
+        return owner.getId();
     }
 
     public Map<String, String> parseCollectedData(String json) {
@@ -45,25 +65,39 @@ public class AppointmentService {
             if (json == null || json.isBlank()) return new HashMap<>();
             return objectMapper.readValue(json, new TypeReference<Map<String, String>>() {});
         } catch (Exception e) {
+            log.warn("Failed to parse collectedData JSON: {}", e.getMessage());
             return new HashMap<>();
         }
     }
 
     private String serialize(Map<String, String> data) {
-        try { return objectMapper.writeValueAsString(data); }
-        catch (Exception e) { return "{}"; }
+        try {
+            return objectMapper.writeValueAsString(data != null ? data : new HashMap<>());
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     @Transactional
     public Appointment bookAppointment(AppointmentRequest req, User owner) {
         Contact contact = null;
+        UUID tenantId = resolveTenantId(owner);
         if (req.getContactId() != null) {
             contact = contactRepository.findById(req.getContactId())
-                    .filter(c -> c.getTenant().getId().equals(owner.getTenant().getId()))
+                    .filter(c -> {
+                        UUID cTenantId = c.getTenant() != null ? c.getTenant().getId() : null;
+                        return cTenantId == null || cTenantId.equals(tenantId);
+                    })
                     .orElseThrow(() -> new RuntimeException("Contact not found or access denied"));
         }
 
-        quotaEnforcerService.verifyBookingQuota(owner.getTenant().getId());
+        if (tenantId != null) {
+            try {
+                quotaEnforcerService.verifyBookingQuota(tenantId);
+            } catch (Exception e) {
+                log.warn("[AppointmentService] Quota check skipped/warned for tenantId={}: {}", tenantId, e.getMessage());
+            }
+        }
         String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.APPOINTMENT);
 
         String meetingLink = req.getMeetingLink();
@@ -123,31 +157,48 @@ public class AppointmentService {
     @Transactional
     public Appointment bookFromFlow(Contact contact, User owner, String title,
                                     Map<String, String> flowData, LocalDateTime dateTime, String source) {
-        quotaEnforcerService.verifyBookingQuota(owner.getTenant().getId());
-        String referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.APPOINTMENT);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            try {
+                quotaEnforcerService.verifyBookingQuota(tenantId);
+            } catch (Exception e) {
+                log.warn("[AppointmentService] Quota check skipped/warned for tenantId={}: {}", tenantId, e.getMessage());
+            }
+        }
+        String referenceNumber = null;
+        try {
+            referenceNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.APPOINTMENT);
+        } catch (Exception e) {
+            log.warn("[AppointmentService] Failed to generate reference number: {}", e.getMessage());
+            referenceNumber = "APT-" + System.currentTimeMillis();
+        }
         
         // Fetch dynamic labels to replace raw keys (e.g. custom_text_1 -> Are you currently using CRM?)
         Map<String, String> resolvedData = new HashMap<>();
-        try {
-            List<com.chatcrmlite.backend.dto.flow.FlowFieldConfig> configs = 
-                    flowConfigService.getConfigurableFields(owner, "appointment");
-            Map<String, String> keyToLabel = new HashMap<>();
-            for (com.chatcrmlite.backend.dto.flow.FlowFieldConfig cfg : configs) {
-                if (cfg.getLabel() != null && !cfg.getLabel().isBlank()) {
-                    keyToLabel.put(cfg.getKey(), cfg.getLabel());
+        if (flowData != null) {
+            try {
+                List<com.chatcrmlite.backend.dto.flow.FlowFieldConfig> configs = 
+                        flowConfigService.getConfigurableFields(owner, "appointment");
+                Map<String, String> keyToLabel = new HashMap<>();
+                if (configs != null) {
+                    for (com.chatcrmlite.backend.dto.flow.FlowFieldConfig cfg : configs) {
+                        if (cfg.getLabel() != null && !cfg.getLabel().isBlank()) {
+                            keyToLabel.put(cfg.getKey(), cfg.getLabel());
+                        }
+                    }
                 }
-            }
-            java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "date", "time", "preferred_date", "preferred_time", "title");
-            for (Map.Entry<String, String> entry : flowData.entrySet()) {
-                if (fixedKeys.contains(entry.getKey())) continue;
-                String displayLabel = keyToLabel.getOrDefault(entry.getKey(), entry.getKey());
-                resolvedData.put(displayLabel, entry.getValue());
-            }
-        } catch (Exception e) {
-            java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "date", "time", "preferred_date", "preferred_time", "title");
-            for (Map.Entry<String, String> entry : flowData.entrySet()) {
-                if (!fixedKeys.contains(entry.getKey())) {
-                    resolvedData.put(entry.getKey(), entry.getValue());
+                java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "date", "time", "preferred_date", "preferred_time", "title");
+                for (Map.Entry<String, String> entry : flowData.entrySet()) {
+                    if (fixedKeys.contains(entry.getKey())) continue;
+                    String displayLabel = keyToLabel.getOrDefault(entry.getKey(), entry.getKey());
+                    resolvedData.put(displayLabel, entry.getValue());
+                }
+            } catch (Exception e) {
+                java.util.List<String> fixedKeys = java.util.List.of("name", "email", "phone", "date", "time", "preferred_date", "preferred_time", "title");
+                for (Map.Entry<String, String> entry : flowData.entrySet()) {
+                    if (!fixedKeys.contains(entry.getKey())) {
+                        resolvedData.put(entry.getKey(), entry.getValue());
+                    }
                 }
             }
         }
@@ -156,28 +207,34 @@ public class AppointmentService {
                 .referenceNumber(referenceNumber)
                 .contact(contact)
                 .owner(owner)
-                .title(title)
-                .appointmentDateTime(dateTime)
+                .title(title != null ? title : "Appointment")
+                .appointmentDateTime(dateTime != null ? dateTime : LocalDateTime.now().plusDays(1).withHour(10).withMinute(0))
                 .collectedData(serialize(resolvedData))
                 .source(source != null ? source : "MANUAL")
                 .build();
         Appointment saved = appointmentRepository.save(appt);
-        eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "FLOW"));
+        try {
+            eventPublisher.publishEvent(new AppointmentScheduledEvent(this, saved, "FLOW"));
+        } catch (Exception e) {
+            log.warn("[AppointmentService] Failed to publish AppointmentScheduledEvent: {}", e.getMessage());
+        }
         return saved;
     }
 
     @Transactional(readOnly = true)
     public List<Appointment> getAllAppointments(User owner) {
-        if (isAdmin(owner)) {
-            return appointmentRepository.findAllOrderByAppointmentDateTimeAsc();
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findAllByTenantIdOrderByAppointmentDateTimeAsc(tenantId);
         }
         return appointmentRepository.findByOwner_IdOrderByAppointmentDateTimeAsc(owner.getId());
     }
 
     @Transactional(readOnly = true)
     public List<Appointment> getAppointmentsForContact(UUID contactId, User owner) {
-        if (isAdmin(owner)) {
-            return appointmentRepository.findByContact_IdOrderByAppointmentDateTimeAsc(contactId);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findByContactIdAndTenantIdOrderByAppointmentDateTimeAsc(contactId, tenantId);
         }
         return appointmentRepository.findByContact_IdAndOwner_IdOrderByAppointmentDateTimeAsc(contactId, owner.getId());
     }
@@ -187,17 +244,30 @@ public class AppointmentService {
         // Next 7 days (excludes today — already shown separately)
         LocalDateTime startOfTomorrow = LocalDate.now().plusDays(1).atStartOfDay();
         LocalDateTime endOfWeek = LocalDate.now().plusDays(7).atTime(23, 59, 59);
-        if (isAdmin(owner)) {
-            return appointmentRepository.findByAppointmentDateTimeBetweenAndStatus(
-                    startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
+        UUID tenantId = resolveTenantId(owner);
+        if (tenantId != null) {
+            return appointmentRepository.findByTenantIdAndAppointmentDateTimeBetweenAndStatus(
+                    tenantId, startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
         }
         return appointmentRepository.findByOwner_IdAndAppointmentDateTimeBetweenAndStatus(
                 owner.getId(), startOfTomorrow, endOfWeek, Appointment.AppointmentStatus.SCHEDULED);
     }
 
+    private java.time.ZoneId getTenantZoneId(User owner) {
+        String tz = (owner != null && owner.getTenant() != null && owner.getTenant().getTimezone() != null)
+                ? owner.getTenant().getTimezone()
+                : "Asia/Kolkata";
+        try {
+            return java.time.ZoneId.of(tz);
+        } catch (Exception e) {
+            return java.time.ZoneId.of("Asia/Kolkata");
+        }
+    }
+
     @Transactional(readOnly = true)
     public List<Appointment> getTodayAppointments(User owner) {
-        LocalDateTime start = LocalDate.now().atStartOfDay();
+        java.time.ZoneId zoneId = getTenantZoneId(owner);
+        LocalDateTime start = java.time.LocalDate.now(zoneId).atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
         if (isAdmin(owner)) {
             return appointmentRepository.findByAppointmentDateTimeBetweenAndStatus(
@@ -209,7 +279,8 @@ public class AppointmentService {
 
     @Transactional(readOnly = true)
     public long countTodayAppointments(User owner) {
-        LocalDateTime start = LocalDate.now().atStartOfDay();
+        java.time.ZoneId zoneId = getTenantZoneId(owner);
+        LocalDateTime start = java.time.LocalDate.now(zoneId).atStartOfDay();
         LocalDateTime end   = start.plusDays(1).minusSeconds(1);
         if (isAdmin(owner)) {
             return appointmentRepository.countByAppointmentDateTimeBetweenAndStatus(
@@ -308,6 +379,22 @@ public class AppointmentService {
 
         appt.setMeetingLink(meetLink);
         Appointment saved = appointmentRepository.save(appt);
+
+        // Send WhatsApp notification if contact has WhatsApp ID
+        if (saved.getContact() != null && saved.getContact().getWaId() != null && whatsAppConfigRepository != null && whatsAppClient != null) {
+            try {
+                UUID tenantId = owner.getTenant().getId();
+                whatsAppConfigRepository.findByTenantId(tenantId).ifPresent(config -> {
+                    if (config.getAccessToken() != null && config.getPhoneNumberId() != null) {
+                        String waMsg = "📹 *Google Meet Link for your appointment* (" + saved.getTitle() + "):\n" + meetLink;
+                        whatsAppClient.sendMessage(saved.getContact().getWaId(), waMsg, config.getAccessToken(), config.getPhoneNumberId());
+                        log.info("[AppointmentService] Sent Google Meet link via WhatsApp to {}", saved.getContact().getWaId());
+                    }
+                });
+            } catch (Exception e) {
+                log.warn("[AppointmentService] Failed to send Meet link via WhatsApp: {}", e.getMessage());
+            }
+        }
 
         // Re-publish event so the email listener sends the Meet link to the client
         eventPublisher.publishEvent(new com.chatcrmlite.backend.event.AppointmentScheduledEvent(this, saved, "MEET_LINK_GENERATED"));

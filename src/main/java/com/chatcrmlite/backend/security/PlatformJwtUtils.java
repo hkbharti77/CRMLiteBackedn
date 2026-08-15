@@ -69,7 +69,7 @@ public class PlatformJwtUtils {
             Claims claims = getClaims(token);
             Object platformClaim = claims.get("platform");
             if (!Boolean.TRUE.equals(platformClaim)) {
-                log.warn("[Platform] JWT missing 'platform' claim — tenant token used on platform route?");
+                log.debug("[Platform] JWT missing 'platform' claim — checking standard user token fallback");
                 return false;
             }
             return true;

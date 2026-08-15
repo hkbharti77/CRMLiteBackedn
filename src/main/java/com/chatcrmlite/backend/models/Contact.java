@@ -47,6 +47,15 @@ public class Contact extends BaseTenantEntity {
     private boolean botPaused = false;
 
     @Enumerated(EnumType.STRING)
+    @Column(name = "support_state", nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'IDLE'")
+    private com.chatcrmlite.backend.models.livechat.SupportState supportState = com.chatcrmlite.backend.models.livechat.SupportState.IDLE;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "assigned_agent_id")
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private User assignedAgent;
+
+    @Enumerated(EnumType.STRING)
     @Column(name = "latest_sentiment")
     private Message.Sentiment latestSentiment = Message.Sentiment.NEUTRAL;
 
@@ -55,6 +64,9 @@ public class Contact extends BaseTenantEntity {
 
     @Column(name = "escalated_at")
     private java.time.LocalDateTime escalatedAt;
+
+    @Column(name = "last_agent_reply_at")
+    private java.time.LocalDateTime lastAgentReplyAt;
 
     public Contact() {}
 
@@ -91,12 +103,33 @@ public class Contact extends BaseTenantEntity {
     public boolean isBotPaused() { return botPaused; }
     public void setBotPaused(boolean botPaused) { this.botPaused = botPaused; }
 
+    public com.chatcrmlite.backend.models.livechat.SupportState getSupportState() { return supportState != null ? supportState : com.chatcrmlite.backend.models.livechat.SupportState.IDLE; }
+    public void setSupportState(com.chatcrmlite.backend.models.livechat.SupportState supportState) { this.supportState = supportState; }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public User getAssignedAgent() { return assignedAgent; }
+    public void setAssignedAgent(User assignedAgent) { this.assignedAgent = assignedAgent; }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public com.chatcrmlite.backend.models.WhatsAppConfig getWhatsappConfig() {
+        if (owner != null && owner.getWhatsappConfig() != null) {
+            return owner.getWhatsappConfig();
+        }
+        if (getTenant() != null && getTenant().getWhatsappConfig() != null) {
+            return getTenant().getWhatsappConfig();
+        }
+        return null;
+    }
+
     public Message.Sentiment getLatestSentiment() { return latestSentiment != null ? latestSentiment : Message.Sentiment.NEUTRAL; }
     public void setLatestSentiment(Message.Sentiment latestSentiment) { this.latestSentiment = latestSentiment; }
     public boolean isEscalated() { return escalated; }
     public void setEscalated(boolean escalated) { this.escalated = escalated; }
     public java.time.LocalDateTime getEscalatedAt() { return escalatedAt; }
     public void setEscalatedAt(java.time.LocalDateTime escalatedAt) { this.escalatedAt = escalatedAt; }
+
+    public java.time.LocalDateTime getLastAgentReplyAt() { return lastAgentReplyAt; }
+    public void setLastAgentReplyAt(java.time.LocalDateTime lastAgentReplyAt) { this.lastAgentReplyAt = lastAgentReplyAt; }
 
     public String getPhone() { return waId; }
     public Boolean getOptedOut() { return false; }

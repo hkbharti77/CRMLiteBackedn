@@ -178,4 +178,59 @@ public class PaymentWebhookControllerTest {
                 .andExpect(jsonPath("$.planId", equalTo("PRO")))
                 .andExpect(jsonPath("$.limits.employeeLimit", equalTo(10)));
     }
+
+    @Test
+    void testVerifyRazorpayPayment_Success() throws Exception {
+        when(razorpayPaymentService.verifyPaymentSignature("order_rzp_999", "pay_rzp_999", "valid_sig_123"))
+                .thenReturn(true);
+
+        BillingTransaction transaction = BillingTransaction.builder()
+                .amount(BigDecimal.valueOf(2499.00))
+                .currency("INR")
+                .status(TransactionStatus.PENDING)
+                .paymentGateway(PaymentGateway.RAZORPAY)
+                .gatewayTransactionId("order_rzp_999")
+                .tenant(testUser.getTenant())
+                .build();
+        billingTransactionRepository.save(transaction);
+
+        Map<String, String> request = new HashMap<>();
+        request.put("razorpayOrderId", "order_rzp_999");
+        request.put("razorpayPaymentId", "pay_rzp_999");
+        request.put("razorpaySignature", "valid_sig_123");
+        request.put("planId", "PRO");
+        request.put("billingCycle", "MONTHLY");
+
+        mockMvc.perform(post("/api/v1/billing/verify-razorpay")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.success", equalTo(true)))
+                .andExpect(jsonPath("$.planId", equalTo("PRO")));
+
+        // Verify status upgraded
+        mockMvc.perform(get("/api/v1/billing/subscription")
+                        .header("Authorization", "Bearer " + authToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.planId", equalTo("PRO")));
+    }
+
+    @Test
+    void testVerifyRazorpayPayment_InvalidSignature() throws Exception {
+        when(razorpayPaymentService.verifyPaymentSignature(anyString(), anyString(), anyString()))
+                .thenReturn(false);
+
+        Map<String, String> request = new HashMap<>();
+        request.put("razorpayOrderId", "order_rzp_bad");
+        request.put("razorpayPaymentId", "pay_rzp_bad");
+        request.put("razorpaySignature", "bad_sig");
+        request.put("planId", "PRO");
+
+        mockMvc.perform(post("/api/v1/billing/verify-razorpay")
+                        .header("Authorization", "Bearer " + authToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
 }

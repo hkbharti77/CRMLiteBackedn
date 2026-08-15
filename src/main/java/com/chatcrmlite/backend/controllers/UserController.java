@@ -19,6 +19,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
@@ -57,6 +58,12 @@ public class UserController {
     @Autowired
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
+    @Autowired
+    private com.chatcrmlite.backend.services.AgentPermissionService agentPermissionService;
+
     @GetMapping("/me")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal String email) {
@@ -86,13 +93,22 @@ public class UserController {
             if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
             if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
             if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
-            if (request.getPrimaryColor() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
-            if (request.getSecondaryColor() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
+            if (request.getWidgetIconUrl() != null) user.setWidgetIconUrl(request.getWidgetIconUrl());
+            if (request.getPrimaryColor() != null && user.getTenant() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
+            if (request.getSecondaryColor() != null && user.getTenant() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
+            if (request.getCountry() != null && user.getTenant() != null) user.getTenant().setCountry(request.getCountry());
+            if (request.getCurrency() != null && user.getTenant() != null) user.getTenant().setCurrency(request.getCurrency());
+            if (request.getTimezone() != null && user.getTenant() != null) user.getTenant().setTimezone(request.getTimezone());
             
             // Manual module overrides
             if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
             if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
             if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
+            if (request.getEmailHeaderText() != null && user.getTenant() != null) user.getTenant().setEmailHeaderText(request.getEmailHeaderText());
+            if (request.getEmailFooterText() != null && user.getTenant() != null) user.getTenant().setEmailFooterText(request.getEmailFooterText());
+            if (request.getDefaultDailyLeadLimit() != null && user.getTenant() != null) user.getTenant().setDefaultDailyLeadLimit(request.getDefaultDailyLeadLimit());
+            if (request.getAutoAssignmentDelayMinutes() != null && user.getTenant() != null) user.getTenant().setAutoAssignmentDelayMinutes(request.getAutoAssignmentDelayMinutes());
+            if (request.getWebFlowsRoutingConfigJson() != null) user.setWebFlowsRoutingConfigJson(request.getWebFlowsRoutingConfigJson());
         }
 
         userRepository.save(user);
@@ -100,8 +116,137 @@ public class UserController {
         return ResponseEntity.ok(UserProfileDto.from(user));
     }
 
+    @PostMapping(value = "/me/widget-icon", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> uploadWidgetIcon(
+            @AuthenticationPrincipal String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only Owner or Admin can upload custom widget icons"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please select a PNG file to upload"));
+        }
+
+        // Strict PNG format validation
+        String contentType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        boolean isPngContentType = contentType != null && contentType.equalsIgnoreCase("image/png");
+        boolean isPngExtension = originalFilename != null && originalFilename.toLowerCase().endsWith(".png");
+
+        if (!isPngContentType && !isPngExtension) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Only PNG image format (.png) is supported for the widget icon"));
+        }
+
+        if (file.getSize() > 2 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Image file size must not exceed 2MB"));
+        }
+
+        try {
+            if (!cloudinaryStorageService.isConfigured()) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Cloudinary Storage is not configured on the server."));
+            }
+
+            java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+            String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "widget_icon.png");
+            String iconUrl = cloudinaryStorageService.uploadFile(key, file);
+
+            user.setWidgetIconUrl(iconUrl);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Widget icon updated successfully",
+                "widgetIconUrl", iconUrl
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to save widget icon: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/me/logo", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> uploadCompanyLogo(
+            @AuthenticationPrincipal String email,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only Owner or Admin can upload company logo"));
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Please select an image file to upload"));
+        }
+
+        String contentType = file.getContentType();
+        String originalFilename = file.getOriginalFilename();
+        
+        boolean isValidType = contentType != null && (
+                contentType.startsWith("image/") ||
+                contentType.equalsIgnoreCase("image/png") ||
+                contentType.equalsIgnoreCase("image/jpeg") ||
+                contentType.equalsIgnoreCase("image/jpg") ||
+                contentType.equalsIgnoreCase("image/webp") ||
+                contentType.equalsIgnoreCase("image/svg+xml") ||
+                contentType.equalsIgnoreCase("image/gif")
+        );
+
+        if (!isValidType && originalFilename != null) {
+            String lowerName = originalFilename.toLowerCase();
+            isValidType = lowerName.endsWith(".png") || lowerName.endsWith(".jpg") || 
+                          lowerName.endsWith(".jpeg") || lowerName.endsWith(".webp") || 
+                          lowerName.endsWith(".svg") || lowerName.endsWith(".gif");
+        }
+
+        if (!isValidType) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Supported image formats are PNG, JPG, JPEG, WebP, SVG, and GIF"));
+        }
+
+        if (file.getSize() > 5 * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Image file size must not exceed 5MB"));
+        }
+
+        try {
+            if (!cloudinaryStorageService.isConfigured()) {
+                return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                        .body(Map.of("error", "Cloudinary Storage is not configured on the server."));
+            }
+
+            String ext = "png";
+            if (originalFilename != null && originalFilename.contains(".")) {
+                ext = originalFilename.substring(originalFilename.lastIndexOf(".") + 1).toLowerCase();
+            }
+
+            java.util.UUID tenantId = (user.getTenant() != null ? user.getTenant().getId() : user.getId());
+            String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "logo." + ext);
+            String logoUrl = cloudinaryStorageService.uploadFile(key, file);
+
+            user.setLogoUrl(logoUrl);
+            userRepository.save(user);
+
+            return ResponseEntity.ok(Map.of(
+                "message", "Company header logo updated successfully",
+                "logoUrl", logoUrl
+            ));
+        } catch (Exception e) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(Map.of("error", "Failed to save company logo: " + e.getMessage()));
+        }
+    }
+
     @PostMapping("/staff")
-    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN')")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
     @org.springframework.transaction.annotation.Transactional
     public ResponseEntity<?> createStaffUser(
             @AuthenticationPrincipal String callerEmail,
@@ -144,6 +289,19 @@ public class UserController {
             return ResponseEntity.badRequest().body(new MessageResponse("User with this email already exists."));
         }
 
+        List<String> initialPermissions = new java.util.ArrayList<>();
+        if (targetRole == User.Role.AGENT) {
+            if (request.getPermissions() != null && !request.getPermissions().isEmpty()) {
+                try {
+                    initialPermissions = agentPermissionService.validateAndNormalizePermissions(request.getPermissions());
+                } catch (IllegalArgumentException e) {
+                    return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+                }
+            } else {
+                initialPermissions = java.util.List.of("MODULE_INBOX", "MODULE_LEADS", "MODULE_SETTINGS", "SETTINGS_PROFILE");
+            }
+        }
+
         User staffUser = User.builder()
                 .email(request.getEmail().trim().toLowerCase())
                 .displayName(request.getDisplayName().trim())
@@ -153,6 +311,8 @@ public class UserController {
                 .accountStatus(User.AccountStatus.ACTIVE)
                 .onboardingCompleted(true) // Automatically complete onboarding for new staff members
                 .build();
+
+        staffUser.setPermissions(initialPermissions);
 
         userRepository.save(staffUser);
 
@@ -285,6 +445,93 @@ public class UserController {
         User caller = userRepository.findByEmail(email).orElseThrow();
         securityService.updateStaffStatus(caller, staffId, status, reason);
         return ResponseEntity.ok("Staff member status updated to: " + status);
+    }
+
+    @PatchMapping("/staff/{agentId}/permissions")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
+    public ResponseEntity<?> updateAgentPermissions(
+            @AuthenticationPrincipal String callerEmail,
+            @PathVariable UUID agentId,
+            @RequestBody UpdateAgentPermissionsRequest request,
+            @RequestHeader(value = "X-Reason", required = false) String headerReason,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+
+        User caller = userRepository.findByEmail(callerEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+
+        String reason = request.getReason() != null && !request.getReason().isBlank() ? request.getReason() : headerReason;
+        String ipAddress = httpRequest.getRemoteAddr();
+        String userAgent = httpRequest.getHeader("User-Agent");
+
+        try {
+            User updatedAgent = agentPermissionService.updateAgentPermissions(
+                    caller,
+                    agentId,
+                    request.getPermissions(),
+                    request.getExpectedVersion(),
+                    reason,
+                    ipAddress,
+                    userAgent
+            );
+            return ResponseEntity.ok(UserProfileDto.from(updatedAgent));
+        } catch (org.springframework.orm.ObjectOptimisticLockingFailureException e) {
+            return ResponseEntity.status(409).body(new MessageResponse("Stale permission state. Concurrent update detected."));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(new MessageResponse(e.getMessage()));
+        } catch (org.springframework.security.access.AccessDeniedException e) {
+            return ResponseEntity.status(403).body(new MessageResponse(e.getMessage()));
+        }
+    }
+
+    @GetMapping("/staff/{agentId}/permissions/audits")
+    @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('OWNER', 'ADMIN', 'SUPER_ADMIN', 'PLATFORM_ADMIN')")
+    public ResponseEntity<?> getAgentPermissionAuditLogs(
+            @AuthenticationPrincipal String callerEmail,
+            @PathVariable UUID agentId) {
+
+        User caller = userRepository.findByEmail(callerEmail)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
+
+        return ResponseEntity.ok(agentPermissionService.getAuditLogsForAgent(caller, agentId));
+    }
+
+    @PatchMapping("/staff/{staffId}/role")
+    @org.springframework.security.access.prepost.PreAuthorize("hasRole('OWNER')")
+    public ResponseEntity<?> updateStaffRole(
+            @AuthenticationPrincipal String email,
+            @PathVariable UUID staffId,
+            @RequestParam User.Role role) {
+        User caller = userRepository.findByEmail(email).orElseThrow();
+        User target = userRepository.findById(staffId)
+                .orElseThrow(() -> new RuntimeException("Staff member not found"));
+
+        if (!target.getTenant().getId().equals(caller.getTenant().getId())) {
+            return ResponseEntity.status(403).body("Unauthorized");
+        }
+
+        target.setRole(role);
+        User saved = userRepository.save(target);
+        return ResponseEntity.ok(Map.of("success", true, "role", saved.getRole().name()));
+    }
+
+    @PatchMapping("/staff/{staffId}/daily-limit")
+    public ResponseEntity<?> updateDailyLimit(
+            @PathVariable UUID staffId,
+            @RequestParam(required = false) Integer limit) {
+        User caller = userRepository.findByEmailWithTenant(org.springframework.security.core.context.SecurityContextHolder.getContext().getAuthentication().getPrincipal().toString()).orElseThrow();
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
+        User staff = userRepository.findById(staffId).orElseThrow();
+        if (staff.getTenant() == null || caller.getTenant() == null || !staff.getTenant().getId().equals(caller.getTenant().getId())) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.FORBIDDEN).build();
+        }
+
+        staff.setDailyLeadLimit(limit);
+        userRepository.save(staff);
+
+        return ResponseEntity.ok(java.util.Map.of("success", true, "dailyLeadLimit", limit != null ? limit : "null"));
     }
 
     // ─── DTOS ─────────────────────────────────────────────────────────────
@@ -427,11 +674,19 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String widgetIconUrl;
         private String primaryColor;
         private String secondaryColor;
+        private String country;
+        private String currency;
+        private String timezone;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
+        private String emailHeaderText;
+        private String emailFooterText;
+        private Integer defaultDailyLeadLimit;
+        private Integer autoAssignmentDelayMinutes;
 
         public UpdateUserRequest() {}
         public String getDisplayName() { return displayName; }
@@ -454,16 +709,35 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getWidgetIconUrl() { return widgetIconUrl; }
+        public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
         public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+        public String getCountry() { return country; }
+        public void setCountry(String country) { this.country = country; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        public String getTimezone() { return timezone; }
+        public void setTimezone(String timezone) { this.timezone = timezone; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
         public void setForceShowAppointment(Boolean forceShowAppointment) { this.forceShowAppointment = forceShowAppointment; }
         public Boolean getForceShowLeads() { return forceShowLeads; }
         public void setForceShowLeads(Boolean forceShowLeads) { this.forceShowLeads = forceShowLeads; }
+        public String getEmailHeaderText() { return emailHeaderText; }
+        public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+        public String getEmailFooterText() { return emailFooterText; }
+        public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+        public Integer getDefaultDailyLeadLimit() { return defaultDailyLeadLimit; }
+        public void setDefaultDailyLeadLimit(Integer defaultDailyLeadLimit) { this.defaultDailyLeadLimit = defaultDailyLeadLimit; }
+        public Integer getAutoAssignmentDelayMinutes() { return autoAssignmentDelayMinutes; }
+        public void setAutoAssignmentDelayMinutes(Integer autoAssignmentDelayMinutes) { this.autoAssignmentDelayMinutes = autoAssignmentDelayMinutes; }
+        public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+        public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+        private String webFlowsRoutingConfigJson;
     }
 
     public static class UserProfileDto {
@@ -479,14 +753,23 @@ public class UserController {
         private Double latitude;
         private Double longitude;
         private String logoUrl;
+        private String widgetIconUrl;
         private String primaryColor;
         private String secondaryColor;
+        private String country;
+        private String currency;
+        private String timezone;
         private Boolean forceShowBooking;
         private Boolean forceShowAppointment;
         private Boolean forceShowLeads;
         private String role;
         private String accountStatus;
         private String planType;
+        private String emailHeaderText;
+        private String emailFooterText;
+        private UUID tenantId;
+        private Integer defaultDailyLeadLimit;
+        private Integer autoAssignmentDelayMinutes;
 
         public UserProfileDto() {}
         public String getId() { return id; }
@@ -513,10 +796,18 @@ public class UserController {
         public void setLongitude(Double longitude) { this.longitude = longitude; }
         public String getLogoUrl() { return logoUrl; }
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
+        public String getWidgetIconUrl() { return widgetIconUrl; }
+        public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
         public void setSecondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; }
+        public String getCountry() { return country; }
+        public void setCountry(String country) { this.country = country; }
+        public String getCurrency() { return currency; }
+        public void setCurrency(String currency) { this.currency = currency; }
+        public String getTimezone() { return timezone; }
+        public void setTimezone(String timezone) { this.timezone = timezone; }
         public Boolean getForceShowBooking() { return forceShowBooking; }
         public void setForceShowBooking(Boolean forceShowBooking) { this.forceShowBooking = forceShowBooking; }
         public Boolean getForceShowAppointment() { return forceShowAppointment; }
@@ -529,6 +820,21 @@ public class UserController {
         public void setAccountStatus(String accountStatus) { this.accountStatus = accountStatus; }
         public String getPlanType() { return planType; }
         public void setPlanType(String planType) { this.planType = planType; }
+        public String getEmailHeaderText() { return emailHeaderText; }
+        public void setEmailHeaderText(String emailHeaderText) { this.emailHeaderText = emailHeaderText; }
+        public String getEmailFooterText() { return emailFooterText; }
+        public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+        public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
+        public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+        private String webFlowsRoutingConfigJson;
+
+        private List<String> permissions;
+        private Integer permissionVersion;
+
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+        public Integer getPermissionVersion() { return permissionVersion; }
+        public void setPermissionVersion(Integer permissionVersion) { this.permissionVersion = permissionVersion; }
 
         public static UserProfileDto from(User user) {
             UserProfileDto dto = new UserProfileDto();
@@ -544,14 +850,30 @@ public class UserController {
             dto.setLatitude(user.getLatitude());
             dto.setLongitude(user.getLongitude());
             dto.setLogoUrl(user.getLogoUrl());
+            dto.setWidgetIconUrl(user.getWidgetIconUrl());
             dto.setPrimaryColor(user.getTenant() != null ? user.getTenant().getPrimaryColor() : null);
             dto.setSecondaryColor(user.getTenant() != null ? user.getTenant().getSecondaryColor() : null);
+            dto.setCountry(user.getTenant() != null ? user.getTenant().getCountry() : "IN");
+            dto.setCurrency(user.getTenant() != null ? user.getTenant().getCurrency() : "INR");
+            dto.setTimezone(user.getTenant() != null ? user.getTenant().getTimezone() : "Asia/Kolkata");
             dto.setForceShowBooking(user.getForceShowBooking());
             dto.setForceShowAppointment(user.getForceShowAppointment());
             dto.setForceShowLeads(user.getForceShowLeads());
+            dto.setWebFlowsRoutingConfigJson(user.getWebFlowsRoutingConfigJson());
             dto.setRole(user.getRole() != null ? user.getRole().name() : null);
             dto.setAccountStatus(user.getAccountStatus() != null ? user.getAccountStatus().name() : null);
-            dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
+            dto.setPermissions(user.getPermissions());
+            dto.setPermissionVersion(user.getPermissionVersion());
+            
+            // Fix: Pull plan type from Tenant if available, fallback to user's plan type
+            if (user.getTenant() != null && user.getTenant().getPlanType() != null) {
+                dto.setPlanType(user.getTenant().getPlanType().name());
+            } else {
+                dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");
+            }
+            
+            dto.setEmailHeaderText(user.getTenant() != null ? user.getTenant().getEmailHeaderText() : null);
+            dto.setEmailFooterText(user.getTenant() != null ? user.getTenant().getEmailFooterText() : null);
             return dto;
         }
     }
@@ -561,6 +883,7 @@ public class UserController {
         private String displayName;
         private String role;
         private String phone;
+        private List<String> permissions;
 
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
@@ -570,6 +893,21 @@ public class UserController {
         public void setRole(String role) { this.role = role; }
         public String getPhone() { return phone; }
         public void setPhone(String phone) { this.phone = phone; }
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+    }
+
+    public static class UpdateAgentPermissionsRequest {
+        private List<String> permissions;
+        private Integer expectedVersion;
+        private String reason;
+
+        public List<String> getPermissions() { return permissions; }
+        public void setPermissions(List<String> permissions) { this.permissions = permissions; }
+        public Integer getExpectedVersion() { return expectedVersion; }
+        public void setExpectedVersion(Integer expectedVersion) { this.expectedVersion = expectedVersion; }
+        public String getReason() { return reason; }
+        public void setReason(String reason) { this.reason = reason; }
     }
 
     public static class MessageResponse {

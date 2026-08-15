@@ -53,7 +53,20 @@ public interface AppointmentRepository extends JpaRepository<Appointment, UUID> 
     @Query(value = "SELECT COUNT(a) FROM appointments a WHERE a.owner_id = :ownerId AND a.reference_number LIKE :datePrefix || '%'", nativeQuery = true)
     long countByOwnerAndDatePrefix(@Param("ownerId") UUID ownerId, @Param("datePrefix") String datePrefix);
 
-    // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
+    // ── Tenant-Wide Methods (Strictly isolated by tenantId) ──
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE a.owner.tenant.id = :tenantId ORDER BY a.appointmentDateTime ASC")
+    List<Appointment> findAllByTenantIdOrderByAppointmentDateTimeAsc(@Param("tenantId") UUID tenantId);
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE c.id = :contactId AND a.owner.tenant.id = :tenantId ORDER BY a.appointmentDateTime ASC")
+    List<Appointment> findByContactIdAndTenantIdOrderByAppointmentDateTimeAsc(@Param("contactId") UUID contactId, @Param("tenantId") UUID tenantId);
+
+    @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c WHERE a.owner.tenant.id = :tenantId AND a.appointmentDateTime BETWEEN :start AND :end AND a.status = :status")
+    List<Appointment> findByTenantIdAndAppointmentDateTimeBetweenAndStatus(
+            @Param("tenantId") UUID tenantId,
+            @Param("start") LocalDateTime start,
+            @Param("end") LocalDateTime end,
+            @Param("status") Appointment.AppointmentStatus status);
 
     @Query("SELECT a FROM Appointment a JOIN FETCH a.contact c ORDER BY a.appointmentDateTime ASC")
     List<Appointment> findAllOrderByAppointmentDateTimeAsc();

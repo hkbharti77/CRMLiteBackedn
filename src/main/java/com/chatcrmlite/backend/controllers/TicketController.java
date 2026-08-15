@@ -1,46 +1,35 @@
 package com.chatcrmlite.backend.controllers;
 
-import com.chatcrmlite.backend.models.PlatformTicket;
+import com.chatcrmlite.backend.dto.TicketDTO;
+import com.chatcrmlite.backend.dto.TicketRequest;
+import com.chatcrmlite.backend.models.Ticket;
+import com.chatcrmlite.backend.models.TicketActivity;
 import com.chatcrmlite.backend.models.User;
-import com.chatcrmlite.backend.models.PlatformTicketMessage;
-import com.chatcrmlite.backend.repositories.PlatformTicketRepository;
-import com.chatcrmlite.backend.repositories.PlatformTicketMessageRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
-import com.chatcrmlite.backend.services.EmailService;
+import com.chatcrmlite.backend.services.TicketService;
 import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/tickets")
 public class TicketController {
 
     @Autowired
-    private PlatformTicketRepository ticketRepository;
+    private TicketService ticketService;
 
     @Autowired
     private UserRepository userRepository;
-
-    @Autowired
-    private PlatformTicketMessageRepository messageRepository;
-    
-    @Autowired
-    private EmailService emailService;
-
-    @Data
-    public static class TicketCreateRequest {
-        private String title;
-        private String description;
-    }
-
-    @Data
-    public static class MessageCreateRequest {
-        private String message;
-    }
 
     private User getAuthenticatedUser() {
         String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
@@ -48,75 +37,179 @@ public class TicketController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
 
-    @PostMapping
-    public ResponseEntity<PlatformTicket> createTicket(@RequestBody TicketCreateRequest request) {
-        User user = getAuthenticatedUser();
-        
-        PlatformTicket ticket = new PlatformTicket();
-        ticket.setTenantId(user.getTenant().getId().toString());
-        ticket.setTitle(request.getTitle());
-        ticket.setDescription(request.getDescription());
-        ticket.setStatus("OPEN");
-        ticket.setSubmittedByEmail(user.getEmail());
-        
-        PlatformTicket savedTicket = ticketRepository.save(ticket);
-        
-        // Also add the original request as the first chat message
-        PlatformTicketMessage msg = new PlatformTicketMessage();
-        msg.setTicketId(savedTicket.getId());
-        msg.setSenderType("TENANT");
-        msg.setSenderEmail(user.getEmail());
-        msg.setMessage("**" + request.getTitle() + "**\n\n" + request.getDescription());
-        messageRepository.save(msg);
-        
-        try {
-            String displayName = user.getDisplayName() != null ? user.getDisplayName() : user.getEmail();
-            emailService.sendPlatformTicketCreatedNotification(
-                user.getEmail(), 
-                displayName, 
-                savedTicket.getId(), 
-                request.getTitle(), 
-                request.getDescription()
-            );
-        } catch (Exception e) {
-            // Log error but don't fail the request
-            e.printStackTrace();
-        }
-        
-        return ResponseEntity.ok(savedTicket);
-    }
-    
     @GetMapping
-    public ResponseEntity<List<PlatformTicket>> getTenantTickets() {
+    public ResponseEntity<List<TicketDTO>> getTickets(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "100") int size
+    ) {
         User user = getAuthenticatedUser();
-        List<PlatformTicket> tickets = ticketRepository.findByTenantIdOrderByCreatedAtDesc(user.getTenant().getId().toString());
-        return ResponseEntity.ok(tickets);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<TicketDTO> resultPage;
+        if (search != null && !search.trim().isEmpty()) {
+            resultPage = ticketService.searchTickets(user, search.trim(), pageable);
+        } else if (status != null && !status.trim().isEmpty() && !"ALL".equalsIgnoreCase(status)) {
+            try {
+                Ticket.TicketStatus ticketStatus = Ticket.TicketStatus.valueOf(status.toUpperCase());
+                resultPage = ticketService.getTicketsByStatus(user, ticketStatus, pageable);
+            } catch (IllegalArgumentException e) {
+                resultPage = ticketService.getAllTickets(user, pageable);
+            }
+        } else {
+            resultPage = ticketService.getAllTickets(user, pageable);
+        }
+
+        return ResponseEntity.ok(resultPage.getContent());
+    }
+
+    @GetMapping("/paged")
+    public ResponseEntity<Page<TicketDTO>> getTicketsPaged(
+            @RequestParam(required = false) String status,
+            @RequestParam(required = false) String search,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        User user = getAuthenticatedUser();
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Page<TicketDTO> resultPage;
+        if (search != null && !search.trim().isEmpty()) {
+            resultPage = ticketService.searchTickets(user, search.trim(), pageable);
+        } else if (status != null && !status.trim().isEmpty() && !"ALL".equalsIgnoreCase(status)) {
+            try {
+                Ticket.TicketStatus ticketStatus = Ticket.TicketStatus.valueOf(status.toUpperCase());
+                resultPage = ticketService.getTicketsByStatus(user, ticketStatus, pageable);
+            } catch (IllegalArgumentException e) {
+                resultPage = ticketService.getAllTickets(user, pageable);
+            }
+        } else {
+            resultPage = ticketService.getAllTickets(user, pageable);
+        }
+
+        return ResponseEntity.ok(resultPage);
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<TicketDTO> getTicket(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(ticketService.getTicket(id, user));
+    }
+
+    @PostMapping
+    public ResponseEntity<TicketDTO> createTicket(@RequestBody TicketRequest request) {
+        User user = getAuthenticatedUser();
+        if (request.getSubmitterName() == null || request.getSubmitterName().isEmpty()) {
+            request.setSubmitterName(user.getDisplayName() != null ? user.getDisplayName() : user.getEmail());
+        }
+        if (request.getSubmitterEmail() == null || request.getSubmitterEmail().isEmpty()) {
+            request.setSubmitterEmail(user.getEmail());
+        }
+        Ticket ticket = ticketService.createTicket(user, request);
+        return ResponseEntity.ok(ticketService.toDTO(ticket));
+    }
+
+    @PatchMapping("/{id}/status")
+    public ResponseEntity<TicketDTO> updateStatus(
+            @PathVariable UUID id,
+            @RequestParam(required = false) String status,
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        User user = getAuthenticatedUser();
+        String targetStatus = status;
+        if (targetStatus == null && body != null) {
+            targetStatus = body.get("status");
+        }
+        if (targetStatus == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Ticket.TicketStatus newStatus = Ticket.TicketStatus.valueOf(targetStatus.toUpperCase());
+        return ResponseEntity.ok(ticketService.updateStatus(id, newStatus, user));
+    }
+
+    @PatchMapping("/{id}/priority")
+    public ResponseEntity<TicketDTO> updatePriority(
+            @PathVariable UUID id,
+            @RequestParam(required = false) String priority,
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        User user = getAuthenticatedUser();
+        String targetPriority = priority;
+        if (targetPriority == null && body != null) {
+            targetPriority = body.get("priority");
+        }
+        if (targetPriority == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        Ticket.TicketPriority newPriority = Ticket.TicketPriority.valueOf(targetPriority.toUpperCase());
+        return ResponseEntity.ok(ticketService.updatePriority(id, newPriority, user));
+    }
+
+    @PatchMapping("/{id}/assign")
+    public ResponseEntity<TicketDTO> assignTicket(
+            @PathVariable UUID id,
+            @RequestParam(required = false) UUID agentId,
+            @RequestBody(required = false) Map<String, String> body
+    ) {
+        User user = getAuthenticatedUser();
+        UUID targetAgentId = agentId;
+        if (targetAgentId == null && body != null && body.containsKey("agentId")) {
+            targetAgentId = UUID.fromString(body.get("agentId"));
+        }
+        if (targetAgentId == null) {
+            return ResponseEntity.badRequest().build();
+        }
+        return ResponseEntity.ok(ticketService.assignTicket(id, targetAgentId, user));
+    }
+
+    @Data
+    public static class CommentRequest {
+        private String message;
+        private boolean internal = false;
+    }
+
+    @PostMapping("/{id}/comments")
+    public ResponseEntity<TicketDTO> addComment(
+            @PathVariable UUID id,
+            @RequestBody CommentRequest request
+    ) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(ticketService.addComment(id, user, request.getMessage(), request.isInternal()));
     }
 
     @GetMapping("/{id}/messages")
-    public ResponseEntity<List<PlatformTicketMessage>> getTicketMessages(@PathVariable String id) {
+    public ResponseEntity<TicketDTO> getTicketMessages(@PathVariable UUID id) {
         User user = getAuthenticatedUser();
-        PlatformTicket ticket = ticketRepository.findById(id).orElse(null);
-        if (ticket == null || !ticket.getTenantId().equals(user.getTenant().getId().toString())) {
-            return ResponseEntity.notFound().build();
-        }
-        return ResponseEntity.ok(messageRepository.findByTicketIdOrderByCreatedAtAsc(id));
+        return ResponseEntity.ok(ticketService.getTicket(id, user));
     }
 
     @PostMapping("/{id}/messages")
-    public ResponseEntity<PlatformTicketMessage> addTicketMessage(@PathVariable String id, @RequestBody MessageCreateRequest request) {
+    public ResponseEntity<TicketDTO> addTicketMessage(
+            @PathVariable UUID id,
+            @RequestBody CommentRequest request
+    ) {
         User user = getAuthenticatedUser();
-        PlatformTicket ticket = ticketRepository.findById(id).orElse(null);
-        if (ticket == null || !ticket.getTenantId().equals(user.getTenant().getId().toString())) {
-            return ResponseEntity.notFound().build();
-        }
+        return ResponseEntity.ok(ticketService.addComment(id, user, request.getMessage(), request.isInternal()));
+    }
 
-        PlatformTicketMessage msg = new PlatformTicketMessage();
-        msg.setTicketId(id);
-        msg.setSenderType("TENANT");
-        msg.setSenderEmail(user.getEmail());
-        msg.setMessage(request.getMessage());
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteTicket(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        ticketService.deleteTicket(id, user);
+        return ResponseEntity.noContent().build();
+    }
 
-        return ResponseEntity.ok(messageRepository.save(msg));
+    @GetMapping("/{id}/activities")
+    public ResponseEntity<List<TicketActivity>> getActivities(@PathVariable UUID id) {
+        User user = getAuthenticatedUser();
+        return ResponseEntity.ok(ticketService.getTicketActivities(id, user));
+    }
+
+    @GetMapping("/open-count")
+    public ResponseEntity<Map<String, Long>> getOpenCount() {
+        User user = getAuthenticatedUser();
+        long count = ticketService.countOpenTickets(user);
+        return ResponseEntity.ok(Map.of("count", count));
     }
 }

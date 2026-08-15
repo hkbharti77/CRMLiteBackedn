@@ -25,6 +25,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     @Autowired private com.chatcrmlite.backend.services.whatsapp.campaign.CampaignAnalyticsService campaignAnalyticsService;
     @Autowired private RedisStateService redisStateService;
+    @Autowired private com.chatcrmlite.backend.clients.WhatsAppClient whatsappClient;
 
     @Value("${whatsapp.async.stream.ingress}")
     private String streamName;
@@ -70,10 +71,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
 
                     java.util.UUID tenantId = whatsappConfigRepository
                             .findTenantIdByPhoneNumberId(phoneNumberId.trim())
-                            .orElseGet(() -> {
-                                log.warn("⚠️ [Worker] No matching WhatsAppConfig found for phone_number_id: {}. Attempting fallback to default tenant.", phoneNumberId);
-                                return tenantRepository.findAll().stream().findFirst().map(com.chatcrmlite.backend.models.Tenant::getId).orElse(null);
-                            });
+                            .orElse(null);
 
                     if (tenantId != null) {
                         if (!resourceManager.canConsume(tenantId, 
@@ -82,6 +80,19 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                             redisTemplate.opsForStream().acknowledge(groupName, record);
                             return;
                         }
+
+                        // 🔵 Send Blue Tick Read Receipt to WhatsApp user
+                        try {
+                            whatsappConfigRepository.findByTenantId(tenantId).ifPresent(config -> {
+                                if (config.getAccessToken() != null && !config.getAccessToken().isBlank()) {
+                                    whatsappClient.markAsRead(waMessageId, config.getAccessToken(), phoneNumberId.trim());
+                                    log.info("🔵 [BlueTick] Sent read receipt to user for waMessageId={}", waMessageId);
+                                }
+                            });
+                        } catch (Exception ex) {
+                            log.warn("⚠️ [BlueTick] Could not send read receipt: {}", ex.getMessage());
+                        }
+
                         workflowOrchestrator.startWorkflow(waMessageId, waId, tenantId, payload);
                         handedToOrchestrator = true;
                     } else {
@@ -112,22 +123,76 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
             } else if ("account_update".equals(field)) {
                 String event = value.path("event").asText("");
                 String wabaId = entry.path("id").asText("");
-                log.warn("🚨 [BSP] Account update for WABA {}: {}", wabaId, event);
-                
-                whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
-                    config.setAccountStatus(event);
-                    whatsappConfigRepository.save(config);
-                });
-            } else if ("quality_update".equals(field)) {
-                String event = value.path("event").asText("");
-                String newQuality = value.path("quality_rating").asText("");
+                String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+                log.warn("🚨 [BSP] Account update for WABA {}: event='{}'", wabaId, event);
+
+                if (!wabaId.isBlank()) {
+                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                        config.setAccountStatus(event);
+                        whatsappConfigRepository.save(config);
+                        log.info("✅ [Worker] Updated account status to '{}' for WABA {}", event, wabaId);
+                    });
+                } else if (!phoneNumberId.isBlank()) {
+                    whatsappConfigRepository.findByPhoneNumberId(phoneNumberId).ifPresent(config -> {
+                        config.setAccountStatus(event);
+                        whatsappConfigRepository.save(config);
+                        log.info("✅ [Worker] Updated account status to '{}' for PhoneNumberId {}", event, phoneNumberId);
+                    });
+                }
+            } else if ("account_alerts".equals(field)) {
+                String alertType = value.path("alert_type").asText(value.path("type").asText("GENERAL_ALERT"));
+                String severity = value.path("alert_severity").asText("WARNING");
+                String description = value.path("alert_description").asText(value.path("description").asText(""));
                 String wabaId = entry.path("id").asText("");
-                log.warn("🚨 [BSP] Quality update for WABA {}: {} -> {}", wabaId, event, newQuality);
+                log.warn("⚠️ [BSP-Alert] Meta account alert for WABA {}: severity='{}' type='{}' desc='{}'", wabaId, severity, alertType, description);
+
+                if (!wabaId.isBlank()) {
+                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                        if ("CRITICAL".equalsIgnoreCase(severity)) {
+                            config.setAccountStatus("ALERT_" + alertType);
+                            whatsappConfigRepository.save(config);
+                        }
+                    });
+                }
+            } else if ("account_review_update".equals(field)) {
+                String decision = value.path("decision").asText(value.path("event").asText(""));
+                String wabaId = entry.path("id").asText("");
+                String reason = value.path("rejection_reason").asText("");
+                log.info("⚖️ [BSP-Review] Meta account review update for WABA {}: decision='{}' reason='{}'", wabaId, decision, reason);
+
+                if (!wabaId.isBlank()) {
+                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                        if ("APPROVED".equalsIgnoreCase(decision)) {
+                            config.setAccountStatus("ACTIVE");
+                            config.setVerificationStatus("VERIFIED");
+                        } else if ("REJECTED".equalsIgnoreCase(decision)) {
+                            config.setAccountStatus("RESTRICTED");
+                        }
+                        whatsappConfigRepository.save(config);
+                        log.info("✅ [Worker] Applied review decision '{}' to WABA {}", decision, wabaId);
+                    });
+                }
+            } else if ("quality_update".equals(field) || "phone_number_quality_update".equals(field)) {
+                String event = value.path("event").asText("");
+                String newQuality = value.has("quality_rating") ? value.path("quality_rating").asText("") : value.path("new_quality_rating").asText("");
+                String currentLimit = value.path("current_limit").asText("");
+                String wabaId = entry.path("id").asText("");
+                String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+                log.warn("🚨 [BSP] Quality update event: {} | Quality: {} | Limit: {} | WABA: {}", event, newQuality, currentLimit, wabaId);
                 
-                whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
-                    config.setQualityRating(newQuality);
-                    whatsappConfigRepository.save(config);
-                });
+                if (!wabaId.isBlank()) {
+                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                        if (!newQuality.isBlank()) config.setQualityRating(newQuality);
+                        whatsappConfigRepository.save(config);
+                        log.info("✅ [Worker] Updated WhatsApp quality rating to '{}' for WABA {}", newQuality, wabaId);
+                    });
+                } else if (!phoneNumberId.isBlank()) {
+                    whatsappConfigRepository.findByPhoneNumberId(phoneNumberId).ifPresent(config -> {
+                        if (!newQuality.isBlank()) config.setQualityRating(newQuality);
+                        whatsappConfigRepository.save(config);
+                        log.info("✅ [Worker] Updated WhatsApp quality rating to '{}' for PhoneNumberId {}", newQuality, phoneNumberId);
+                    });
+                }
             } else if ("message_template_status_update".equals(field)) {
                 String templateName = value.path("message_template_name").asText("");
                 String status = value.path("event").asText("");
@@ -151,15 +216,31 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
                 });
             } else if ("phone_number_name_update".equals(field)) {
                 String newName = value.path("requested_verified_name").asText("");
-                String event = value.path("event").asText("");
+                String decision = value.has("decision") ? value.path("decision").asText("") : value.path("event").asText("");
                 String wabaId = entry.path("id").asText("");
-                log.info("ℹ️ [BSP] Phone number name update for WABA {}: {} ({})", wabaId, newName, event);
-                if ("APPROVED".equals(event)) {
-                    whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
-                        config.setVerifiedName(newName);
-                        whatsappConfigRepository.save(config);
-                    });
+                String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+                log.info("ℹ️ [BSP] Phone number name update for WABA {}: name='{}' decision='{}'", wabaId, newName, decision);
+                
+                if ("APPROVED".equalsIgnoreCase(decision)) {
+                    if (!wabaId.isBlank()) {
+                        whatsappConfigRepository.findByWabaId(wabaId).ifPresent(config -> {
+                            config.setVerifiedName(newName);
+                            whatsappConfigRepository.save(config);
+                            log.info("✅ [Worker] Updated verified name to '{}' for WABA {}", newName, wabaId);
+                        });
+                    } else if (!phoneNumberId.isBlank()) {
+                        whatsappConfigRepository.findByPhoneNumberId(phoneNumberId).ifPresent(config -> {
+                            config.setVerifiedName(newName);
+                            whatsappConfigRepository.save(config);
+                            log.info("✅ [Worker] Updated verified name to '{}' for PhoneNumberId {}", newName, phoneNumberId);
+                        });
+                    }
                 }
+            } else if ("smb_app_state_sync".equals(field)) {
+                String eventType = value.path("event_type").asText(value.path("action").asText("STATE_SYNC"));
+                String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+                String waId = value.path("wa_id").asText(value.path("chat_id").asText(""));
+                log.info("📱 [SMB-State-Sync] WhatsApp Business app state sync event: {} for waId: {}", eventType, waId);
             } else {
                 log.info("ℹ️ [BSP] Unhandled webhook field: {}", field);
             }

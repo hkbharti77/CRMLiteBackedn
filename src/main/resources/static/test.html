@@ -4,37 +4,38 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Chat Widget Test Page</title>
-    <link rel="stylesheet" href="http://localhost:8080/styles.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Playfair+Display:wght@700&family=Montserrat:wght@400;600&family=Merriweather:wght@400;700&family=Fira+Code&family=Oswald:wght@500&family=Lora&family=Quicksand:wght@500&family=Roboto&family=Poppins:wght@400;600&family=Raleway&family=Cinzel&family=Libre+Baskerville&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
         body {
             min-height: 100vh;
-            background: linear-gradient(135deg, #f0f4ff 0%, #dce8ff 100%);
-            font-family: 'Inter', sans-serif;
+            background: #f1f5f9;
+            font-family: 'Plus Jakarta Sans', 'Inter', sans-serif;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            padding: 20px;
+            padding: 24px;
+            color: #0f172a;
         }
 
         .demo-card {
-            background: rgba(255, 255, 255, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(255,255,255,0.5);
-            border-radius: 20px;
-            padding: 40px;
+            background: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 36px;
             max-width: 560px;
             width: 100%;
-            box-shadow: 0 12px 40px rgba(0,0,0,0.1);
+            box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06);
             text-align: center;
         }
 
         .demo-card h1 {
-            font-size: 24px;
-            color: #1e293b;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
             margin-bottom: 8px;
         }
 
@@ -58,33 +59,35 @@
             border-radius: 8px;
             font-size: 14px;
             outline: none;
-            font-family: 'Inter', sans-serif;
+            font-family: inherit;
         }
 
         .input-row input:focus {
-            border-color: #3b82f6;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
 
         .input-row button {
             padding: 10px 18px;
-            background: #3b82f6;
+            background: #0f172a;
             color: white;
             border: none;
             border-radius: 8px;
             cursor: pointer;
             font-size: 14px;
             font-weight: 600;
-            transition: opacity 0.2s;
+            font-family: inherit;
+            transition: background 0.15s ease;
         }
 
-        .input-row button:hover { opacity: 0.85; }
+        .input-row button:hover { background: #1e293b; }
 
         .code-block {
             background: #0f172a;
             color: #94a3b8;
             padding: 16px 20px;
             border-radius: 10px;
-            font-family: 'Fira Code', monospace;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
             font-size: 12px;
             text-align: left;
             line-height: 1.7;
@@ -93,7 +96,7 @@
         }
 
         .code-block .label {
-            color: #3b82f6;
+            color: #60a5fa;
             font-weight: 600;
             display: block;
             margin-bottom: 6px;
@@ -112,7 +115,7 @@
             padding: 4px 10px;
             font-size: 11px;
             cursor: pointer;
-            transition: background 0.2s;
+            font-family: inherit;
         }
 
         .copy-btn:hover { background: #334155; color: white; }
@@ -130,22 +133,68 @@
             border-radius: 50%;
             background: #22c55e;
             margin-right: 6px;
-            animation: pulse 1.5s infinite;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
+        body.embed-mode {
+            padding: 0;
+            margin: 0;
+            background: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        body.embed-mode .demo-card {
+            display: none !important;
+        }
+
+        body.embed-mode #crm-chat-widget {
+            position: relative !important;
+            bottom: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            z-index: 1 !important;
+        }
+
+        body.embed-mode .chat-button {
+            display: none !important;
+        }
+
+        body.embed-mode .chat-panel {
+            display: flex !important;
+            position: relative !important;
+            bottom: auto !important;
+            right: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
+            border: none !important;
+            box-shadow: none !important;
+            animation: none !important;
+        }
+
+        body.embed-mode .chat-panel.zoomed {
+            position: relative !important;
+            top: auto !important;
+            left: auto !important;
+            right: auto !important;
+            bottom: auto !important;
+            width: 100% !important;
+            height: 100vh !important;
+            max-width: 100% !important;
+            max-height: 100vh !important;
+            border-radius: 0 !important;
         }
     </style>
 </head>
 <body>
 
     <div class="demo-card">
-        <h1>🤖 Chat Widget Test Page</h1>
+        <h1>Chat Widget Preview</h1>
         <p>
-            Enter a Business UUID to load that business's niche theme and flow.<br>
-            The chat bubble will appear at the <strong>bottom-right</strong> of this page.
+            Enter a Business UUID to load that business theme and conversation flow.<br>
+            The chat launcher appears at the bottom-right of this page.
         </p>
 
         <div class="input-row">
@@ -157,8 +206,7 @@
             <span class="label"># Embed code for your website</span>
             <button class="copy-btn" onclick="copySnippet()">Copy</button>
             <code id="snippet-text">
-&lt;link rel="stylesheet" href="http://localhost:8080/styles.css"&gt;<br>
-&lt;script src="http://localhost:8080/chat-widget.js"<br>
+&lt;script src="/chat-widget.js"<br>
 &nbsp;&nbsp;data-business-id="<span class="highlight" id="snippet-id">YOUR_BUSINESS_UUID</span>"&gt;<br>
 &lt;/script&gt;
             </code>
@@ -170,14 +218,18 @@
         </p>
     </div>
 
-    <!-- Widget script — businessId injected dynamically -->
     <script id="widget-script"></script>
 
     <script>
-        // Read businessId from URL on load
+        const urlParams = new URLSearchParams(window.location.search);
+        const isEmbedMode = urlParams.get('embed') === 'true';
+
+        if (isEmbedMode) {
+            document.body.classList.add('embed-mode');
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
-            const params = new URLSearchParams(window.location.search);
-            const id = params.get('businessId') || '';
+            const id = urlParams.get('businessId') || '';
             if (id) {
                 document.getElementById('biz-id').value = id;
                 injectWidget(id);
@@ -188,37 +240,41 @@
             const id = document.getElementById('biz-id').value.trim();
             if (!id) { alert('Please enter a Business UUID'); return; }
 
-            // Update URL without reload
             const url = new URL(window.location.href);
             url.searchParams.set('businessId', id);
             window.history.replaceState({}, '', url.toString());
 
-            // Update snippet
             document.getElementById('snippet-id').textContent = id;
-
             injectWidget(id);
         }
 
         function injectWidget(businessId) {
-            // Remove existing widget if any
             const existing = document.getElementById('crm-chat-widget');
             if (existing) existing.remove();
 
-            // Remove old script tag
             const oldScript = document.getElementById('widget-script');
             if (oldScript) oldScript.remove();
 
-            // Inject fresh script with data-business-id
             const script = document.createElement('script');
             script.id = 'widget-script';
-            script.src = 'http://localhost:8080/chat-widget.js?t=' + new Date().getTime();
+            script.src = '/chat-widget.js?t=' + new Date().getTime();
             script.setAttribute('data-business-id', businessId);
+
+            if (isEmbedMode) {
+                script.onload = () => {
+                    setTimeout(() => {
+                        const chatBtn = document.querySelector('.chat-button');
+                        if (chatBtn) chatBtn.click();
+                    }, 400);
+                };
+            }
+
             document.body.appendChild(script);
         }
 
         function copySnippet() {
             const id = document.getElementById('snippet-id').textContent;
-            const text = `<link rel="stylesheet" href="http://localhost:8080/styles.css">\n<script src="http://localhost:8080/chat-widget.js" data-business-id="${id}"><\/script>`;
+            const text = `<script src="/chat-widget.js" data-business-id="${id}"><\/script>`;
             navigator.clipboard.writeText(text).then(() => {
                 const btn = document.querySelector('.copy-btn');
                 btn.textContent = 'Copied!';

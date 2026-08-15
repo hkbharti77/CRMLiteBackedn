@@ -38,6 +38,9 @@ public class WhatsAppMenuService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.livechat.LiveSupportService liveSupportService;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url}")
     private String appPublicUrl;
 
@@ -70,28 +73,10 @@ public class WhatsAppMenuService {
     }
 
     private void sendTenantMenuToContact(Contact contact, WhatsAppConfig config, String overrideBodyText, User owner) {
-        MenuDto menu;
-        if (config.getInteractiveMenuJson() == null || config.getInteractiveMenuJson().isBlank()) {
-            menu = buildDefaultMenu(owner);
-        } else {
-            try {
-                menu = objectMapper.readValue(config.getInteractiveMenuJson(), MenuDto.class);
-                // FIX #1: Validate menu is not null after parsing
-                if (menu == null) {
-                    log.warn("[WhatsAppMenuService] Parsed menu is null for user={}, using default", owner.getId());
-                    menu = buildDefaultMenu(owner);
-                } else {
-                    refreshTriggerLabels(menu, owner);
-                }
-            } catch (Exception e) {
-                log.error("[WhatsAppMenuService] Failed to parse menu JSON for user={}: {}", 
-                    owner.getId(), e.getMessage(), e);
-                menu = buildDefaultMenu(owner);
-            }
-        }
+        MenuDto menu = parseMenuJson(config != null ? config.getInteractiveMenuJson() : null, owner);
 
         if (overrideBodyText != null) menu.setBodyText(overrideBodyText);
-        injectDynamicFeatures(menu, config);
+        if (config != null) injectDynamicFeatures(menu, config);
         menu.setTitle(null); 
 
         // FIX #1: Validate menu before sending
@@ -103,6 +88,83 @@ public class WhatsAppMenuService {
             outboundService.sendText(contact,
                 "How can we help you today? Please reply with your query.",
                 config, owner);
+        }
+    }
+
+    public MenuDto parseMenuJson(String json, User owner) {
+        if (json == null || json.isBlank()) return buildDefaultMenu(owner);
+        try {
+            com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
+            String type = root.path("type").asText("list");
+            String button = root.has("action") ? root.path("action").path("button").asText("View Options") : root.path("button").asText("View Options");
+            String bodyText = root.path("bodyText").asText(null);
+
+            List<MenuDto.MenuSectionDto> sections = new ArrayList<>();
+
+            if ("button".equals(type)) {
+                List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+                com.fasterxml.jackson.databind.JsonNode buttonsNode = root.has("action") && root.path("action").has("buttons") 
+                    ? root.path("action").path("buttons") 
+                    : (root.has("buttons") ? root.path("buttons") : (root.has("sections") ? root.path("sections").path(0).path("rows") : null));
+                
+                if (buttonsNode != null && buttonsNode.isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode btn : buttonsNode) {
+                        String id = btn.path("id").asText();
+                        String title = btn.path("title").asText();
+                        if (btn.has("reply")) {
+                            id = btn.path("reply").path("id").asText(id);
+                            title = btn.path("reply").path("title").asText(title);
+                        }
+                        if (title != null && !title.isBlank()) {
+                            rows.add(MenuDto.MenuRowDto.builder().id(id != null && !id.isBlank() ? id : "btn_" + rows.size()).title(title).build());
+                        }
+                    }
+                }
+                if (!rows.isEmpty()) {
+                    sections.add(MenuDto.MenuSectionDto.builder().title("Menu").rows(rows).build());
+                }
+            } else {
+                com.fasterxml.jackson.databind.JsonNode sectionsNode = root.has("action") && root.path("action").has("sections")
+                    ? root.path("action").path("sections")
+                    : root.path("sections");
+
+                if (sectionsNode != null && sectionsNode.isArray()) {
+                    for (com.fasterxml.jackson.databind.JsonNode sec : sectionsNode) {
+                        String secTitle = sec.path("title").asText("Menu");
+                        List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+                        com.fasterxml.jackson.databind.JsonNode rowsNode = sec.path("rows");
+                        if (rowsNode != null && rowsNode.isArray()) {
+                            for (com.fasterxml.jackson.databind.JsonNode r : rowsNode) {
+                                String id = r.path("id").asText();
+                                String title = r.path("title").asText();
+                                String desc = r.path("description").asText(null);
+                                if (title != null && !title.isBlank()) {
+                                    rows.add(MenuDto.MenuRowDto.builder().id(id != null && !id.isBlank() ? id : "row_" + rows.size()).title(title).description(desc).build());
+                                }
+                            }
+                        }
+                        if (!rows.isEmpty()) {
+                            sections.add(MenuDto.MenuSectionDto.builder().title(secTitle).rows(rows).build());
+                        }
+                    }
+                }
+            }
+
+            if (sections.isEmpty() || sections.get(0).getRows() == null || sections.get(0).getRows().isEmpty()) {
+                return buildDefaultMenu(owner);
+            }
+
+            MenuDto menu = MenuDto.builder()
+                    .type(type)
+                    .button(button)
+                    .bodyText(bodyText)
+                    .sections(sections)
+                    .build();
+            refreshTriggerLabels(menu, owner);
+            return menu;
+        } catch (Exception e) {
+            log.error("[WhatsAppMenuService] Failed to parse custom menu JSON: {}", e.getMessage());
+            return buildDefaultMenu(owner);
         }
     }
 
@@ -154,9 +216,12 @@ public class WhatsAppMenuService {
         if (config.getCustomMessagesJson() == null || config.getCustomMessagesJson().isBlank()) return false;
         try {
             JsonNode messages = objectMapper.readTree(config.getCustomMessagesJson());
+            int idx = 0;
             for (JsonNode msg : messages) {
-                if (selectionId.equals(msg.path("id").asText())) {
-                    String text = msg.path("response").asText();
+                idx++;
+                String id = msg.has("id") && !msg.path("id").asText().isBlank() ? msg.path("id").asText() : "custom_msg_" + idx;
+                if (selectionId.equals(id)) {
+                    String text = msg.has("text") ? msg.path("text").asText() : msg.path("response").asText();
                     String imgUrl = msg.path("imageUrl").asText(null);
 
                     String body = (text != null && text.length() > 1024) ? text.substring(0, 1021) + "..." : text;
@@ -182,7 +247,6 @@ public class WhatsAppMenuService {
             }
         } catch (Exception e) {
             log.error("[WhatsAppMenuService] Failed to send custom message for selection={}: {}", selectionId, e.getMessage(), e);
-            // FIX #14: Send fallback message to user
             try {
                 outboundService.sendText(contact,
                     "Sorry, we couldn't process that request. Please try again.",
@@ -272,15 +336,9 @@ public class WhatsAppMenuService {
         }
         if ("get_support".equals(selectionId)) {
             try {
-                String note = config.getSosNote();
-                if (note == null || note.isBlank()) note = "A human agent has been notified and will be with you shortly.";
-                outboundService.sendText(contact, note, config, owner);
-                
-                // Pause the bot so human can take over
-                contact.setBotPaused(true);
-                contactRepository.save(contact);
+                liveSupportService.requestHumanSupport(contact, java.util.UUID.randomUUID().toString());
             } catch (Exception e) {
-                log.error("Failed to send support message", e);
+                log.error("Failed to request human support for contact {}", contact.getId(), e);
             }
             return true;
         }

@@ -8,7 +8,9 @@ import com.chatcrmlite.backend.event.LeadStatusChangedEvent;
 import com.chatcrmlite.backend.models.Lead;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.Contact;
-import com.chatcrmlite.backend.models.LeadEnquiry;
+import com.chatcrmlite.backend.models.LeadAssignment;
+import com.chatcrmlite.backend.models.AssignmentSource;
+import com.chatcrmlite.backend.repositories.LeadAssignmentRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import lombok.RequiredArgsConstructor;
@@ -35,12 +37,22 @@ public class LeadServiceImpl implements LeadService {
 
     private final LeadRepository leadRepository;
     private final ContactRepository contactRepository;
+    private final LeadAssignmentRepository leadAssignmentRepository;
     private final LeadValidator leadValidator;
     private final LeadEnquiryService leadEnquiryService;
     private final ApplicationEventPublisher eventPublisher;
     @org.springframework.context.annotation.Lazy
     @org.springframework.beans.factory.annotation.Autowired
     private LeadScoringService leadScoringService;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.EmailService emailService;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService whatsAppOutboundService;
+    
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
 
     private boolean isAdmin(User user) {
         return user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT;
@@ -56,7 +68,7 @@ public class LeadServiceImpl implements LeadService {
     private Lead findOwnedLead(UUID leadId, User owner) {
         Lead lead = leadRepository.findByIdWithOwnerAndTenant(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead not found"));
-        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+        if (lead.getOwner() == null || lead.getOwner().getTenant() == null || owner == null || owner.getTenant() == null || !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
             throw new RuntimeException("Lead not found");
         }
         return lead;
@@ -67,7 +79,7 @@ public class LeadServiceImpl implements LeadService {
     public Lead getLeadByLeadNumber(String leadNumber, User owner) {
         Lead lead = leadRepository.findByLeadNumber(leadNumber)
                 .orElseThrow(() -> new RuntimeException("Lead not found with number: " + leadNumber));
-        if (!isAdmin(owner) && !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
+        if (lead.getOwner() == null || lead.getOwner().getTenant() == null || owner == null || owner.getTenant() == null || !lead.getOwner().getTenant().getId().equals(owner.getTenant().getId())) {
             throw new RuntimeException("Lead not found");
         }
         initializeLead(lead);
@@ -193,20 +205,26 @@ public class LeadServiceImpl implements LeadService {
     }
 
     @Override
-    public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status) {
+    public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status, String search) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastActivity"));
         Page<Lead> result;
+        boolean hasSearch = search != null && !search.trim().isEmpty();
+        
         if (isAdmin(user)) {
             if (status != null) {
-                result = leadRepository.findAllByStatusPaged(status, pageable);
+                result = hasSearch ? leadRepository.findAllByStatusAndSearchPaged(status, search, pageable) 
+                                   : leadRepository.findAllByStatusPaged(status, pageable);
             } else {
-                result = leadRepository.findAllPaged(pageable);
+                result = hasSearch ? leadRepository.findAllAndSearchPaged(search, pageable)
+                                   : leadRepository.findAllPaged(pageable);
             }
         } else {
             if (status != null) {
-                result = leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+                result = hasSearch ? leadRepository.findAllByStatusAndOwnerAndSearchPaged(status, user, search, pageable)
+                                   : leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
             } else {
-                result = leadRepository.findAllByOwnerPaged(user, pageable);
+                result = hasSearch ? leadRepository.findAllByOwnerAndSearchPaged(user, search, pageable)
+                                   : leadRepository.findAllByOwnerPaged(user, pageable);
             }
         }
         initializeLeads(result);
@@ -216,7 +234,7 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @CacheEvict(value = {"leadsByContact", "latestLeadByContact", "activeLeadCount", "leadsByUser", "leadsByStatus"}, allEntries = true)
     @Transactional
-    public Lead updateStatus(UUID leadId, Lead.LeadStatus status, User owner) {
+    public Lead updateStatus(UUID leadId, Lead.LeadStatus status, java.math.BigDecimal dealValue, String lostReason, Lead.PaymentStatus paymentStatus, Boolean sendPaymentLink, String paymentMethod, String paymentLinkUrl, User owner) {
         Lead lead = findOwnedLead(leadId, owner);
         Lead.LeadStatus oldStatus = lead.getStatus();
         
@@ -225,12 +243,44 @@ public class LeadServiceImpl implements LeadService {
                 lead.getContact().getWaId(), owner.getId());
         
         lead.setStatus(status);
+        if (status == Lead.LeadStatus.WON || status == Lead.LeadStatus.CLOSED_WON) {
+            if (dealValue != null) lead.setDealValue(dealValue);
+            if (paymentStatus != null) {
+                lead.setPaymentStatus(paymentStatus);
+            } else {
+                lead.setPaymentStatus(Lead.PaymentStatus.PAID);
+            }
+        } else if (status == Lead.LeadStatus.LOST || status == Lead.LeadStatus.CLOSED_LOST) {
+            if (lostReason != null) lead.setLostReason(lostReason);
+        }
+
         lead.setLastActivity(LocalDateTime.now());
         Lead savedLead = leadRepository.save(lead);
         initializeLead(savedLead);
         
         eventPublisher.publishEvent(new LeadStatusChangedEvent(this, savedLead, oldStatus, status));
         
+        if (Boolean.TRUE.equals(sendPaymentLink) && paymentLinkUrl != null && !paymentLinkUrl.isBlank()) {
+            if ("EMAIL".equalsIgnoreCase(paymentMethod) || "BOTH".equalsIgnoreCase(paymentMethod)) {
+                String toEmail = savedLead.getContact().getEmail();
+                if (toEmail != null && !toEmail.isBlank()) {
+                    emailService.sendPaymentLinkEmail(toEmail, paymentLinkUrl, savedLead.getDealValue());
+                } else {
+                    log.warn("Cannot send email payment link, contact has no email.");
+                }
+            }
+            if ("WHATSAPP".equalsIgnoreCase(paymentMethod) || "BOTH".equalsIgnoreCase(paymentMethod)) {
+                com.chatcrmlite.backend.models.WhatsAppConfig config = whatsappConfigRepository.findByTenantId(owner.getTenant().getId()).stream().findFirst().orElse(null);
+                if (config != null) {
+                    String amountText = savedLead.getDealValue() != null ? String.format("₹%,.2f", savedLead.getDealValue()) : "the agreed amount";
+                    String message = String.format("Hi, your deal for *%s* has been approved!\n\nPlease complete your payment securely using the link below:\n%s", amountText, paymentLinkUrl);
+                    whatsAppOutboundService.sendText(savedLead.getContact(), message, config, owner);
+                } else {
+                    log.warn("Cannot send WhatsApp payment link, tenant has no WhatsApp Config.");
+                }
+            }
+        }
+
         return savedLead;
     }
 
@@ -309,5 +359,325 @@ public class LeadServiceImpl implements LeadService {
             return saved;
         }
         return lead;
+    }
+
+    // ── Notes ─────────────────────────────────────────────────────────────
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadNoteRepository leadNoteRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadAttachmentRepository leadAttachmentRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.LeadActivityRepository leadActivityRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
+    @Override
+    @Transactional
+    public com.chatcrmlite.backend.dto.LeadNoteResponseDTO addNote(UUID leadId, String content, User caller) {
+        if (content == null || content.isBlank()) {
+            throw new IllegalArgumentException("Note content cannot be empty.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+
+        com.chatcrmlite.backend.models.LeadNote note = com.chatcrmlite.backend.models.LeadNote.builder()
+                .lead(lead)
+                .author(caller)
+                .tenant(caller.getTenant())
+                .content(content.trim())
+                .createdAt(LocalDateTime.now())
+                .deleted(false)
+                .build();
+
+        com.chatcrmlite.backend.models.LeadNote saved = leadNoteRepository.save(note);
+        logActivity(lead, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.NOTE_ADDED, "{\"noteId\":\"" + saved.getId() + "\"}");
+        return com.chatcrmlite.backend.dto.LeadNoteResponseDTO.from(saved);
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadNoteResponseDTO> getNotesPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadNote> notes = leadNoteRepository.findByLeadAndTenantAndDeletedFalseOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return notes.map(com.chatcrmlite.backend.dto.LeadNoteResponseDTO::from);
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteNote(UUID leadId, UUID noteId, User caller) {
+        // Authorization: Only OWNER or ADMIN can delete notes
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized: Only Tenant Owners and Admins can delete notes.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+        com.chatcrmlite.backend.models.LeadNote note = leadNoteRepository.findByIdAndLeadAndTenantAndDeletedFalse(noteId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Note not found or already deleted"));
+
+        note.setDeleted(true);
+        note.setDeletedAt(LocalDateTime.now());
+        note.setDeletedBy(caller);
+        leadNoteRepository.save(note);
+    }
+
+    // ── Attachments ───────────────────────────────────────────────────────
+
+    private static final long MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    private static final java.util.Set<String> ALLOWED_MIME_TYPES = java.util.Set.of(
+        "application/pdf", "image/png", "image/jpeg", "image/jpg",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "application/msword"
+    );
+
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
+    @Override
+    @Transactional
+    public com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO uploadAttachment(UUID leadId, org.springframework.web.multipart.MultipartFile file, User caller) {
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("File cannot be empty.");
+        }
+        if (file.getSize() > MAX_FILE_SIZE) {
+            throw new IllegalArgumentException("File size exceeds maximum limit of 10MB.");
+        }
+
+        String mimeType = file.getContentType();
+        if (mimeType == null || !ALLOWED_MIME_TYPES.contains(mimeType.toLowerCase())) {
+            throw new IllegalArgumentException("File type not allowed. Allowed types: PDF, PNG, JPEG, DOCX.");
+        }
+
+        Lead lead = findOwnedLead(leadId, caller);
+
+        // Sanitize original filename (prevent path traversal)
+        String originalName = file.getOriginalFilename();
+        if (originalName == null) originalName = "attachment";
+        String sanitizedFilename = java.nio.file.Paths.get(originalName).getFileName().toString().replaceAll("[^a-zA-Z0-9._-]", "_");
+
+        String checksum = "";
+        try {
+            byte[] bytes = file.getBytes();
+            java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(bytes);
+            StringBuilder sb = new StringBuilder();
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            checksum = sb.toString();
+        } catch (Exception e) {
+            log.warn("Failed to compute SHA-256 checksum: {}", e.getMessage());
+        }
+
+        String storagePath;
+        com.chatcrmlite.backend.models.LeadAttachment.StorageType storageType;
+
+        if (cloudinaryStorageService != null && cloudinaryStorageService.isConfigured()) {
+            String key = cloudinaryStorageService.buildTenantKey(caller.getTenant().getId(), "leads/" + lead.getId(), sanitizedFilename);
+            try {
+                storagePath = cloudinaryStorageService.uploadFile(key, file);
+                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.CLOUDINARY;
+                log.info("Uploaded lead attachment to Cloudinary: {}", key);
+            } catch (Exception e) {
+                log.error("Failed to upload file to Cloudinary, falling back to local storage: {}", e.getMessage());
+                storagePath = saveToLocalStorage(caller.getTenant().getId().toString(), lead.getId().toString(), sanitizedFilename, file);
+                storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.LOCAL;
+            }
+        } else {
+            storagePath = saveToLocalStorage(caller.getTenant().getId().toString(), lead.getId().toString(), sanitizedFilename, file);
+            storageType = com.chatcrmlite.backend.models.LeadAttachment.StorageType.LOCAL;
+        }
+
+        com.chatcrmlite.backend.models.LeadAttachment attachment = com.chatcrmlite.backend.models.LeadAttachment.builder()
+                .lead(lead)
+                .uploader(caller)
+                .tenant(caller.getTenant())
+                .fileName(sanitizedFilename)
+                .fileSize(file.getSize())
+                .fileType(mimeType)
+                .storagePath(storagePath)
+                .storageType(storageType)
+                .checksumSha256(checksum)
+                .createdAt(LocalDateTime.now())
+                .deleted(false)
+                .build();
+
+        com.chatcrmlite.backend.models.LeadAttachment saved = leadAttachmentRepository.save(attachment);
+        logActivity(lead, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.FILE_UPLOADED, "{\"fileName\":\"" + sanitizedFilename + "\",\"storageType\":\"" + storageType + "\"}");
+        return com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO.from(saved);
+    }
+
+    private String saveToLocalStorage(String tenantId, String leadId, String sanitizedFilename, org.springframework.web.multipart.MultipartFile file) {
+        String storageDir = "uploads/leads/" + tenantId + "/" + leadId;
+        java.io.File dir = new java.io.File(storageDir);
+        if (!dir.exists()) {
+            dir.mkdirs();
+        }
+        String storedFileName = UUID.randomUUID() + "_" + sanitizedFilename;
+        java.io.File destFile = new java.io.File(dir, storedFileName);
+        try {
+            file.transferTo(destFile);
+            return destFile.getAbsolutePath();
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to store file attachment locally: " + e.getMessage());
+        }
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO> getAttachmentsPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadAttachment> attachments = leadAttachmentRepository.findByLeadAndTenantAndDeletedFalseOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return attachments.map(com.chatcrmlite.backend.dto.LeadAttachmentResponseDTO::from);
+    }
+
+    @Override
+    public com.chatcrmlite.backend.models.LeadAttachment getAttachmentEntity(UUID leadId, UUID attachmentId, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        return leadAttachmentRepository.findByIdAndLeadAndTenantAndDeletedFalse(attachmentId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Attachment not found"));
+    }
+
+    @Override
+    @Transactional
+    public void softDeleteAttachment(UUID leadId, UUID attachmentId, User caller) {
+        // Authorization: Only OWNER or ADMIN can delete attachments
+        if (caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized: Only Tenant Owners and Admins can delete attachments.");
+        }
+        Lead lead = findOwnedLead(leadId, caller);
+        com.chatcrmlite.backend.models.LeadAttachment attachment = leadAttachmentRepository.findByIdAndLeadAndTenantAndDeletedFalse(attachmentId, lead, caller.getTenant())
+                .orElseThrow(() -> new IllegalArgumentException("Attachment not found or already deleted"));
+
+        attachment.setDeleted(true);
+        attachment.setDeletedAt(LocalDateTime.now());
+        attachment.setDeletedBy(caller);
+        leadAttachmentRepository.save(attachment);
+    }
+
+    // ── Reassign & Activity ───────────────────────────────────────────────
+
+    @Override
+    @Transactional
+    public Lead reassignLeadOwner(UUID leadId, UUID newOwnerId, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        User newOwner = userRepository.findById(newOwnerId)
+                .orElseThrow(() -> new IllegalArgumentException("Target user not found"));
+
+        if (!newOwner.getTenant().getId().equals(caller.getTenant().getId())) {
+            throw new IllegalArgumentException("Cannot reassign lead to a user from another tenant.");
+        }
+
+        lead.setOwner(newOwner);
+        Lead saved = leadRepository.save(lead);
+        logActivity(saved, caller, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + (newOwner.getDisplayName() != null && !newOwner.getDisplayName().isBlank() ? newOwner.getDisplayName() : newOwner.getEmail()) + "\"}");
+        initializeLead(saved);
+        return saved;
+    }
+
+    @Override
+    public Page<com.chatcrmlite.backend.dto.LeadActivityResponseDTO> getActivitiesPaged(UUID leadId, int page, int size, User caller) {
+        Lead lead = findOwnedLead(leadId, caller);
+        Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "createdAt"));
+        Page<com.chatcrmlite.backend.models.LeadActivity> activities = leadActivityRepository.findByLeadAndTenantOrderByCreatedAtDesc(lead, caller.getTenant(), pageable);
+        return activities.map(com.chatcrmlite.backend.dto.LeadActivityResponseDTO::from);
+    }
+
+    @Override
+    @Transactional
+    public void logActivity(Lead lead, User actor, com.chatcrmlite.backend.models.LeadActivity.ActivityType type, String metadataJson) {
+        if (lead == null || actor == null || type == null) return;
+        com.chatcrmlite.backend.models.LeadActivity activity = com.chatcrmlite.backend.models.LeadActivity.builder()
+                .lead(lead)
+                .actor(actor)
+                .tenant(actor.getTenant())
+                .type(type)
+                .metadataJson(metadataJson != null ? metadataJson : "{}")
+                .createdAt(LocalDateTime.now())
+                .build();
+        leadActivityRepository.save(activity);
+    }
+
+    @Override
+    @Transactional
+    public Lead claimLead(UUID leadId, User caller) {
+        if (caller.getRole() != User.Role.AGENT && caller.getRole() != User.Role.OWNER && caller.getRole() != User.Role.ADMIN) {
+            throw new IllegalArgumentException("Unauthorized to claim lead.");
+        }
+
+        // 1. Lock the user to prevent concurrent TOCTOU race conditions when checking capacity
+        User agent = userRepository.findByIdWithPessimisticWriteLock(caller.getId())
+                .orElseThrow(() -> new IllegalArgumentException("Agent not found"));
+        
+        if (agent.getTenant() == null) {
+            throw new IllegalArgumentException("Agent has no tenant assigned.");
+        }
+
+        // 2. Check daily capacity
+        int dailyLimit = agent.getDailyLeadLimit() != null ? agent.getDailyLeadLimit() 
+                : (agent.getTenant().getDefaultDailyLeadLimit() != null ? agent.getTenant().getDefaultDailyLeadLimit() : 20);
+
+        LocalDateTime todayStart = LocalDateTime.now().with(java.time.LocalTime.MIN);
+        // Note: We could count from LeadAssignmentRepository here. 
+        // For simplicity, we just count the user's assignments today.
+        long todayCount = leadAssignmentRepository.findAll().stream() // In prod, this should be a DB count query, but for now we'll do a quick count.
+                .filter(la -> la.getAgent().getId().equals(agent.getId()) && la.getAssignedAt().isAfter(todayStart))
+                .count();
+
+        if (todayCount >= dailyLimit) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT, "Daily lead limit reached.");
+        }
+
+        // 3. Atomic Assignment Update
+        LocalDateTime now = LocalDateTime.now();
+        int rowsUpdated = leadRepository.atomicAssignLead(
+                leadId, agent.getId(), agent.getTenant().getId(), now, AssignmentSource.MANUAL.name());
+
+        if (rowsUpdated == 0) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                org.springframework.http.HttpStatus.CONFLICT, "Lead is no longer available for claiming.");
+        }
+
+        // 4. Record history
+        Lead lead = leadRepository.findById(leadId).orElseThrow();
+        LeadAssignment history = new LeadAssignment(lead, agent, now, agent, AssignmentSource.MANUAL);
+        leadAssignmentRepository.save(history);
+
+        logActivity(lead, agent, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + agent.getEmail() + "\"}");
+        
+        initializeLead(lead);
+        return lead;
+    }
+
+    @Override
+    @Transactional
+    public void autoAssignLead(UUID leadId, com.chatcrmlite.backend.models.Tenant tenant) {
+        Lead lead = leadRepository.findById(leadId).orElse(null);
+        if (lead == null) return;
+        
+        int defaultLimit = tenant.getDefaultDailyLeadLimit() != null ? tenant.getDefaultDailyLeadLimit() : 20;
+        LocalDateTime todayStart = LocalDateTime.now().with(java.time.LocalTime.MIN);
+        
+        java.util.Optional<UUID> bestAgentIdOpt = leadRepository.findBestEligibleAgentForTenant(tenant.getId(), defaultLimit, todayStart);
+        
+        if (bestAgentIdOpt.isPresent()) {
+            User agent = userRepository.findById(bestAgentIdOpt.get()).orElseThrow();
+            
+            LocalDateTime now = LocalDateTime.now();
+            int rowsUpdated = leadRepository.atomicAssignLead(
+                    leadId, agent.getId(), tenant.getId(), now, AssignmentSource.AUTO.name());
+
+            if (rowsUpdated == 1) {
+                LeadAssignment history = new LeadAssignment(lead, agent, now, null, AssignmentSource.AUTO);
+                leadAssignmentRepository.save(history);
+                
+                logActivity(lead, agent, com.chatcrmlite.backend.models.LeadActivity.ActivityType.LEAD_REASSIGNED, "{\"newOwner\":\"" + agent.getEmail() + "\",\"source\":\"AUTO\"}");
+            }
+        } else {
+            // No eligible agents found. Mark as LIMIT_REACHED
+            lead.setAssignmentStatus(com.chatcrmlite.backend.models.LeadAssignmentStatus.LIMIT_REACHED);
+            leadRepository.save(lead);
+        }
     }
 }

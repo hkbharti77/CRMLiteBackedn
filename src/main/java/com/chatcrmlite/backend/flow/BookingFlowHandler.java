@@ -1,7 +1,9 @@
 package com.chatcrmlite.backend.flow;
 
 import com.chatcrmlite.backend.models.Booking;
+import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.ConversationState.FlowType;
+import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.services.BookingService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +27,7 @@ import java.util.Map;
 public class BookingFlowHandler implements FlowHandler {
 
     private final BookingService bookingService;
+    private final ContactRepository contactRepository;
 
     @Override
     public boolean supports(FlowType flowType) {
@@ -35,6 +38,28 @@ public class BookingFlowHandler implements FlowHandler {
     public FlowResponse handle(FlowContext context) {
         try {
             Map<String, String> data = context.getCollectedData();
+            Contact contact = context.getContact();
+
+            // Update contact information if captured in flow and not already present
+            String capturedName = data.get("name");
+            if (capturedName != null && !capturedName.isBlank()) {
+                if (contact.getName() == null || contact.getName().startsWith("WhatsApp User")) {
+                    contact.setName(capturedName.trim());
+                    contactRepository.save(contact);
+                    log.info("[BookingFlowHandler] Updated contact name to '{}' for waId={}", 
+                            capturedName, contact.getWaId());
+                }
+            }
+            
+            String capturedEmail = data.get("email");
+            if (capturedEmail != null && !capturedEmail.isBlank()) {
+                if (contact.getEmail() == null || contact.getEmail().isBlank()) {
+                    contact.setEmail(capturedEmail.trim());
+                    contactRepository.save(contact);
+                    log.info("[BookingFlowHandler] Updated contact email to '{}' for waId={}", 
+                            capturedEmail, contact.getWaId());
+                }
+            }
 
             // Extract service name — covers all niche-specific booking keys
             String service = data.getOrDefault("service",

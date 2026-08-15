@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -7,7 +8,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "whatsapp_campaign_recipients", uniqueConstraints = {
-    @UniqueConstraint(name = "uk_camp_contact", columnNames = {"campaign_id", "contact_id"})
+    @UniqueConstraint(name = "uk_camp_phone", columnNames = {"campaign_id", "phone_number"})
 }, indexes = {
     @Index(name = "idx_wa_cr_tenant", columnList = "tenant_id"),
     @Index(name = "idx_wa_cr_camp", columnList = "campaign_id"),
@@ -19,6 +20,7 @@ import java.util.UUID;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
+@JsonIgnoreProperties({"hibernateLazyInitializer", "handler"})
 public class WhatsAppCampaignRecipient extends BaseTenantEntity {
 
     public enum RecipientStatus {
@@ -35,12 +37,15 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "campaign_id", nullable = false)
     private WhatsAppCampaign campaign;
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "contact_id", nullable = false)
+    @JoinColumn(name = "contact_id", nullable = true, foreignKey = @ForeignKey(name = "fk_wa_camp_recip_contact"))
+    @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.SET_NULL)
     private Contact contact;
 
     @Column(nullable = false)
@@ -60,7 +65,14 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
     @Builder.Default
     private Integer retryCount = 0;
 
+    @Builder.Default
+    private Integer attemptCount = 0;
+
     private String errorMessage;
+
+    private LocalDateTime availableAt;
+    private LocalDateTime nextAttemptAt;
+    private String idempotencyKey;
 
     private LocalDateTime sentAt;
     private LocalDateTime deliveredAt;
@@ -78,6 +90,12 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
         }
         if (retryCount == null) {
             retryCount = 0;
+        }
+        if (attemptCount == null) {
+            attemptCount = 0;
+        }
+        if (availableAt == null) {
+            availableAt = LocalDateTime.now();
         }
     }
 }
