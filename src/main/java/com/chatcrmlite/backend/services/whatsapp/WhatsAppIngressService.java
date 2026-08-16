@@ -44,7 +44,8 @@ public class WhatsAppIngressService {
     @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.team.AgentAssignmentService agentAssignmentService;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowSubmissionRepository flowSubmissionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowOutboxEventRepository flowOutboxEventRepository;
-    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.WhatsAppFlowRepository whatsAppFlowRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
 
     @Transactional
     public void resolveAndSaveIngress(ProcessingContext context) {
@@ -56,7 +57,22 @@ public class WhatsAppIngressService {
             
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + context.getTenantId()));
-            User owner = config.getUser();
+            
+            com.chatcrmlite.backend.models.Tenant tenant = config.getTenant();
+            if (tenant == null && tenantRepository != null && context.getTenantId() != null) {
+                tenant = tenantRepository.findById(context.getTenantId()).orElse(null);
+            }
+            
+            User owner = null;
+            if (tenant != null && userRepository != null) {
+                java.util.List<User> users = userRepository.findAllByTenant(tenant);
+                if (!users.isEmpty()) {
+                    owner = users.stream()
+                            .filter(u -> u.getRole() == User.Role.OWNER || u.getRole() == User.Role.ADMIN)
+                            .findFirst()
+                            .orElse(users.get(0));
+                }
+            }
 
             // Idempotency check
             if (!idempotencyService.markAsProcessing(context.getMessageId(), context.getTenantId())) {
@@ -137,7 +153,9 @@ public class WhatsAppIngressService {
                             .rawResponseJson(flowResponseJson)
                             .processingStatus(com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.RECEIVED)
                             .build();
-                    if (owner != null && owner.getTenant() != null) {
+                    if (tenant != null) {
+                        submission.setTenant(tenant);
+                    } else if (owner != null && owner.getTenant() != null) {
                         submission.setTenant(owner.getTenant());
                     }
                     submission = flowSubmissionRepository.save(submission);
@@ -149,11 +167,14 @@ public class WhatsAppIngressService {
                             .payloadJson(flowResponseJson)
                             .status(com.chatcrmlite.backend.models.flows.OutboxStatus.PENDING)
                             .build();
-                    if (owner != null && owner.getTenant() != null) {
+                    if (tenant != null) {
+                        outboxEvent.setTenant(tenant);
+                    } else if (owner != null && owner.getTenant() != null) {
                         outboxEvent.setTenant(owner.getTenant());
                     }
                     flowOutboxEventRepository.save(outboxEvent);
-                    log.info("📥 [Flow-Ingress] Created FlowSubmission {} and FlowOutboxEvent {} in single ACID transaction", submission.getId(), outboxEvent.getId());
+                    log.info("📥 [Flow-Ingress] Created FlowSubmission {} and FlowOutboxEvent {} in single ACID transaction (Tenant: {})", 
+                            submission.getId(), outboxEvent.getId(), tenant != null ? tenant.getId() : "null");
                 } catch (Exception ex) {
                     log.warn("⚠️ [Flow-Ingress] Error writing FlowSubmission / FlowOutboxEvent: {}", ex.getMessage());
                 }

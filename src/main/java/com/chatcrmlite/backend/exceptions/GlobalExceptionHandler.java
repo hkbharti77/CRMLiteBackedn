@@ -34,6 +34,20 @@ import org.slf4j.LoggerFactory;
 public class GlobalExceptionHandler {
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    // ── Entitlement & Permissions ─────────────────────────────────────────────
+    @ExceptionHandler(com.chatcrmlite.backend.security.EntitlementDeniedException.class)
+    public ResponseEntity<Map<String, Object>> handleEntitlementDenied(
+            com.chatcrmlite.backend.security.EntitlementDeniedException ex) {
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("timestamp", Instant.now().toString());
+        body.put("status", HttpStatus.FORBIDDEN.value());
+        body.put("error", "Forbidden");
+        body.put("code", ex.getCode());
+        body.put("feature", ex.getFeature());
+        body.put("message", ex.getMessage());
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(body);
+    }
+
     // ── Public flow widget ────────────────────────────────────────────────────
 
     @ExceptionHandler(PublicFlowController.BusinessNotFoundException.class)

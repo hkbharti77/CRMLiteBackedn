@@ -93,7 +93,7 @@ class WhatsAppOutboundServiceTest {
         assertSame(contact, persisted.getContact());
         assertSame(owner, persisted.getOwner());
         assertNotNull(persisted.getTimestamp());
-        verify(distributedWebSocketPublisher).publishMessage(eq(owner.getId()), any());
+        verify(distributedWebSocketPublisher).publishMessage(eq(owner.getTenant().getId()), any());
     }
 
     @Test

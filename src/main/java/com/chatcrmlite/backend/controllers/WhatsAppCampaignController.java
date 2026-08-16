@@ -37,6 +37,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 
 @RestController
 @RequestMapping("/api/v1/whatsapp/campaigns")
+@com.chatcrmlite.backend.security.RequiresPage("PAGE_BROADCASTS")
 @PreAuthorize("@perm.has(authentication, 'MODULE_CAMPAIGNS')")
 @RequiredArgsConstructor
 public class WhatsAppCampaignController {

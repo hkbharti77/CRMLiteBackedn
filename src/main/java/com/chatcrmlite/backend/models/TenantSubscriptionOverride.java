@@ -38,6 +38,30 @@ public class TenantSubscriptionOverride extends BaseTenantEntity {
     private LocalDateTime effectiveFrom;
     private LocalDateTime effectiveUntil;
 
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "tenant_page_overrides", joinColumns = @JoinColumn(name = "override_id"))
+    @MapKeyColumn(name = "page_key", length = 64)
+    @Column(name = "action", length = 16)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private java.util.Map<String, com.chatcrmlite.backend.models.entitlements.OverrideAction> pageOverrides = new java.util.HashMap<>();
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "tenant_setting_overrides", joinColumns = @JoinColumn(name = "override_id"))
+    @MapKeyColumn(name = "setting_key", length = 64)
+    @Column(name = "action", length = 16)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private java.util.Map<String, com.chatcrmlite.backend.models.entitlements.OverrideAction> settingOverrides = new java.util.HashMap<>();
+
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "tenant_service_overrides", joinColumns = @JoinColumn(name = "override_id"))
+    @MapKeyColumn(name = "service_key", length = 64)
+    @Column(name = "action", length = 16)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private java.util.Map<String, com.chatcrmlite.backend.models.entitlements.OverrideAction> serviceOverrides = new java.util.HashMap<>();
+
     @Version
     @Column(name = "entity_version", nullable = false)
     @Builder.Default

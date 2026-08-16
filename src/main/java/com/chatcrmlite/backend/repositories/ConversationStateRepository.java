@@ -12,6 +12,8 @@ import java.util.UUID;
 
 public interface ConversationStateRepository extends JpaRepository<ConversationState, UUID> {
 
+    Optional<ConversationState> findByContact(Contact contact);
+
     @Query("SELECT c FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != 'CLOSED'")
     Optional<ConversationState> findActiveByContact(Contact contact);
 

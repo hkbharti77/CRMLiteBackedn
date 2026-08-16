@@ -36,6 +36,9 @@ class WhatsAppFlowHandlerTest {
     @Mock
     private WhatsAppOutboundService outboundService;
 
+    @Mock
+    private WhatsAppMenuService whatsappMenuService;
+
     private WhatsAppFlowHandler flowHandler;
     private User owner;
     private Contact contact;
@@ -47,7 +50,8 @@ class WhatsAppFlowHandlerTest {
                 contactRepository,
                 flowStateMachine,
                 new ObjectMapper(),
-                outboundService
+                outboundService,
+                whatsappMenuService
         );
 
         Tenant tenant = Tenant.builder()
@@ -74,7 +78,7 @@ class WhatsAppFlowHandlerTest {
                 .phoneNumberId("phone-id")
                 .build();
         when(whatsappConfigRepository.findByTenantId(owner.getId())).thenReturn(Optional.of(config));
-        when(contactRepository.findByWaIdAndOwner("919900000000", owner)).thenReturn(Optional.of(contact));
+        when(contactRepository.findByWaIdAndTenant_Id("919900000000", owner.getId())).thenReturn(Optional.of(contact));
         when(flowStateMachine.processFlow(contact, owner, "Need a website", null, false)).thenReturn(true);
 
         ProcessingContext context = ProcessingContext.builder()
@@ -89,6 +93,64 @@ class WhatsAppFlowHandlerTest {
         flowHandler.executeFlowLogic(context);
 
         assertEquals("FLOW_CONSUMED", context.getMetadata().get("responseType"));
+    }
+
+    @Test
+    void testCancelFlowUsesConfiguredCtaMenu() {
+        String cancelJson = "{\"enabled\":true,\"message\":\"🛑 Terminated.\",\"buttons\":[{\"id\":\"btn_1\",\"label\":\"Enquire\",\"linkType\":\"lead\"}]}";
+        WhatsAppConfig config = WhatsAppConfig.builder()
+                .user(owner)
+                .flowCancelMenuJson(cancelJson)
+                .accessToken("token")
+                .phoneNumberId("phone-id")
+                .build();
+        when(whatsappConfigRepository.findByTenantId(owner.getId())).thenReturn(Optional.of(config));
+        when(contactRepository.findByWaIdAndTenant_Id("919900000000", owner.getId())).thenReturn(Optional.of(contact));
+
+        com.chatcrmlite.backend.dto.MenuDto expectedMenu = com.chatcrmlite.backend.dto.MenuDto.builder()
+                .type("button")
+                .bodyText("🛑 Terminated.")
+                .sections(java.util.List.of(com.chatcrmlite.backend.dto.MenuDto.MenuSectionDto.builder()
+                        .rows(java.util.List.of(com.chatcrmlite.backend.dto.MenuDto.MenuRowDto.builder().id("trigger_flow_lead").title("Enquire").build()))
+                        .build()))
+                .build();
+        when(whatsappMenuService.parseCtaMenuJson(cancelJson, "🛑 Your form has been cancelled.\n\nHow else may we help you today?"))
+                .thenReturn(expectedMenu);
+
+        ProcessingContext context = ProcessingContext.builder()
+                .messageId("wamid.cancel")
+                .waId("919900000000")
+                .tenantId(owner.getId())
+                .payload("""
+                        {
+                          "entry": [
+                            {
+                              "changes": [
+                                {
+                                  "value": {
+                                    "messages": [
+                                      {
+                                        "from": "919900000000",
+                                        "id": "wamid.cancel",
+                                        "type": "text",
+                                        "text": { "body": "cancel" }
+                                      }
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          ]
+                        }
+                        """)
+                .build();
+        context.getMetadata().put("text", "cancel");
+        context.getMetadata().put("type", "text");
+
+        flowHandler.executeFlowLogic(context);
+
+        assertEquals("NONE", context.getMetadata().get("responseType"));
+        org.mockito.Mockito.verify(outboundService).sendInteractiveMenu(contact, expectedMenu, null, config, owner);
     }
 
     private String textPayload() {

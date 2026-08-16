@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
   <meta name="color-scheme" content="light dark"/>
   <meta name="supported-color-schemes" content="light dark"/>
-  <title th:text="${heading ?: 'We Received Your Enquiry'}">Enquiry Received</title>
+  <title th:text="${heading ?: 'Thank You for Connecting with GyanVani AI'}">Thank You for Connecting with GyanVani AI</title>
 </head>
 <body style="margin:0;padding:0;background-color:#F8FAFC;">
 
 <div th:replace="~{email/base :: header(
-      heading  = ${heading},
-      greeting = ${greeting}, 
-      intro    = ${intro})}">
+      heading  = ${heading ?: 'Thank You for Reaching Out!'},
+      greeting = ${greeting ?: 'Hi there,'}, 
+      intro    = ${intro ?: 'We have received your enquiry. Our AI solutions team is reviewing your requirements and will connect with you shortly.'})}">
 </div>
 
 <table class="body-bg" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="background-color:#F8FAFC;margin:0;padding:0 12px;">
@@ -25,16 +25,90 @@
       <![endif]-->
       <table class="card-bg fluid-container" width="100%" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;margin:0 auto;background-color:#FFFFFF;border-left:1px solid #E2E8F0;border-right:1px solid #E2E8F0;">
         <tr>
-          <td class="content-padding" style="padding:0 32px 24px;">
+          <td class="content-padding" style="padding:0 32px 28px;">
 
-            <!-- ── SUBMITTED ENQUIRY CARD ──────────────────────────────────── -->
-            <div class="card-subtle" style="background-color:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:20px;margin:0 0 16px;">
-              <p class="text-main" style="margin:0 0 10px;color:#0F172A;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;">
-                💬 Your Submitted Message
+            <!-- ── GREETING & CONFIRMATION MESSAGE ────────────────────────────── -->
+            <div style="background: linear-gradient(135deg, #EFF6FF 0%, #F0FDF4 100%); border: 1px solid #BFDBFE; border-radius: 12px; padding: 22px; margin-bottom: 24px; text-align: center;">
+              <p style="margin: 0 0 8px; font-size: 16px; font-weight: 700; color: #1E3A8A;">
+                🚀 Transforming Your Business with Next-Gen AI
               </p>
-              <div class="card-bg" style="background-color:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:16px;color:#334155;font-size:14px;line-height:1.6;" th:text="${enquiryMessage}">
-                Enquiry message text submitted by customer...
-              </div>
+              <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.6;">
+                At <strong style="color: #2563EB;">GyanVani AI</strong>, we build intelligent AI Agents and WhatsApp CRM Automations designed to scale your sales, automate customer support, and capture high-intent leads 24/7.
+              </p>
+            </div>
+
+            <!-- ── FEATURED SERVICES SECTION ───────────────────────────────────── -->
+            <div style="margin-bottom: 24px;">
+              <p class="text-main" style="margin: 0 0 16px; color: #0F172A; font-size: 14px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; text-align: center;">
+                ✨ What We Offer at GyanVani AI
+              </p>
+
+              <!-- Service Item 1: AI Chatbots & Agents -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 12px; background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <tr>
+                  <td width="40" valign="top" style="font-size: 24px; line-height: 1; padding-right: 12px;">🤖</td>
+                  <td>
+                    <strong style="color: #0F172A; font-size: 14px; display: block; margin-bottom: 3px;">Autonomous AI Agents</strong>
+                    <span style="color: #64748B; font-size: 13px; line-height: 1.5; display: block;">
+                      24/7 smart customer conversations, instant FAQ answers, and seamless human agent takeover.
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Service Item 2: WhatsApp CRM & Flows -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 12px; background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <tr>
+                  <td width="40" valign="top" style="font-size: 24px; line-height: 1; padding-right: 12px;">📲</td>
+                  <td>
+                    <strong style="color: #0F172A; font-size: 14px; display: block; margin-bottom: 3px;">WhatsApp Native Flows & CRM</strong>
+                    <span style="color: #64748B; font-size: 13px; line-height: 1.5; display: block;">
+                      In-chat interactive forms, instant booking flows, catalog orders, and targeted campaign broadcasts.
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Service Item 3: RAG Knowledge Base -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 12px; background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <tr>
+                  <td width="40" valign="top" style="font-size: 24px; line-height: 1; padding-right: 12px;">🧠</td>
+                  <td>
+                    <strong style="color: #0F172A; font-size: 14px; display: block; margin-bottom: 3px;">Custom Knowledge Base & RAG</strong>
+                    <span style="color: #64748B; font-size: 13px; line-height: 1.5; display: block;">
+                      AI trained securely on your company documents, PDFs, and website data with zero hallucination.
+                    </span>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Service Item 4: Lead Automation -->
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 8px; background-color: #F8FAFC; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px 16px;">
+                <tr>
+                  <td width="40" valign="top" style="font-size: 24px; line-height: 1; padding-right: 12px;">⚡</td>
+                  <td>
+                    <strong style="color: #0F172A; font-size: 14px; display: block; margin-bottom: 3px;">Smart Lead Pipeline & Scoring</strong>
+                    <span style="color: #64748B; font-size: 13px; line-height: 1.5; display: block;">
+                      Automated lead qualification, auto-agent assignment, SLA tracking, and real-time notifications.
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </div>
+
+            <!-- ── ACTION CTA BUTTON ─────────────────────────────────────────── -->
+            <div style="text-align: center; margin: 28px 0 12px;">
+              <a th:href="${ctaUrl ?: 'https://gyanvaniai.online'}" target="_blank"
+                 style="display: inline-block; background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%); color: #FFFFFF; font-size: 15px; font-weight: 700; text-decoration: none; padding: 14px 32px; border-radius: 8px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                🌐 Explore GyanVani AI Platform →
+              </a>
+            </div>
+
+            <!-- ── SIGNATURE ────────────────────────────────────────────────── -->
+            <div style="text-align: center; margin-top: 24px; border-top: 1px solid #F1F5F9; padding-top: 18px;">
+              <p style="margin: 0; font-size: 13px; color: #64748B;">
+                Need urgent assistance? Reach us at <a href="mailto:contact@gyanvaniai.online" style="color: #2563EB; font-weight: 600; text-decoration: none;">contact@gyanvaniai.online</a>
+              </p>
             </div>
 
           </td>
@@ -50,9 +124,9 @@
 </table>
 
 <div th:replace="~{email/base :: footer(
-      footerNote = ${footerNote},
-      ctaLabel   = ${ctaLabel},
-      ctaUrl     = ${ctaUrl})}">
+      footerNote = ${footerNote ?: 'Empowering businesses with AI automation and smart customer engagement.'},
+      ctaLabel   = null,
+      ctaUrl     = null)}">
 </div>
 
 </body>
