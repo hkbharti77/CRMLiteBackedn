@@ -68,6 +68,7 @@ public class ConversationEventStore {
         @Column(nullable = false)
         private String eventType;
         
+        @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
         @Column(columnDefinition = "jsonb", nullable = false)
         private String payload;
     }

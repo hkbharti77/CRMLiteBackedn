@@ -35,6 +35,7 @@ public class AiAuditLog {
     private long latencyMs;
     private double confidenceScore;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String decisionTrace; // e.g. {"sources": ["doc_123", "kb_456"], "reasoning": "..."}
 
