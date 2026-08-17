@@ -12,6 +12,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/v1/knowledge-base")
+@com.chatcrmlite.backend.security.RequiresPage("PAGE_KNOWLEDGE_BASE")
 public class KnowledgeBaseController {
 
     @Autowired

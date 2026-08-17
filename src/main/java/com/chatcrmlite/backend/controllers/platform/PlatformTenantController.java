@@ -30,15 +30,18 @@ public class PlatformTenantController {
     private final UserRepository userRepository;
     private final TenantSubscriptionRepository subscriptionRepository;
     private final PlatformAuditService auditService;
+    private final com.chatcrmlite.backend.services.platform.PlatformTenantProfileService profileService;
 
     public PlatformTenantController(TenantRepository tenantRepository,
                                     UserRepository userRepository,
                                     TenantSubscriptionRepository subscriptionRepository,
-                                    PlatformAuditService auditService) {
+                                    PlatformAuditService auditService,
+                                    com.chatcrmlite.backend.services.platform.PlatformTenantProfileService profileService) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
         this.subscriptionRepository = subscriptionRepository;
         this.auditService = auditService;
+        this.profileService = profileService;
     }
 
     /** Paginated + searchable tenant list. */
@@ -90,6 +93,37 @@ public class PlatformTenantController {
             "totalPages", (int) Math.ceil((double) total / size),
             "hasNext", end < total
         ));
+    }
+
+    /** Comprehensive 360° Tenant Profile Summary */
+    @GetMapping("/{id}/profile")
+    public ResponseEntity<com.chatcrmlite.backend.dtos.platform.TenantProfileSummaryDto> getTenantProfile(
+            @PathVariable UUID id, HttpServletRequest request) {
+        auditService.record("VIEWED_TENANT_PROFILE", "SUCCESS", "Tenant", id.toString(), "{}", request);
+        return ResponseEntity.ok(profileService.getTenantProfileSummary(id));
+    }
+
+    /** Timezone-Aware Multi-Channel Usage Analytics */
+    @GetMapping("/{id}/analytics")
+    public ResponseEntity<com.chatcrmlite.backend.dtos.platform.TenantMultiChannelAnalyticsDto> getTenantAnalytics(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "CURRENT_MONTH") String range,
+            HttpServletRequest request) {
+        auditService.record("VIEWED_TENANT_ANALYTICS", "SUCCESS", "Tenant", id.toString(), "{\"range\":\"" + range + "\"}", request);
+        return ResponseEntity.ok(profileService.getTenantAnalytics(id, range));
+    }
+
+    /** Paginated & Filterable Team Member Roster */
+    @GetMapping("/{id}/members")
+    public ResponseEntity<com.chatcrmlite.backend.dtos.platform.TenantMemberRosterDto> getTenantMembers(
+            @PathVariable UUID id,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "ALL") String role,
+            @RequestParam(required = false) String search,
+            HttpServletRequest request) {
+        auditService.record("VIEWED_TENANT_MEMBERS", "SUCCESS", "Tenant", id.toString(), "{\"page\":" + page + ",\"role\":\"" + role + "\"}", request);
+        return ResponseEntity.ok(profileService.getTenantMembers(id, page, size, role, search));
     }
 
     /** Full tenant detail. */

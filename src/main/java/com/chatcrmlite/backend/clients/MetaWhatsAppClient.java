@@ -163,13 +163,14 @@ public class MetaWhatsAppClient implements WhatsAppClient {
                 MenuDto.MenuSectionDto sec = menu.getSections().get(0);
                 if (sec.getRows() != null) {
                     for (MenuDto.MenuRowDto row : sec.getRows()) {
+                        if (row == null) continue;
                         Map<String, Object> btnMap = new HashMap<>();
                         btnMap.put("type", "reply");
                         Map<String, Object> replyMap = new HashMap<>();
-                        replyMap.put("id", row.getId());
+                        replyMap.put("id", row.getId() != null ? row.getId() : "btn_" + buttonsBody.size());
                         // WhatsApp button title: max 20 chars
-                        String title = row.getTitle();
-                        if (title != null && title.length() > 20) {
+                        String title = row.getTitle() != null ? row.getTitle() : "Option";
+                        if (title.length() > 20) {
                             title = title.substring(0, 20);
                         }
                         replyMap.put("title", title);
@@ -178,6 +179,10 @@ public class MetaWhatsAppClient implements WhatsAppClient {
                     }
                 }
             }
+            if (buttonsBody.isEmpty()) {
+                log.warn("[MetaWhatsAppClient] Interactive button menu has 0 buttons for to={}. Falling back to plain text.", to);
+                return sendMessage(to, bodyText, accessToken, phoneNumberId);
+            }
             action.put("buttons", buttonsBody);
         } else {
             action.put("button",
@@ -185,24 +190,32 @@ public class MetaWhatsAppClient implements WhatsAppClient {
             List<Map<String, Object>> sectionsBody = new ArrayList<>();
             if (menu.getSections() != null) {
                 for (MenuDto.MenuSectionDto sec : menu.getSections()) {
+                    if (sec == null) continue;
                     Map<String, Object> sectionMap = new HashMap<>();
-                    sectionMap.put("title", sec.getTitle());
+                    sectionMap.put("title", sec.getTitle() != null && !sec.getTitle().isBlank() ? sec.getTitle() : "Options");
 
                     List<Map<String, Object>> rowsBody = new ArrayList<>();
                     if (sec.getRows() != null) {
                         for (MenuDto.MenuRowDto row : sec.getRows()) {
+                            if (row == null) continue;
                             Map<String, Object> rowMap = new HashMap<>();
-                            rowMap.put("id", row.getId());
-                            rowMap.put("title", row.getTitle());
+                            rowMap.put("id", row.getId() != null ? row.getId() : "row_" + rowsBody.size());
+                            rowMap.put("title", row.getTitle() != null && !row.getTitle().isBlank() ? row.getTitle() : "Option");
                             if (row.getDescription() != null && !row.getDescription().trim().isEmpty()) {
                                 rowMap.put("description", row.getDescription());
                             }
                             rowsBody.add(rowMap);
                         }
                     }
-                    sectionMap.put("rows", rowsBody);
-                    sectionsBody.add(sectionMap);
+                    if (!rowsBody.isEmpty()) {
+                        sectionMap.put("rows", rowsBody);
+                        sectionsBody.add(sectionMap);
+                    }
                 }
+            }
+            if (sectionsBody.isEmpty()) {
+                log.warn("[MetaWhatsAppClient] Interactive list menu has 0 sections for to={}. Falling back to plain text.", to);
+                return sendMessage(to, bodyText, accessToken, phoneNumberId);
             }
             action.put("sections", sectionsBody);
         }

@@ -24,6 +24,7 @@ public class WhatsAppFlowHandler {
     private final FlowStateMachine flowStateMachine;
     private final ObjectMapper objectMapper;
     private final WhatsAppOutboundService outboundService;
+    private final WhatsAppMenuService whatsappMenuService;
 
     @Transactional
     public void executeFlowLogic(ProcessingContext context) {
@@ -57,30 +58,45 @@ public class WhatsAppFlowHandler {
             boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
             boolean isCancel = lower.matches("^(cancel|stop|exit|quit|terminate)$") || "cancel_flow".equals(selectionId);
 
-            if (hasActiveFlow) {
-                if (isCancel) {
-                    flowStateMachine.resetFlow(contact);
-                    context.getMetadata().put("responseType", "NONE");
-                    log.info("🛑 User cancelled the active flow.");
-                    
-                    if (config.getFlowCancelMenuJson() != null && !config.getFlowCancelMenuJson().isBlank()) {
-                        try {
-                            com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
-                                    config.getFlowCancelMenuJson(), com.chatcrmlite.backend.dto.MenuDto.class);
-                            outboundService.sendInteractiveMenu(contact, menu, "🛑 Your form has been terminated.", config, owner);
-                        } catch (Exception e) {
-                            log.warn("Failed to parse configured cancel menu, falling back to text", e);
-                            outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
-                        }
-                    } else {
-                        outboundService.sendText(contact, "🛑 Your form has been terminated.", config, owner);
-                    }
-                    return;
+            if (isCancel) {
+                flowStateMachine.resetFlow(contact);
+                context.getMetadata().put("responseType", "NONE");
+                log.info("🛑 User cancelled the flow.");
+                
+                com.chatcrmlite.backend.dto.MenuDto cancelMenu = null;
+                if (config.getFlowCancelMenuJson() != null && !config.getFlowCancelMenuJson().isBlank()) {
+                    cancelMenu = whatsappMenuService.parseCtaMenuJson(
+                            config.getFlowCancelMenuJson(), "🛑 Your form has been cancelled.\n\nHow else may we help you today?");
                 }
+
+                if (cancelMenu == null) {
+                    cancelMenu = com.chatcrmlite.backend.dto.MenuDto.builder()
+                            .type("button")
+                            .bodyText("🛑 Your form has been cancelled.\n\nHow else may we help you today?")
+                            .sections(java.util.List.of(
+                                    com.chatcrmlite.backend.dto.MenuDto.MenuSectionDto.builder()
+                                            .title("Options")
+                                            .rows(java.util.List.of(
+                                                    com.chatcrmlite.backend.dto.MenuDto.MenuRowDto.builder().id("menu").title("📋 Main Menu").build(),
+                                                    com.chatcrmlite.backend.dto.MenuDto.MenuRowDto.builder().id("trigger_flow_lead").title("🔄 Restart Form").build()
+                                            )).build()
+                            )).build();
+                }
+
+                try {
+                    outboundService.sendInteractiveMenu(contact, cancelMenu, null, config, owner);
+                } catch (Exception ex) {
+                    log.warn("Failed to send interactive cancel menu, falling back to text", ex);
+                    outboundService.sendText(contact, "🛑 Your form has been cancelled. Type *menu* to see all options.", config, owner);
+                }
+                return;
+            }
+
+            if (hasActiveFlow) {
                 // Do not intercept other keywords if a flow is active. Let the flow validate the input.
             } else {
                 boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
-                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show|cancel|exit|stop)$");
+                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
 
                 if ("text".equals(type) && (isGreeting || isNavCommand)) {
                     flowStateMachine.resetFlow(contact);

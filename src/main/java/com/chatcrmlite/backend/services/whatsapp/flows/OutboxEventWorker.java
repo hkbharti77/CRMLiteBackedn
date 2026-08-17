@@ -37,11 +37,16 @@ public class OutboxEventWorker {
      */
     @Scheduled(fixedDelay = 3000)
     public void processOutboxEvents() {
-        List<FlowOutboxEvent> pendingEvents = flowOutboxEventRepository.findPendingEvents(OutboxStatus.PENDING, 5);
-        if (pendingEvents.isEmpty()) return;
+        com.chatcrmlite.backend.security.TenantContext.setAdminMode(true);
+        try {
+            List<FlowOutboxEvent> pendingEvents = flowOutboxEventRepository.findPendingEvents(OutboxStatus.PENDING, 5);
+            if (pendingEvents.isEmpty()) return;
 
-        for (FlowOutboxEvent event : pendingEvents) {
-            processSingleOutboxEvent(event);
+            for (FlowOutboxEvent event : pendingEvents) {
+                processSingleOutboxEvent(event);
+            }
+        } finally {
+            com.chatcrmlite.backend.security.TenantContext.clear();
         }
     }
 
@@ -51,6 +56,9 @@ public class OutboxEventWorker {
 
             try {
                 if ("FLOW_SUBMISSION".equals(event.getAggregateType())) {
+                    if (event.getTenant() != null) {
+                        com.chatcrmlite.backend.security.TenantContext.setTenantId(event.getTenant().getId());
+                    }
                     FlowSubmission submission = flowSubmissionRepository.findById(event.getAggregateId()).orElse(null);
                     if (submission != null) {
                         flowSubmissionProcessor.processSubmission(submission);
@@ -72,6 +80,8 @@ public class OutboxEventWorker {
                     event.setStatus(OutboxStatus.FAILED);
                 }
                 flowOutboxEventRepository.save(event);
+            } finally {
+                com.chatcrmlite.backend.security.TenantContext.clear();
             }
         });
     }

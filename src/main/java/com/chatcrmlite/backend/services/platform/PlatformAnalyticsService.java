@@ -35,6 +35,7 @@ public class PlatformAnalyticsService {
     private final MessageRepository messageRepository;
     private final DocumentChunkRepository documentChunkRepository;
     private final UserSessionRepository userSessionRepository;
+    private final TicketRepository ticketRepository;
     private final StringRedisTemplate redisTemplate;
 
     public PlatformAnalyticsService(TenantRepository tenantRepository,
@@ -43,6 +44,7 @@ public class PlatformAnalyticsService {
                                     MessageRepository messageRepository,
                                     DocumentChunkRepository documentChunkRepository,
                                     UserSessionRepository userSessionRepository,
+                                    TicketRepository ticketRepository,
                                     StringRedisTemplate redisTemplate) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
@@ -50,6 +52,7 @@ public class PlatformAnalyticsService {
         this.messageRepository = messageRepository;
         this.documentChunkRepository = documentChunkRepository;
         this.userSessionRepository = userSessionRepository;
+        this.ticketRepository = ticketRepository;
         this.redisTemplate = redisTemplate;
     }
 
@@ -64,6 +67,11 @@ public class PlatformAnalyticsService {
         long trial = allSubs.stream().filter(s -> s.getStatus() == TenantSubscription.SubscriptionStatus.FREE_TRIAL).count();
         long pastDue = allSubs.stream().filter(s -> s.getStatus() == TenantSubscription.SubscriptionStatus.PAST_DUE).count();
         long cancelled = allSubs.stream().filter(s -> s.getStatus() == TenantSubscription.SubscriptionStatus.CANCELLED).count();
+
+        long totalTickets = ticketRepository != null ? ticketRepository.count() : 0;
+        long openTickets = ticketRepository != null ? ticketRepository.findAll().stream()
+            .filter(t -> !t.isDeleted() && (t.getStatus() == com.chatcrmlite.backend.models.Ticket.TicketStatus.OPEN || t.getStatus() == com.chatcrmlite.backend.models.Ticket.TicketStatus.IN_PROGRESS))
+            .count() : 0;
 
         LocalDateTime in7Days = LocalDateTime.now().plusDays(7);
         long expiringSoon = allSubs.stream()
@@ -86,6 +94,8 @@ public class PlatformAnalyticsService {
         result.put("cancelledSubscriptions", cancelled);
         result.put("expiringSoon", expiringSoon);
         result.put("newTenantsThisMonth", newThisMonth);
+        result.put("totalTickets", totalTickets);
+        result.put("openTickets", openTickets);
         return result;
     }
 

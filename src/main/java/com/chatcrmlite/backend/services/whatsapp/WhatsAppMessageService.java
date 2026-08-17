@@ -48,42 +48,32 @@ public class WhatsAppMessageService {
         // Meta limit: body text <= 1024 chars
         String body = (response != null && response.length() > 1024) ? response.substring(0, 1021) + "..." : response;
 
-        List<MenuDto.MenuRowDto> buttons = new ArrayList<>();
-        String menuJson = config.getAiResponseMenuJson();
-        
+        String menuJson = config != null ? config.getAiResponseMenuJson() : null;
+        MenuDto menu = null;
         if (menuJson != null && !menuJson.isBlank()) {
-            try {
-                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-                com.fasterxml.jackson.databind.JsonNode root = mapper.readTree(menuJson);
-                com.fasterxml.jackson.databind.JsonNode rows = root.at("/sections/0/rows");
-                if (rows.isArray()) {
-                    for (com.fasterxml.jackson.databind.JsonNode row : rows) {
-                        buttons.add(MenuDto.MenuRowDto.builder()
-                                .id(row.get("id").asText())
-                                .title(row.get("title").asText())
-                                .build());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("Failed to parse aiResponseMenuJson, falling back to default.", e);
-            }
+            menu = menuService.parseCtaMenuJson(menuJson, body);
         } else {
             // Default backward compatibility if not configured
-            buttons.add(MenuDto.MenuRowDto.builder().id("trigger_flow").title("Enquire Now").build());
+            menu = MenuDto.builder()
+                    .type("button")
+                    .bodyText(body)
+                    .sections(List.of(MenuDto.MenuSectionDto.builder()
+                            .title("Options")
+                            .rows(List.of(MenuDto.MenuRowDto.builder().id("trigger_flow").title("Enquire Now").build()))
+                            .build()))
+                    .build();
         }
 
-        if (buttons.isEmpty()) {
-            // If the user configured the menu but removed all buttons, just send plain text
+        if (menu == null || menu.getSections().isEmpty() || menu.getSections().get(0).getRows().isEmpty()) {
+            // If the user configured the menu but removed all buttons or disabled it, send plain text
             outboundService.sendText(contact, body, config, owner);
             return;
         }
 
-        MenuDto menu = MenuDto.builder()
-                .type("button")
-                .headerImageUrl(imgUrl)
-                .bodyText(body)
-                .sections(List.of(MenuDto.MenuSectionDto.builder().rows(buttons).build()))
-                .build();
+        menu.setBodyText(body);
+        if (imgUrl != null && !imgUrl.isBlank()) {
+            menu.setHeaderImageUrl(imgUrl);
+        }
 
         try {
             outboundService.sendInteractiveMenu(contact, menu, response, config, owner);

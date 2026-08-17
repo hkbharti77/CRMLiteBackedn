@@ -26,6 +26,9 @@ public class FlowConfirmationService {
     private final MessageRepository messageRepository;
     private final DistributedWebSocketPublisher webSocketPublisher;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
     public FlowConfirmationService(MetaWhatsAppClient metaWhatsAppClient,
                                    WhatsAppConfigRepository whatsappConfigRepository,
                                    MessageRepository messageRepository,
@@ -48,7 +51,7 @@ public class FlowConfirmationService {
                 ? revision.getConfirmationMessage()
                 : "Thank you! We have received your submission.";
 
-        UUID tenantId = (submission.getTenant() != null) ? submission.getTenant().getId() : null;
+        UUID tenantId = (submission.getTenant() != null) ? submission.getTenant().getId() : (contact.getTenant() != null ? contact.getTenant().getId() : null);
         if (tenantId == null) return;
 
         WhatsAppConfig config = whatsappConfigRepository.findByTenantId(tenantId).orElse(null);
@@ -61,17 +64,31 @@ public class FlowConfirmationService {
             // Send WhatsApp Text message
             String waMessageId = metaWhatsAppClient.sendMessage(contact.getWaId(), confirmationText, config.getAccessToken(), config.getPhoneNumberId());
 
+            com.chatcrmlite.backend.models.User owner = contact.getOwner();
+            if (owner == null && userRepository != null) {
+                com.chatcrmlite.backend.models.Tenant tenant = contact.getTenant() != null ? contact.getTenant() : submission.getTenant();
+                if (tenant != null) {
+                    java.util.List<com.chatcrmlite.backend.models.User> users = userRepository.findAllByTenant(tenant);
+                    if (!users.isEmpty()) {
+                        owner = users.stream()
+                                .filter(u -> u.getRole() == com.chatcrmlite.backend.models.User.Role.OWNER || u.getRole() == com.chatcrmlite.backend.models.User.Role.ADMIN)
+                                .findFirst()
+                                .orElse(users.get(0));
+                    }
+                }
+            }
+
             // Save outgoing message in conversation timeline
             Message message = Message.builder()
                     .contact(contact)
-                    .owner(contact.getOwner())
+                    .owner(owner)
                     .content(confirmationText)
                     .direction(Message.Direction.OUTGOING)
                     .timestamp(LocalDateTime.now())
                     .waMessageId((waMessageId != null && !waMessageId.isBlank()) ? waMessageId : "flow_conf_" + System.currentTimeMillis())
                     .build();
             message.setTenant(contact.getTenant() != null ? contact.getTenant() : submission.getTenant());
-            messageRepository.save(message);
+            message = messageRepository.save(message);
 
             // Broadcast to Live Chat WebSocket
             Map<String, Object> wsPayload = new HashMap<>();

@@ -45,6 +45,9 @@ public class FlowStateMachine {
     private final List<FlowHandler> flowHandlers; // Legacy support for completion
     private final WhatsAppOutboundService outboundService;
     private final WhatsAppConfigRepository configRepository;
+    @org.springframework.context.annotation.Lazy
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppMenuService whatsappMenuService;
 
     @Transactional
     public boolean processFlow(Contact contact, User owner, String messageText, String selectionId, boolean isInteractiveSelection) {
@@ -172,12 +175,25 @@ public class FlowStateMachine {
                 if (waConfig != null) {
                     if (contact.getName() != null && !contact.getName().isBlank()
                             && !contact.getName().startsWith("WhatsApp User")) {
-                        String firstName = contact.getName().split(" ")[0];
-                        greeting = greeting.replace("{{contact.firstName}}", firstName);
-                        greeting = greeting.replace("{{contact.name}}", contact.getName());
+                        String fullName = contact.getName();
+                        String firstName = fullName.split(" ")[0];
+                        greeting = greeting.replace("{{contact.firstName}}", firstName)
+                                           .replace("{{contact.first_name}}", firstName)
+                                           .replace("{{first_name}}", firstName)
+                                           .replace("{{firstName}}", firstName)
+                                           .replace("{{contact.name}}", fullName)
+                                           .replace("{{customer_name}}", fullName)
+                                           .replace("{{customerName}}", fullName)
+                                           .replace("{{name}}", firstName);
                     } else {
-                        greeting = greeting.replace("{{contact.firstName}}", "there");
-                        greeting = greeting.replace("{{contact.name}}", "there");
+                        greeting = greeting.replace("{{contact.firstName}}", "there")
+                                           .replace("{{contact.first_name}}", "there")
+                                           .replace("{{first_name}}", "there")
+                                           .replace("{{firstName}}", "there")
+                                           .replace("{{contact.name}}", "there")
+                                           .replace("{{customer_name}}", "there")
+                                           .replace("{{customerName}}", "there")
+                                           .replace("{{name}}", "there");
                     }
                     outboundService.sendText(contact, greeting, waConfig, owner);
                     log.info("[StateMachine] Sent greeting to contact={} for flowType={}: {}", contact.getWaId(), flowType, greeting);
@@ -211,13 +227,21 @@ public class FlowStateMachine {
             return false;
         }
 
-        ConversationState state = ConversationState.builder()
+        Optional<ConversationState> existingOpt = stateRepository.findByContact(contact);
+        ConversationState state = existingOpt.orElseGet(() -> ConversationState.builder()
                 .contact(contact)
-                .flowType(flowType)
-                .flowDefinitionId(flowDefinitionId)
-                .currentState(initialStateName)
-                .collectedData("{}")
-                .build();
+                .build());
+
+        state.setFlowType(flowType);
+        state.setFlowDefinitionId(flowDefinitionId);
+        state.setCurrentState(initialStateName);
+        state.setCollectedData("{}");
+        state.setStateHistory("[]");
+        state.setSessionStatus(SessionStatus.ACTIVE);
+        state.setLastActivityAt(LocalDateTime.now());
+        state.setTimeoutStartedAt(null);
+        state.setClosedAt(null);
+        state.setCloseReason(null);
 
         saveAnswer(state, "initial_selection", initialMessage);
         stateRepository.save(state);
@@ -517,13 +541,15 @@ public class FlowStateMachine {
 
         if (config != null && messageToSend != null && !messageToSend.isBlank()) {
             try {
-                if (config.getFlowCompletionMenuJson() != null && !config.getFlowCompletionMenuJson().isBlank()) {
+                com.chatcrmlite.backend.dto.MenuDto menu = null;
+                if (config.getFlowCompletionMenuJson() != null && !config.getFlowCompletionMenuJson().isBlank() && whatsappMenuService != null) {
+                    menu = whatsappMenuService.parseCtaMenuJson(config.getFlowCompletionMenuJson(), messageToSend);
+                }
+                if (menu != null) {
                     try {
-                        com.chatcrmlite.backend.dto.MenuDto menu = objectMapper.readValue(
-                                config.getFlowCompletionMenuJson(), com.chatcrmlite.backend.dto.MenuDto.class);
                         outboundService.sendInteractiveMenu(contact, menu, messageToSend, config, owner);
                     } catch (Exception e) {
-                        log.warn("[StateMachine] Failed to parse configured completion menu, falling back to text", e);
+                        log.warn("[StateMachine] Failed to send configured completion menu, falling back to text", e);
                         outboundService.sendText(contact, messageToSend, config, owner);
                     }
                 } else {

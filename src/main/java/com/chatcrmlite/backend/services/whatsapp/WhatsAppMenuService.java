@@ -168,6 +168,107 @@ public class WhatsAppMenuService {
         }
     }
 
+    public MenuDto parseCtaMenuJson(String json, String defaultBodyText) {
+        if (json == null || json.isBlank()) return null;
+        try {
+            JsonNode root = objectMapper.readTree(json);
+
+            // If explicitly disabled in config, return null
+            if (root.has("enabled") && !root.path("enabled").asBoolean(true)) {
+                return null;
+            }
+
+            String bodyText = defaultBodyText;
+            if (root.has("message") && !root.path("message").asText().isBlank()) {
+                bodyText = root.path("message").asText();
+            } else if (root.has("bodyText") && !root.path("bodyText").asText().isBlank()) {
+                bodyText = root.path("bodyText").asText();
+            }
+
+            List<MenuDto.MenuRowDto> rows = new ArrayList<>();
+
+            // Case 1: "buttons" array (FlowCTAPanel format: [{id, label/title, linkType}])
+            if (root.has("buttons") && root.path("buttons").isArray()) {
+                for (JsonNode btn : root.path("buttons")) {
+                    String label = btn.has("label") ? btn.path("label").asText() : btn.path("title").asText();
+                    String linkType = btn.path("linkType").asText("");
+                    String id = btn.path("id").asText();
+                    if (label != null && !label.isBlank()) {
+                        String mappedId = mapLinkTypeToTriggerId(linkType, id);
+                        rows.add(MenuDto.MenuRowDto.builder()
+                                .id(mappedId)
+                                .title(label.length() > 20 ? label.substring(0, 20) : label)
+                                .build());
+                    }
+                }
+            }
+            // Case 2: "sections" array with "rows" (MenuDto format)
+            else if (root.has("sections") && root.path("sections").isArray()) {
+                for (JsonNode sec : root.path("sections")) {
+                    JsonNode secRows = sec.path("rows");
+                    if (secRows.isArray()) {
+                        for (JsonNode r : secRows) {
+                            String title = r.path("title").asText();
+                            String id = r.path("id").asText();
+                            String desc = r.path("description").asText(null);
+                            if (title != null && !title.isBlank()) {
+                                rows.add(MenuDto.MenuRowDto.builder()
+                                        .id(id != null && !id.isBlank() ? id : "btn_" + rows.size())
+                                        .title(title.length() > 20 ? title.substring(0, 20) : title)
+                                        .description(desc)
+                                        .build());
+                            }
+                        }
+                    }
+                }
+            }
+            // Case 3: Root is a JSON array
+            else if (root.isArray()) {
+                for (JsonNode btn : root) {
+                    String label = btn.has("label") ? btn.path("label").asText() : btn.path("title").asText();
+                    String linkType = btn.path("linkType").asText("");
+                    String id = btn.path("id").asText();
+                    if (label != null && !label.isBlank()) {
+                        String mappedId = mapLinkTypeToTriggerId(linkType, id);
+                        rows.add(MenuDto.MenuRowDto.builder()
+                                .id(mappedId)
+                                .title(label.length() > 20 ? label.substring(0, 20) : label)
+                                .build());
+                    }
+                }
+            }
+
+            if (rows.isEmpty()) {
+                return null;
+            }
+
+            // WhatsApp Quick-Reply button interactive menu has a hard limit of 3 buttons
+            if (rows.size() > 3) {
+                rows = new ArrayList<>(rows.subList(0, 3));
+            }
+
+            return MenuDto.builder()
+                    .type("button")
+                    .bodyText(bodyText != null && !bodyText.isBlank() ? bodyText : (defaultBodyText != null ? defaultBodyText : "Please select an option:"))
+                    .sections(List.of(MenuDto.MenuSectionDto.builder().title("Options").rows(rows).build()))
+                    .build();
+        } catch (Exception e) {
+            log.warn("[WhatsAppMenuService] Error parsing CTA menu JSON: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private String mapLinkTypeToTriggerId(String linkType, String fallbackId) {
+        if ("lead".equalsIgnoreCase(linkType)) return "trigger_flow_lead";
+        if ("appointment".equalsIgnoreCase(linkType)) return "trigger_flow_appointment";
+        if ("booking".equalsIgnoreCase(linkType)) return "trigger_flow_booking";
+        if ("catalog".equalsIgnoreCase(linkType)) return "view_services";
+        if (fallbackId != null && !fallbackId.isBlank() && !fallbackId.startsWith("btn_")) {
+            return fallbackId;
+        }
+        return "menu";
+    }
+
     public boolean handleCustomSubMenuTrigger(Contact contact, WhatsAppConfig config, String selectionId) {
         if (config.getCustomSubMenusJson() == null || config.getCustomSubMenusJson().isBlank()) return false;
         User owner = resolveOwner(config);

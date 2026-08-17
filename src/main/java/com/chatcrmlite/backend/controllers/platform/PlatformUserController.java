@@ -17,10 +17,22 @@ public class PlatformUserController {
 
     private final UserRepository userRepository;
     private final PlatformAuditService auditService;
+    private final com.chatcrmlite.backend.services.platform.PlatformTenantProfileService profileService;
 
-    public PlatformUserController(UserRepository userRepository, PlatformAuditService auditService) {
+    public PlatformUserController(UserRepository userRepository,
+                                  PlatformAuditService auditService,
+                                  com.chatcrmlite.backend.services.platform.PlatformTenantProfileService profileService) {
         this.userRepository = userRepository;
         this.auditService = auditService;
+        this.profileService = profileService;
+    }
+
+    /** 360° Comprehensive User Profile with Workload & Permissions */
+    @GetMapping("/{id}/profile")
+    public ResponseEntity<com.chatcrmlite.backend.dtos.platform.UserDetailedProfileDto> getUserProfile(
+            @PathVariable UUID id, HttpServletRequest request) {
+        auditService.record("VIEWED_USER_PROFILE", "SUCCESS", "User", id.toString(), "{}", request);
+        return ResponseEntity.ok(profileService.getUserDetailedProfile(id));
     }
 
     @GetMapping
@@ -90,25 +102,41 @@ public class PlatformUserController {
     }
 
     @Transactional
-    @PostMapping("/{id}/disable")
-    public ResponseEntity<Map<String, Object>> disableUser(@PathVariable UUID id, HttpServletRequest request) {
+    @PostMapping("/{id}/suspend")
+    public ResponseEntity<Map<String, Object>> suspendUser(@PathVariable UUID id, HttpServletRequest request) {
         return userRepository.findById(id).map(u -> {
+            boolean isPlatformAdmin = (u.getRole() != null && u.getRole() == com.chatcrmlite.backend.models.User.Role.SUPER_ADMIN) || "gyanvaniai@gmail.com".equalsIgnoreCase(u.getEmail());
+            if (isPlatformAdmin) {
+                return ResponseEntity.badRequest().body(Map.<String, Object>of("message", "Platform Owner account cannot be suspended."));
+            }
             u.setAccountStatus(com.chatcrmlite.backend.models.User.AccountStatus.LOCKED);
             userRepository.save(u);
-            auditService.record("DISABLED_USER", "SUCCESS", "User", id.toString(), "{}", request);
-            return ResponseEntity.ok(Map.<String, Object>of("message", "User disabled", "userId", id));
+            auditService.record("SUSPENDED_USER", "SUCCESS", "User", id.toString(), "{}", request);
+            return ResponseEntity.ok(Map.<String, Object>of("message", "User suspended", "userId", id));
         }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @Transactional
+    @PostMapping("/{id}/activate")
+    public ResponseEntity<Map<String, Object>> activateUser(@PathVariable UUID id, HttpServletRequest request) {
+        return userRepository.findById(id).map(u -> {
+            u.setAccountStatus(com.chatcrmlite.backend.models.User.AccountStatus.ACTIVE);
+            userRepository.save(u);
+            auditService.record("ACTIVATED_USER", "SUCCESS", "User", id.toString(), "{}", request);
+            return ResponseEntity.ok(Map.<String, Object>of("message", "User activated", "userId", id));
+        }).orElse(ResponseEntity.notFound().build());
+    }
+
+    @Transactional
+    @PostMapping("/{id}/disable")
+    public ResponseEntity<Map<String, Object>> disableUser(@PathVariable UUID id, HttpServletRequest request) {
+        return suspendUser(id, request);
     }
 
     @Transactional
     @PostMapping("/{id}/enable")
     public ResponseEntity<Map<String, Object>> enableUser(@PathVariable UUID id, HttpServletRequest request) {
-        return userRepository.findById(id).map(u -> {
-            u.setAccountStatus(com.chatcrmlite.backend.models.User.AccountStatus.ACTIVE);
-            userRepository.save(u);
-            auditService.record("ENABLED_USER", "SUCCESS", "User", id.toString(), "{}", request);
-            return ResponseEntity.ok(Map.<String, Object>of("message", "User enabled", "userId", id));
-        }).orElse(ResponseEntity.notFound().build());
+        return activateUser(id, request);
     }
 
     private boolean contains(String value, String search) {

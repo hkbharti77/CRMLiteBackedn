@@ -84,6 +84,9 @@ public class FlowSubmissionProcessor {
         this.userRepository = userRepository;
     }
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     private User resolveOwner(FlowSubmission submission, Contact contact) {
         if (contact != null && contact.getOwner() != null) return contact.getOwner();
         Tenant targetTenant = resolveTenant(submission, contact, null);
@@ -96,14 +99,27 @@ public class FlowSubmissionProcessor {
                         .orElse(users.get(0));
             }
         }
+        if (userRepository != null) {
+            java.util.List<User> allUsers = userRepository.findAll();
+            if (!allUsers.isEmpty()) {
+                return allUsers.stream()
+                        .filter(u -> u.getRole() == User.Role.OWNER || u.getRole() == User.Role.ADMIN)
+                        .findFirst()
+                        .orElse(allUsers.get(0));
+            }
+        }
         return null;
     }
 
     private Tenant resolveTenant(FlowSubmission submission, Contact contact, User owner) {
         if (contact != null && contact.getTenant() != null) return contact.getTenant();
         if (owner != null && owner.getTenant() != null) return owner.getTenant();
-        if (submission.getTenant() != null) return submission.getTenant();
-        if (submission.getFlow() != null && submission.getFlow().getTenant() != null) return submission.getFlow().getTenant();
+        if (submission != null && submission.getTenant() != null) return submission.getTenant();
+        if (submission != null && submission.getFlow() != null && submission.getFlow().getTenant() != null) return submission.getFlow().getTenant();
+        if (tenantRepository != null) {
+            java.util.List<Tenant> allTenants = tenantRepository.findAll();
+            if (!allTenants.isEmpty()) return allTenants.get(0);
+        }
         return null;
     }
 
@@ -214,25 +230,15 @@ public class FlowSubmissionProcessor {
 
         String leadNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.LEAD);
 
-        Optional<Lead> existingLead = leadRepository.findTopByContactOrderByCreatedAtDesc(contact);
-        Lead lead = existingLead.orElseGet(() -> {
-            Lead newLead = Lead.builder()
-                    .contact(contact)
-                    .status(Lead.LeadStatus.BOOKED)
-                    .owner(owner)
-                    .dealLabel(dealLabel)
-                    .leadNumber(leadNumber)
-                    .build();
-            if (tenant != null) newLead.setTenant(tenant);
-            return newLead;
-        });
-
-        if (lead.getOwner() == null && owner != null) lead.setOwner(owner);
-        if (lead.getTenant() == null && tenant != null) lead.setTenant(tenant);
-        if (lead.getLeadNumber() == null || lead.getLeadNumber().isBlank()) lead.setLeadNumber(leadNumber);
+        Lead lead = Lead.builder()
+                .contact(contact)
+                .status(Lead.LeadStatus.BOOKED)
+                .owner(owner)
+                .dealLabel(dealLabel)
+                .leadNumber(leadNumber)
+                .build();
+        if (tenant != null) lead.setTenant(tenant);
         lead.setDeleted(false);
-        lead.setStatus(Lead.LeadStatus.BOOKED);
-        lead.setDealLabel(dealLabel);
         lead.setLastActivity(LocalDateTime.now());
         lead = leadRepository.save(lead);
 
@@ -251,7 +257,7 @@ public class FlowSubmissionProcessor {
             webSocketPublisher.publishMessage(tenant.getId(), wsPayload);
         }
 
-        log.info("📅 [FlowProcessor] Created/Updated Booked Lead for Contact {} via Flow and triggered email notifications", contact.getWaId());
+        log.info("📅 [FlowProcessor] Created Booked Lead {} for Contact {} via Flow", lead.getLeadNumber(), contact.getWaId());
     }
 
     private void processLeadGeneration(FlowSubmission submission, Contact contact, Map<String, String> normalizedMap, Map<String, Object> rawData) {
@@ -278,25 +284,15 @@ public class FlowSubmissionProcessor {
 
         String leadNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.LEAD);
 
-        Optional<Lead> existingLead = leadRepository.findTopByContactOrderByCreatedAtDesc(contact);
-        Lead lead = existingLead.orElseGet(() -> {
-            Lead newLead = Lead.builder()
-                    .contact(contact)
-                    .status(Lead.LeadStatus.NEW)
-                    .owner(owner)
-                    .dealLabel(dealLabel)
-                    .leadNumber(leadNumber)
-                    .build();
-            if (tenant != null) newLead.setTenant(tenant);
-            return newLead;
-        });
-
-        if (lead.getOwner() == null && owner != null) lead.setOwner(owner);
-        if (lead.getTenant() == null && tenant != null) lead.setTenant(tenant);
-        if (lead.getLeadNumber() == null || lead.getLeadNumber().isBlank()) lead.setLeadNumber(leadNumber);
+        Lead lead = Lead.builder()
+                .contact(contact)
+                .status(Lead.LeadStatus.NEW)
+                .owner(owner)
+                .dealLabel(dealLabel)
+                .leadNumber(leadNumber)
+                .build();
+        if (tenant != null) lead.setTenant(tenant);
         lead.setDeleted(false);
-        lead.setStatus(Lead.LeadStatus.NEW);
-        lead.setDealLabel(dealLabel);
         lead.setLastActivity(LocalDateTime.now());
         lead = leadRepository.save(lead);
 

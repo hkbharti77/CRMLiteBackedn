@@ -38,10 +38,10 @@ public class EmailService {
     @Value("${SENDER_EMAIL:no-reply@gyanvaniai.online}")
     private String from;
 
-    @Value("${PLATFORM_BRAND_URL:${platform.brand.url:https://gyanvaniai.online}}")
+    @Value("${PLATFORM_BRAND_URL:https://gyanvaniai.online}")
     private String platformBrandUrl;
 
-    @Value("${PLATFORM_BRAND_NAME:${platform.brand.name:GyanVaniAi}}")
+    @Value("${PLATFORM_BRAND_NAME:GyanVaniAi}")
     private String platformBrandName;
 
     private static final String BRAND = "GyanVaniAi Connect";
@@ -423,14 +423,20 @@ public class EmailService {
     public void sendLeadCreatedToContact(String toEmail, String contactName,
             String ownerBusinessName, String enquiryMessage) {
         Context ctx = new Context();
-        ctx.setVariable("heading",        "We Received Your Enquiry");
-        ctx.setVariable("greeting",       "Hi " + contactName + ",");
-        ctx.setVariable("intro",          "Thank you for reaching out. We will be in touch shortly.");
-        ctx.setVariable("footerNote",     "Our team will review your enquiry and contact you soon.");
-        ctx.setVariable("contactName",    contactName);
-        ctx.setVariable("businessName",   ownerBusinessName);
+        String brandName = (platformBrandName != null && !platformBrandName.isBlank()) ? platformBrandName : "GyanVani AI";
+        String brandUrl = (platformBrandUrl != null && !platformBrandUrl.isBlank()) ? platformBrandUrl : "https://gyanvaniai.online";
+        String name = (contactName != null && !contactName.isBlank()) ? contactName : "there";
+
+        ctx.setVariable("heading",        "Thank You for Reaching Out!");
+        ctx.setVariable("greeting",       "Hi " + name + ",");
+        ctx.setVariable("intro",          "Thank you for contacting " + brandName + ". Our AI solutions team has received your request and will connect with you shortly.");
+        ctx.setVariable("footerNote",     "Empowering modern businesses with Enterprise AI Agents & WhatsApp CRM Automation.");
+        ctx.setVariable("ctaLabel",       "Explore GyanVani AI");
+        ctx.setVariable("ctaUrl",         brandUrl);
+        ctx.setVariable("contactName",    name);
+        ctx.setVariable("businessName",   brandName);
         ctx.setVariable("enquiryMessage", enquiryMessage);
-        sendTemplate(toEmail, "We received your enquiry - " + ownerBusinessName,
+        sendTemplate(toEmail, "Thank you for connecting with " + brandName + "!",
                 "lead-enquiry-received", ctx);
     }
 

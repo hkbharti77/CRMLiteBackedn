@@ -2,12 +2,22 @@ package com.chatcrmlite.backend.controllers.platform;
 
 import com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO;
 import com.chatcrmlite.backend.dtos.UpdateTenantOverridesRequestDto;
+import com.chatcrmlite.backend.dtos.entitlements.PlatformTenantEntitlementMatrixDTO;
+import com.chatcrmlite.backend.dtos.entitlements.UpdateTenantEntitlementsMatrixRequestDto;
 import com.chatcrmlite.backend.models.PlatformAdmin;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.TenantSubscriptionOverride;
 import com.chatcrmlite.backend.models.TenantSubscriptionOverrideAudit;
+import com.chatcrmlite.backend.models.entitlements.EntitlementCatalog;
+import com.chatcrmlite.backend.models.entitlements.EntitlementDefinition;
+import com.chatcrmlite.backend.models.entitlements.EntitlementMutability;
+import com.chatcrmlite.backend.models.entitlements.OverrideAction;
 import com.chatcrmlite.backend.repositories.PlatformAdminRepository;
+import com.chatcrmlite.backend.repositories.TenantRepository;
 import com.chatcrmlite.backend.repositories.TenantSubscriptionOverrideAuditRepository;
 import com.chatcrmlite.backend.repositories.TenantSubscriptionOverrideRepository;
+import com.chatcrmlite.backend.services.platform.PlatformAuditService;
+import com.chatcrmlite.backend.services.platform.PlatformEntitlementPresetService;
 import com.chatcrmlite.backend.services.tenant.EntitlementResolverService;
 import com.chatcrmlite.backend.services.tenant.SubscriptionEntitlementService;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +39,7 @@ import java.util.UUID;
 
 @Slf4j
 @RestController
-@RequestMapping("/api/v1/platform/tenants/{tenantId}")
+@RequestMapping("/api/v1/platform")
 @RequiredArgsConstructor
 public class PlatformTenantOverrideController {
 
@@ -38,7 +48,9 @@ public class PlatformTenantOverrideController {
     private final TenantSubscriptionOverrideRepository overrideRepository;
     private final TenantSubscriptionOverrideAuditRepository auditRepository;
     private final PlatformAdminRepository platformAdminRepository;
-    private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+    private final TenantRepository tenantRepository;
+    private final PlatformEntitlementPresetService presetService;
+    private final PlatformAuditService platformAuditService;
     private final ObjectMapper objectMapper;
 
     private String verifyPlatformAdminAccess(String email) {
@@ -53,15 +65,116 @@ public class PlatformTenantOverrideController {
         return admin.getEmail();
     }
 
-    private com.chatcrmlite.backend.models.Tenant resolveTenant(UUID tenantId) {
+    private Tenant resolveTenant(UUID tenantId) {
         return tenantRepository.findById(tenantId).orElseGet(() -> {
-            com.chatcrmlite.backend.models.Tenant t = new com.chatcrmlite.backend.models.Tenant();
+            Tenant t = new Tenant();
             t.setId(tenantId);
             return t;
         });
     }
 
-    @GetMapping("/entitlements")
+    @GetMapping("/entitlement-presets")
+    public ResponseEntity<List<PlatformEntitlementPresetService.PresetDefinition>> getPresets(
+            @AuthenticationPrincipal String email) {
+        verifyPlatformAdminAccess(email);
+        return ResponseEntity.ok(presetService.getAvailablePresets());
+    }
+
+    @GetMapping("/tenants/{tenantId}/entitlements-matrix")
+    public ResponseEntity<PlatformTenantEntitlementMatrixDTO> getEntitlementsMatrix(
+            @PathVariable UUID tenantId,
+            @AuthenticationPrincipal String email) {
+        verifyPlatformAdminAccess(email);
+        PlatformTenantEntitlementMatrixDTO matrix = entitlementResolverService.getPlatformTenantEntitlementMatrix(tenantId);
+        return ResponseEntity.ok(matrix);
+    }
+
+    @PutMapping("/tenants/{tenantId}/entitlements-matrix")
+    @Transactional
+    public ResponseEntity<?> updateEntitlementsMatrix(
+            @PathVariable UUID tenantId,
+            @RequestBody UpdateTenantEntitlementsMatrixRequestDto requestDto,
+            @AuthenticationPrincipal String email,
+            HttpServletRequest servletRequest) {
+
+        String adminEmail = verifyPlatformAdminAccess(email);
+        Tenant tenant = resolveTenant(tenantId);
+
+        TenantSubscriptionOverride existingOverride = overrideRepository.findByTenantId(tenantId).orElse(null);
+        TenantSubscriptionOverride overrideToSave = existingOverride != null ? existingOverride : new TenantSubscriptionOverride();
+        overrideToSave.setTenant(tenant);
+
+        // Sanitize overrides to respect ALWAYS_ENABLED mutability rules
+        Map<String, OverrideAction> cleanPages = new HashMap<>();
+        if (requestDto.getPageOverrides() != null) {
+            for (Map.Entry<String, OverrideAction> entry : requestDto.getPageOverrides().entrySet()) {
+                if (!EntitlementCatalog.isAlwaysEnabled(entry.getKey())) {
+                    cleanPages.put(entry.getKey(), entry.getValue() != null ? entry.getValue() : OverrideAction.INHERIT);
+                }
+            }
+        }
+
+        Map<String, OverrideAction> cleanSettings = new HashMap<>();
+        if (requestDto.getSettingOverrides() != null) {
+            for (Map.Entry<String, OverrideAction> entry : requestDto.getSettingOverrides().entrySet()) {
+                if (!EntitlementCatalog.isAlwaysEnabled(entry.getKey())) {
+                    cleanSettings.put(entry.getKey(), entry.getValue() != null ? entry.getValue() : OverrideAction.INHERIT);
+                }
+            }
+        }
+
+        Map<String, OverrideAction> cleanServices = new HashMap<>();
+        if (requestDto.getServiceOverrides() != null) {
+            for (Map.Entry<String, OverrideAction> entry : requestDto.getServiceOverrides().entrySet()) {
+                cleanServices.put(entry.getKey(), entry.getValue() != null ? entry.getValue() : OverrideAction.INHERIT);
+            }
+        }
+
+        overrideToSave.setPageOverrides(cleanPages);
+        overrideToSave.setSettingOverrides(cleanSettings);
+        overrideToSave.setServiceOverrides(cleanServices);
+        overrideToSave.setVersion((overrideToSave.getVersion() != null ? overrideToSave.getVersion() : 0) + 1);
+        overrideToSave.setUpdatedBy(adminEmail);
+
+        try {
+            overrideRepository.saveAndFlush(overrideToSave);
+        } catch (ObjectOptimisticLockingFailureException e) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrent modification detected. Please refresh and try again.");
+        }
+
+        entitlementResolverService.invalidateEntitlementsCache(tenantId);
+
+        // Record Audit Log
+        platformAuditService.record("ENTITLEMENT_MATRIX_CHANGED", "SUCCESS", "Tenant", tenantId.toString(),
+                "{\"updatedBy\":\"" + adminEmail + "\",\"newVersion\":" + overrideToSave.getVersion() + "}", servletRequest);
+
+        PlatformTenantEntitlementMatrixDTO updatedMatrix = entitlementResolverService.getPlatformTenantEntitlementMatrix(tenantId);
+        return ResponseEntity.ok(updatedMatrix);
+    }
+
+    @PostMapping("/tenants/{tenantId}/entitlements/apply-preset")
+    @Transactional
+    public ResponseEntity<?> applyPreset(
+            @PathVariable UUID tenantId,
+            @RequestParam String presetId,
+            @AuthenticationPrincipal String email,
+            HttpServletRequest servletRequest) {
+
+        String adminEmail = verifyPlatformAdminAccess(email);
+        PlatformEntitlementPresetService.PresetDefinition preset = presetService.getPresetById(presetId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid preset ID: " + presetId));
+
+        UpdateTenantEntitlementsMatrixRequestDto requestDto = UpdateTenantEntitlementsMatrixRequestDto.builder()
+                .pageOverrides(preset.pageOverrides())
+                .settingOverrides(preset.settingOverrides())
+                .serviceOverrides(preset.serviceOverrides())
+                .reason("Applied Preset: " + preset.name())
+                .build();
+
+        return updateEntitlementsMatrix(tenantId, requestDto, email, servletRequest);
+    }
+
+    @GetMapping("/tenants/{tenantId}/entitlements")
     public ResponseEntity<EffectiveEntitlementsDTO> getEntitlements(
             @PathVariable UUID tenantId,
             @RequestParam(defaultValue = "false") boolean trace,
@@ -71,7 +184,7 @@ public class PlatformTenantOverrideController {
         return ResponseEntity.ok(entitlements);
     }
 
-    @PutMapping("/overrides")
+    @PutMapping("/tenants/{tenantId}/overrides")
     @Transactional
     public ResponseEntity<?> updateTenantOverrides(
             @PathVariable UUID tenantId,
@@ -80,7 +193,7 @@ public class PlatformTenantOverrideController {
             HttpServletRequest servletRequest) {
 
         String adminEmail = verifyPlatformAdminAccess(email);
-        com.chatcrmlite.backend.models.Tenant tenant = resolveTenant(tenantId);
+        Tenant tenant = resolveTenant(tenantId);
 
         TenantSubscriptionOverride existingOverride = overrideRepository.findByTenantId(tenantId).orElse(null);
         String oldValueJson = existingOverride != null ? serializeOverride(existingOverride) : null;
@@ -108,12 +221,14 @@ public class PlatformTenantOverrideController {
         if (requestDto.getMonthlyWhatsappMessageQuota() != null) quotaMap.put("monthlyWhatsappMessageQuota", requestDto.getMonthlyWhatsappMessageQuota());
         overrideToSave.setQuotaOverrides(serializeMap(quotaMap));
 
-        // Build priority overrides JSON
+        // Priority overrides
         if (requestDto.getMaxAllowedPriority() != null) {
-            overrideToSave.setPriorityOverrides(serializeMap(Map.of("maxPriority", requestDto.getMaxAllowedPriority().name())));
+            Map<String, Object> priMap = new HashMap<>();
+            priMap.put("maxPriority", requestDto.getMaxAllowedPriority().name());
+            overrideToSave.setPriorityOverrides(serializeMap(priMap));
         }
 
-        // Build pricing overrides JSON
+        // Pricing overrides
         Map<String, Object> priceMap = new HashMap<>();
         if (requestDto.getCustomMonthlyInr() != null) priceMap.put("monthlyInr", requestDto.getCustomMonthlyInr());
         if (requestDto.getCustomYearlyInr() != null) priceMap.put("yearlyInr", requestDto.getCustomYearlyInr());
@@ -124,90 +239,47 @@ public class PlatformTenantOverrideController {
         if (requestDto.getEffectiveFrom() != null) overrideToSave.setEffectiveFrom(requestDto.getEffectiveFrom());
         if (requestDto.getEffectiveUntil() != null) overrideToSave.setEffectiveUntil(requestDto.getEffectiveUntil());
 
-        overrideToSave.setVersion(overrideToSave.getVersion() != null ? overrideToSave.getVersion() + 1 : 1);
+        overrideToSave.setVersion((overrideToSave.getVersion() != null ? overrideToSave.getVersion() : 0) + 1);
         overrideToSave.setUpdatedBy(adminEmail);
-        if (existingOverride == null) {
-            overrideToSave.setCreatedBy(adminEmail);
-        }
+        if (overrideToSave.getCreatedBy() == null) overrideToSave.setCreatedBy(adminEmail);
 
-        TenantSubscriptionOverride saved;
         try {
-            saved = overrideRepository.save(overrideToSave);
+            overrideRepository.saveAndFlush(overrideToSave);
         } catch (ObjectOptimisticLockingFailureException e) {
-            log.warn("⚠️ Optimistic locking conflict updating overrides for tenantId={}", tenantId);
-            return ResponseEntity.status(HttpStatus.CONFLICT)
-                    .body(Map.of("error", "Tenant overrides were updated by another administrator. Please refresh and try again.", "code", "OPTIMISTIC_LOCK_CONFLICT"));
+            log.warn("⚠️ Optimistic lock conflict while saving override for tenantId={}: {}", tenantId, e.getMessage());
+            throw new ResponseStatusException(HttpStatus.CONFLICT, "Concurrent modification detected. Please refresh and try again.");
         }
 
-        String newValueJson = serializeOverride(saved);
+        entitlementResolverService.invalidateEntitlementsCache(tenantId);
 
-        // Record Audit Entry
+        String newValueJson = serializeOverride(overrideToSave);
         TenantSubscriptionOverrideAudit audit = TenantSubscriptionOverrideAudit.builder()
-                .action(existingOverride == null ? TenantSubscriptionOverrideAudit.OverrideAuditAction.CREATE_OVERRIDE : TenantSubscriptionOverrideAudit.OverrideAuditAction.UPDATE_OVERRIDE)
+                .action(TenantSubscriptionOverrideAudit.OverrideAuditAction.UPDATE_OVERRIDE)
+                .changedBy(adminEmail)
                 .oldValueJson(oldValueJson)
                 .newValueJson(newValueJson)
-                .changedBy(adminEmail)
-                .reason(requestDto.getReason() != null ? requestDto.getReason() : "Platform Admin Custom Overrides Update")
-                .requestId(servletRequest.getHeader("X-Request-ID"))
+                .reason(requestDto.getReason())
                 .ipAddress(servletRequest.getRemoteAddr())
                 .build();
         audit.setTenant(tenant);
         auditRepository.save(audit);
 
-        // Invalidate Redis pointer cache
-        entitlementResolverService.invalidateEntitlementsCache(tenantId);
-        subscriptionEntitlementService.revalidateTenantCampaignPriorities(tenantId);
-
-        log.info("✅ Platform admin {} updated overrides for tenantId={} (version={})", adminEmail, tenantId, saved.getVersion());
-        return ResponseEntity.ok(entitlementResolverService.getEffectiveEntitlements(tenantId, true));
+        EffectiveEntitlementsDTO effective = entitlementResolverService.getEffectiveEntitlements(tenantId, true);
+        return ResponseEntity.ok(effective);
     }
 
-    @DeleteMapping("/overrides")
-    @Transactional
-    public ResponseEntity<Map<String, String>> resetTenantOverrides(
-            @PathVariable UUID tenantId,
-            @AuthenticationPrincipal String email,
-            HttpServletRequest servletRequest) {
-
-        String adminEmail = verifyPlatformAdminAccess(email);
-        com.chatcrmlite.backend.models.Tenant tenant = resolveTenant(tenantId);
-        TenantSubscriptionOverride existing = overrideRepository.findByTenantId(tenantId).orElse(null);
-
-        if (existing != null) {
-            String oldValue = serializeOverride(existing);
-            overrideRepository.deleteByTenantId(tenantId);
-
-            TenantSubscriptionOverrideAudit audit = TenantSubscriptionOverrideAudit.builder()
-                    .action(TenantSubscriptionOverrideAudit.OverrideAuditAction.RESET_OVERRIDE)
-                    .oldValueJson(oldValue)
-                    .newValueJson(null)
-                    .changedBy(adminEmail)
-                    .reason("Reset tenant custom overrides to standard base plan defaults")
-                    .requestId(servletRequest.getHeader("X-Request-ID"))
-                    .ipAddress(servletRequest.getRemoteAddr())
-                    .build();
-            audit.setTenant(tenant);
-            auditRepository.save(audit);
-
-            entitlementResolverService.invalidateEntitlementsCache(tenantId);
-            subscriptionEntitlementService.revalidateTenantCampaignPriorities(tenantId);
-            log.info("🧹 Platform admin {} reset overrides for tenantId={}", adminEmail, tenantId);
-        }
-
-        return ResponseEntity.ok(Map.of("message", "Tenant custom overrides reset to base plan defaults successfully. Existing usage preserved."));
-    }
-
-    @GetMapping("/override-audits")
-    public ResponseEntity<List<TenantSubscriptionOverrideAudit>> getOverrideAudits(
-            @PathVariable UUID tenantId,
-            @AuthenticationPrincipal String email) {
-        verifyPlatformAdminAccess(email);
-        return ResponseEntity.ok(auditRepository.findByTenantIdOrderByCreatedAtDesc(tenantId));
-    }
-
-    private String serializeOverride(TenantSubscriptionOverride override) {
+    private String serializeOverride(TenantSubscriptionOverride o) {
         try {
-            return objectMapper.writeValueAsString(override);
+            Map<String, Object> map = new HashMap<>();
+            map.put("featureOverrides", o.getFeatureOverrides());
+            map.put("quotaOverrides", o.getQuotaOverrides());
+            map.put("priorityOverrides", o.getPriorityOverrides());
+            map.put("pricingOverrides", o.getPricingOverrides());
+            map.put("pageOverrides", o.getPageOverrides());
+            map.put("settingOverrides", o.getSettingOverrides());
+            map.put("serviceOverrides", o.getServiceOverrides());
+            map.put("version", o.getVersion());
+            return objectMapper.writeValueAsString(map);
         } catch (Exception e) {
             return "{}";
         }
