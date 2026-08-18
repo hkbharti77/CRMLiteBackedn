@@ -31,5 +31,37 @@ public class WebMvcConfig implements WebMvcConfigurer {
 
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadPath + "/");
+
+        registry.addResourceHandler("/widget/**", "/chat-widget.js", "/styles.css", "/test.html")
+                .addResourceLocations("classpath:/static/widget/", "classpath:/static/");
+    }
+
+    @Override
+    public void addCorsMappings(org.springframework.web.servlet.config.annotation.CorsRegistry registry) {
+        registry.addMapping("/api/v1/public/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+                .allowedHeaders("*");
+
+        registry.addMapping("/public/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "POST", "OPTIONS")
+                .allowedHeaders("*");
+
+        registry.addMapping("/chat-widget.js")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "OPTIONS");
+
+        registry.addMapping("/styles.css")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "OPTIONS");
+
+        registry.addMapping("/widget/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "OPTIONS");
+
+        registry.addMapping("/uploads/**")
+                .allowedOriginPatterns("*")
+                .allowedMethods("GET", "OPTIONS");
     }
 }
