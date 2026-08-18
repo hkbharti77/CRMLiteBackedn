@@ -131,8 +131,8 @@ public class SecurityConfig {
                 // Swagger — gated: only allowed if the request comes from localhost
                 // In a true production deploy, remove these lines or add IP-based restriction
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                // Static resources
-                .requestMatchers("/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json", "/widget/**").permitAll()
+                // Static resources & widget files (Publicly accessible from any website)
+                .requestMatchers("/widget/**", "/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json", "/chat-widget.js", "/styles.css", "/test.html").permitAll()
                 // OPTIONS preflight — must be permitted for CORS to work
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 // Actuator — require authentication; role-based health detail is configured in properties
@@ -192,10 +192,9 @@ public class SecurityConfig {
      */
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        // Merge allowed origins: env var + always include the owner panel origin and ngrok domains for testing
-        String rawOrigins = allowedOrigins + ",http://localhost:3000,http://localhost:3001,http://localhost:5173,http://localhost:5174,https://*.ngrok-free.dev,https://*.ngrok.app";
-        List<String> origins = Arrays.stream(rawOrigins.split(","))
+        List<String> origins = Arrays.stream(allowedOrigins.split(","))
             .map(String::trim)
+            .filter(s -> !s.isEmpty())
             .distinct()
             .toList();
 
@@ -211,17 +210,24 @@ public class SecurityConfig {
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         
-        // Public API CORS (Widget, Webhooks) - Allow All Origins
+        // Public API & Embeddable Widget CORS - Allow All Origins (*) so the widget works on any client site
         CorsConfiguration publicConfig = new CorsConfiguration();
         publicConfig.setAllowedOriginPatterns(java.util.Collections.singletonList("*"));
-        publicConfig.setAllowedMethods(Arrays.asList("GET", "POST", "OPTIONS"));
-        publicConfig.setAllowedHeaders(Arrays.asList("Content-Type", "Accept", "Origin"));
+        publicConfig.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        publicConfig.setAllowedHeaders(Arrays.asList("*"));
+        publicConfig.setExposedHeaders(Arrays.asList("*"));
         publicConfig.setAllowCredentials(false);
         publicConfig.setMaxAge(3600L);
+
         source.registerCorsConfiguration("/api/v1/public/**", publicConfig);
         source.registerCorsConfiguration("/public/**", publicConfig);
+        source.registerCorsConfiguration("/chat-widget.js", publicConfig);
+        source.registerCorsConfiguration("/styles.css", publicConfig);
+        source.registerCorsConfiguration("/widget/**", publicConfig);
+        source.registerCorsConfiguration("/uploads/**", publicConfig);
+        source.registerCorsConfiguration("/test.html", publicConfig);
         
-        // Private API CORS - Restricted Origins
+        // Private API CORS - Restricted Origins from .env / application.properties
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }

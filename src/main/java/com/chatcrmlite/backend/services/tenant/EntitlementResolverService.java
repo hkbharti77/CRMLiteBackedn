@@ -188,6 +188,14 @@ public class EntitlementResolverService {
         return dto != null && Boolean.TRUE.equals(dto.getServices().get(serviceKey));
     }
 
+    @org.springframework.transaction.event.TransactionalEventListener(phase = org.springframework.transaction.event.TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void handleSubscriptionUpdated(com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent event) {
+        if (event != null && event.getTenantId() != null) {
+            log.info("🧹 Handling subscription updated event in EntitlementResolverService for tenantId={}", event.getTenantId());
+            invalidateEntitlementsCache(event.getTenantId());
+        }
+    }
+
     public void invalidateEntitlementsCache(UUID tenantId) {
         if (tenantId == null) return;
         try {
@@ -200,6 +208,11 @@ public class EntitlementResolverService {
                 stringRedisTemplate.delete(dtoKey);
             }
             stringRedisTemplate.delete(pointerKey);
+
+            Set<String> keys = stringRedisTemplate.keys("tenant:entitlements:*" + tenantId + "*");
+            if (keys != null && !keys.isEmpty()) {
+                stringRedisTemplate.delete(keys);
+            }
             log.info("🧹 Invalidated entitlements Redis cache pointer for tenantId={}", tenantId);
         } catch (Exception e) {
             log.warn("⚠️ Failed invalidating Redis entitlements cache for tenantId={}: {}", tenantId, e.getMessage());

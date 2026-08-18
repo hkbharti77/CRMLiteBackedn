@@ -34,9 +34,11 @@ public class TenantSubscriptionOverrideAudit extends BaseTenantEntity {
     @Column(nullable = false, length = 50)
     private OverrideAuditAction action;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String oldValueJson;
 
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private String newValueJson;
 

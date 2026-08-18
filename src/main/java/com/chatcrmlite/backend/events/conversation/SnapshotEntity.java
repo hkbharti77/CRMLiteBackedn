@@ -18,6 +18,7 @@ public class SnapshotEntity {
     @Column(nullable = false)
     private int version;
     
+    @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
     private String state;
     

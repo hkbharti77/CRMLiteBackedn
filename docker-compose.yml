@@ -1,14 +1,75 @@
+version: '3.8'
+
 services:
+  # ── PostgreSQL Database with pgvector ──
   db:
     image: pgvector/pgvector:pg17
     container_name: chatcrm_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_DB: chatcrmdb
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: root
+      POSTGRES_DB: ${POSTGRES_DB:-chatcrmdb}
+      POSTGRES_USER: ${DB_USERNAME:-root}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
     ports:
-      - "5433:5432"
+      - "5432:5432"
     volumes:
-      - ./postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-root} -d ${POSTGRES_DB:-chatcrmdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crmlite-network
+
+  # ── Redis Cache & PubSub ──
+  redis:
+    image: redis:7-alpine
+    container_name: chatcrm_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - crmlite-network
+
+  # ── Spring Boot Backend ──
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: chatcrm_backend
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    environment:
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-chatcrmdb}
+      DB_USERNAME: ${DB_USERNAME:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - crmlite-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  crmlite-network:
+    driver: bridge

@@ -32,6 +32,9 @@ public class UserController {
     private UserRepository userRepository;
 
     @Autowired
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
+    @Autowired
     private UserSessionRepository sessionRepository;
 
     @Autowired
@@ -78,42 +81,74 @@ public class UserController {
             @AuthenticationPrincipal String email,
             @RequestBody UpdateUserRequest request) {
         
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailWithTenant(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         if (request.getDisplayName() != null) user.setDisplayName(request.getDisplayName());
         if (request.getPhone() != null) user.setPhone(request.getPhone());
         
-        if (user.getRole() == User.Role.OWNER || user.getRole() == User.Role.ADMIN) {
-            if (request.getBusinessName() != null) user.setBusinessName(request.getBusinessName());
-            if (request.getBusinessType() != null) user.setBusinessType(request.getBusinessType());
-            if (request.getBusinessSubType() != null) user.setBusinessSubType(request.getBusinessSubType());
-            if (request.getAddress() != null) user.setAddress(request.getAddress());
-            if (request.getAboutUs() != null) user.setAboutUs(request.getAboutUs());
-            if (request.getLatitude() != null) user.setLatitude(request.getLatitude());
-            if (request.getLongitude() != null) user.setLongitude(request.getLongitude());
-            if (request.getLogoUrl() != null) user.setLogoUrl(request.getLogoUrl());
-            if (request.getWidgetIconUrl() != null) user.setWidgetIconUrl(request.getWidgetIconUrl());
-            if (request.getPrimaryColor() != null && user.getTenant() != null) user.getTenant().setPrimaryColor(request.getPrimaryColor());
-            if (request.getSecondaryColor() != null && user.getTenant() != null) user.getTenant().setSecondaryColor(request.getSecondaryColor());
-            if (request.getCountry() != null && user.getTenant() != null) user.getTenant().setCountry(request.getCountry());
-            if (request.getCurrency() != null && user.getTenant() != null) user.getTenant().setCurrency(request.getCurrency());
-            if (request.getTimezone() != null && user.getTenant() != null) user.getTenant().setTimezone(request.getTimezone());
-            
-            // Manual module overrides
-            if (request.getForceShowBooking() != null) user.setForceShowBooking(request.getForceShowBooking());
-            if (request.getForceShowAppointment() != null) user.setForceShowAppointment(request.getForceShowAppointment());
-            if (request.getForceShowLeads() != null) user.setForceShowLeads(request.getForceShowLeads());
-            if (request.getEmailHeaderText() != null && user.getTenant() != null) user.getTenant().setEmailHeaderText(request.getEmailHeaderText());
-            if (request.getEmailFooterText() != null && user.getTenant() != null) user.getTenant().setEmailFooterText(request.getEmailFooterText());
-            if (request.getDefaultDailyLeadLimit() != null && user.getTenant() != null) user.getTenant().setDefaultDailyLeadLimit(request.getDefaultDailyLeadLimit());
-            if (request.getAutoAssignmentDelayMinutes() != null && user.getTenant() != null) user.getTenant().setAutoAssignmentDelayMinutes(request.getAutoAssignmentDelayMinutes());
-            if (request.getWebFlowsRoutingConfigJson() != null) user.setWebFlowsRoutingConfigJson(request.getWebFlowsRoutingConfigJson());
+        com.chatcrmlite.backend.models.Tenant tenant = user.getTenant();
+        if (user.getRole() == User.Role.OWNER || user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.SUPER_ADMIN) {
+            if (tenant != null) {
+                if (request.getBusinessName() != null) tenant.setBusinessName(request.getBusinessName());
+                if (request.getBusinessType() != null) tenant.setBusinessType(request.getBusinessType());
+                if (request.getBusinessSubType() != null) tenant.setBusinessSubType(request.getBusinessSubType());
+                if (request.getAddress() != null) tenant.setAddress(request.getAddress());
+                if (request.getAboutUs() != null) tenant.setAboutUs(request.getAboutUs());
+                if (request.getLatitude() != null) tenant.setLatitude(request.getLatitude());
+                if (request.getLongitude() != null) tenant.setLongitude(request.getLongitude());
+                if (request.getLogoUrl() != null) tenant.setLogoUrl(request.getLogoUrl());
+                if (request.getWidgetIconUrl() != null) tenant.setWidgetIconUrl(request.getWidgetIconUrl());
+                if (request.getPrimaryColor() != null) tenant.setPrimaryColor(request.getPrimaryColor());
+                if (request.getSecondaryColor() != null) tenant.setSecondaryColor(request.getSecondaryColor());
+                if (request.getCountry() != null) tenant.setCountry(request.getCountry());
+                if (request.getCurrency() != null) tenant.setCurrency(request.getCurrency());
+                if (request.getTimezone() != null) tenant.setTimezone(request.getTimezone());
+                
+                // Manual module overrides
+                if (request.getForceShowBooking() != null) tenant.setForceShowBooking(request.getForceShowBooking());
+                if (request.getForceShowAppointment() != null) tenant.setForceShowAppointment(request.getForceShowAppointment());
+                if (request.getForceShowLeads() != null) tenant.setForceShowLeads(request.getForceShowLeads());
+                if (request.getEmailHeaderText() != null) tenant.setEmailHeaderText(request.getEmailHeaderText());
+                if (request.getEmailFooterText() != null) tenant.setEmailFooterText(request.getEmailFooterText());
+                if (request.getDefaultDailyLeadLimit() != null) tenant.setDefaultDailyLeadLimit(request.getDefaultDailyLeadLimit());
+                if (request.getAutoAssignmentDelayMinutes() != null) tenant.setAutoAssignmentDelayMinutes(request.getAutoAssignmentDelayMinutes());
+                if (request.getWebFlowsRoutingConfigJson() != null) tenant.setWebFlowsRoutingConfigJson(request.getWebFlowsRoutingConfigJson());
+                
+                tenantRepository.save(tenant);
+            }
         }
 
         userRepository.save(user);
 
         return ResponseEntity.ok(UserProfileDto.from(user));
+    }
+
+    @PutMapping("/me/password")
+    @org.springframework.transaction.annotation.Transactional
+    public ResponseEntity<?> updatePassword(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> request) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        String currentPassword = request.get("currentPassword");
+        String newPassword = request.get("newPassword");
+        
+        if (newPassword == null || newPassword.trim().length() < 6) {
+            return ResponseEntity.badRequest().body(Map.of("error", "New password must be at least 6 characters."));
+        }
+        
+        if (user.getPassword() != null && !user.getPassword().isBlank() && !user.getPassword().equals("OTP_ONLY")) {
+            if (currentPassword == null || !passwordEncoder.matches(currentPassword, user.getPassword())) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Current password is incorrect."));
+            }
+        }
+        
+        user.setPassword(passwordEncoder.encode(newPassword.trim()));
+        userRepository.save(user);
+        
+        return ResponseEntity.ok(Map.of("message", "Password updated successfully."));
     }
 
     @PostMapping(value = "/me/widget-icon", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
@@ -122,7 +157,7 @@ public class UserController {
             @AuthenticationPrincipal String email,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailWithTenant(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
@@ -158,6 +193,10 @@ public class UserController {
             String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "widget_icon.png");
             String iconUrl = cloudinaryStorageService.uploadFile(key, file);
 
+            if (user.getTenant() != null) {
+                user.getTenant().setWidgetIconUrl(iconUrl);
+                tenantRepository.save(user.getTenant());
+            }
             user.setWidgetIconUrl(iconUrl);
             userRepository.save(user);
 
@@ -177,7 +216,7 @@ public class UserController {
             @AuthenticationPrincipal String email,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file) {
         
-        User user = userRepository.findByEmail(email)
+        User user = userRepository.findByEmailWithTenant(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
         if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
@@ -232,6 +271,10 @@ public class UserController {
             String key = cloudinaryStorageService.buildTenantKey(tenantId, "branding", "logo." + ext);
             String logoUrl = cloudinaryStorageService.uploadFile(key, file);
 
+            if (user.getTenant() != null) {
+                user.getTenant().setLogoUrl(logoUrl);
+                tenantRepository.save(user.getTenant());
+            }
             user.setLogoUrl(logoUrl);
             userRepository.save(user);
 
