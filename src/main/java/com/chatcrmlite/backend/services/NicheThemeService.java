@@ -18,6 +18,7 @@ import java.util.Arrays;
 import com.chatcrmlite.backend.dto.WidgetCtaDTO;
 import com.chatcrmlite.backend.dto.MenuSectionDTO;
 import com.chatcrmlite.backend.dto.MenuCardDTO;
+import com.chatcrmlite.backend.util.MenuActionTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 
 @Service
@@ -210,7 +211,13 @@ public class NicheThemeService {
             List<CustomMenuCard> customCards = customMenuCardRepository
                     .findByTenantAndSectionOrderByDisplayOrderAsc(tenant, "SERVICES");
             for (CustomMenuCard c : customCards) {
-                serviceCards.add(new MenuCardDTO(c.getTitle(), c.getSubtitle(), c.getIcon(), c.getActionType(), c.getActionPayload()));
+                serviceCards.add(new MenuCardDTO(
+                        c.getTitle(),
+                        c.getSubtitle(),
+                        c.getIcon(),
+                        MenuActionTypes.normalize(c.getActionType()),
+                        c.getActionPayload()
+                ));
             }
             // Always append About Us if the tenant hasn't added it themselves
             boolean hasAbout = customCards.stream().anyMatch(c -> "ABOUT".equals(c.getActionType()));
@@ -224,13 +231,35 @@ public class NicheThemeService {
 
         sections.add(new MenuSectionDTO("SERVICES", serviceCards));
 
-        // 3. RESOURCES SECTION
+        // 3. RESOURCES SECTION — tenant custom cards or niche defaults (never hardcoded here)
+        List<MenuCardDTO> resourceCards = new ArrayList<>();
+        if (hasCustomCards) {
+            List<CustomMenuCard> resourceCustom = customMenuCardRepository
+                    .findByTenantAndSectionOrderByDisplayOrderAsc(tenant, "RESOURCES");
+            for (CustomMenuCard c : resourceCustom) {
+                resourceCards.add(new MenuCardDTO(
+                        c.getTitle(),
+                        c.getSubtitle(),
+                        c.getIcon(),
+                        MenuActionTypes.normalize(c.getActionType()),
+                        c.getActionPayload()
+                ));
+            }
+        } else {
+            resourceCards.addAll(getDefaultResourceCards());
+        }
+        if (!resourceCards.isEmpty()) {
+            sections.add(new MenuSectionDTO("RESOURCES", resourceCards));
+        }
+
+        return sections;
+    }
+
+    public List<MenuCardDTO> getDefaultResourceCards() {
         List<MenuCardDTO> resourceCards = new ArrayList<>();
         resourceCards.add(new MenuCardDTO("Careers", "Join our team", "doc", "LINK", "#careers"));
         resourceCards.add(new MenuCardDTO("Blog", "Read our articles", "doc", "LINK", "#blog"));
-        sections.add(new MenuSectionDTO("RESOURCES", resourceCards));
-
-        return sections;
+        return resourceCards;
     }
 
     public List<MenuCardDTO> getDefaultServiceCards(String slug) {

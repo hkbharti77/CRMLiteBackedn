@@ -34,18 +34,8 @@ COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes  .
 
 EXPOSE 8080
 
-# JVM flags optimized for 512MB containers:
+# JVM flags optimized for containers:
 #   UseSerialGC: uses minimal memory footprint compared to G1GC
-#   MaxMetaspaceSize: caps class metadata memory
-#   Xss256k: reduces thread stack size
-ENTRYPOINT ["java", \
-  "-XX:+UseContainerSupport", \
-  "-XX:MaxRAMPercentage=60.0", \
-  "-XX:+UseSerialGC", \
-  "-XX:MaxMetaspaceSize=128m", \
-  "-Xss256k", \
-  "-XX:+ExitOnOutOfMemoryError", \
-  "-Djava.security.egd=file:/dev/./urandom", \
-  "-Dspring.profiles.active=${SPRING_PROFILES_ACTIVE:prod}", \
-  "-cp", ".:lib/*", \
-  "com.chatcrmlite.backend.ChatCrmBackendApplication"]
+#   MaxMetaspaceSize: class metadata memory (Spring Boot 3 requires ~150MB)
+#   Xss256k: thread stack size
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms128m", "-Xmx350m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=256m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-cp", ".:lib/*", "com.chatcrmlite.backend.ChatCrmBackendApplication"]
