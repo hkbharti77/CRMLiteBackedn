@@ -32,8 +32,11 @@ public class WebMvcConfig implements WebMvcConfigurer {
         registry.addResourceHandler("/uploads/**")
                 .addResourceLocations("file:" + uploadPath + "/");
 
-        registry.addResourceHandler("/widget/**", "/chat-widget.js", "/styles.css", "/test.html")
-                .addResourceLocations("classpath:/static/widget/", "classpath:/static/");
+        registry.addResourceHandler("/widget/**")
+                .addResourceLocations("classpath:/static/widget/");
+
+        registry.addResourceHandler("/*.js", "/*.css", "/*.html", "/*.png", "/*.ico", "/*.json")
+                .addResourceLocations("classpath:/static/");
     }
 
     @Override

@@ -131,8 +131,8 @@ public class SecurityConfig {
                 // Swagger — gated: only allowed if the request comes from localhost
                 // In a true production deploy, remove these lines or add IP-based restriction
                 .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
-                // Static resources
-                .requestMatchers("/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json", "/widget/**").permitAll()
+                // Static resources & widget files (Publicly accessible from any website)
+                .requestMatchers("/widget/**", "/*.html", "/*.js", "/*.css", "/*.png", "/*.ico", "/*.json", "/chat-widget.js", "/styles.css", "/test.html").permitAll()
                 // OPTIONS preflight — must be permitted for CORS to work
                 .requestMatchers(org.springframework.http.HttpMethod.OPTIONS, "/**").permitAll()
                 // Actuator — require authentication; role-based health detail is configured in properties
