@@ -10,6 +10,15 @@ import { createCatalogManager } from './catalog.js';
 import { createUIController } from './ui.js';
 import { createFlowEngine } from './flow-engine.js';
 
+function normalizeMenuActionType(actionType) {
+    const raw = String(actionType || '').toUpperCase();
+    if (raw === 'EXTERNAL_LINK') return 'LINK';
+    if (raw === 'ABOUT_US') return 'ABOUT';
+    if (raw === 'CONTACT_SUPPORT') return 'SUPPORT';
+    if (raw === 'CUSTOM_RESPONSE') return 'LINK';
+    return raw;
+}
+
 export async function initWidget({ businessId, apiBase } = {}) {
     console.log("CRM Chat Widget Initializing (Modular)...");
 
@@ -66,7 +75,10 @@ export async function initWidget({ businessId, apiBase } = {}) {
         resetInactivityTimer();
 
         flowEngine.addUserBubble(val);
-        if (input) input.value = '';
+        if (input) {
+            input.value = '';
+            if (input.tagName === 'TEXTAREA') input.style.height = 'auto';
+        }
         ui.setTyping(true);
 
         const triggered = flowEngine.evaluateTrigger(val);
@@ -134,16 +146,22 @@ export async function initWidget({ businessId, apiBase } = {}) {
         onRestartConfirm: () => flowEngine.restart(),
         onZoomToggle: () => {},
         onMenuCardClick: (card) => {
-            if (card.actionType === 'FLOW') {
+            const action = normalizeMenuActionType(card.actionType);
+            if (action === 'FLOW') {
                 flowEngine.startFlow(card.actionPayload, card.title);
-            } else if (card.actionType === 'SUPPORT') {
+            } else if (action === 'SUPPORT') {
                 flowEngine.startSupportFlow();
-            } else if (card.actionType === 'CATALOG') {
+            } else if (action === 'CATALOG') {
                 flowEngine.startCatalogFlow();
-            } else if (card.actionType === 'ABOUT') {
+            } else if (action === 'ABOUT') {
                 flowEngine.startAboutFlow(theme.aboutUs);
-            } else if (card.actionType === 'LINK') {
-                window.open(card.actionPayload, '_blank');
+            } else if (action === 'LINK') {
+                const url = card.actionPayload || '#';
+                if (url.startsWith('#')) {
+                    window.location.hash = url;
+                } else {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                }
             }
         },
         onCtaAction: (btnConfig) => flowEngine.handleCtaAction(btnConfig)
@@ -153,7 +171,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
     catalogManager = createCatalogManager({
         messagesContainer: elements.messages,
-        onAddUserBubble: (t) => flowEngine.addUserBubble(t)
+        onAddUserBubble: (t) => flowEngine.addUserBubble(t),
+        createBotRow: () => ui.createBotRow()
     });
 
     flowEngine = createFlowEngine({
@@ -190,12 +209,15 @@ export async function initWidget({ businessId, apiBase } = {}) {
         if (chatHistory.length > 0) {
             chatHistory.forEach(m => {
                 if (m.ctas && m.ctas.length > 0) {
-                    ui.renderBotBubbleWithCTAs(m.text, m.ctas, (btnConfig) => flowEngine.handleCtaAction(btnConfig));
+                    ui.renderBotBubbleWithCTAs(m.text, m.ctas, (btnConfig) => flowEngine.handleCtaAction(btnConfig), m.ctasUsed);
                 } else {
                     ui.renderMessageBubble(m);
                 }
             });
-            flowEngine.showDynamicCTAs();
+            const last = chatHistory[chatHistory.length - 1];
+            if (!last || !last.ctas || last.ctas.length === 0) {
+                flowEngine.showDynamicCTAs();
+            }
         } else {
             let wm = theme.welcomeMessage;
             if (!wm || String(wm).trim() === '') wm = 'Hello! How can I help you today?';

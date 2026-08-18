@@ -16,9 +16,9 @@
     --bubble-bot-border: #e8edf3;
     --bubble-user-bg: var(--primary-color);
     --bubble-user-gradient: var(--primary-color);
-    --radius-panel: 18px;
-    --radius-bubble: 16px;
-    --radius-sm: 10px;
+    --radius-panel: 16px;
+    --radius-bubble: 12px;
+    --radius-sm: 8px;
     --text-primary: #0f172a;
     --text-muted: #64748b;
     --surface-muted: #f4f6f9;
@@ -49,8 +49,8 @@
 
 #crm-chat-widget {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    right: calc(20px + env(safe-area-inset-right, 0px));
     z-index: 99999;
     --primary-color: #2563eb;
     --primary-hover: #1d4ed8;
@@ -70,6 +70,9 @@
     border-radius: 50%;
     background: var(--primary-color);
     color: #ffffff;
+    border: none;
+    padding: 0;
+    font-family: inherit;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -191,9 +194,9 @@
     position: absolute;
     bottom: 0;
     right: 0;
-    width: 480px;
-    height: 700px;
-    max-height: calc(94vh - 24px);
+    width: 400px;
+    height: 620px;
+    max-height: calc(90vh - 28px);
     background: var(--bg-panel);
     border: 1px solid rgba(15, 23, 42, 0.06);
     border-radius: var(--radius-panel);
@@ -227,16 +230,16 @@
     left: auto !important;
     right: 0 !important;
     bottom: 0 !important;
-    width: 580px !important;
-    height: 780px !important;
-    max-width: 96vw !important;
-    max-height: calc(96vh - 16px) !important;
+    width: 480px !important;
+    height: 680px !important;
+    max-width: 94vw !important;
+    max-height: calc(94vh - 20px) !important;
     border-radius: var(--radius-panel) !important;
 }
 
 /* ── Header ── */
 .chat-header {
-    padding: 16px 14px 16px 16px;
+    padding: 12px 12px 12px 14px;
     background: var(--header-bg, var(--secondary-color));
     color: #ffffff;
     display: flex;
@@ -253,13 +256,13 @@
 .chat-header-info {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 10px;
     min-width: 0;
 }
 
 .chat-header-info .niche-icon-wrap {
-    width: 40px;
-    height: 40px;
+    width: 34px;
+    height: 34px;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.14);
     display: flex;
@@ -277,7 +280,7 @@
 }
 
 .avatar-initials {
-    font-size: 13px;
+    font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.02em;
     color: #ffffff;
@@ -300,8 +303,8 @@
 }
 
 .chat-header-title {
-    font-weight: 650;
-    font-size: 15px;
+    font-weight: 600;
+    font-size: 14px;
     letter-spacing: -0.02em;
     color: #ffffff;
     line-height: 1.25;
@@ -313,16 +316,16 @@
 .chat-header-status {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 5px;
+    font-size: 11px;
     font-weight: 500;
-    color: rgba(255, 255, 255, 0.78);
-    margin-top: 3px;
+    color: rgba(255, 255, 255, 0.75);
+    margin-top: 2px;
 }
 
 .status-dot-pulse {
-    width: 7px;
-    height: 7px;
+    width: 6px;
+    height: 6px;
     border-radius: 50%;
     background: #22c55e;
     flex-shrink: 0;
@@ -359,8 +362,8 @@
     background: transparent;
     border: none;
     color: rgba(255, 255, 255, 0.88);
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: inline-flex;
     align-items: center;
@@ -398,11 +401,11 @@
 /* ── Messages ── */
 .chat-messages {
     flex: 1;
-    padding: 18px 16px 20px;
+    padding: 14px 12px 16px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 14px;
+    gap: 10px;
     background:
         radial-gradient(ellipse at top, rgba(15, 23, 42, 0.015), transparent 55%),
         var(--surface-muted);
@@ -412,7 +415,7 @@
 .message-row {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
+    gap: 6px;
     max-width: 100%;
     animation: bubbleEnter 0.2s ease forwards;
 }
@@ -427,16 +430,33 @@
     justify-content: flex-end;
 }
 
+.message-row-content {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100% - 30px);
+}
+
+.message-row-content--buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.flow-buttons-row .flow-skip-link {
+    align-self: flex-start;
+    margin-left: 0;
+}
+
 .msg-avatar {
-    width: 28px;
-    height: 28px;
+    width: 24px;
+    height: 24px;
     border-radius: 50%;
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: center;
     overflow: hidden;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 700;
     letter-spacing: 0.02em;
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
@@ -468,26 +488,26 @@
 }
 
 .msg-avatar--user svg {
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     display: block;
 }
 
 .message {
-    max-width: calc(100% - 36px);
-    padding: 11px 14px 9px;
+    max-width: calc(100% - 30px);
+    padding: 8px 11px 6px;
     border-radius: var(--radius-bubble);
-    font-size: 14.5px;
-    line-height: 1.55;
+    font-size: 13px;
+    line-height: 1.5;
     letter-spacing: -0.01em;
     position: relative;
     overflow-wrap: break-word;
     word-break: normal;
-    font-weight: 450;
+    font-weight: 400;
 }
 
 .message-row .message {
-    max-width: min(78%, 360px);
+    max-width: min(84%, 280px);
 }
 
 @keyframes bubbleEnter {
@@ -510,7 +530,7 @@
 }
 
 .message.bot.has-ctas {
-    max-width: min(88%, 400px);
+    max-width: min(92%, 300px);
     width: auto;
 }
 
@@ -537,9 +557,9 @@
 }
 
 .message-time {
-    font-size: 10.5px;
-    opacity: 0.5;
-    margin-top: 6px;
+    font-size: 10px;
+    opacity: 0.45;
+    margin-top: 4px;
     display: block;
     text-align: right;
     font-weight: 500;
@@ -556,8 +576,8 @@
 .typing-wrap {
     display: flex;
     align-items: flex-end;
-    gap: 8px;
-    padding: 0 16px 10px;
+    gap: 6px;
+    padding: 0 12px 10px;
     background: transparent;
 }
 
@@ -591,7 +611,7 @@
 
 /* ── Composer ── */
 .chat-input-container {
-    padding: 12px 14px 14px;
+    padding: 10px 12px calc(12px + env(safe-area-inset-bottom, 0px));
     background: #ffffff;
     border-top: 1px solid var(--border-subtle);
     display: flex;
@@ -602,9 +622,9 @@
 }
 
 .chat-menu-btn {
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
     background: #ffffff;
     border: 1px solid var(--border-subtle);
     color: #475569;
@@ -640,12 +660,12 @@
     flex: 1;
     min-width: 0;
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: flex-end;
+    gap: 5px;
     background: var(--surface-muted);
     border: 1px solid transparent;
-    border-radius: 14px;
-    padding: 4px 4px 4px 14px;
+    border-radius: 12px;
+    padding: 3px 3px 3px 12px;
     transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
@@ -659,14 +679,19 @@
     flex: 1;
     border: none;
     border-radius: 0;
-    padding: 8px 0;
-    font-size: 14px;
+    padding: 7px 0;
+    font-size: 13px;
     font-weight: 500;
     outline: none;
     background: transparent;
     color: var(--text-primary);
     box-shadow: none;
     min-width: 0;
+    resize: none;
+    overflow-y: auto;
+    max-height: 120px;
+    line-height: 1.45;
+    font-family: inherit;
 }
 
 .chat-input::placeholder {
@@ -688,9 +713,9 @@
     background: var(--primary-color);
     color: #ffffff;
     border: none;
-    border-radius: 10px;
-    width: 36px;
-    height: 36px;
+    border-radius: 8px;
+    width: 32px;
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -729,12 +754,12 @@
 /* ── Flow / CTA buttons ── */
 .flow-buttons,
 .cta-card-wrap {
-    margin-top: 10px;
-    padding-top: 8px;
+    margin-top: 8px;
+    padding-top: 6px;
     border-top: 1px solid #f1f5f9;
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
+    gap: 6px;
     width: 100%;
 }
 
@@ -748,11 +773,11 @@
     color: var(--text-primary);
     border: 1px solid var(--border-subtle);
     border-radius: 999px;
-    padding: 9px 12px;
+    padding: 7px 10px;
     cursor: pointer;
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.25;
     letter-spacing: -0.01em;
     display: flex;
     align-items: center;
@@ -944,6 +969,9 @@
     cursor: pointer;
     border: 1px solid var(--border-subtle);
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
 }
 
 .menu-card:hover {
@@ -1062,6 +1090,11 @@
     cursor: pointer;
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     overflow: hidden;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    display: block;
 }
 
 .catalog-card:hover {
@@ -1146,109 +1179,146 @@
 /* ── Mobile ── */
 @media (max-width: 480px) {
     #crm-chat-widget {
-        bottom: 12px;
-        right: 12px;
+        bottom: 0;
+        right: 0;
+        left: 0;
     }
     .chat-button {
         width: 52px;
         height: 52px;
+        margin: 12px;
+        margin-bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+        margin-right: calc(12px + env(safe-area-inset-right, 0px));
     }
     .chat-panel {
         position: fixed;
-        bottom: 12px;
-        right: 12px;
-        left: 12px;
-        width: calc(100vw - 16px);
-        max-width: 500px;
-        height: 85vh;
-        max-height: 740px;
-        margin: 0 auto;
+        inset: 0;
+        width: auto;
+        max-width: none;
+        height: 100dvh;
+        max-height: none;
+        border-radius: 0;
+        margin: 0;
     }
     .chat-panel.zoomed {
         position: fixed !important;
-        bottom: 8px !important;
-        right: 8px !important;
-        left: 8px !important;
-        width: calc(100vw - 12px) !important;
-        max-width: 560px !important;
-        height: 92vh !important;
-        max-height: 820px !important;
+        inset: 0 !important;
+        width: auto !important;
+        max-width: none !important;
+        height: 100dvh !important;
+        max-height: none !important;
+        border-radius: 0 !important;
+    }
+    #chat-zoom {
+        display: none;
+    }
+    .crm-webflow-sheet--inline .crm-webflow-body {
+        max-height: none;
+        flex: 1;
+        min-height: 0;
     }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════
-   🌟 "WEB FLOW" INTERACTIVE IN-CHAT MODAL & CTA CARD SYSTEM (1-to-1 Parity)
+   Enterprise Inline Form & CTA System (Appointment / Lead / Booking / Support)
    ══════════════════════════════════════════════════════════════════════════════ */
 
-/* ── Web Flow Bubble Container ── */
-.message.bot.crm-webflow-bubble {
-    padding: 0 !important;
-    background: transparent !important;
-    border: none !important;
-    box-shadow: none !important;
-    max-width: min(88%, 340px) !important;
-    width: 100% !important;
+/* ── Form message row ── */
+.message-row.crm-form-row {
+    align-self: stretch;
+    max-width: 100%;
 }
 
-/* ── Interactive In-Chat CTA Launch Card ── */
+.message-row.crm-form-row .crm-webflow-cta-card,
+.message-row.crm-form-row .crm-webflow-success-card {
+    flex: 1;
+    min-width: 0;
+    max-width: calc(100% - 30px);
+}
+
+/* ── Enterprise CTA Launch Card ── */
 .crm-webflow-cta-card {
     background: #ffffff;
-    border: 1px solid var(--bubble-bot-border, #e2e8f0);
-    border-radius: 16px;
-    padding: 14px 16px;
-    margin: 2px 0;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 12px;
     width: 100%;
     box-sizing: border-box;
-    box-shadow: 0 4px 20px -4px rgba(15, 23, 42, 0.08), 0 2px 6px -1px rgba(15, 23, 42, 0.04);
-    animation: flowCtaPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-    position: relative;
-    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05);
+    animation: flowCtaPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.crm-webflow-cta-card.has-inline-form {
+    padding-bottom: 0;
+}
+
+.crm-webflow-cta-card.has-inline-form .crm-webflow-cta-desc {
+    margin-bottom: 0;
+}
+
+.crm-webflow-cta-card.has-inline-form .crm-webflow-cta-btn {
+    display: none;
 }
 
 @keyframes flowCtaPop {
-    from { opacity: 0; transform: translateY(10px) scale(0.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 
-.crm-webflow-cta-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 4px;
-    height: 100%;
-    background: linear-gradient(180deg, var(--primary-color, #0284c7) 0%, var(--secondary-color, #38bdf8) 100%);
-    border-radius: 4px 0 0 4px;
+.crm-webflow-cta-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+
+.crm-webflow-cta-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.crm-webflow-cta-header-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
 }
 
 .crm-webflow-cta-badge {
     display: inline-flex;
     align-items: center;
-    gap: 5px;
-    padding: 3px 8px;
-    border-radius: 6px;
-    font-size: 10.5px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.05em;
-    background: rgba(2, 132, 199, 0.08);
-    color: var(--primary-color, #0284c7);
-    margin-bottom: 8px;
+    letter-spacing: 0.06em;
+    background: var(--primary-light);
+    color: var(--primary-color);
+    width: fit-content;
 }
 
 .crm-webflow-cta-title {
-    font-size: 14.5px;
-    font-weight: 700;
-    color: var(--text-primary, #0f172a);
-    margin-bottom: 4px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: var(--text-primary);
     line-height: 1.35;
+    letter-spacing: -0.01em;
 }
 
 .crm-webflow-cta-desc {
-    font-size: 12.5px;
-    color: #64748b;
+    font-size: 12px;
+    color: var(--text-muted);
     line-height: 1.45;
-    margin-bottom: 14px;
+    margin-bottom: 10px;
 }
 
 .crm-webflow-cta-btn {
@@ -1262,129 +1332,140 @@
     font-size: 13px;
     font-weight: 600;
     color: #ffffff;
-    background: linear-gradient(135deg, var(--primary-color, #0284c7) 0%, var(--secondary-color, #0369a1) 100%);
+    background: var(--primary-color);
     border: none;
     cursor: pointer;
-    box-shadow: 0 3px 12px rgba(2, 132, 199, 0.25);
-    transition: all 0.2s ease;
+    transition: background 0.15s ease, opacity 0.15s ease, transform 0.15s ease;
+    font-family: inherit;
 }
 
-.crm-webflow-cta-btn:hover {
+.crm-webflow-cta-btn:hover:not(:disabled) {
+    background: var(--primary-hover);
     transform: translateY(-1px);
-    box-shadow: 0 5px 16px rgba(2, 132, 199, 0.35);
-    filter: brightness(1.05);
 }
 
-.crm-webflow-cta-btn:active {
-    transform: translateY(0);
+.crm-webflow-cta-btn:disabled.is-opened {
+    opacity: 0.5;
+    cursor: default;
+    transform: none;
 }
 
-/* ── Interactive Web Flow In-Chat Modal Sheet ── */
-.crm-webflow-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.45);
-    backdrop-filter: blur(4px);
-    z-index: 1000;
+/* ── Inline Form Panel (expands below CTA in chat) ── */
+.crm-webflow-inline-form {
+    margin-top: 12px;
+    border-top: 1px solid var(--border-subtle);
+    animation: flowFormExpand 0.28s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.crm-webflow-sheet--compact .crm-webflow-inline-toolbar {
     display: flex;
-    flex-direction: column;
     justify-content: flex-end;
-    border-radius: inherit;
-    animation: flowBackdropFade 0.25s ease-out;
+    padding: 0 0 4px;
 }
 
-@keyframes flowBackdropFade {
-    from { opacity: 0; }
-    to { opacity: 1; }
+.crm-webflow-sheet--compact .crm-webflow-body {
+    padding-top: 0;
 }
 
-.crm-webflow-sheet {
-    background: #ffffff;
-    border-top-left-radius: 20px;
-    border-top-right-radius: 20px;
-    max-height: 92%;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.18);
-    animation: flowSheetSlideUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
-    overflow: hidden;
+@keyframes flowFormExpand {
+    from { opacity: 0; max-height: 0; }
+    to { opacity: 1; max-height: 800px; }
 }
 
-@keyframes flowSheetSlideUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+.crm-webflow-sheet--inline {
+    background: transparent;
+    border-radius: 0;
+    box-shadow: none;
+    max-height: none;
+    overflow: visible;
+}
+
+.crm-webflow-sheet--inline .crm-webflow-header {
+    padding: 14px 0 10px;
+    border-bottom: none;
+    background: transparent;
+}
+
+.crm-webflow-sheet--inline .crm-webflow-body {
+    padding: 4px 0 10px;
+    max-height: min(340px, 52vh);
+    overflow-y: auto;
+}
+
+.crm-webflow-sheet--inline .crm-webflow-footer {
+    padding: 12px 0 16px;
+    border-top: 1px solid var(--border-subtle);
+    background: transparent;
 }
 
 .crm-webflow-header {
-    padding: 16px 18px 12px;
-    border-bottom: 1px solid #f1f5f9;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #ffffff;
+    gap: 10px;
 }
 
 .crm-webflow-header-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
+    min-width: 0;
 }
 
 .crm-webflow-header-title {
-    font-size: 15px;
-    font-weight: 700;
-    color: #0f172a;
-    display: flex;
-    align-items: center;
-    gap: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+    letter-spacing: -0.01em;
 }
 
 .crm-webflow-header-subtitle {
     font-size: 11.5px;
-    color: #64748b;
+    color: var(--text-muted);
     font-weight: 500;
 }
 
 .crm-webflow-close-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 1px solid #e2e8f0;
-    background: #f8fafc;
-    color: #64748b;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-muted);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.15s;
-    font-size: 14px;
+    transition: background 0.15s ease, color 0.15s ease;
+    padding: 0;
+    flex-shrink: 0;
 }
 
 .crm-webflow-close-btn:hover {
-    background: #f1f5f9;
-    color: #0f172a;
+    background: #e8edf3;
+    color: var(--text-primary);
 }
 
 .crm-webflow-progress-bar {
     width: 100%;
     height: 3px;
-    background: #f1f5f9;
-    position: relative;
+    background: var(--surface-muted);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 4px;
 }
 
 .crm-webflow-progress-fill {
     height: 100%;
-    background: linear-gradient(90deg, var(--primary-color, #0284c7), var(--secondary-color, #38bdf8));
+    background: var(--primary-color);
+    border-radius: 999px;
     transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .crm-webflow-body {
-    padding: 18px;
-    overflow-y: auto;
-    max-height: calc(80vh - 170px);
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 14px;
 }
 
 .crm-webflow-field {
@@ -1394,7 +1475,7 @@
 }
 
 .crm-webflow-label {
-    font-size: 12.5px;
+    font-size: 12px;
     font-weight: 600;
     color: #334155;
     display: flex;
@@ -1410,14 +1491,14 @@
 .crm-webflow-select,
 .crm-webflow-textarea {
     width: 100%;
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: 1.5px solid #e2e8f0;
-    font-size: 13.5px;
-    color: #0f172a;
-    background: #f8fafc;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--border-subtle);
+    font-size: 13px;
+    color: var(--text-primary);
+    background: var(--surface-muted);
     outline: none;
-    transition: all 0.2s;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
     font-family: inherit;
     box-sizing: border-box;
 }
@@ -1425,9 +1506,9 @@
 .crm-webflow-input:focus,
 .crm-webflow-select:focus,
 .crm-webflow-textarea:focus {
-    border-color: var(--primary-color, #0284c7);
+    border-color: var(--primary-color);
     background: #ffffff;
-    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+    box-shadow: 0 0 0 3px var(--primary-light);
 }
 
 .crm-webflow-input.input-error,
@@ -1438,7 +1519,7 @@
 }
 
 .crm-webflow-field-error {
-    font-size: 11px;
+    font-size: 11.5px;
     color: #ef4444;
     font-weight: 500;
     display: flex;
@@ -1446,23 +1527,42 @@
     gap: 4px;
 }
 
-/* ── Radio Choice Cards (Identical to WhatsApp Radio Component) ── */
+.crm-webflow-field-error svg {
+    flex-shrink: 0;
+}
+
+/* ── Radio choice cards (2 per row) ── */
 .crm-webflow-radio-group {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
+    width: 100%;
+}
+
+.crm-webflow-radio-input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
 }
 
 .crm-webflow-radio-card {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 11px 14px;
+    gap: 8px;
+    padding: 9px 10px;
     border-radius: 10px;
-    border: 1.5px solid #e2e8f0;
-    background: #f8fafc;
+    border: 1px solid var(--border-subtle);
+    background: var(--surface-muted);
     cursor: pointer;
-    transition: all 0.18s ease;
+    transition: border-color 0.15s ease, background 0.15s ease;
+    min-width: 0;
+    position: relative;
 }
 
 .crm-webflow-radio-card:hover {
@@ -1471,8 +1571,8 @@
 }
 
 .crm-webflow-radio-card.selected {
-    border-color: var(--primary-color, #0284c7);
-    background: rgba(2, 132, 199, 0.05);
+    border-color: var(--primary-color);
+    background: var(--primary-light);
 }
 
 .crm-webflow-radio-dot {
@@ -1484,12 +1584,12 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    transition: all 0.18s;
+    transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .crm-webflow-radio-card.selected .crm-webflow-radio-dot {
-    border-color: var(--primary-color, #0284c7);
-    background: var(--primary-color, #0284c7);
+    border-color: var(--primary-color);
+    background: var(--primary-color);
 }
 
 .crm-webflow-radio-dot::after {
@@ -1500,7 +1600,7 @@
     background: #ffffff;
     opacity: 0;
     transform: scale(0.5);
-    transition: all 0.18s;
+    transition: opacity 0.15s ease, transform 0.15s ease;
 }
 
 .crm-webflow-radio-card.selected .crm-webflow-radio-dot::after {
@@ -1509,29 +1609,32 @@
 }
 
 .crm-webflow-radio-label {
-    font-size: 13px;
+    font-size: 12.5px;
     font-weight: 500;
     color: #334155;
+    overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    line-height: 1.35;
+    min-width: 0;
 }
 
 .crm-webflow-radio-card.selected .crm-webflow-radio-label {
     font-weight: 600;
-    color: #0f172a;
+    color: var(--text-primary);
 }
 
-/* ── Footer Actions ── */
+/* ── Footer actions ── */
 .crm-webflow-footer {
-    padding: 14px 18px;
-    border-top: 1px solid #f1f5f9;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: #ffffff;
     gap: 10px;
 }
 
 .crm-webflow-btn {
-    padding: 10px 18px;
+    padding: 9px 16px;
     border-radius: 10px;
     font-size: 13px;
     font-weight: 600;
@@ -1540,30 +1643,30 @@
     align-items: center;
     justify-content: center;
     gap: 6px;
-    transition: all 0.18s ease;
+    transition: background 0.15s ease, color 0.15s ease;
     border: none;
+    font-family: inherit;
 }
 
 .crm-webflow-btn-secondary {
-    background: #f1f5f9;
-    color: #475569;
+    background: var(--surface-muted);
+    color: var(--text-muted);
+    border: 1px solid var(--border-subtle);
 }
 
 .crm-webflow-btn-secondary:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+    background: #e8edf3;
+    color: var(--text-primary);
 }
 
 .crm-webflow-btn-primary {
-    background: linear-gradient(135deg, var(--primary-color, #0284c7) 0%, var(--secondary-color, #0369a1) 100%);
+    background: var(--primary-color);
     color: #ffffff;
-    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.25);
     flex: 1;
 }
 
-.crm-webflow-btn-primary:hover {
-    filter: brightness(1.06);
-    box-shadow: 0 4px 14px rgba(2, 132, 199, 0.35);
+.crm-webflow-btn-primary:hover:not(:disabled) {
+    background: var(--primary-hover);
 }
 
 .crm-webflow-btn:disabled {
@@ -1571,33 +1674,117 @@
     cursor: not-allowed;
 }
 
-/* ── Success Celebration Card in Timeline ── */
+.crm-spin {
+    animation: crmSpin 0.8s linear infinite;
+}
+
+@keyframes crmSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* ── Success card ── */
 .crm-webflow-success-card {
-    background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(5, 150, 105, 0.04) 100%);
-    border: 1.5px solid rgba(16, 185, 129, 0.25);
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
     border-radius: 14px;
     padding: 14px 16px;
-    margin: 2px 0;
     width: 100%;
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: 6px;
-    animation: flowCtaPop 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    animation: flowCtaPop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 .crm-webflow-success-header {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 13.5px;
-    font-weight: 700;
+    font-size: 14px;
+    font-weight: 600;
     color: #065f46;
 }
 
+.crm-webflow-success-header svg {
+    color: #059669;
+    flex-shrink: 0;
+}
+
 .crm-webflow-success-details {
-    font-size: 12.5px;
+    font-size: 13px;
     color: #047857;
-    line-height: 1.4;
+    line-height: 1.45;
+}
+
+/* ── Markdown content in messages ── */
+.message-text .md-pre {
+    background: var(--surface-muted);
+    padding: 8px 10px;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 12px;
+    margin: 6px 0;
+    display: block;
+}
+
+.message-text .md-pre code {
+    font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+    white-space: pre-wrap;
+}
+
+.message-text .md-code {
+    background: var(--surface-muted);
+    padding: 1px 5px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: ui-monospace, 'Cascadia Code', 'Segoe UI Mono', monospace;
+}
+
+.message-text .md-h1,
+.message-text .md-h2,
+.message-text .md-h3 {
+    display: block;
+    font-weight: 700;
+    margin: 4px 0 2px;
+}
+
+.message-text .md-h1 { font-size: 15px; }
+.message-text .md-h2 { font-size: 14px; }
+.message-text .md-h3 { font-size: 13px; }
+
+.message-text .md-quote {
+    display: block;
+    border-left: 3px solid var(--border-subtle);
+    padding-left: 10px;
+    color: var(--text-muted);
+    margin: 4px 0;
+}
+
+/* ── Narrow panel: single-column option grid ── */
+@media (max-width: 360px) {
+    .crm-webflow-radio-group {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+    #crm-chat-widget *,
+    #crm-chat-widget *::before,
+    #crm-chat-widget *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+
+    .chat-tooltip {
+        animation: none !important;
+    }
+
+    .chat-panel {
+        transition: none !important;
+    }
 }
 

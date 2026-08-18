@@ -2,7 +2,7 @@
  * CRM Chat Widget - Flow Engine & State Machine
  */
 
-import { SUPPORT_STEPS, ENDPOINT_MAP } from './constants.js';
+import { SUPPORT_STEPS, ENDPOINT_MAP, FORM_META } from './constants.js';
 import { validateFieldInput, validateSupportPayload } from './validator.js';
 
 export function createFlowEngine({
@@ -41,15 +41,27 @@ export function createFlowEngine({
 
     function addBotBubbleWithCTAs(text) {
         const t = text || "Hello! How can I help you today?";
-        const entry = { text: t, sender: 'bot', time: Date.now() };
+        const currentTheme = getTheme();
+        const ctas = currentTheme.ctaButtons || [];
+        const entry = { text: t, sender: 'bot', time: Date.now(), ctas: ctas.length ? ctas : undefined };
         const history = storage.loadHistory();
         history.push(entry);
         storage.saveHistory(history);
 
-        const currentTheme = getTheme();
-        ui.renderBotBubbleWithCTAs(t, currentTheme.ctaButtons || [], (btnConfig) => {
+        ui.renderBotBubbleWithCTAs(t, ctas, (btnConfig) => {
             engine.handleCtaAction(btnConfig);
         });
+    }
+
+    function markLastCtasUsed() {
+        const history = storage.loadHistory();
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].ctas && history[i].ctas.length > 0 && !history[i].ctasUsed) {
+                history[i].ctasUsed = true;
+                storage.saveHistory(history);
+                break;
+            }
+        }
     }
 
     const engine = {
@@ -102,6 +114,8 @@ export function createFlowEngine({
                     mode = 'flow';
                     ui.setInputEnabled(false);
                     this.renderStep(0);
+                } else if (val === 'Keep chatting') {
+                    ui.removeLastFlowButtons();
                 }
             });
         },
@@ -143,6 +157,64 @@ export function createFlowEngine({
                 ui.setTyping(false);
                 addBotBubble('Connection error. Please try again.');
             }
+        },
+
+        getFormMeta(actionType) {
+            const key = (actionType || '').toUpperCase();
+            return FORM_META[key] || FORM_META.DEFAULT;
+        },
+
+        getFormIconSvg(iconKey) {
+            const icons = {
+                calendar: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4"/><path d="M8 3v4"/><path d="M3 11h18"/></svg>`,
+                briefcase: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/></svg>`,
+                doc: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`,
+                settings: `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>`
+            };
+            return icons[iconKey] || icons.doc;
+        },
+
+        openWebFlowForm({ actionType, label, title, subtitle, steps, onSubmit, onCancel, autoOpen = true }) {
+            const meta = this.getFormMeta(actionType);
+            const iconSvg = this.getFormIconSvg(meta.icon);
+            const formTitle = title || label || meta.defaultTitle;
+            const formSubtitle = subtitle || meta.defaultSubtitle;
+
+            const openInlineForm = (anchorCard, anchorRow) => {
+                ui.renderWebFlowModal({
+                    title: formTitle,
+                    subtitle: formSubtitle,
+                    steps: steps || [],
+                    anchorCard,
+                    anchorRow,
+                    onSubmit,
+                    onCancel
+                });
+            };
+
+            if (autoOpen) {
+                ui.renderWebFlowInline({
+                    title: formTitle,
+                    subtitle: formSubtitle,
+                    badgeText: meta.badge,
+                    iconSvg,
+                    steps: steps || [],
+                    onSubmit,
+                    onCancel
+                });
+                return;
+            }
+
+            const ctaResult = ui.renderWebFlowCtaCard({
+                title: formTitle,
+                subtitle: formSubtitle,
+                badgeText: meta.badge,
+                buttonText: meta.buttonText,
+                iconSvg,
+                onOpen: (card, row) => openInlineForm(card, row)
+            });
+
+            return ctaResult;
         },
 
         getWebFlowRoutingMode(category) {
@@ -187,57 +259,45 @@ export function createFlowEngine({
                     { dataKey: 'description', question: 'Detailed Description', fieldType: 'TEXTAREA', required: true }
                 ];
 
-                const openSupportModal = () => {
-                    ui.renderWebFlowModal({
-                        title: 'Support Ticket Request',
-                        subtitle: 'Customer Care & Grievances',
-                        steps: supportSteps,
-                        onSubmit: async (formData, { close, reset }) => {
-                            try {
-                                const res = await apiClient.submitSupportTicket({
-                                    name: formData.name,
-                                    email: formData.email,
-                                    phone: formData.phone || '',
-                                    subject: formData.subject,
-                                    description: formData.description,
-                                    category: formData.category,
-                                    priority: 'MEDIUM'
+                this.openWebFlowForm({
+                    actionType: 'SUPPORT',
+                    title: 'Support Ticket Request',
+                    subtitle: 'Customer Care',
+                    steps: supportSteps,
+                    onSubmit: async (formData, { close, reset }) => {
+                        try {
+                            const res = await apiClient.submitSupportTicket({
+                                name: formData.name,
+                                email: formData.email,
+                                phone: formData.phone || '',
+                                subject: formData.subject,
+                                description: formData.description,
+                                category: formData.category,
+                                priority: 'MEDIUM'
+                            });
+                            if (res.ok) {
+                                close();
+                                const ticketNum = res.data && res.data.ticketNumber ? ` (Ticket #${res.data.ticketNumber})` : '';
+                                ui.renderWebFlowSuccessCard({
+                                    title: `Support ticket created${ticketNum}`,
+                                    details: `Your ticket has been logged with our team. A confirmation email has been sent to ${formData.email}.`
                                 });
-                                if (res.ok) {
-                                    close();
-                                    const ticketNum = res.data && res.data.ticketNumber ? ` (Ticket: #${res.data.ticketNumber})` : '';
-                                    ui.renderWebFlowSuccessCard({
-                                        title: `🎫 Support Ticket Created${ticketNum}!`,
-                                        details: `Your ticket has been logged with our team. A confirmation email with resolution details has been sent to ${formData.email}.`
-                                    });
-                                    mode = 'rag';
-                                    ui.setInputEnabled(true, 'Ask me anything...');
-                                } else {
-                                    reset();
-                                    ui.showValidationError('Failed to submit ticket. Please check your fields and try again.');
-                                }
-                            } catch (err) {
+                                mode = 'rag';
+                                ui.setInputEnabled(true, 'Ask me anything...');
+                            } else {
                                 reset();
-                                ui.showValidationError('Network error submitting ticket. Please try again.');
+                                ui.showValidationError('Failed to submit ticket. Please check your fields and try again.');
                             }
-                        },
-                        onCancel: () => {
-                            mode = 'rag';
-                            ui.setInputEnabled(true, 'Ask me anything...');
+                        } catch (err) {
+                            reset();
+                            ui.showValidationError('Network error submitting ticket. Please try again.');
                         }
-                    });
-                };
-
-                ui.renderWebFlowCtaCard({
-                    title: 'Customer Support Request',
-                    subtitle: 'Submit your issue directly to our dedicated support agents with real-time ticket tracking.',
-                    badgeText: 'SUPPORT TICKET',
-                    buttonText: 'Open Support Form',
-                    onOpen: openSupportModal
+                    },
+                    onCancel: () => {
+                        mode = 'rag';
+                        ui.setInputEnabled(true, 'Ask me anything...');
+                    }
                 });
-
-                // Auto-open modal immediately for seamless UX
-                openSupportModal();
             }
         },
 
@@ -261,54 +321,44 @@ export function createFlowEngine({
                         mode = 'flow';
                         this.renderStep(0);
                     } else {
-                        // Web Flow mode (Interactive In-Chat Sheet with 1-to-1 WhatsApp parity)
                         mode = 'rag';
                         ui.setInputEnabled(true, 'Ask me anything...');
 
-                        const openFlowModal = () => {
-                            ui.renderWebFlowModal({
-                                title: label || 'Interactive Form',
-                                subtitle: flow.flowType || 'Direct Request',
-                                steps: flow.steps || [],
-                                onSubmit: async (formData, { close, reset }) => {
-                                    try {
-                                        const ep = ENDPOINT_MAP[actionType] || (actionType ? actionType.toLowerCase() : 'lead');
-                                        const sessionId = storage.getSessionId();
-                                        const res = await apiClient.submitFlow(ep, formData, sessionId);
-                                        if (res.ok) {
-                                            close();
-                                            ui.renderWebFlowSuccessCard({
-                                                title: '🎉 Request Submitted Successfully!',
-                                                details: `Thank you! Your information has been securely recorded. A confirmation email has been dispatched to ${formData.email || 'your email'}.`
-                                            });
-                                            mode = 'rag';
-                                            ui.setInputEnabled(true, 'Ask me anything...');
-                                        } else {
-                                            reset();
-                                            ui.showValidationError('Submission error. Please check the required fields and try again.');
-                                        }
-                                    } catch (err) {
+                        this.openWebFlowForm({
+                            actionType,
+                            label,
+                            title: label || this.getFormMeta(actionType).defaultTitle,
+                            subtitle: (flow.greetingMessage && String(flow.greetingMessage).trim())
+                                ? flow.greetingMessage
+                                : undefined,
+                            steps: flow.steps || [],
+                            onSubmit: async (formData, { close, reset }) => {
+                                try {
+                                    const ep = ENDPOINT_MAP[actionType] || (actionType ? actionType.toLowerCase() : 'lead');
+                                    const sessionId = storage.getSessionId();
+                                    const res = await apiClient.submitFlow(ep, formData, sessionId);
+                                    if (res.ok) {
+                                        close();
+                                        ui.renderWebFlowSuccessCard({
+                                            title: 'Request submitted successfully',
+                                            details: `Thank you. Your information has been recorded. A confirmation will be sent to ${formData.email || 'your email'}.`
+                                        });
+                                        mode = 'rag';
+                                        ui.setInputEnabled(true, 'Ask me anything...');
+                                    } else {
                                         reset();
-                                        ui.showValidationError('Network connection error. Please try again.');
+                                        ui.showValidationError('Submission error. Please check the required fields and try again.');
                                     }
-                                },
-                                onCancel: () => {
-                                    mode = 'rag';
-                                    ui.setInputEnabled(true, 'Ask me anything...');
+                                } catch (err) {
+                                    reset();
+                                    ui.showValidationError('Network connection error. Please try again.');
                                 }
-                            });
-                        };
-
-                        ui.renderWebFlowCtaCard({
-                            title: `${label || 'Booking & Inquiry'}`,
-                            subtitle: flow.greetingMessage || 'Click below to open the interactive form and submit your request in seconds.',
-                            badgeText: 'INTERACTIVE FORM',
-                            buttonText: `Open ${label || 'Form'}`,
-                            onOpen: openFlowModal
+                            },
+                            onCancel: () => {
+                                mode = 'rag';
+                                ui.setInputEnabled(true, 'Ask me anything...');
+                            }
                         });
-
-                        // Auto-open modal sheet immediately on screen
-                        openFlowModal();
                     }
                 } else {
                     addBotBubble('This form is not configured yet.');
@@ -541,8 +591,7 @@ export function createFlowEngine({
                 const inputEl = ui.getElements().input;
                 if (inputEl) inputEl.value = '';
 
-                const activeButtons = ui.getElements().messages.querySelectorAll('.flow-buttons:last-child');
-                activeButtons.forEach(b => b.style.display = 'none');
+                ui.removeLastFlowButtons();
 
                 const currentTheme = getTheme();
                 const menuEntry = ui.renderCustomMenu(currentTheme.flowCancelMenuJson, 'Form cancelled.', false, currentTheme, (id, title) => {
@@ -756,27 +805,18 @@ export function createFlowEngine({
             if (!messages) return;
 
             if (currentTheme.ctaButtons && currentTheme.ctaButtons.length > 0) {
-                const container = document.createElement('div');
-                container.className = 'flow-buttons flow-buttons--outline';
-                currentTheme.ctaButtons.forEach(btnConfig => {
-                    const btn = document.createElement('button');
-                    btn.className = 'flow-btn flow-btn--outline';
-                    btn.innerHTML = `<span class="btn-text">${btnConfig.label}</span>`;
-                    btn.onclick = () => {
-                        container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
-                        this.handleCtaAction(btnConfig);
-                    };
-                    container.appendChild(btn);
-                });
-                messages.appendChild(container);
-                messages.scrollTop = messages.scrollHeight;
+                ui.renderButtons(currentTheme.ctaButtons.map(b => b.label), (label) => {
+                    const btnConfig = currentTheme.ctaButtons.find(b => b.label === label);
+                    if (btnConfig) this.handleCtaAction(btnConfig);
+                }, false, null, { outline: true, ctaConfigs: currentTheme.ctaButtons });
             }
         },
 
         handleCtaAction(btnConfig) {
+            markLastCtasUsed();
             if (btnConfig.action === 'SUPPORT') {
                 this.startSupportFlow();
-            } else if (btnConfig.action === 'APPOINTMENT' || btnConfig.action === 'BOOKING' || btnConfig.action === 'LEAD') {
+            } else if (btnConfig.action === 'APPOINTMENT' || btnConfig.action === 'BOOKING' || btnConfig.action === 'LEAD' || btnConfig.action === 'ENQUIRY') {
                 this.startFlow(btnConfig.action, btnConfig.label);
             } else {
                 if (config && config.steps && config.steps.length > 0) {

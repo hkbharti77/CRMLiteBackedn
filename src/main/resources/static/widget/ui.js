@@ -2,6 +2,11 @@
  * CRM Chat Widget - UI Controller & DOM Component Renderer
  */
 
+import { escapeHtml, getLocalDateString } from './markdown.js';
+import { validateFieldInput } from './validator.js';
+
+let fieldIdCounter = 0;
+
 function darkenHex(hex, amount = 0.15) {
     if (!hex || typeof hex !== 'string') return hex;
     const raw = hex.replace('#', '').trim();
@@ -107,6 +112,47 @@ export function createUIController({
         }
     }
 
+    function createBotRow(contentClass) {
+        const row = document.createElement('div');
+        row.className = 'message-row message-row--bot';
+        const avatar = createMsgAvatar('bot');
+        const content = document.createElement('div');
+        content.className = contentClass || 'message-row-content';
+        row.appendChild(avatar);
+        row.appendChild(content);
+        return row;
+    }
+
+    function removeLastFlowButtons() {
+        const { messages } = elements;
+        if (!messages) return;
+        const groups = messages.querySelectorAll('.flow-buttons-row');
+        if (groups.length === 0) return;
+        groups[groups.length - 1].remove();
+    }
+
+    function getFocusable(container) {
+        if (!container) return [];
+        return Array.from(container.querySelectorAll(
+            'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ));
+    }
+
+    function trapFocus(container, e) {
+        if (e.key !== 'Tab') return;
+        const focusable = getFocusable(container);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+        }
+    }
+
     return {
         getElements() {
             return elements;
@@ -128,18 +174,18 @@ export function createUIController({
                 <div class="chat-tooltip" id="chat-tooltip">
                     <span class="chat-tooltip-text">Chat with us</span>
                 </div>
-                <div class="chat-button" id="chat-toggle" title="Chat with us" role="button" tabindex="0">
+                <button type="button" class="chat-button" id="chat-toggle" title="Chat with us" aria-label="Open chat">
                     ${icons.chat}
-                </div>
-                <div class="chat-panel" id="chat-panel" role="dialog" aria-label="Chat">
+                </button>
+                <div class="chat-panel" id="chat-panel" role="dialog" aria-modal="true" aria-label="Chat">
                     <div class="chat-header">
                         <div class="chat-header-info">
                             <div class="niche-icon-wrap" id="chat-header-icon"><span class="avatar-initials">${initials}</span></div>
                             <div class="chat-header-text">
-                                <span class="chat-header-title">${theme.businessName || 'Assistant'}</span>
+                                <span class="chat-header-title">${escapeHtml(theme.businessName || 'Assistant')}</span>
                                 <div class="chat-header-status">
                                     <span class="status-dot-pulse" aria-hidden="true"></span>
-                                    <span class="status-text">Online</span>
+                                    <span class="status-text">Available</span>
                                 </div>
                             </div>
                         </div>
@@ -152,9 +198,8 @@ export function createUIController({
                             </div>
                         </div>
                     </div>
-                    <div class="chat-messages" id="chat-messages"></div>
-                    <div id="typing" class="typing-wrap" style="display:none;" aria-live="polite">
-                        <div class="msg-avatar msg-avatar--bot" aria-hidden="true"><span>A</span></div>
+                    <div class="chat-messages" id="chat-messages" role="log" aria-live="polite" aria-relevant="additions"></div>
+                    <div id="typing" class="typing-wrap" style="display:none;" aria-live="polite" aria-label="Assistant is typing">
                         <div class="typing-dots">
                             <div class="dot"></div><div class="dot"></div><div class="dot"></div>
                         </div>
@@ -162,17 +207,17 @@ export function createUIController({
                     <div class="chat-input-container">
                         <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
                         <div class="chat-composer">
-                            <input type="text" id="chat-input" class="chat-input" placeholder="Loading..." autocomplete="off" disabled aria-label="Message">
+                            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Loading..." autocomplete="off" disabled aria-label="Message"></textarea>
                             <button type="button" id="chat-send" class="send-btn" title="Send message" disabled aria-label="Send">${icons.send}</button>
                         </div>
                     </div>
                     <div class="chat-confirm-overlay" id="chat-confirm-overlay">
-                        <div class="chat-confirm-box" role="alertdialog" aria-labelledby="chat-confirm-title">
+                        <div class="chat-confirm-box" role="alertdialog" aria-labelledby="chat-confirm-title" aria-describedby="chat-confirm-desc">
                             <h4 id="chat-confirm-title">Restart conversation</h4>
-                            <p>Are you sure you want to start a new conversation? This will clear current messages.</p>
+                            <p id="chat-confirm-desc">Are you sure you want to start a new conversation? This will clear current messages.</p>
                             <div class="chat-confirm-actions">
                                 <button type="button" id="chat-confirm-cancel" class="flow-btn flow-btn--muted">Cancel</button>
-                                <button type="button" id="chat-confirm-ok" class="flow-btn selected">Start new</button>
+                                <button type="button" id="chat-confirm-ok" class="flow-btn flow-btn--danger">Start new</button>
                             </div>
                         </div>
                     </div>
@@ -225,10 +270,22 @@ export function createUIController({
                 confirmCancelBtn, confirmOkBtn, messages
             } = elements;
 
+            let lastFocusedBeforeOpen = null;
+
+            const autoResizeComposer = () => {
+                if (!input || input.tagName !== 'TEXTAREA') return;
+                input.style.height = 'auto';
+                input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+            };
+
             const openPanel = () => {
+                lastFocusedBeforeOpen = document.activeElement;
                 panel.classList.add('open');
                 const tooltip = document.getElementById('chat-tooltip');
-                if (tooltip) tooltip.style.display = 'none';
+                if (tooltip) {
+                    tooltip.style.display = 'none';
+                    tooltip.classList.add('dismissed');
+                }
                 messages.scrollTop = messages.scrollHeight;
                 setTimeout(() => { messages.scrollTop = messages.scrollHeight; }, 30);
                 if (!input.disabled) input.focus();
@@ -237,27 +294,21 @@ export function createUIController({
 
             const closePanel = () => {
                 panel.classList.remove('open');
-                const tooltip = document.getElementById('chat-tooltip');
-                if (tooltip && !tooltip.classList.contains('dismissed')) tooltip.style.display = 'block';
+                menuOverlay.classList.remove('active');
+                confirmOverlay.classList.remove('active');
                 toggle.classList.remove('is-hidden');
-            };
-
-            toggle.onclick = () => {
-                if (panel.classList.contains('open')) closePanel();
-                else openPanel();
-            };
-
-            toggle.onkeydown = (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    toggle.click();
+                if (lastFocusedBeforeOpen && typeof lastFocusedBeforeOpen.focus === 'function') {
+                    lastFocusedBeforeOpen.focus();
                 }
             };
+
+            toggle.onclick = openPanel;
 
             closeBtn.onclick = closePanel;
 
             clearBtn.onclick = () => {
                 confirmOverlay.classList.add('active');
+                confirmCancelBtn.focus();
             };
 
             confirmCancelBtn.onclick = () => {
@@ -269,28 +320,64 @@ export function createUIController({
                 if (onRestartConfirm) onRestartConfirm();
             };
 
+            confirmOverlay.onclick = (e) => {
+                if (e.target === confirmOverlay) confirmOverlay.classList.remove('active');
+            };
+
             zoomBtn.onclick = () => {
                 isZoomed = !isZoomed;
                 panel.classList.toggle('zoomed', isZoomed);
                 zoomBtn.innerHTML = isZoomed ? icons.zoomOut : icons.zoomIn;
-                zoomBtn.title = isZoomed ? 'Standard view' : 'Expand view';
+                const label = isZoomed ? 'Standard view' : 'Expand view';
+                zoomBtn.title = label;
+                zoomBtn.setAttribute('aria-label', label);
                 messages.scrollTop = messages.scrollHeight;
                 if (onZoomToggle) onZoomToggle(isZoomed);
             };
 
             menuBtn.onclick = () => {
                 menuOverlay.classList.add('active');
+                menuCloseBtn.focus();
             };
 
             menuCloseBtn.onclick = () => {
                 menuOverlay.classList.remove('active');
+                if (!input.disabled) input.focus();
             };
+
+            menuOverlay.onclick = (e) => {
+                if (e.target === menuOverlay) menuOverlay.classList.remove('active');
+            };
+
+            panel.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape') {
+                    if (confirmOverlay.classList.contains('active')) {
+                        confirmOverlay.classList.remove('active');
+                    } else if (menuOverlay.classList.contains('active')) {
+                        menuOverlay.classList.remove('active');
+                    } else {
+                        closePanel();
+                    }
+                    return;
+                }
+                if (menuOverlay.classList.contains('active')) {
+                    trapFocus(menuOverlay, e);
+                } else if (confirmOverlay.classList.contains('active')) {
+                    trapFocus(confirmOverlay, e);
+                } else if (panel.classList.contains('open')) {
+                    trapFocus(panel, e);
+                }
+            });
 
             if (onSendMessage) {
                 sendBtn.onclick = onSendMessage;
-                input.onkeypress = (e) => {
-                    if (e.key === 'Enter') onSendMessage();
-                };
+                input.addEventListener('input', autoResizeComposer);
+                input.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        onSendMessage();
+                    }
+                });
             }
         },
 
@@ -315,19 +402,18 @@ export function createUIController({
                     gridEl.className = 'menu-cards-grid';
 
                     (section.cards || []).forEach(card => {
-                        const cardEl = document.createElement('div');
+                        const cardEl = document.createElement('button');
+                        cardEl.type = 'button';
                         cardEl.className = 'menu-card';
                         cardEl.innerHTML = `
                             <div class="menu-card-icon">${icons[card.icon] || icons.briefcase}</div>
-                            <div class="menu-card-title">${card.title || ''}</div>
-                            <div class="menu-card-subtitle">${card.subtitle || ''}</div>
+                            <div class="menu-card-title">${escapeHtml(card.title || '')}</div>
+                            <div class="menu-card-subtitle">${escapeHtml(card.subtitle || '')}</div>
                         `;
 
                         cardEl.onclick = () => {
                             menuOverlay.classList.remove('active');
-                            if (onMenuCardClick) {
-                                onMenuCardClick(card);
-                            }
+                            if (onMenuCardClick) onMenuCardClick(card);
                         };
 
                         gridEl.appendChild(cardEl);
@@ -457,7 +543,7 @@ export function createUIController({
             return appendMessageRow(container, sender, msgDiv);
         },
 
-        renderBotBubbleWithCTAs(text, ctaButtons, onCtaSelect) {
+        renderBotBubbleWithCTAs(text, ctaButtons, onCtaSelect, ctasUsed = false) {
             const { messages } = elements;
             if (!messages) return;
 
@@ -476,15 +562,28 @@ export function createUIController({
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'flow-btn';
-                    btn.innerHTML = `
-                        <span class="btn-text">${btnConfig.label}</span>
-                        <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                    `;
-                    btn.onclick = () => {
-                        btn.classList.add('selected');
-                        ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
-                        if (onCtaSelect) onCtaSelect(btnConfig);
-                    };
+                    if (ctasUsed) btn.disabled = true;
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'btn-text';
+                    labelSpan.textContent = btnConfig.label || '';
+                    btn.appendChild(labelSpan);
+                    if (!ctasUsed) {
+                        const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                        arrow.setAttribute('class', 'btn-arrow');
+                        arrow.setAttribute('viewBox', '0 0 24 24');
+                        arrow.setAttribute('fill', 'none');
+                        arrow.setAttribute('stroke', 'currentColor');
+                        arrow.setAttribute('stroke-width', '2.5');
+                        arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
+                        btn.appendChild(arrow);
+                    }
+                    if (!ctasUsed) {
+                        btn.onclick = () => {
+                            btn.classList.add('selected');
+                            ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                            if (onCtaSelect) onCtaSelect(btnConfig);
+                        };
+                    }
                     ctaWrap.appendChild(btn);
                 });
                 msgDiv.appendChild(ctaWrap);
@@ -533,10 +632,18 @@ export function createUIController({
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'flow-btn';
-                    btn.innerHTML = `
-                        <span class="btn-text">${btnConfig.title}</span>
-                        <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                    `;
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'btn-text';
+                    labelSpan.textContent = btnConfig.title || '';
+                    btn.appendChild(labelSpan);
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    arrow.setAttribute('class', 'btn-arrow');
+                    arrow.setAttribute('viewBox', '0 0 24 24');
+                    arrow.setAttribute('fill', 'none');
+                    arrow.setAttribute('stroke', 'currentColor');
+                    arrow.setAttribute('stroke-width', '2.5');
+                    arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
+                    btn.appendChild(arrow);
                     btn.onclick = () => {
                         btn.classList.add('selected');
                         btnWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
@@ -552,10 +659,18 @@ export function createUIController({
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'flow-btn';
-                    btn.innerHTML = `
-                        <span class="btn-text">${btnConfig.label}</span>
-                        <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                    `;
+                    const labelSpan = document.createElement('span');
+                    labelSpan.className = 'btn-text';
+                    labelSpan.textContent = btnConfig.label || '';
+                    btn.appendChild(labelSpan);
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    arrow.setAttribute('class', 'btn-arrow');
+                    arrow.setAttribute('viewBox', '0 0 24 24');
+                    arrow.setAttribute('fill', 'none');
+                    arrow.setAttribute('stroke', 'currentColor');
+                    arrow.setAttribute('stroke-width', '2.5');
+                    arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
+                    btn.appendChild(arrow);
                     btn.onclick = () => {
                         btn.classList.add('selected');
                         ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
@@ -575,24 +690,31 @@ export function createUIController({
             return { text: bodyMsg, sender: 'bot', time: Date.now() };
         },
 
-        renderButtons(options, onSelect, showTypeInstead = false, onTypeInstead = null) {
+        renderButtons(options, onSelect, showTypeInstead = false, onTypeInstead = null, opts = {}) {
             const { messages } = elements;
             if (!messages) return;
 
+            const row = createBotRow('message-row-content message-row-content--buttons');
             const container = document.createElement('div');
-            container.className = 'flow-buttons';
+            container.className = `flow-buttons${opts.outline ? ' flow-buttons--outline' : ''}`;
 
             options.forEach(opt => {
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = opt === 'Cancel' ? 'flow-btn flow-btn--danger' : 'flow-btn';
-                if (opt === 'Cancel' || opt === 'Skip') {
-                    btn.innerHTML = `<span class="btn-text">${opt}</span>`;
-                } else {
-                    btn.innerHTML = `
-                        <span class="btn-text">${opt}</span>
-                        <svg class="btn-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
-                    `;
+                btn.className = opt === 'Cancel' ? 'flow-btn flow-btn--danger' : (opts.outline ? 'flow-btn flow-btn--outline' : 'flow-btn');
+                const labelSpan = document.createElement('span');
+                labelSpan.className = 'btn-text';
+                labelSpan.textContent = opt;
+                btn.appendChild(labelSpan);
+                if (opt !== 'Cancel' && opt !== 'Skip') {
+                    const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                    arrow.setAttribute('class', 'btn-arrow');
+                    arrow.setAttribute('viewBox', '0 0 24 24');
+                    arrow.setAttribute('fill', 'none');
+                    arrow.setAttribute('stroke', 'currentColor');
+                    arrow.setAttribute('stroke-width', '2.5');
+                    arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
+                    btn.appendChild(arrow);
                 }
                 btn.onclick = () => {
                     btn.classList.add('selected');
@@ -602,7 +724,9 @@ export function createUIController({
                 container.appendChild(btn);
             });
 
-            messages.appendChild(container);
+            row.classList.add('flow-buttons-row');
+            const content = row.querySelector('.message-row-content');
+            content.appendChild(container);
 
             if (showTypeInstead) {
                 const skipLink = document.createElement('button');
@@ -614,11 +738,20 @@ export function createUIController({
                     container.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
                     if (onTypeInstead) onTypeInstead();
                 };
-                messages.appendChild(skipLink);
+                content.appendChild(skipLink);
             }
 
+            messages.appendChild(row);
             messages.scrollTop = messages.scrollHeight;
             setTimeout(() => { messages.scrollTop = messages.scrollHeight; }, 30);
+        },
+
+        removeLastFlowButtons() {
+            removeLastFlowButtons();
+        },
+
+        createBotRow(contentClass) {
+            return createBotRow(contentClass);
         },
 
         setInputEnabled(enabled, placeholder = null) {
@@ -637,6 +770,7 @@ export function createUIController({
             const { typing, messages } = elements;
             if (!typing) return;
             if (isTyping) {
+                refreshTypingAvatar();
                 typing.style.display = 'flex';
                 if (messages) messages.scrollTop = messages.scrollHeight;
             } else {
@@ -649,107 +783,159 @@ export function createUIController({
             if (!messages) return;
             const el = document.createElement('div');
             el.className = 'validation-msg';
-            el.innerHTML = `<span>${msg}</span>`;
+            el.setAttribute('role', 'alert');
+            el.textContent = msg;
             messages.appendChild(el);
             messages.scrollTop = messages.scrollHeight;
             setTimeout(() => el.remove(), 3500);
         },
 
-        renderWebFlowCtaCard({ title, subtitle, badgeText, buttonText, onOpen }) {
+        renderWebFlowInline({ title, subtitle, badgeText, iconSvg, steps, onSubmit, onCancel }) {
             const { messages } = elements;
             if (!messages) return;
 
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message bot has-ctas crm-webflow-bubble';
+            messages.querySelectorAll('.crm-webflow-inline-form').forEach(el => el.remove());
+
+            const row = document.createElement('div');
+            row.className = 'message-row message-row--bot crm-form-row';
+
+            const avatar = createMsgAvatar('bot');
+            row.appendChild(avatar);
+
+            const card = document.createElement('div');
+            card.className = 'crm-webflow-cta-card has-inline-form';
+
+            const bText = badgeText || 'Form';
+            const tText = title || 'Complete Your Request';
+            const dText = subtitle || '';
+            const iconHtml = iconSvg || '';
+
+            card.innerHTML = `
+                <div class="crm-webflow-cta-header">
+                    ${iconHtml ? `<div class="crm-webflow-cta-icon">${iconHtml}</div>` : ''}
+                    <div class="crm-webflow-cta-header-text">
+                        <span class="crm-webflow-cta-badge">${escapeHtml(bText)}</span>
+                        <div class="crm-webflow-cta-title">${escapeHtml(tText)}</div>
+                    </div>
+                </div>
+                ${dText ? `<div class="crm-webflow-cta-desc">${escapeHtml(dText)}</div>` : ''}
+            `;
+
+            row.appendChild(card);
+            messages.appendChild(row);
+
+            this.renderWebFlowModal({
+                title: tText,
+                subtitle: subtitle,
+                steps: steps || [],
+                anchorCard: card,
+                anchorRow: row,
+                onSubmit,
+                onCancel
+            });
+
+            messages.scrollTop = messages.scrollHeight;
+            setTimeout(() => row.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 60);
+        },
+
+        renderWebFlowCtaCard({ title, subtitle, badgeText, buttonText, iconSvg, onOpen }) {
+            const { messages } = elements;
+            if (!messages) return null;
+
+            const row = document.createElement('div');
+            row.className = 'message-row message-row--bot crm-form-row';
+
+            const avatar = createMsgAvatar('bot');
+            row.appendChild(avatar);
 
             const card = document.createElement('div');
             card.className = 'crm-webflow-cta-card';
 
-            const bText = badgeText || 'INTERACTIVE FORM';
+            const bText = badgeText || 'Form';
             const tText = title || 'Complete Your Request';
-            const dText = subtitle || 'Tap the button below to open the interactive form and submit your details in seconds.';
-            const btnLabel = buttonText || '🚀 Open Interactive Form';
+            const dText = subtitle || 'Fill in the form below to submit your details securely.';
+            const btnLabel = buttonText || 'Open Form';
+            const iconHtml = iconSvg || `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>`;
 
             card.innerHTML = `
-                <div class="crm-webflow-cta-badge">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/><polyline points="14 2 14 8 20 8"/></svg>
-                    <span>${bText}</span>
+                <div class="crm-webflow-cta-header">
+                    <div class="crm-webflow-cta-icon">${iconHtml}</div>
+                    <div class="crm-webflow-cta-header-text">
+                        <span class="crm-webflow-cta-badge">${escapeHtml(bText)}</span>
+                        <div class="crm-webflow-cta-title">${escapeHtml(tText)}</div>
+                    </div>
                 </div>
-                <div class="crm-webflow-cta-title">${tText}</div>
-                <div class="crm-webflow-cta-desc">${dText}</div>
+                <div class="crm-webflow-cta-desc">${escapeHtml(dText)}</div>
                 <button type="button" class="crm-webflow-cta-btn">
-                    <span>${btnLabel}</span>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path></svg>
+                    <span>${escapeHtml(btnLabel)}</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
                 </button>
             `;
 
             const btn = card.querySelector('.crm-webflow-cta-btn');
             btn.onclick = () => {
-                if (onOpen) onOpen();
+                btn.disabled = true;
+                btn.classList.add('is-opened');
+                if (onOpen) onOpen(card, row);
             };
 
-            msgDiv.appendChild(card);
-            appendMessageRow(messages, 'bot', msgDiv);
+            row.appendChild(card);
+            messages.appendChild(row);
             messages.scrollTop = messages.scrollHeight;
             setTimeout(() => {
                 messages.scrollTop = messages.scrollHeight;
-                msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 60);
-            return card;
+            return { card, row };
         },
 
         renderWebFlowSuccessCard({ title, details }) {
             const { messages } = elements;
             if (!messages) return;
 
-            const msgDiv = document.createElement('div');
-            msgDiv.className = 'message bot has-ctas crm-webflow-bubble';
+            const row = document.createElement('div');
+            row.className = 'message-row message-row--bot crm-form-row';
+
+            const avatar = createMsgAvatar('bot');
+            row.appendChild(avatar);
 
             const card = document.createElement('div');
             card.className = 'crm-webflow-success-card';
 
-            const headerText = title || '🎉 Form Submitted Successfully!';
-            const detailText = details || 'Thank you! Your information has been securely recorded. A confirmation email has been dispatched.';
+            const headerText = title || 'Form submitted successfully';
+            const detailText = details || 'Thank you. Your information has been recorded and a confirmation will be sent shortly.';
 
             card.innerHTML = `
                 <div class="crm-webflow-success-header">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                    <span>${headerText}</span>
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                    <span>${escapeHtml(headerText)}</span>
                 </div>
-                <div class="crm-webflow-success-details">${detailText}</div>
+                <div class="crm-webflow-success-details">${escapeHtml(detailText)}</div>
             `;
 
-            msgDiv.appendChild(card);
-            appendMessageRow(messages, 'bot', msgDiv);
+            row.appendChild(card);
+            messages.appendChild(row);
             messages.scrollTop = messages.scrollHeight;
             setTimeout(() => {
                 messages.scrollTop = messages.scrollHeight;
-                msgDiv.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                row.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }, 60);
         },
 
-        renderWebFlowModal({ title, subtitle, steps = [], initialData = {}, onSubmit, onCancel }) {
-            const panel = elements.panel || document.getElementById('crm-chat-panel');
-            if (!panel) return;
+        renderWebFlowModal({ title, subtitle, steps = [], initialData = {}, onSubmit, onCancel, anchorCard, anchorRow }) {
+            const { messages } = elements;
+            if (!messages) return;
 
-            // Remove any existing webflow modal
-            const existingOverlay = panel.querySelector('.crm-webflow-overlay');
-            if (existingOverlay) existingOverlay.remove();
+            const isCompact = !!anchorCard;
 
-            const overlay = document.createElement('div');
-            overlay.className = 'crm-webflow-overlay';
+            // Remove any existing inline form in this thread
+            messages.querySelectorAll('.crm-webflow-inline-form').forEach(el => el.remove());
 
-            // Partition steps into screens (approx 2-3 fields per screen for sleek UX)
-            const screens = [];
-            let currentChunk = [];
-            steps.forEach((step, idx) => {
-                currentChunk.push(step);
-                if (currentChunk.length >= 2 || idx === steps.length - 1) {
-                    screens.push(currentChunk);
-                    currentChunk = [];
-                }
-            });
-            if (screens.length === 0) screens.push([]);
+            const formWrap = document.createElement('div');
+            formWrap.className = 'crm-webflow-inline-form';
+
+            // Show all fields on one screen (full form — no multi-step Continue clicks)
+            const screens = steps.length > 0 ? [steps] : [[]];
 
             let currentScreenIdx = 0;
             const formData = { ...initialData };
@@ -767,63 +953,77 @@ export function createUIController({
                 return 'TEXT';
             }
 
+            const dismissForm = () => {
+                formWrap.remove();
+                if (anchorCard) {
+                    anchorCard.classList.remove('has-inline-form');
+                    const ctaBtn = anchorCard.querySelector('.crm-webflow-cta-btn');
+                    if (ctaBtn) {
+                        ctaBtn.disabled = false;
+                        ctaBtn.classList.remove('is-opened');
+                        ctaBtn.style.display = '';
+                    }
+                }
+                if (onCancel) onCancel();
+            };
+
             function renderScreen(screenIdx) {
                 const screenSteps = screens[screenIdx] || [];
                 const totalScreens = screens.length;
                 const progressPct = Math.round(((screenIdx + 1) / totalScreens) * 100);
 
-                overlay.innerHTML = `
-                    <div class="crm-webflow-sheet">
-                        <div class="crm-webflow-header">
-                            <div class="crm-webflow-header-info">
-                                <div class="crm-webflow-header-title">
-                                    <span>✨</span>
-                                    <span>${title || 'Interactive Form'}</span>
-                                </div>
-                                <div class="crm-webflow-header-subtitle">
-                                    ${subtitle ? subtitle + ' • ' : ''}Screen ${screenIdx + 1} of ${totalScreens}
-                                </div>
+                const isSingleScreen = totalScreens === 1;
+
+                formWrap.innerHTML = `
+                    <div class="crm-webflow-sheet crm-webflow-sheet--inline${isCompact ? ' crm-webflow-sheet--compact' : ''}">
+                        ${isCompact ? `
+                            <div class="crm-webflow-inline-toolbar">
+                                <button type="button" class="crm-webflow-close-btn" title="Close" aria-label="Close form">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                </button>
                             </div>
-                            <button type="button" class="crm-webflow-close-btn" title="Close Form">✕</button>
-                        </div>
-                        <div class="crm-webflow-progress-bar">
-                            <div class="crm-webflow-progress-fill" style="width: ${progressPct}%"></div>
-                        </div>
+                        ` : `
+                            <div class="crm-webflow-header">
+                                <div class="crm-webflow-header-info">
+                                    <div class="crm-webflow-header-title">${escapeHtml(title || 'Form')}</div>
+                                    <div class="crm-webflow-header-subtitle">
+                                        ${escapeHtml(subtitle || (isSingleScreen ? 'Complete all fields below' : `Step ${screenIdx + 1} of ${totalScreens}`))}
+                                    </div>
+                                </div>
+                                <button type="button" class="crm-webflow-close-btn" title="Close" aria-label="Close form">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+                                </button>
+                            </div>
+                        `}
+                        ${!isCompact && !isSingleScreen ? `<div class="crm-webflow-progress-bar"><div class="crm-webflow-progress-fill" style="width: ${progressPct}%"></div></div>` : ''}
                         <div class="crm-webflow-body"></div>
                         <div class="crm-webflow-footer">
                             <button type="button" class="crm-webflow-btn crm-webflow-btn-secondary btn-back-cancel">
-                                ${screenIdx === 0 ? '✕ Cancel' : '← Back'}
+                                ${screenIdx === 0 ? 'Cancel' : 'Back'}
                             </button>
                             <button type="button" class="crm-webflow-btn crm-webflow-btn-primary btn-next-submit">
-                                <span>${screenIdx === totalScreens - 1 ? '🚀 Submit Form' : 'Next Screen ➔'}</span>
+                                <span>${screenIdx === totalScreens - 1 ? 'Submit' : 'Continue'}</span>
+                                ${screenIdx === totalScreens - 1 ? '' : '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>'}
                             </button>
                         </div>
                     </div>
                 `;
 
-                // Wire Close & Cancel/Back
-                const closeBtn = overlay.querySelector('.crm-webflow-close-btn');
-                const backCancelBtn = overlay.querySelector('.btn-back-cancel');
-                const nextSubmitBtn = overlay.querySelector('.btn-next-submit');
-                const bodyContainer = overlay.querySelector('.crm-webflow-body');
+                const closeBtn = formWrap.querySelector('.crm-webflow-close-btn');
+                const backCancelBtn = formWrap.querySelector('.btn-back-cancel');
+                const nextSubmitBtn = formWrap.querySelector('.btn-next-submit');
+                const bodyContainer = formWrap.querySelector('.crm-webflow-body');
 
-                const dismissModal = () => {
-                    overlay.style.opacity = '0';
-                    setTimeout(() => overlay.remove(), 200);
-                    if (onCancel) onCancel();
-                };
-
-                closeBtn.onclick = dismissModal;
+                closeBtn.onclick = dismissForm;
                 backCancelBtn.onclick = () => {
                     if (screenIdx === 0) {
-                        dismissModal();
+                        dismissForm();
                     } else {
                         currentScreenIdx--;
                         renderScreen(currentScreenIdx);
                     }
                 };
 
-                // Render dynamic fields for this screen
                 screenSteps.forEach(step => {
                     const fieldType = getFieldType(step);
                     const fieldWrap = document.createElement('div');
@@ -832,37 +1032,63 @@ export function createUIController({
 
                     const isReq = step.required !== false;
                     const val = formData[step.dataKey] || '';
+                    const fieldId = `crm-field-${++fieldIdCounter}`;
 
                     const labelEl = document.createElement('label');
                     labelEl.className = 'crm-webflow-label';
-                    labelEl.innerHTML = `<span>${step.question || step.dataKey}</span> ${isReq ? '<span class="required-star">*</span>' : ''}`;
+                    labelEl.setAttribute('for', fieldType === 'OPTIONS' ? '' : fieldId);
+                    const labelText = document.createElement('span');
+                    labelText.textContent = step.question || step.dataKey;
+                    labelEl.appendChild(labelText);
+                    if (isReq) {
+                        const star = document.createElement('span');
+                        star.className = 'required-star';
+                        star.textContent = ' *';
+                        labelEl.appendChild(star);
+                    }
                     fieldWrap.appendChild(labelEl);
 
                     if (fieldType === 'OPTIONS') {
                         const radioGroup = document.createElement('div');
                         radioGroup.className = 'crm-webflow-radio-group';
-                        step.options.forEach(opt => {
-                            const radioCard = document.createElement('div');
+                        radioGroup.setAttribute('role', 'radiogroup');
+                        radioGroup.setAttribute('aria-label', step.question || step.dataKey);
+                        step.options.forEach((opt, optIdx) => {
+                            const radioId = `${fieldId}-${optIdx}`;
+                            const radioCard = document.createElement('label');
                             radioCard.className = `crm-webflow-radio-card ${val === opt ? 'selected' : ''}`;
-                            radioCard.innerHTML = `
-                                <div class="crm-webflow-radio-dot"></div>
-                                <span class="crm-webflow-radio-label">${opt}</span>
-                            `;
-                            radioCard.onclick = () => {
+                            radioCard.setAttribute('for', radioId);
+                            const radioInput = document.createElement('input');
+                            radioInput.type = 'radio';
+                            radioInput.className = 'crm-webflow-radio-input';
+                            radioInput.name = fieldId;
+                            radioInput.id = radioId;
+                            radioInput.value = opt;
+                            radioInput.checked = val === opt;
+                            radioInput.onchange = () => {
                                 radioGroup.querySelectorAll('.crm-webflow-radio-card').forEach(c => c.classList.remove('selected'));
                                 radioCard.classList.add('selected');
                                 formData[step.dataKey] = opt;
                                 const errEl = fieldWrap.querySelector('.crm-webflow-field-error');
                                 if (errEl) errEl.remove();
                             };
+                            const dot = document.createElement('div');
+                            dot.className = 'crm-webflow-radio-dot';
+                            const optLabel = document.createElement('span');
+                            optLabel.className = 'crm-webflow-radio-label';
+                            optLabel.textContent = opt;
+                            radioCard.appendChild(radioInput);
+                            radioCard.appendChild(dot);
+                            radioCard.appendChild(optLabel);
                             radioGroup.appendChild(radioCard);
                         });
                         fieldWrap.appendChild(radioGroup);
                     } else if (fieldType === 'TEXTAREA') {
                         const ta = document.createElement('textarea');
+                        ta.id = fieldId;
                         ta.className = 'crm-webflow-textarea';
                         ta.rows = 3;
-                        ta.placeholder = `Enter ${step.question || 'details'}...`;
+                        ta.placeholder = `Enter details...`;
                         ta.value = val;
                         ta.oninput = (e) => {
                             formData[step.dataKey] = e.target.value;
@@ -873,27 +1099,27 @@ export function createUIController({
                         fieldWrap.appendChild(ta);
                     } else {
                         const input = document.createElement('input');
+                        input.id = fieldId;
                         input.className = 'crm-webflow-input';
                         input.value = val;
 
                         if (fieldType === 'EMAIL') {
                             input.type = 'email';
-                            input.placeholder = 'e.g. yourname@example.com';
+                            input.placeholder = 'yourname@example.com';
                         } else if (fieldType === 'PHONE') {
                             input.type = 'tel';
-                            input.placeholder = 'e.g. +91 9876543210';
+                            input.placeholder = '+1 555 000 0000';
                         } else if (fieldType === 'DATE') {
                             input.type = 'date';
-                            // Set min date to today
-                            input.min = new Date().toISOString().split('T')[0];
+                            input.min = getLocalDateString();
                         } else if (fieldType === 'TIME') {
                             input.type = 'time';
                         } else if (fieldType === 'NUMBER') {
                             input.type = 'number';
-                            input.placeholder = 'Enter amount/number';
+                            input.placeholder = 'Enter number';
                         } else {
                             input.type = 'text';
-                            input.placeholder = `Enter ${step.question || 'here'}...`;
+                            input.placeholder = 'Enter here...';
                         }
 
                         input.oninput = (e) => {
@@ -908,7 +1134,6 @@ export function createUIController({
                     bodyContainer.appendChild(fieldWrap);
                 });
 
-                // Next / Submit Button Validation & Action
                 nextSubmitBtn.onclick = () => {
                     let hasErrors = false;
                     screenSteps.forEach(step => {
@@ -917,7 +1142,6 @@ export function createUIController({
                         const rawVal = (formData[step.dataKey] || '').toString().trim();
                         const fieldWrap = bodyContainer.querySelector(`[data-data-key="${step.dataKey}"]`);
 
-                        // Clear existing error
                         if (fieldWrap) {
                             const oldErr = fieldWrap.querySelector('.crm-webflow-field-error');
                             if (oldErr) oldErr.remove();
@@ -928,12 +1152,9 @@ export function createUIController({
                         let errMsg = '';
                         if (isReq && !rawVal) {
                             errMsg = 'This field is required';
-                        } else if (rawVal && fieldType === 'EMAIL') {
-                            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                            if (!emailRegex.test(rawVal)) errMsg = 'Please enter a valid email address';
-                        } else if (rawVal && fieldType === 'PHONE') {
-                            const digits = rawVal.replace(/\D/g, '');
-                            if (digits.length < 7) errMsg = 'Please enter a valid phone number (min 7 digits)';
+                        } else if (rawVal) {
+                            const vErr = validateFieldInput(fieldType, step.dataKey, rawVal);
+                            if (vErr) errMsg = vErr;
                         }
 
                         if (errMsg && fieldWrap) {
@@ -943,7 +1164,10 @@ export function createUIController({
 
                             const errDiv = document.createElement('div');
                             errDiv.className = 'crm-webflow-field-error';
-                            errDiv.innerHTML = `⚠️ <span>${errMsg}</span>`;
+                            errDiv.setAttribute('role', 'alert');
+                            const errSpan = document.createElement('span');
+                            errSpan.textContent = errMsg;
+                            errDiv.appendChild(errSpan);
                             fieldWrap.appendChild(errDiv);
                         }
                     });
@@ -953,22 +1177,25 @@ export function createUIController({
                     if (screenIdx < totalScreens - 1) {
                         currentScreenIdx++;
                         renderScreen(currentScreenIdx);
+                        messages.scrollTop = messages.scrollHeight;
                     } else {
-                        // Final Submit
                         nextSubmitBtn.disabled = true;
                         nextSubmitBtn.innerHTML = `
-                            <svg class="crm-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+                            <svg class="crm-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10" stroke-opacity="0.25"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
                             <span>Submitting...</span>
                         `;
                         if (onSubmit) {
                             onSubmit(formData, {
                                 close: () => {
-                                    overlay.style.opacity = '0';
-                                    setTimeout(() => overlay.remove(), 200);
+                                    formWrap.remove();
+                                    if (anchorCard) {
+                                        const ctaBtn = anchorCard.querySelector('.crm-webflow-cta-btn');
+                                        if (ctaBtn) ctaBtn.style.display = 'none';
+                                    }
                                 },
                                 reset: () => {
                                     nextSubmitBtn.disabled = false;
-                                    nextSubmitBtn.innerHTML = `<span>🚀 Submit Form</span>`;
+                                    nextSubmitBtn.innerHTML = `<span>Submit</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`;
                                 }
                             });
                         }
@@ -977,7 +1204,27 @@ export function createUIController({
             }
 
             renderScreen(0);
-            panel.appendChild(overlay);
+
+            if (anchorCard) {
+                anchorCard.classList.add('has-inline-form');
+                anchorCard.appendChild(formWrap);
+            } else if (anchorRow) {
+                anchorRow.appendChild(formWrap);
+            } else {
+                const row = document.createElement('div');
+                row.className = 'message-row message-row--bot crm-form-row';
+                row.appendChild(createMsgAvatar('bot'));
+                const holder = document.createElement('div');
+                holder.className = 'crm-webflow-cta-card crm-webflow-cta-card--form-only';
+                holder.appendChild(formWrap);
+                row.appendChild(holder);
+                messages.appendChild(row);
+            }
+
+            messages.scrollTop = messages.scrollHeight;
+            setTimeout(() => {
+                formWrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }, 80);
         }
     };
 }
