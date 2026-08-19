@@ -65,21 +65,44 @@ public class RedisEmailConsumer {
         executorService.shutdownNow();
     }
 
+    private static final java.util.regex.Pattern EMAIL_PATTERN =
+            java.util.regex.Pattern.compile("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$");
+
     private void processEmail(EmailJobPayload payload, RDelayedQueue<EmailJobPayload> delayedQueue) {
-        log.debug("[RedisEmailConsumer] Processing email for: {}", payload.getToEmail());
+        if (payload == null) return;
+        String toEmail = payload.getToEmail();
+
+        if (toEmail == null || toEmail.isBlank() || !EMAIL_PATTERN.matcher(toEmail.trim()).matches()) {
+            log.warn("[RedisEmailConsumer] Invalid email address format: '{}'. Discarding to DLQ without retry.", toEmail);
+            moveToDlq(payload);
+            return;
+        }
+
+        log.debug("[RedisEmailConsumer] Processing email for: {}", toEmail);
         try {
             Context ctx = new Context();
             if (payload.getContextVariables() != null) {
                 ctx.setVariables(payload.getContextVariables());
             }
             // Send synchronously in this worker thread.
-            // Note: Ensure EmailService.sendTemplate is synchronous or adapt accordingly.
-            emailService.sendTemplateSync(payload.getToEmail(), payload.getSubject(), payload.getTemplateName(), ctx);
-            log.info("[RedisEmailConsumer] Successfully sent email to {}", payload.getToEmail());
+            emailService.sendTemplateSync(toEmail.trim(), payload.getSubject(), payload.getTemplateName(), ctx);
+            log.info("[RedisEmailConsumer] Successfully sent email to {}", toEmail);
 
         } catch (Exception e) {
-            log.error("[RedisEmailConsumer] Failed to send email to {}. Attempt: {}", payload.getToEmail(), payload.getRetryCount() + 1, e);
-            handleFailure(payload, delayedQueue);
+            String errorMsg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            boolean isPermanentAddressError = errorMsg.contains("invalid addresses")
+                    || errorMsg.contains("555-5.5.2")
+                    || errorMsg.contains("syntax error")
+                    || errorMsg.contains("550")
+                    || errorMsg.contains("553");
+
+            if (isPermanentAddressError) {
+                log.error("[RedisEmailConsumer] Permanent address failure for recipient '{}'. Moving directly to DLQ.", toEmail);
+                moveToDlq(payload);
+            } else {
+                log.error("[RedisEmailConsumer] Failed to send email to {}. Attempt: {}", toEmail, payload.getRetryCount() + 1, e);
+                handleFailure(payload, delayedQueue);
+            }
         }
     }
 
@@ -93,8 +116,16 @@ public class RedisEmailConsumer {
             log.info("[RedisEmailConsumer] Re-queued email for {} to retry in {} minutes", payload.getToEmail(), delayMinutes);
         } else {
             log.error("[RedisEmailConsumer] Max retries reached for {}. Moving to DLQ.", payload.getToEmail());
+            moveToDlq(payload);
+        }
+    }
+
+    private void moveToDlq(EmailJobPayload payload) {
+        try {
             org.redisson.api.RBlockingQueue<EmailJobPayload> dlq = redissonClient.getBlockingQueue(EMAIL_DLQ);
             dlq.add(payload);
+        } catch (Exception e) {
+            log.error("[RedisEmailConsumer] Failed to move payload to DLQ", e);
         }
     }
 }

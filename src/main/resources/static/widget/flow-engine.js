@@ -301,7 +301,7 @@ export function createFlowEngine({
             }
         },
 
-        async startFlow(actionType, label) {
+        async startFlow(actionType, label, preselectedService) {
             addUserBubble(label);
             mode = 'submitting';
             ui.setInputEnabled(false);
@@ -314,6 +314,10 @@ export function createFlowEngine({
                     config = flow;
                     currentStep = 0;
                     collectedData = {};
+                    if (preselectedService) {
+                        collectedData.service = preselectedService;
+                        collectedData.selectedService = preselectedService;
+                    }
 
                     const routingMode = this.getWebFlowRoutingMode(actionType);
                     if (routingMode === 'CHATBOT') {
@@ -327,6 +331,7 @@ export function createFlowEngine({
                         this.openWebFlowForm({
                             actionType,
                             label,
+                            initialData: preselectedService ? { service: preselectedService, selectedService: preselectedService } : undefined,
                             title: label || this.getFormMeta(actionType).defaultTitle,
                             subtitle: (flow.greetingMessage && String(flow.greetingMessage).trim())
                                 ? flow.greetingMessage
@@ -594,8 +599,8 @@ export function createFlowEngine({
                 ui.removeLastFlowButtons();
 
                 const currentTheme = getTheme();
-                const menuEntry = ui.renderCustomMenu(currentTheme.flowCancelMenuJson, 'Form cancelled.', false, currentTheme, (id, title) => {
-                    this.handleMenuAction(id, title);
+                const menuEntry = ui.renderCustomMenu(currentTheme.flowCancelMenuJson, 'Form cancelled.', false, currentTheme, (id, title, actionType) => {
+                    this.handleMenuAction(id, title, actionType);
                 });
                 if (menuEntry) {
                     const history = storage.loadHistory();
@@ -707,8 +712,8 @@ export function createFlowEngine({
                     setTimeout(() => {
                         ui.setInputEnabled(true, 'Ask me anything...');
                         const currentTheme = getTheme();
-                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, result.data.message || 'Thank you! We\'ll be in touch.', false, currentTheme, (id, title) => {
-                            this.handleMenuAction(id, title);
+                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, result.data.message || 'Thank you! We\'ll be in touch.', false, currentTheme, (id, title, actionType) => {
+                            this.handleMenuAction(id, title, actionType);
                         });
                         if (menuEntry) {
                             const history = storage.loadHistory();
@@ -755,8 +760,8 @@ export function createFlowEngine({
                     setTimeout(() => {
                         ui.setInputEnabled(true, 'Ask me anything...');
                         const currentTheme = getTheme();
-                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, data.message || 'Support ticket created successfully.', false, currentTheme, (id, title) => {
-                            this.handleMenuAction(id, title);
+                        const menuEntry = ui.renderCustomMenu(currentTheme.flowCompletionMenuJson, data.message || 'Support ticket created successfully.', false, currentTheme, (id, title, actionType) => {
+                            this.handleMenuAction(id, title, actionType);
                         });
                         if (menuEntry) {
                             const history = storage.loadHistory();
@@ -835,13 +840,21 @@ export function createFlowEngine({
             }
         },
 
-        handleMenuAction(id, title) {
-            if (id === 'trigger_flow_lead') {
-                this.startFlow('LEAD', title);
-            } else if (id === 'trigger_flow_appointment') {
-                this.startFlow('APPOINTMENT', title);
-            } else if (id === 'trigger_flow_booking') {
-                this.startFlow('BOOKING', title);
+        handleMenuAction(id, title, actionType, item) {
+            const act = (actionType || '').toLowerCase();
+            const idStr = (id || '').toLowerCase();
+            const preselected = item && item.name ? item.name : undefined;
+
+            if (act === 'lead' || idStr === 'trigger_flow_lead' || idStr === 'lead') {
+                this.startFlow('LEAD', title, preselected);
+            } else if (act === 'appointment' || idStr === 'trigger_flow_appointment' || idStr === 'appointment') {
+                this.startFlow('APPOINTMENT', title, preselected);
+            } else if (act === 'booking' || idStr === 'trigger_flow_booking' || idStr === 'booking') {
+                this.startFlow('BOOKING', title, preselected);
+            } else if (act === 'catalog' || idStr === 'catalog' || idStr === 'view_services' || idStr === 'view_services_list') {
+                this.startCatalogFlow();
+            } else if (act === 'support' || idStr === 'support') {
+                this.startSupportFlow();
             } else {
                 addUserBubble(title);
                 const inputEl = ui.getElements().input;
