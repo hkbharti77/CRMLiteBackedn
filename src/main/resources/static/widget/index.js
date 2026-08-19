@@ -99,8 +99,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
                     ? (theme.guardrailMessageAbuse || "We cannot process requests containing inappropriate or abusive language. Please communicate respectfully or select an option from the menu.")
                     : (theme.guardrailMessageGibberish || "We couldn't understand your request. Please rephrase your message or select one of the available options below."));
                 setTimeout(() => {
-                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, fallbackMsg, true, theme, (id, title) => {
-                        flowEngine.handleMenuAction(id, title);
+                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, fallbackMsg, true, theme, (id, title, actionType) => {
+                        flowEngine.handleMenuAction(id, title, actionType);
                     });
                     if (entry) {
                         const history = storage.loadHistory();
@@ -114,8 +114,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
                     flowEngine.addBotBubble(finalResponse);
                     setTimeout(() => flowEngine.suggestForm(), 600);
                 } else {
-                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title) => {
-                        flowEngine.handleMenuAction(id, title);
+                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title, actionType) => {
+                        flowEngine.handleMenuAction(id, title, actionType);
                     });
                     if (entry) {
                         const history = storage.loadHistory();
@@ -126,8 +126,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
             }
         } catch (e) {
             ui.setTyping(false);
-            const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, "Connection lost. Please try again.", true, theme, (id, title) => {
-                flowEngine.handleMenuAction(id, title);
+            const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, "Connection lost. Please try again.", true, theme, (id, title, actionType) => {
+                flowEngine.handleMenuAction(id, title, actionType);
             });
             if (entry) {
                 const history = storage.loadHistory();
@@ -172,7 +172,13 @@ export async function initWidget({ businessId, apiBase } = {}) {
     catalogManager = createCatalogManager({
         messagesContainer: elements.messages,
         onAddUserBubble: (t) => flowEngine.addUserBubble(t),
-        createBotRow: () => ui.createBotRow()
+        createBotRow: () => ui.createBotRow(),
+        apiBase,
+        resolveImageUrl,
+        getTheme: () => theme,
+        onActionSelect: (id, title, actionType, item) => {
+            flowEngine.handleMenuAction(id, title, actionType, item);
+        }
     });
 
     flowEngine = createFlowEngine({

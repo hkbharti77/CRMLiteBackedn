@@ -113,13 +113,20 @@ public class PublicFlowController {
                 .map(user -> {
                     List<com.chatcrmlite.backend.dto.BusinessServiceDTO> dtos = businessServiceRepository.findByOwner(user)
                             .stream()
-                            .map(s -> com.chatcrmlite.backend.dto.BusinessServiceDTO.builder()
-                                    .id(s.getId())
-                                    .name(s.getName())
-                                    .description(s.getDescription())
-                                    .hasImage(s.getImageData() != null && s.getImageData().length > 0)
-                                    .imageUrl(s.getImageUrl())
-                                    .build())
+                            .map(s -> {
+                                String imgUrl = s.getImageUrl();
+                                boolean hasImg = (s.getImageData() != null && s.getImageData().length > 0) || (imgUrl != null && !imgUrl.isBlank());
+                                if ((imgUrl == null || imgUrl.isBlank()) && s.getImageData() != null && s.getImageData().length > 0) {
+                                    imgUrl = "/public/images/" + s.getId();
+                                }
+                                return com.chatcrmlite.backend.dto.BusinessServiceDTO.builder()
+                                        .id(s.getId())
+                                        .name(s.getName())
+                                        .description(s.getDescription())
+                                        .hasImage(hasImg)
+                                        .imageUrl(imgUrl)
+                                        .build();
+                            })
                             .toList();
                     return ResponseEntity.ok(dtos);
                 })

@@ -414,6 +414,9 @@ public class WhatsAppMenuService {
                 businessServiceRepository.findByIdAndOwner(svcId, owner).ifPresentOrElse(svc -> {
                     String caption = "*" + svc.getName() + "*\n\n" + (svc.getDescription() != null ? svc.getDescription() : "");
                     String imageUrl = svc.getImageUrl();
+                    if ((imageUrl == null || imageUrl.isBlank()) && svc.getImageData() != null && svc.getImageData().length > 0) {
+                        imageUrl = appPublicUrl + "/public/images/" + svc.getId();
+                    }
                     
                     if (imageUrl != null && !imageUrl.isBlank()) {
                         // Ensure WhatsApp can reach the image by replacing localhost with the public ngrok URL

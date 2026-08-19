@@ -603,11 +603,27 @@ export function createUIController({
 
             let bodyMsg = defaultMessage || 'Please select an option:';
             let parsed = null;
+            let buttonList = [];
+
             try {
                 if (jsonString) {
-                    parsed = JSON.parse(jsonString);
-                    if (parsed && parsed.bodyText && !overrideBodyText) {
-                        bodyMsg = parsed.bodyText;
+                    parsed = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString;
+                    if (parsed) {
+                        if (parsed.bodyText && !overrideBodyText) {
+                            bodyMsg = parsed.bodyText;
+                        } else if (parsed.message && !overrideBodyText) {
+                            bodyMsg = parsed.message;
+                        }
+
+                        if (parsed.enabled !== false) {
+                            if (Array.isArray(parsed)) {
+                                buttonList = parsed;
+                            } else if (Array.isArray(parsed.buttons)) {
+                                buttonList = parsed.buttons;
+                            } else if (parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows) {
+                                buttonList = parsed.sections[0].rows;
+                            }
+                        }
                     }
                 }
             } catch (e) {
@@ -619,23 +635,28 @@ export function createUIController({
 
             const textSpan = document.createElement('span');
             textSpan.className = 'message-text';
-            textSpan.innerHTML = parseMarkdown(bodyMsg);
+            textSpan.innerHTML = parseMarkdown(bodyMsg, apiBaseRef);
             msgDiv.appendChild(textSpan);
 
             const t = currentTheme || activeTheme || theme;
 
-            if (parsed && parsed.sections && parsed.sections.length > 0 && parsed.sections[0].rows && parsed.sections[0].rows.length > 0) {
+            if (buttonList && buttonList.length > 0) {
                 const btnWrap = document.createElement('div');
                 btnWrap.className = 'cta-card-wrap';
 
-                parsed.sections[0].rows.forEach(btnConfig => {
+                buttonList.forEach(btnConfig => {
                     const btn = document.createElement('button');
                     btn.type = 'button';
                     btn.className = 'flow-btn';
+
+                    const label = btnConfig.label || btnConfig.title || 'Action';
+                    const linkType = btnConfig.linkType || btnConfig.action || btnConfig.id;
+
                     const labelSpan = document.createElement('span');
                     labelSpan.className = 'btn-text';
-                    labelSpan.textContent = btnConfig.title || '';
+                    labelSpan.textContent = label;
                     btn.appendChild(labelSpan);
+
                     const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
                     arrow.setAttribute('class', 'btn-arrow');
                     arrow.setAttribute('viewBox', '0 0 24 24');
@@ -644,15 +665,18 @@ export function createUIController({
                     arrow.setAttribute('stroke-width', '2.5');
                     arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
                     btn.appendChild(arrow);
+
                     btn.onclick = () => {
                         btn.classList.add('selected');
                         btnWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
-                        if (onActionSelect) onActionSelect(btnConfig.id, btnConfig.title);
+                        if (onActionSelect) {
+                            onActionSelect(btnConfig.id || linkType, label, linkType);
+                        }
                     };
                     btnWrap.appendChild(btn);
                 });
                 msgDiv.appendChild(btnWrap);
-            } else if (t.ctaButtons && t.ctaButtons.length > 0) {
+            } else if (t.ctaButtons && t.ctaButtons.length > 0 && (!parsed || parsed.enabled !== false)) {
                 const ctaWrap = document.createElement('div');
                 ctaWrap.className = 'cta-card-wrap';
                 t.ctaButtons.forEach(btnConfig => {
@@ -674,7 +698,11 @@ export function createUIController({
                     btn.onclick = () => {
                         btn.classList.add('selected');
                         ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
-                        if (onCtaAction) onCtaAction(btnConfig);
+                        if (onActionSelect) {
+                            onActionSelect(btnConfig.action, btnConfig.label, btnConfig.action);
+                        } else if (onCtaAction) {
+                            onCtaAction(btnConfig);
+                        }
                     };
                     ctaWrap.appendChild(btn);
                 });
