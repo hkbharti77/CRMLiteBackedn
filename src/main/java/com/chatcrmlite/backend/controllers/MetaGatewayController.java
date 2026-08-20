@@ -64,10 +64,63 @@ public class MetaGatewayController {
     @Value("${app.public.url:http://localhost:8080}")
     private String publicAppUrl;
 
+    @Value("${FRONTEND_URL:${app.frontend.url:https://gyanvaniaiconnect.qivantaai.in}}")
+    private String frontendUrl;
+
+    private String extractTokenFromState(String state) {
+        if (!StringUtils.hasText(state)) return null;
+        String s = state.trim();
+        if (s.startsWith("%7B") || s.startsWith("%7b")) {
+            try {
+                s = java.net.URLDecoder.decode(s, java.nio.charset.StandardCharsets.UTF_8);
+            } catch (Exception ignored) {}
+        }
+        if (s.startsWith("{") && s.endsWith("}")) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(s);
+                if (node.has("token")) {
+                    return node.get("token").asText();
+                }
+            } catch (Exception ignored) {}
+        }
+        if (s.contains(":::")) {
+            return s.split(":::")[0];
+        }
+        return s;
+    }
+
+    private String resolveRedirectUrl(String state) {
+        String base = (frontendUrl != null && !frontendUrl.isBlank()) ? frontendUrl.replaceAll("/+$", "") : "https://gyanvaniaiconnect.qivantaai.in";
+        if (StringUtils.hasText(state)) {
+            String s = state.trim();
+            if (s.startsWith("%7B") || s.startsWith("%7b")) {
+                try {
+                    s = java.net.URLDecoder.decode(s, java.nio.charset.StandardCharsets.UTF_8);
+                } catch (Exception ignored) {}
+            }
+            if (s.startsWith("{") && s.endsWith("}")) {
+                try {
+                    com.fasterxml.jackson.databind.JsonNode node = new com.fasterxml.jackson.databind.ObjectMapper().readTree(s);
+                    if (node.has("origin") && StringUtils.hasText(node.get("origin").asText())) {
+                        base = node.get("origin").asText().replaceAll("/+$", "");
+                    }
+                } catch (Exception ignored) {}
+            } else if (s.contains(":::")) {
+                String[] parts = s.split(":::");
+                if (parts.length > 1 && StringUtils.hasText(parts[1])) {
+                    base = parts[1].replaceAll("/+$", "");
+                }
+            }
+        }
+        return base + "/meta-config";
+    }
+
     /**
      * Resolves authenticated user from SecurityContext or Token query param.
      */
     private User resolveUser(String tokenParam) {
+        String actualToken = extractTokenFromState(tokenParam);
+
         // Try SecurityContext first
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth != null && auth.isAuthenticated() && auth.getPrincipal() instanceof String) {
@@ -78,10 +131,10 @@ public class MetaGatewayController {
         }
 
         // Fallback to token parameter
-        if (StringUtils.hasText(tokenParam)) {
+        if (StringUtils.hasText(actualToken)) {
             try {
-                if (jwtUtils.validateJwtToken(tokenParam)) {
-                    String email = jwtUtils.getEmailFromJwtToken(tokenParam);
+                if (jwtUtils.validateJwtToken(actualToken)) {
+                    String email = jwtUtils.getEmailFromJwtToken(actualToken);
                     if (StringUtils.hasText(email)) {
                         return userRepository.findByEmail(email).orElse(null);
                     }
@@ -278,6 +331,7 @@ public class MetaGatewayController {
             const APP_ID = '__APP_ID__';
             const CONFIG_ID = '__CONFIG_ID__';
             const TOKEN = '__TOKEN__';
+            const ORIGIN = '__ORIGIN__';
             const CALLBACK_URL = window.location.origin + '/api/v1/integrations/meta/gateway/callback';
             let sdkReady = false;
 
@@ -300,12 +354,14 @@ public class MetaGatewayController {
 
             // Direct OAuth dialog fallback (Ad-block safe)
             function launchDirectOAuth() {
+              const originUrl = ORIGIN || window.location.origin;
+              const stateVal = TOKEN ? (TOKEN + ':::' + originUrl) : originUrl;
               const oauthUrl = 'https://www.facebook.com/v20.0/dialog/oauth?' + 
                 'client_id=' + encodeURIComponent(APP_ID) + 
                 '&redirect_uri=' + encodeURIComponent(CALLBACK_URL) + 
                 '&config_id=' + encodeURIComponent(CONFIG_ID) + 
                 '&response_type=code' + 
-                '&state=' + encodeURIComponent(TOKEN);
+                '&state=' + encodeURIComponent(stateVal);
               setStatus('loading', 'Redirecting to Meta authorization dialog...');
               window.location.href = oauthUrl;
             }
@@ -319,7 +375,6 @@ public class MetaGatewayController {
 
             function launchFacebookLogin() {
               if (!sdkReady || typeof FB === 'undefined' || !FB.login) {
-                // Fallback to direct OAuth URL immediately
                 launchDirectOAuth();
                 return;
               }
@@ -358,7 +413,9 @@ public class MetaGatewayController {
                         }, '*');
                       }
                       setTimeout(() => {
-                        window.close();
+                        try { window.close(); } catch(e) {}
+                        const target = ORIGIN ? (ORIGIN + '/meta-config') : '/meta-config';
+                        window.location.href = target;
                       }, 1500);
                     }
                   })
@@ -378,7 +435,7 @@ public class MetaGatewayController {
                 override_default_response_type: true,
                 extras: {
                   setup: {},
-                  featureType: '',
+                  featureType: 'coexistence',
                   sessionInfoVersion: '3'
                 }
               });
@@ -391,7 +448,8 @@ public class MetaGatewayController {
         .replace("__THEME_CLASS__", initialThemeClass)
         .replace("__APP_ID__", safeAppId)
         .replace("__CONFIG_ID__", safeConfigId)
-        .replace("__TOKEN__", safeToken);
+        .replace("__TOKEN__", safeToken)
+        .replace("__ORIGIN__", origin != null ? origin : (frontendUrl != null ? frontendUrl : ""));
 
         return ResponseEntity.ok()
                 .contentType(MediaType.TEXT_HTML)
@@ -546,23 +604,50 @@ public class MetaGatewayController {
             @RequestParam(required = false) String error,
             @RequestParam(name = "error_description", required = false) String errorDescription) {
 
+        String targetUrl = resolveRedirectUrl(state);
+
         if (StringUtils.hasText(error) || !StringUtils.hasText(code)) {
-            String errMsg = StringUtils.hasText(errorDescription) ? errorDescription : (error != null ? error : "Authorization was denied");
+            String errMsg = StringUtils.hasText(errorDescription) ? errorDescription : (error != null ? error : "Authorization was cancelled or denied");
             String errHtml = """
             <!DOCTYPE html>
-            <html>
-            <body style="font-family:sans-serif;text-align:center;padding:40px;background:#F8FAFC;">
-              <h2 style="color:#DC2626;">Connection Cancelled</h2>
-              <p style="color:#64748B;">__ERROR__</p>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Connection Cancelled | GyanVaniAi</title>
+              <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px; background: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 24px; padding: 36px 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.06); }
+                .icon { font-size: 44px; margin-bottom: 12px; }
+                h2 { color: #DC2626; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+                p { color: #64748B; font-size: 13px; line-height: 1.5; margin-bottom: 24px; word-break: break-word; }
+                .btn { display: inline-flex; align-items: center; justify-content: center; background: #0F172A; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 24px; border-radius: 12px; width: 100%; transition: background 0.2s; }
+                .btn:hover { background: #1E293B; }
+                .redirect-note { margin-top: 14px; font-size: 12px; color: #94A3B8; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">⚠️</div>
+                <h2>Connection Cancelled</h2>
+                <p>__ERROR__</p>
+                <a href="__REDIRECT_URL__" class="btn">➜ Return to CRM</a>
+                <div class="redirect-note">Redirecting in 3 seconds...</div>
+              </div>
               <script>
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'META_GATEWAY_ERROR', error: '__ERROR__' }, '*');
-                }
-                setTimeout(() => window.close(), 3000);
+                const target = '__REDIRECT_URL__';
+                try {
+                  if (window.opener) {
+                    window.opener.postMessage({ type: 'META_GATEWAY_ERROR', error: '__ERROR__' }, '*');
+                    setTimeout(() => { try { window.close(); } catch(e) {} }, 2500);
+                  }
+                } catch(e) {}
+                setTimeout(() => { window.location.href = target; }, 3000);
               </script>
             </body>
             </html>
-            """.replace("__ERROR__", errMsg);
+            """.replace("__ERROR__", errMsg).replace("__REDIRECT_URL__", targetUrl);
             return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(errHtml);
         }
 
@@ -570,13 +655,35 @@ public class MetaGatewayController {
         if (user == null) {
             String unauthHtml = """
             <!DOCTYPE html>
-            <html>
-            <body style="font-family:sans-serif;text-align:center;padding:40px;">
-              <h2 style="color:#DC2626;">Authentication Required</h2>
-              <p>Please log in to your CRM account and try again.</p>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Authentication Required | GyanVaniAi</title>
+              <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px; background: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 24px; padding: 36px 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.06); }
+                .icon { font-size: 44px; margin-bottom: 12px; }
+                h2 { color: #DC2626; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+                p { color: #64748B; font-size: 13px; line-height: 1.5; margin-bottom: 24px; }
+                .btn { display: inline-flex; align-items: center; justify-content: center; background: #1877F2; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 24px; border-radius: 12px; width: 100%; transition: background 0.2s; }
+                .btn:hover { background: #166fe5; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">🔒</div>
+                <h2>Authentication Required</h2>
+                <p>Please log in to your CRM account to link WhatsApp.</p>
+                <a href="__REDIRECT_URL__" class="btn">➜ Return to Login</a>
+              </div>
+              <script>
+                setTimeout(() => { window.location.href = '__REDIRECT_URL__'; }, 2500);
+              </script>
             </body>
             </html>
-            """;
+            """.replace("__REDIRECT_URL__", targetUrl);
             return ResponseEntity.status(401).contentType(MediaType.TEXT_HTML).body(unauthHtml);
         }
 
@@ -604,6 +711,7 @@ public class MetaGatewayController {
                 try {
                     String subscribeUrl = String.format("https://graph.facebook.com/v19.0/%s/subscribed_apps?access_token=%s", wabaId, longLivedToken);
                     restTemplate.postForEntity(subscribeUrl, null, String.class);
+                    log.info("[MetaGateway Callback] Successfully auto-subscribed WABA {} to webhooks", wabaId);
                 } catch (Exception e) {
                     log.warn("[MetaGateway Callback] Auto-subscription warning: {}", e.getMessage());
                 }
@@ -629,35 +737,83 @@ public class MetaGatewayController {
 
             String successHtml = """
             <!DOCTYPE html>
-            <html>
-            <body style="font-family:-apple-system,sans-serif;text-align:center;padding:50px;background:#F8FAFC;">
-              <div style="background:#fff;border:1px solid #E2E8F0;border-radius:20px;padding:30px;max-width:400px;margin:0 auto;box-shadow:0 10px 25px rgba(0,0,0,0.05);">
-                <div style="font-size:40px;margin-bottom:10px;">✅</div>
-                <h2 style="color:#059669;margin-bottom:8px;">Connected Successfully!</h2>
-                <p style="color:#475569;font-size:14px;">Your WhatsApp Coexistence is active. Returning to CRM...</p>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>WhatsApp Connected | GyanVaniAi</title>
+              <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px; background: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 24px; padding: 36px 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.06); }
+                .icon { font-size: 48px; margin-bottom: 12px; }
+                h2 { color: #059669; font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+                p { color: #475569; font-size: 14px; line-height: 1.5; margin-bottom: 24px; }
+                .btn { display: inline-flex; align-items: center; justify-content: center; background: #1877F2; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 24px; border-radius: 12px; width: 100%; transition: background 0.2s; }
+                .btn:hover { background: #166fe5; }
+                .redirect-note { margin-top: 14px; font-size: 12px; color: #94A3B8; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">✅</div>
+                <h2>WhatsApp Connected!</h2>
+                <p>Your WhatsApp Coexistence is active and verified. Automatically redirecting to your CRM dashboard...</p>
+                <a href="__REDIRECT_URL__" id="returnBtn" class="btn">➜ Return to CRM Dashboard</a>
+                <div class="redirect-note" id="timerText">Redirecting automatically in 2s...</div>
               </div>
               <script>
-                if (window.opener) {
-                  window.opener.postMessage({ type: 'META_WHATSAPP_CONNECTED', success: true }, '*');
+                const targetUrl = '__REDIRECT_URL__';
+                try {
+                  if (window.opener && !window.opener.closed) {
+                    window.opener.postMessage({ type: 'META_WHATSAPP_CONNECTED', success: true }, '*');
+                    setTimeout(() => { try { window.close(); } catch(e) {} }, 1200);
+                  }
+                } catch (e) {
+                  console.warn('Opener postMessage error:', e);
                 }
-                setTimeout(() => window.close(), 1800);
+                setTimeout(() => {
+                  window.location.href = targetUrl;
+                }, 1600);
               </script>
             </body>
             </html>
-            """;
+            """.replace("__REDIRECT_URL__", targetUrl);
             return ResponseEntity.ok().contentType(MediaType.TEXT_HTML).body(successHtml);
 
         } catch (Exception e) {
             log.error("[MetaGateway Callback] Failed direct OAuth exchange", e);
             String failHtml = """
             <!DOCTYPE html>
-            <html>
-            <body style="font-family:sans-serif;text-align:center;padding:40px;">
-              <h2 style="color:#DC2626;">Connection Failed</h2>
-              <p style="color:#64748B;">__ERROR__</p>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>Connection Failed | GyanVaniAi</title>
+              <style>
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; text-align: center; padding: 24px; background: #F8FAFC; color: #0F172A; display: flex; align-items: center; justify-content: center; min-height: 100vh; }
+                .card { background: #fff; border: 1px solid #E2E8F0; border-radius: 24px; padding: 36px 28px; max-width: 440px; width: 100%; box-shadow: 0 20px 40px rgba(0,0,0,0.06); }
+                .icon { font-size: 44px; margin-bottom: 12px; }
+                h2 { color: #DC2626; font-size: 20px; font-weight: 800; margin-bottom: 8px; }
+                p { color: #64748B; font-size: 13px; line-height: 1.5; margin-bottom: 24px; }
+                .btn { display: inline-flex; align-items: center; justify-content: center; background: #0F172A; color: #fff; text-decoration: none; font-weight: 700; font-size: 14px; padding: 13px 24px; border-radius: 12px; width: 100%; transition: background 0.2s; }
+                .btn:hover { background: #1E293B; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <div class="icon">❌</div>
+                <h2>Connection Failed</h2>
+                <p>__ERROR__</p>
+                <a href="__REDIRECT_URL__" class="btn">➜ Return to CRM</a>
+              </div>
+              <script>
+                setTimeout(() => { window.location.href = '__REDIRECT_URL__'; }, 3500);
+              </script>
             </body>
             </html>
-            """.replace("__ERROR__", e.getMessage());
+            """.replace("__ERROR__", e.getMessage()).replace("__REDIRECT_URL__", targetUrl);
             return ResponseEntity.status(500).contentType(MediaType.TEXT_HTML).body(failHtml);
         }
     }

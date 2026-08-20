@@ -266,12 +266,14 @@ export function createFlowEngine({
                     steps: supportSteps,
                     onSubmit: async (formData, { close, reset }) => {
                         try {
+                            const messageText = formData.message || formData.description || '';
                             const res = await apiClient.submitSupportTicket({
                                 name: formData.name,
                                 email: formData.email,
                                 phone: formData.phone || '',
                                 subject: formData.subject,
-                                description: formData.description,
+                                message: messageText,
+                                description: messageText,
                                 category: formData.category,
                                 priority: 'MEDIUM'
                             });
@@ -380,8 +382,8 @@ export function createFlowEngine({
 
         async startCatalogFlow() {
             addUserBubble('View Services/Products');
-            mode = 'catalog';
-            ui.setInputEnabled(false);
+            mode = 'rag';
+            ui.setInputEnabled(true, 'Ask me anything...');
             ui.setTyping(true);
 
             try {
@@ -390,17 +392,17 @@ export function createFlowEngine({
                 if (catalog && catalog.length > 0) {
                     addBotBubble('Here is our catalog:');
                     if (catalogManager) catalogManager.renderCatalog(catalog);
+                    ui.setInputEnabled(true, 'Ask me anything...');
                 } else {
                     addBotBubble('Our catalog is currently empty.');
-                    ui.setInputEnabled(true);
-                    mode = 'rag';
+                    ui.setInputEnabled(true, 'Ask me anything...');
                 }
             } catch (e) {
                 ui.setTyping(false);
                 addBotBubble('Connection error. Please try again.');
-                ui.setInputEnabled(true);
-                mode = 'rag';
+                ui.setInputEnabled(true, 'Ask me anything...');
             }
+            mode = 'rag';
         },
 
         startAboutFlow(aboutUsText) {
@@ -411,6 +413,7 @@ export function createFlowEngine({
                 addBotBubble('Information about our business is coming soon!');
             }
             mode = 'rag';
+            ui.setInputEnabled(true, 'Ask me anything...');
         },
 
         async renderSupportStep(index) {

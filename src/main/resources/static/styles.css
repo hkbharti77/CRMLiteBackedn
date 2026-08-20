@@ -425,6 +425,13 @@
     justify-content: flex-start;
 }
 
+.message-row:has(.catalog-details),
+.message-row:has(.catalog-container),
+.message-row:has(.crm-webflow-inline-form),
+.message-row:has(.crm-form-row) {
+    align-items: flex-start;
+}
+
 .message-row--user {
     align-self: stretch;
     justify-content: flex-end;

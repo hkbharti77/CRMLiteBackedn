@@ -26,7 +26,8 @@
     }
 
     // Ensure stylesheet is present even if the host page forgot to link it
-    const cssHref = `${origin}/styles.css`;
+    const buildVer = Date.now();
+    const cssHref = `${origin}/styles.css?v=${buildVer}`;
     const hasStylesheet = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
         .some(link => (link.href || '').includes('/styles.css'));
     if (!hasStylesheet) {
@@ -36,7 +37,7 @@
         document.head.appendChild(link);
     }
 
-    import(`${widgetBaseUrl}/index.js`)
+    import(`${widgetBaseUrl}/index.js?v=${buildVer}`)
         .then(({ initWidget }) => {
             initWidget({ businessId, apiBase: API_BASE });
         })
