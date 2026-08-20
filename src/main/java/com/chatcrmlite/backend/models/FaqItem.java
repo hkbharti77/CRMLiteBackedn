@@ -21,7 +21,7 @@ public class FaqItem {
     @Column(columnDefinition = "TEXT", nullable = false)
     private String answer;
 
-    @Column(length = 100)
+    @Column(columnDefinition = "TEXT")
     private String category = "General";
 
     @Column(columnDefinition = "TEXT")

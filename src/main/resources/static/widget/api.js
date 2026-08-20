@@ -103,10 +103,17 @@ export function createApiClient(apiBase, businessId) {
         },
 
         async submitSupportTicket(payload) {
+            const data = { ...payload };
+            if (!data.message && data.description) {
+                data.message = data.description;
+            }
+            if (!data.description && data.message) {
+                data.description = data.message;
+            }
             const res = await fetch(`${base}/support/${businessId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
+                body: JSON.stringify(data)
             });
             const result = await res.json().catch(() => ({}));
             return {

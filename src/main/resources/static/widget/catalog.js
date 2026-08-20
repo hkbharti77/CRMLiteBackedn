@@ -4,7 +4,7 @@
 
 import { escapeHtml, resolveImageUrl } from './markdown.js';
 
-export function createCatalogManager({ messagesContainer, onAddUserBubble, createBotRow, apiBase, resolveImageUrl: customResolveImageUrl, getTheme, onActionSelect }) {
+export function createCatalogManager({ messagesContainer, onAddUserBubble, createBotRow, apiBase, resolveImageUrl: customResolveImageUrl, getTheme, onActionSelect, setInputEnabled }) {
     const resolveUrl = customResolveImageUrl || resolveImageUrl;
 
     function getMediaUrl(item) {
@@ -35,6 +35,9 @@ export function createCatalogManager({ messagesContainer, onAddUserBubble, creat
     return {
         renderCatalog(catalog) {
             if (!messagesContainer) return;
+            if (typeof setInputEnabled === 'function') {
+                setInputEnabled(true, 'Ask me anything...');
+            }
 
             const row = createBotRow ? createBotRow() : null;
             const container = document.createElement('div');
@@ -101,6 +104,10 @@ export function createCatalogManager({ messagesContainer, onAddUserBubble, creat
 
         showCatalogDetails(item) {
             if (!messagesContainer || !item) return;
+
+            if (typeof setInputEnabled === 'function') {
+                setInputEnabled(true, 'Ask me anything...');
+            }
 
             if (onAddUserBubble) {
                 onAddUserBubble(`Tell me more about ${item.name}`);

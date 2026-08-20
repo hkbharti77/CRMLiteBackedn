@@ -178,7 +178,8 @@ export async function initWidget({ businessId, apiBase } = {}) {
         getTheme: () => theme,
         onActionSelect: (id, title, actionType, item) => {
             flowEngine.handleMenuAction(id, title, actionType, item);
-        }
+        },
+        setInputEnabled: (enabled, placeholder) => ui.setInputEnabled(enabled, placeholder)
     });
 
     flowEngine = createFlowEngine({

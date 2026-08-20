@@ -41,6 +41,11 @@ public class SupportRequest {
     public void setSubject(String subject) { this.subject = subject; }
     public String getMessage() { return message; }
     public void setMessage(String message) { this.message = message; }
+    public void setDescription(String description) {
+        if (this.message == null || this.message.isBlank()) {
+            this.message = description;
+        }
+    }
     public String getCategory() { return category; }
     public void setCategory(String category) { this.category = category; }
 }
