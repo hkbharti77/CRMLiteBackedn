@@ -98,8 +98,8 @@ public class NluEngine {
         io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start(meterRegistry);
         long start = System.currentTimeMillis();
         try {
-            if (text.contains("kitna time")) {
-                text = wordBoundaryPatternCache.computeIfAbsent("kitna", k -> java.util.regex.Pattern.compile("\\b" + java.util.regex.Pattern.quote(k) + "\\b"))
+            if (text != null && text.contains("kitna time")) {
+                text = java.util.regex.Pattern.compile("\\bkitna time\\b", java.util.regex.Pattern.CASE_INSENSITIVE)
                         .matcher(text).replaceAll("duration");
             }
             

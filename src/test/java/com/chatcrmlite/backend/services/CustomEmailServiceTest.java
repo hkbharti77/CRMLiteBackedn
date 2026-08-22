@@ -95,6 +95,12 @@ class CustomEmailServiceTest {
         campaign.setStatus(CustomEmail.EmailStatus.SENDING);
         campaign.setSubject("Test Subject");
         campaign.setBody("Test Body");
+
+        org.springframework.test.util.ReflectionTestUtils.setField(customEmailService, "aiQuotaService", aiQuotaService);
+        org.springframework.test.util.ReflectionTestUtils.setField(customEmailService, "chatLanguageModel", chatLanguageModel);
+        org.springframework.test.util.ReflectionTestUtils.setField(customEmailService, "tokenBudgetService", tokenBudgetService);
+        org.springframework.test.util.ReflectionTestUtils.setField(customEmailService, "costTracker", costTracker);
+        org.springframework.test.util.ReflectionTestUtils.setField(customEmailService, "objectMapper", objectMapper);
     }
 
     @Test

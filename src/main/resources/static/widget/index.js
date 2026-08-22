@@ -27,8 +27,9 @@ export async function initWidget({ businessId, apiBase } = {}) {
         return;
     }
 
-    let theme = { ...DEFAULT_THEME };
     const storage = createStorageManager(businessId);
+    const cachedTheme = storage.loadTheme();
+    let theme = cachedTheme ? { ...DEFAULT_THEME, ...cachedTheme } : { ...DEFAULT_THEME };
     const apiClient = createApiClient(apiBase, businessId);
 
     let ui = null;
@@ -139,6 +140,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
     ui = createUIController({
         theme,
+        apiBase,
         icons: ICONS,
         parseMarkdown,
         resolveImageUrl,
@@ -197,6 +199,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
         if (bootstrapData.theme) {
             theme = { ...theme, ...bootstrapData.theme };
+            storage.saveTheme(theme);
             ui.applyTheme(theme, apiBase);
         }
 

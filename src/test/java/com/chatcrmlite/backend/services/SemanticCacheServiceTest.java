@@ -76,6 +76,6 @@ public class SemanticCacheServiceTest {
         semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);
 
         verify(jdbcTemplate, times(1)).update(anyString(), 
-                eq(tenantId), eq(query), eq(embeddingLiteral), eq(response));
+                any(UUID.class), eq(tenantId), eq(query), eq(embeddingLiteral), eq(response));
     }
 }

@@ -116,7 +116,6 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/webhook/**",
                     "/api/v1/public/**",
-                    "/api/v1/test-emails/**", // TEMPORARY — remove after testing
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
                     "/api/v1/integrations/meta/gateway/**", // Meta WhatsApp Gateway launcher & callbacks
                     "/api/v1/business-categories/**",
@@ -139,6 +138,7 @@ public class SecurityConfig {
                 .requestMatchers("/actuator/**").authenticated()
                 // Admin API — method-level @PreAuthorize("hasRole('ADMIN')") enforces role
                 .requestMatchers("/api/v1/admin/**").authenticated()
+                .requestMatchers("/api/v1/test-emails/**").authenticated()
                 // Everything else needs a valid JWT
                 .anyRequest().authenticated()
             )

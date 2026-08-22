@@ -50,8 +50,13 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT COUNT(u) FROM User u WHERE u.tenant.id = :tenantId")
     long countByTenantId(@Param("tenantId") UUID tenantId);
 
-    @Query(value = "SELECT id FROM app_users WHERE tenant_id = :tenantId LIMIT 1", nativeQuery = true)
-    Optional<UUID> findFirstUserIdByTenantId(@Param("tenantId") UUID tenantId);
+    @Query("SELECT u.id FROM User u WHERE u.tenant.id = :tenantId")
+    java.util.List<UUID> findUserIdsByTenantId(@Param("tenantId") UUID tenantId, org.springframework.data.domain.Pageable pageable);
+
+    default Optional<UUID> findFirstUserIdByTenantId(UUID tenantId) {
+        java.util.List<UUID> list = findUserIdsByTenantId(tenantId, org.springframework.data.domain.PageRequest.of(0, 1));
+        return list.isEmpty() ? Optional.empty() : Optional.of(list.get(0));
+    }
 
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     @Query("SELECT u FROM User u WHERE u.tenant = :tenant AND u.role = :role AND u.accountStatus = 'ACTIVE' AND u.availabilityStatus = 'AVAILABLE' AND (u.lastSeenAt IS NULL OR u.lastSeenAt >= :threshold) ORDER BY u.createdAt ASC")

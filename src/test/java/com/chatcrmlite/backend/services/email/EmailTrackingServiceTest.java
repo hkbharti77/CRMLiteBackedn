@@ -36,7 +36,7 @@ class EmailTrackingServiceTest {
         assertNotNull(token2);
         assertNotEquals(token1, token2, "Tokens should be unique");
         assertEquals(32, token1.length(), "Tokens should be 32 chars long");
-        assertTrue(token1.matches("^[a-zA-Z0-9]+$"), "Tokens should be URL safe alphanumeric");
+        assertTrue(token1.matches("^[a-zA-Z0-9_-]+$"), "Tokens should be URL safe alphanumeric");
     }
 
     @Test

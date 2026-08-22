@@ -17,10 +17,10 @@ import java.util.HashMap;
 /**
  * Stage Worker for AI Processing (RAG, Guardrails).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AIWorker implements StreamListener<String, ObjectRecord<String, String>> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AIWorker.class);
 
     private final WorkflowOrchestrator orchestrator;
     private final com.chatcrmlite.backend.services.whatsapp.WhatsAppAiService whatsappAiService;
@@ -84,7 +84,9 @@ public class AIWorker implements StreamListener<String, ObjectRecord<String, Str
             redisTemplate.opsForStream().acknowledge(groupName, record);
         } catch (Exception e) {
             log.error("AI Processing failed for {}", context.getMessageId(), e);
-            // Handle retries/DLQ
+            orchestrator.completeStage(context, ProcessingContext.WorkflowStage.FAILED);
+            dlqHandler.moveToDlq(record, e);
+            redisTemplate.opsForStream().acknowledge(groupName, record);
         }
     }
 

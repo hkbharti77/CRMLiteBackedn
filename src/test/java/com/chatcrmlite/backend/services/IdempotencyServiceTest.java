@@ -66,10 +66,10 @@ class IdempotencyServiceTest {
         owner.setId(userId);
 
         // Make transactionTemplate.executeWithoutResult() invoke the lambda synchronously.
-        doAnswer(invocation -> {
-            org.springframework.transaction.support.TransactionCallbackWithoutResult callback =
+        org.mockito.Mockito.lenient().doAnswer(invocation -> {
+            java.util.function.Consumer<org.springframework.transaction.TransactionStatus> callback =
                     invocation.getArgument(0);
-            callback.doInTransaction(null);
+            callback.accept(null);
             return null;
         }).when(transactionTemplate).executeWithoutResult(any());
     }

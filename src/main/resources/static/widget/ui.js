@@ -41,6 +41,7 @@ function businessInitials(name) {
 
 export function createUIController({
     theme,
+    apiBase,
     icons,
     parseMarkdown,
     resolveImageUrl,
@@ -53,8 +54,8 @@ export function createUIController({
     let elements = {};
     let isZoomed = false;
     let activeTheme = theme || {};
-    let botLogoUrl = '';
-    let apiBaseRef = '';
+    let apiBaseRef = apiBase || '';
+    let botLogoUrl = resolveImageUrl ? (resolveImageUrl(activeTheme.logoUrl || activeTheme.widgetIconUrl, apiBaseRef) || '') : '';
 
     const USER_AVATAR_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21a8 8 0 0 0-16 0"/><circle cx="12" cy="8" r="4"/></svg>`;
 
@@ -168,21 +169,54 @@ export function createUIController({
             widgetWrap.id = 'crm-chat-widget';
             document.body.appendChild(widgetWrap);
 
-            const initials = businessInitials(theme.businessName);
+            const initials = businessInitials(activeTheme.businessName);
+            const iconImage = resolveImageUrl ? (resolveImageUrl(activeTheme.widgetIconUrl || activeTheme.logoUrl, apiBaseRef) || '') : '';
+            botLogoUrl = resolveImageUrl ? (resolveImageUrl(activeTheme.logoUrl || activeTheme.widgetIconUrl, apiBaseRef) || '') : '';
+
+            // Apply active theme colors & fonts immediately to prevent style flashing on reload
+            const root = document.documentElement;
+            const primary = activeTheme.primaryColor || '#2563eb';
+            const secondary = activeTheme.secondaryColor || '#0f172a';
+            const accent = activeTheme.accentColor || primary;
+            const fontFamily = activeTheme.fontFamily || "'Plus Jakarta Sans', 'Inter', sans-serif";
+
+            root.style.setProperty('--primary-color', primary);
+            root.style.setProperty('--primary-hover', darkenHex(primary, 0.1));
+            root.style.setProperty('--primary-light', hexToRgba(primary, 0.1));
+            root.style.setProperty('--secondary-color', secondary);
+            root.style.setProperty('--accent-color', accent);
+            root.style.setProperty('--font-family', fontFamily);
+            root.style.setProperty('--header-bg', secondary);
+            root.style.setProperty('--bubble-user-bg', primary);
+            root.style.setProperty('--bubble-user-gradient', primary);
+
+            const launcherHtml = iconImage
+                ? `<button type="button" class="chat-button has-custom-icon" id="chat-toggle" title="Chat with us" aria-label="Open chat">
+                    <img src="${iconImage}" alt="Open chat" onerror="this.parentElement.classList.remove('has-custom-icon');this.parentElement.innerHTML=\`${icons.chat}\`;">
+                </button>`
+                : `<button type="button" class="chat-button" id="chat-toggle" title="Chat with us" aria-label="Open chat">
+                    ${icons.chat}
+                </button>`;
+
+            const headerAvatarHtml = botLogoUrl
+                ? `<div class="niche-icon-wrap has-logo" id="chat-header-icon"><img src="${botLogoUrl}" alt="" class="avatar-logo" onerror="this.onerror=null;this.parentElement.classList.remove('has-logo');this.parentElement.innerHTML='<span class=\\'avatar-initials\\'>${initials}</span>';"></div>`
+                : `<div class="niche-icon-wrap" id="chat-header-icon"><span class="avatar-initials">${initials}</span></div>`;
+
+            const menuAvatarHtml = botLogoUrl
+                ? `<div class="niche-icon-wrap has-logo"><img src="${botLogoUrl}" alt="" class="avatar-logo" onerror="this.onerror=null;this.parentElement.classList.remove('has-logo');this.parentElement.innerHTML='<span class=\\'avatar-initials\\'>${initials}</span>';"></div>`
+                : `<div class="niche-icon-wrap"><span class="avatar-initials">${initials}</span></div>`;
 
             widgetWrap.innerHTML = `
                 <div class="chat-tooltip" id="chat-tooltip">
                     <span class="chat-tooltip-text">Chat with us</span>
                 </div>
-                <button type="button" class="chat-button" id="chat-toggle" title="Chat with us" aria-label="Open chat">
-                    ${icons.chat}
-                </button>
+                ${launcherHtml}
                 <div class="chat-panel" id="chat-panel" role="dialog" aria-modal="true" aria-label="Chat">
                     <div class="chat-header">
                         <div class="chat-header-info">
-                            <div class="niche-icon-wrap" id="chat-header-icon"><span class="avatar-initials">${initials}</span></div>
+                            ${headerAvatarHtml}
                             <div class="chat-header-text">
-                                <span class="chat-header-title">${escapeHtml(theme.businessName || 'Assistant')}</span>
+                                <span class="chat-header-title">${escapeHtml(activeTheme.businessName || 'Assistant')}</span>
                                 <div class="chat-header-status">
                                     <span class="status-dot-pulse" aria-hidden="true"></span>
                                     <span class="status-text">Available</span>
@@ -224,9 +258,9 @@ export function createUIController({
                     <div class="chat-menu-overlay" id="chat-menu-overlay">
                         <div class="chat-header chat-header--menu">
                             <div class="chat-header-info">
-                                <div class="niche-icon-wrap"><span class="avatar-initials">${initials}</span></div>
+                                ${menuAvatarHtml}
                                 <div class="chat-header-text">
-                                    <span class="chat-header-title">${theme.businessName || 'Assistant'}</span>
+                                    <span class="chat-header-title">${escapeHtml(activeTheme.businessName || 'Assistant')}</span>
                                     <div class="chat-header-status">
                                         <span class="status-text">Select an option</span>
                                     </div>

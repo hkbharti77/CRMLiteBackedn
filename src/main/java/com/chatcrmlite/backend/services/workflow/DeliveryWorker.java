@@ -15,10 +15,10 @@ import java.util.UUID;
 /**
  * Stage Worker for Message Delivery (Meta API Calls).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class DeliveryWorker implements StreamListener<String, ObjectRecord<String, String>> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeliveryWorker.class);
 
     private final WorkflowOrchestrator orchestrator;
     private final WhatsAppClient whatsappClient;
@@ -26,6 +26,8 @@ public class DeliveryWorker implements StreamListener<String, ObjectRecord<Strin
     private final StringRedisTemplate redisTemplate;
     private final com.chatcrmlite.backend.services.whatsapp.WhatsAppDeliveryHandler whatsappDeliveryHandler;
     private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.services.DeadLetterHandler dlqHandler;
 
     @Value("${whatsapp.async.group}")
     private String groupName;
@@ -55,7 +57,16 @@ public class DeliveryWorker implements StreamListener<String, ObjectRecord<Strin
             orchestrator.completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
             redisTemplate.opsForStream().acknowledge(groupName, record);
         } catch (Exception e) {
-            log.error("Delivery failed for {}", context.getMessageId(), e);
+            log.error("❌ [Delivery-Worker] Delivery failed for messageId={}", context.getMessageId(), e);
+            orchestrator.completeStage(context, ProcessingContext.WorkflowStage.FAILED);
+            if (dlqHandler != null) {
+                try {
+                    dlqHandler.moveToDlq(record, e);
+                } catch (Exception dlqEx) {
+                    log.warn("⚠️ [Delivery-Worker] Failed to write to DLQ: {}", dlqEx.getMessage());
+                }
+            }
+            redisTemplate.opsForStream().acknowledge(groupName, record);
         }
     }
 

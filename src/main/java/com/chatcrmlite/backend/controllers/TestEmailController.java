@@ -15,15 +15,18 @@ import java.util.*;
 
 /**
  * Controller to trigger test emails for all 25+ enterprise templates to a specified email address.
- * Default recipient: hkbharti77@gmail.com
+ * The default recipient is the ADMIN_EMAIL configured in the application environment.
  */
 @RestController
 @RequestMapping("/api/v1/test-emails")
+@org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
 @CrossOrigin(origins = "*")
 public class TestEmailController {
 
     private static final Logger log = LoggerFactory.getLogger(TestEmailController.class);
-    private static final String DEFAULT_RECIPIENT = "hkbharti77@gmail.com";
+
+    @org.springframework.beans.factory.annotation.Value("${ADMIN_EMAIL:admin@example.com}")
+    private String defaultRecipient;
 
     @Autowired
     private EmailService emailService;
@@ -37,9 +40,9 @@ public class TestEmailController {
      */
     @RequestMapping(value = "/send-all", method = {RequestMethod.GET, RequestMethod.POST})
     public ResponseEntity<?> sendAllTestEmails(
-            @RequestParam(required = false, defaultValue = DEFAULT_RECIPIENT) String to) {
+            @RequestParam(required = false) String to) {
         
-        String recipient = (to != null && !to.isBlank()) ? to.trim() : DEFAULT_RECIPIENT;
+        String recipient = (to != null && !to.isBlank()) ? to.trim() : defaultRecipient;
         log.info("[TestEmailController] Dispatching all 26 test emails to: {}", recipient);
         List<String> sentList = new ArrayList<>();
 
@@ -324,10 +327,10 @@ public class TestEmailController {
     @PostMapping("/send-template/{templateName}")
     public ResponseEntity<?> sendSingleTemplate(
             @PathVariable String templateName,
-            @RequestParam(required = false, defaultValue = DEFAULT_RECIPIENT) String to,
+            @RequestParam(required = false) String to,
             @RequestBody(required = false) Map<String, Object> customVars) {
 
-        String recipient = (to != null && !to.isBlank()) ? to.trim() : DEFAULT_RECIPIENT;
+        String recipient = (to != null && !to.isBlank()) ? to.trim() : defaultRecipient;
         try {
             Context ctx = new Context();
             ctx.setVariable("heading", "Test Preview: " + templateName);

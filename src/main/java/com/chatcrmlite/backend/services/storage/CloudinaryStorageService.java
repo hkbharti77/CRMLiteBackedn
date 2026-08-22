@@ -134,6 +134,106 @@ public class CloudinaryStorageService {
     }
 
     /**
+     * Uploads raw byte array to Cloudinary with tenant-scoped folder and specified resource type.
+     */
+    public String uploadTenantBytes(java.util.UUID tenantId, String category, String filename, byte[] bytes, String resourceType) throws Exception {
+        String key = buildTenantKey(tenantId, category, filename);
+        return uploadBytes(key, bytes, resourceType);
+    }
+
+    /**
+     * Uploads raw byte array to Cloudinary with specified resource type.
+     */
+    public String uploadBytes(String key, byte[] bytes, String resourceType) throws Exception {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cloudinary client is not configured.");
+        }
+        if (bytes == null || bytes.length == 0) {
+            throw new IllegalArgumentException("Byte array to upload cannot be empty.");
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("resource_type", (resourceType != null && !resourceType.isBlank()) ? resourceType : "auto");
+        params.put("overwrite", true);
+
+        String publicId = key;
+        if (key != null && !key.isBlank()) {
+            int lastSlash = key.lastIndexOf('/');
+            if (lastSlash != -1) {
+                params.put("folder", key.substring(0, lastSlash));
+                publicId = key.substring(lastSlash + 1);
+                params.put("public_id", publicId);
+            } else {
+                params.put("public_id", key);
+            }
+        }
+
+        Map<?, ?> uploadResult = cloudinary.uploader().upload(bytes, params);
+        String secureUrl = (String) uploadResult.get("secure_url");
+        if (secureUrl == null) {
+            secureUrl = (String) uploadResult.get("url");
+        }
+
+        String resType = (String) uploadResult.get("resource_type");
+        if ("image".equalsIgnoreCase(resType)) {
+            secureUrl = optimizeUrl(secureUrl);
+        }
+
+        log.info("Successfully uploaded byte array to Cloudinary: {} -> {} (size: {} bytes)", key, secureUrl, bytes.length);
+        return secureUrl;
+    }
+
+    /**
+     * Uploads an InputStream to Cloudinary with tenant-scoped folder and specified resource type.
+     */
+    public String uploadTenantStream(java.util.UUID tenantId, String category, String filename, InputStream inputStream, String resourceType) throws Exception {
+        String key = buildTenantKey(tenantId, category, filename);
+        return uploadStream(key, inputStream, resourceType);
+    }
+
+    /**
+     * Uploads an InputStream to Cloudinary with specified resource type.
+     */
+    public String uploadStream(String key, InputStream inputStream, String resourceType) throws Exception {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cloudinary client is not configured.");
+        }
+        if (inputStream == null) {
+            throw new IllegalArgumentException("InputStream to upload cannot be null.");
+        }
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("resource_type", (resourceType != null && !resourceType.isBlank()) ? resourceType : "auto");
+        params.put("overwrite", true);
+
+        String publicId = key;
+        if (key != null && !key.isBlank()) {
+            int lastSlash = key.lastIndexOf('/');
+            if (lastSlash != -1) {
+                params.put("folder", key.substring(0, lastSlash));
+                publicId = key.substring(lastSlash + 1);
+                params.put("public_id", publicId);
+            } else {
+                params.put("public_id", key);
+            }
+        }
+
+        Map<?, ?> uploadResult = cloudinary.uploader().upload(inputStream, params);
+        String secureUrl = (String) uploadResult.get("secure_url");
+        if (secureUrl == null) {
+            secureUrl = (String) uploadResult.get("url");
+        }
+
+        String resType = (String) uploadResult.get("resource_type");
+        if ("image".equalsIgnoreCase(resType)) {
+            secureUrl = optimizeUrl(secureUrl);
+        }
+
+        log.info("Successfully uploaded stream to Cloudinary: {} -> {}", key, secureUrl);
+        return secureUrl;
+    }
+
+    /**
      * Creates a custom transformed URL and HTML image tag for a given public ID.
      */
     public String getTransformedImageUrl(String publicId, int width, int height, String crop, String background) {
@@ -240,6 +340,6 @@ public class CloudinaryStorageService {
     }
 
     public String getCloudName() {
-        return (cloudinary != null && cloudinary.config.cloudName != null) ? cloudinary.config.cloudName : "lpgtcptz";
+        return (cloudinary != null && cloudinary.config.cloudName != null) ? cloudinary.config.cloudName : "";
     }
 }

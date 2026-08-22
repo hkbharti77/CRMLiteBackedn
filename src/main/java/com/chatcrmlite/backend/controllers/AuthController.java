@@ -53,10 +53,10 @@ public class AuthController {
     @Autowired private com.chatcrmlite.backend.services.platform.PlatformAuditService platformAuditService;
 
     /**
-     * Step 1: Initiate login — sends OTP to the provided email.
+     * Step 1: Initiate login or signup — sends OTP to the provided email.
      *
      * Rate limited: 5 requests per minute per IP.
-     * No indication whether the email exists in the system (prevents enumeration).
+     * Checks registration state according to mode (login vs signup) and returns clear professional guidance.
      */
     @PostMapping("/login")
     public ResponseEntity<?> initiateLogin(@RequestBody LoginRequest request, HttpServletRequest servletRequest) {
@@ -71,26 +71,46 @@ public class AuthController {
         if (!bucket.tryConsume(1)) {
             log.warn("[Auth] Rate limit exceeded on /login from IP={}", clientIp);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ErrorResponse("Too many requests. Please wait a minute before trying again."));
+                    .body(new ErrorResponse("Too many requests. Please wait a minute before trying again.", "RATE_LIMIT_EXCEEDED"));
         }
 
-        // Always generate and attempt to send OTP — don't reveal if email exists
+        String cleanEmail = request.getEmail().trim().toLowerCase();
+        boolean isSuperAdminUser = platformAdminRepository.findByEmailIgnoreCase(cleanEmail).isPresent()
+                || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
+        boolean userExists = isSuperAdminUser || userRepository.findByEmail(cleanEmail).isPresent();
+        String mode = StringUtils.hasText(request.getMode()) ? request.getMode().trim().toLowerCase() : "login";
+
+        // If trying to Log In but email is not registered, advise signing up first
+        if ("login".equals(mode) && !userExists) {
+            log.info("[Auth] Login attempt for unregistered email from ip={}", clientIp);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                    .body(new ErrorResponse("No account found with this email address. Please sign up first to create your CRM workspace.", "ACCOUNT_NOT_FOUND"));
+        }
+
+        // If trying to Sign Up but email is already registered, advise signing in instead
+        if ("signup".equals(mode) && userExists) {
+            log.info("[Auth] Signup attempt for already registered email from ip={}", clientIp);
+            return ResponseEntity.status(HttpStatus.CONFLICT)
+                    .body(new ErrorResponse("An account with this email already exists. Please sign in instead.", "ACCOUNT_ALREADY_EXISTS"));
+        }
+
+        // Generate and send OTP
         try {
-            emailService.generateAndSendOtp(request.getEmail());
-            log.info("[Auth] OTP requested from ip={}", clientIp);
+            emailService.generateAndSendOtp(cleanEmail);
+            log.info("[Auth] OTP requested for mode={} from ip={}", mode, clientIp);
         } catch (Exception e) {
             log.error("[Auth] OTP generation failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to send verification code. Please check your email configuration.", "OTP_SEND_FAILED"));
         }
 
-        // Always return the same message regardless of whether the email exists
-        return ResponseEntity.ok(new MessageResponse("If this email is registered, you will receive a login code."));
+        return ResponseEntity.ok(new MessageResponse("A 6-digit verification code has been sent to your email."));
     }
 
     /**
      * Step 2: Verify OTP and issue JWT if valid.
      *
      * Rate limited: 5 requests per minute per IP (shared bucket with /login).
-     * Generic error response — does not reveal whether email or OTP was wrong.
      */
     @PostMapping("/verify")
     public ResponseEntity<?> verifyOtp(@RequestBody VerifyRequest request, HttpServletRequest servletRequest) {
@@ -105,19 +125,27 @@ public class AuthController {
         if (!bucket.tryConsume(1)) {
             log.warn("[Auth] Rate limit exceeded on /verify from IP={}", clientIp);
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                    .body(new ErrorResponse("Too many requests. Please wait a minute before trying again."));
+                    .body(new ErrorResponse("Too many requests. Please wait a minute before trying again.", "RATE_LIMIT_EXCEEDED"));
         }
 
-        if (emailService.verifyOtp(request.getEmail(), request.getOtp())) {
-            boolean isSuperAdminUser = platformAdminRepository.findByEmailIgnoreCase(request.getEmail()).isPresent()
-                    || "gyanvaniai@gmail.com".equalsIgnoreCase(request.getEmail().trim());
+        String cleanEmail = request.getEmail().trim().toLowerCase();
 
-            Optional<User> userOpt = userRepository.findByEmailWithTenant(request.getEmail());
+        if (emailService.verifyOtp(cleanEmail, request.getOtp())) {
+            boolean isSuperAdminUser = platformAdminRepository.findByEmailIgnoreCase(cleanEmail).isPresent()
+                    || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
+
+            Optional<User> userOpt = userRepository.findByEmailWithTenant(cleanEmail);
             User user;
             if (userOpt.isEmpty()) {
+                // If mode is strictly login and user not found, reject
+                if ("login".equalsIgnoreCase(request.getMode()) && !isSuperAdminUser) {
+                    return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                            .body(new ErrorResponse("Account not registered. Please sign up first.", "ACCOUNT_NOT_FOUND"));
+                }
+
                 String defaultBiz = StringUtils.hasText(request.getBusinessName()) ? request.getBusinessName().trim() : "My Business";
                 user = User.builder()
-                        .email(request.getEmail())
+                        .email(cleanEmail)
                         .displayName(StringUtils.hasText(request.getDisplayName()) ? request.getDisplayName().trim() : null)
                         .businessName(isSuperAdminUser ? "Platform Control Center" : defaultBiz)
                         .onboardingCompleted(isSuperAdminUser)
@@ -171,15 +199,15 @@ public class AuthController {
             ));
         }
 
-        // Unified failure — same message whether email unknown or OTP wrong (prevents enumeration)
-        userRepository.findByEmail(request.getEmail()).ifPresent(user ->
+        // Unified failure message for invalid OTP code
+        userRepository.findByEmail(cleanEmail).ifPresent(user ->
             securityService.logSecurityEvent(user, SecurityLog.LogAction.LOGIN_FAILURE, "FAILURE",
                     "Invalid OTP attempt", clientIp, sanitizeUserAgent(servletRequest.getHeader("User-Agent")))
         );
         log.warn("[Auth] Failed OTP verify from ip={}", clientIp);
 
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
-                .body(new ErrorResponse("Invalid or expired code. Please request a new one."));
+                .body(new ErrorResponse("Invalid or expired code. Please request a new one.", "INVALID_OTP"));
     }
 
     /**
@@ -235,9 +263,13 @@ public class AuthController {
 
     public static class LoginRequest {
         private String email;
+        private String mode = "login"; // "login" or "signup"
+
         public LoginRequest() {}
         public String getEmail() { return email; }
         public void setEmail(String email) { this.email = email; }
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
     }
 
     public static class VerifyRequest {
@@ -245,6 +277,7 @@ public class AuthController {
         private String otp;
         private String displayName;
         private String businessName;
+        private String mode = "login"; // "login" or "signup"
 
         public VerifyRequest() {}
         public String getEmail() { return email; }
@@ -255,6 +288,8 @@ public class AuthController {
         public void setDisplayName(String displayName) { this.displayName = displayName; }
         public String getBusinessName() { return businessName; }
         public void setBusinessName(String businessName) { this.businessName = businessName; }
+        public String getMode() { return mode; }
+        public void setMode(String mode) { this.mode = mode; }
     }
 
     public static class AuthResponse {
@@ -297,7 +332,18 @@ public class AuthController {
 
     public static class ErrorResponse {
         private String error;
-        public ErrorResponse(String error) { this.error = error; }
+        private String code;
+
+        public ErrorResponse(String error) { 
+            this.error = error; 
+        }
+
+        public ErrorResponse(String error, String code) { 
+            this.error = error; 
+            this.code = code;
+        }
+
         public String getError() { return error; }
+        public String getCode() { return code; }
     }
 }

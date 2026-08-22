@@ -72,8 +72,8 @@ public class User implements Serializable {
     private Boolean biometricsEnabled = false;
     private Boolean loginAlertsEnabled = false;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "permissions", columnDefinition = "jsonb")
+    @Convert(converter = StringListConverter.class)
+    @Column(name = "permissions", columnDefinition = "text")
     private List<String> permissions = new ArrayList<>();
 
     @Version

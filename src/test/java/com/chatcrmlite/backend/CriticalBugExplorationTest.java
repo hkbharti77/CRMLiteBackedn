@@ -14,7 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.ActiveProfiles;
@@ -51,7 +51,7 @@ public class CriticalBugExplorationTest {
     @Autowired
     private EmailService emailService;
 
-    @MockitoBean
+    @MockBean
     private JavaMailSender javaMailSender;
 
     // ── Bug 2 ──────────────────────────────────────────────────────────────

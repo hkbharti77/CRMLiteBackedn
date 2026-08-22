@@ -21,11 +21,10 @@ public class WhatsAppDeliveryHandler {
     private final WhatsAppMessageService messageService;
     private final WhatsAppMenuService menuService;
 
-    @Transactional
-    public void deliverResponse(ProcessingContext context) {
+    public void deliverResponse(ProcessingContext context) throws Exception {
         try {
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
-                    .orElseThrow(() -> new RuntimeException("Config not found"));
+                    .orElseThrow(() -> new RuntimeException("WhatsApp config not found for tenant: " + context.getTenantId()));
             User owner = config.getUser();
             Contact contact = contactRepository.findByWaIdAndTenant_Id(context.getWaId(), context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Contact not found for tenant: " + context.getTenantId()));
@@ -63,7 +62,8 @@ public class WhatsAppDeliveryHandler {
             }
             log.info("🚚 [Delivery-Stage] Dispatched response type {} for {}", responseType, context.getMessageId());
         } catch (Exception e) {
-            log.error("❌ [Delivery-Stage] Failed for {}", context.getMessageId(), e);
+            log.error("❌ [Delivery-Stage] Delivery failed for messageId={}: {}", context.getMessageId(), e.getMessage());
+            throw e;
         }
     }
 }

@@ -12,7 +12,9 @@ import java.util.UUID;
 @Repository
 public interface WebChatSessionRepository extends JpaRepository<WebChatSession, UUID> {
     List<WebChatSession> findByOwnerOrderByUpdatedAtDesc(User owner);
+    List<WebChatSession> findByOwner_TenantOrderByUpdatedAtDesc(com.chatcrmlite.backend.models.Tenant tenant);
     Optional<WebChatSession> findByOwnerAndId(User owner, UUID id);
+    Optional<WebChatSession> findByIdAndOwner_Tenant(UUID id, com.chatcrmlite.backend.models.Tenant tenant);
     Optional<WebChatSession> findByOwnerAndSessionId(User owner, String sessionId);
     Optional<WebChatSession> findByOwnerAndSessionIdAndStatus(User owner, String sessionId, com.chatcrmlite.backend.models.SessionStatus status);
 
