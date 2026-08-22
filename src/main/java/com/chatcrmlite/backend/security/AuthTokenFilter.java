@@ -60,11 +60,15 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
 
-                    TenantContext.setTenantId(user.getTenant().getId());
-                    MDC.put("tenantId", user.getTenant().getId().toString());
-                    MDC.put("userEmail", email);  // available in log patterns
+                    if (user.getTenant() != null && user.getTenant().getId() != null) {
+                        TenantContext.setTenantId(user.getTenant().getId());
+                        MDC.put("tenantId", user.getTenant().getId().toString());
+                    }
+                    if (email != null) {
+                        MDC.put("userEmail", email);  // available in log patterns
+                    }
 
-                    if ("LOCKED".equals(user.getAccountStatus())) {
+                    if (user.getAccountStatus() == User.AccountStatus.LOCKED) {
                         response.sendError(HttpServletResponse.SC_FORBIDDEN, "Account is locked");
                         return;
                     }
@@ -101,13 +105,14 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                     log.debug("[Auth] Request authenticated — role={}", roleAuthority);
                 }
             }
+
+            filterChain.doFilter(request, response);
         } catch (Exception e) {
             // Log problem class, not the token value
             log.error("[Auth] Authentication processing failed: {}", e.getClass().getSimpleName());
-        }
-
-        try {
-            filterChain.doFilter(request, response);
+            if (!response.isCommitted()) {
+                filterChain.doFilter(request, response);
+            }
         } finally {
             TenantContext.clear();
             MDC.remove("tenantId");

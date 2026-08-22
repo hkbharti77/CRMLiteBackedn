@@ -39,6 +39,15 @@ public class RagConfig {
     @Value("${ai.openai.model-name:gemma-3-1b-it-Q4_K_M}")
     private String openAiModelName;
 
+    @Value("${ai.openrouter.api-key:}")
+    private String openRouterApiKey;
+
+    @Value("${ai.openrouter.base-url:https://openrouter.ai/api/v1}")
+    private String openRouterBaseUrl;
+
+    @Value("${ai.openrouter.model-name:stealth/ox-alpha}")
+    private String openRouterModelName;
+
     /**
      * Local ONNX embedding model — no API key required.
      * Produces 384-dimensional vectors compatible with the document_chunks schema.
@@ -71,10 +80,26 @@ public class RagConfig {
     }
 
     /**
-     * Configuration of Chat Model bean supporting Gemini or Ollama (OpenAI compatible)
+     * Configuration of Chat Model bean supporting Gemini, OpenRouter, and Ollama/Local OpenAI
      */
     @Bean
     public ChatLanguageModel geminiChatModel() {
+        if ("openrouter".equalsIgnoreCase(aiProvider)) {
+            if (openRouterApiKey == null || openRouterApiKey.isBlank()) {
+                return null;
+            }
+            String url = (openRouterBaseUrl != null && !openRouterBaseUrl.isBlank()) 
+                    ? openRouterBaseUrl.trim() 
+                    : "https://openrouter.ai/api/v1";
+            return OpenAiChatModel.builder()
+                    .baseUrl(url)
+                    .apiKey(openRouterApiKey)
+                    .modelName(openRouterModelName != null && !openRouterModelName.isBlank() ? openRouterModelName : "stealth/ox-alpha")
+                    .timeout(java.time.Duration.ofSeconds(120))
+                    .maxRetries(1)
+                    .build();
+        }
+
         if ("openai".equalsIgnoreCase(aiProvider) || "ollama".equalsIgnoreCase(aiProvider) || "local".equalsIgnoreCase(aiProvider)) {
             if (openAiBaseUrl == null || openAiBaseUrl.isBlank()) {
                 return null;
@@ -104,7 +129,14 @@ public class RagConfig {
     public AiProvider chatLanguageModelAiProvider(
             @org.springframework.context.annotation.Lazy ChatLanguageModel chatLanguageModel,
             ModelHealthMonitor healthMonitor) {
-        return new ChatLanguageModelAiProvider(chatLanguageModel, healthMonitor, aiProvider, modelName, openAiModelName);
+        return new ChatLanguageModelAiProvider(
+                chatLanguageModel, 
+                healthMonitor, 
+                aiProvider, 
+                modelName, 
+                openAiModelName,
+                openRouterModelName
+        );
     }
 
     public static class ChatLanguageModelAiProvider implements AiProvider {
@@ -113,17 +145,20 @@ public class RagConfig {
         private final String aiProvider;
         private final String modelName;
         private final String openAiModelName;
+        private final String openRouterModelName;
 
         public ChatLanguageModelAiProvider(ChatLanguageModel chatLanguageModel,
                                            ModelHealthMonitor healthMonitor,
                                            String aiProvider,
                                            String modelName,
-                                           String openAiModelName) {
+                                           String openAiModelName,
+                                           String openRouterModelName) {
             this.chatLanguageModel = chatLanguageModel;
             this.healthMonitor = healthMonitor;
             this.aiProvider = aiProvider;
             this.modelName = modelName;
             this.openAiModelName = openAiModelName;
+            this.openRouterModelName = openRouterModelName;
         }
 
         @Override
@@ -153,7 +188,13 @@ public class RagConfig {
 
         @Override
         public String getModelName() {
-            return "google".equalsIgnoreCase(aiProvider) ? modelName : openAiModelName;
+            if ("openrouter".equalsIgnoreCase(aiProvider)) {
+                return openRouterModelName != null ? openRouterModelName : "stealth/ox-alpha";
+            }
+            if ("openai".equalsIgnoreCase(aiProvider) || "ollama".equalsIgnoreCase(aiProvider) || "local".equalsIgnoreCase(aiProvider)) {
+                return openAiModelName;
+            }
+            return modelName;
         }
 
         @Override
@@ -163,7 +204,10 @@ public class RagConfig {
 
         @Override
         public double getCostPer1kTokens() {
-            return "google".equalsIgnoreCase(aiProvider) ? 0.00015 : 0.0;
+            if ("openrouter".equalsIgnoreCase(aiProvider)) {
+                return 0.0002;
+            }
+            return "google".equalsIgnoreCase(aiProvider) || "gemini".equalsIgnoreCase(aiProvider) ? 0.00015 : 0.0;
         }
     }
 }

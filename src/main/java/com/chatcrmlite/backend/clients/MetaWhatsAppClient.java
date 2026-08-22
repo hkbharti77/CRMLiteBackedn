@@ -15,6 +15,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.chatcrmlite.backend.dto.MenuDto;
 import lombok.extern.slf4j.Slf4j;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryRegistry;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,8 +31,10 @@ public class MetaWhatsAppClient implements WhatsAppClient {
     @Autowired
     private ObjectMapper objectMapper;
 
-    private static final String META_URL = "https://graph.facebook.com/v18.0/%s/messages"; // Slightly more standard
-                                                                                           // version
+    @Autowired
+    private RetryRegistry retryRegistry;
+
+    private static final String META_URL = "https://graph.facebook.com/v18.0/%s/messages";
 
     @Override
     public String sendMessage(String to, String text, String accessToken, String phoneNumberId) {
@@ -49,32 +53,7 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         textBody.put("body", text);
         body.put("text", textBody);
 
-        try {
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
-
-            if (response != null && response.containsKey("messages")) {
-                Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
-                return (String) messages.iterator().next().get("id");
-            }
-            return "unknown_id";
-        } catch (HttpStatusCodeException e) {
-            String errorResponse = e.getResponseBodyAsString();
-            String errorMessage = "WhatsApp API Error: " + e.getStatusCode();
-            try {
-                JsonNode errorNode = objectMapper.readTree(errorResponse);
-                errorMessage = errorNode.path("error").path("message").asText();
-                String errorCode = errorNode.path("error").path("code").asText();
-                errorMessage = "WhatsApp Error (" + errorCode + "): " + errorMessage;
-            } catch (Exception ignored) {
-            }
-
-            System.err.println("Meta API Failure: " + errorMessage);
-            throw new RuntimeException(errorMessage);
-        } catch (Exception e) {
-            System.err.println("General Error sending WhatsApp: " + e.getMessage());
-            throw new RuntimeException("Connection error or timeout while sending WhatsApp");
-        }
+        return executeApiCallWithRetry(url, headers, body);
     }
 
     @Override
@@ -97,22 +76,7 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         }
         body.put("image", imageBody);
 
-        try {
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
-            if (response != null && response.containsKey("messages")) {
-                Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
-                return (String) messages.iterator().next().get("id");
-            }
-            return "unknown_id";
-        } catch (HttpStatusCodeException e) {
-            String errorResponse = e.getResponseBodyAsString();
-            System.err.println("Meta API Failure (Image): " + errorResponse);
-            throw new RuntimeException("Failed to send image: " + e.getStatusCode());
-        } catch (Exception e) {
-            System.err.println("General Error sending image: " + e.getMessage());
-            throw new RuntimeException("Connection error sending image");
-        }
+        return executeApiCallWithRetry(url, headers, body);
     }
 
     public String sendInteractiveMenu(String to, MenuDto menu, String accessToken, String phoneNumberId) {
@@ -228,38 +192,33 @@ public class MetaWhatsAppClient implements WhatsAppClient {
 
     private String executeApiCallWithRetry(String url, HttpHeaders headers, Map<String, Object> body) {
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
+        Retry retry = retryRegistry.retry("whatsAppClient");
+
         try {
-            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
-            if (response != null && response.containsKey("messages")) {
-                Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
-                return (String) messages.iterator().next().get("id");
-            }
-            return "unknown_id";
-        } catch (HttpStatusCodeException e) {
-            String fullError = e.getResponseBodyAsString();
-            System.err.println("\u274C Meta API Error: " + fullError);
-            log.error("[MetaAPI] 4xx/5xx Error: {}", fullError);
-            System.err.println("Meta API Error: " + fullError + ". Retrying once...");
-            try {
-                Thread.sleep(500); // Wait half a second before retry
-                Map<String, Object> retryResponse = restTemplate.postForObject(url, request, Map.class);
-                if (retryResponse != null && retryResponse.containsKey("messages")) {
-                    Iterable<Map<String, Object>> m = (Iterable<Map<String, Object>>) retryResponse.get("messages");
-                    return (String) m.iterator().next().get("id");
+            return Retry.decorateSupplier(retry, () -> {
+                Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+                if (response != null && response.containsKey("messages")) {
+                    Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
+                    if (messages != null && messages.iterator().hasNext()) {
+                        return (String) messages.iterator().next().get("id");
+                    }
                 }
                 return "unknown_id";
-            } catch (Exception retryEx) {
-                System.err.println("Retry failed: " + retryEx.getMessage());
-                throw new RuntimeException(
-                        "WhatsApp Error: " + parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString()));
-            }
+            }).get();
+        } catch (HttpStatusCodeException e) {
+            String fullError = e.getResponseBodyAsString();
+            log.error("❌ [MetaAPI] HTTP {} Error: {}", e.getStatusCode(), fullError);
+            throw new RuntimeException("WhatsApp Error: " + parseMetaError(fullError, e.getStatusCode().toString()), e);
         } catch (Exception e) {
-            System.err.println("General Error sending interactive WhatsApp: " + e.getMessage());
-            throw new RuntimeException("Failed to send interactive message");
+            log.error("❌ [MetaAPI] Error sending WhatsApp message: {}", e.getMessage());
+            throw new RuntimeException("Failed to send WhatsApp message: " + e.getMessage(), e);
         }
     }
 
     private String parseMetaError(String errorResponse, String defaultCode) {
+        if (errorResponse == null || errorResponse.isBlank()) {
+            return "(" + defaultCode + ")";
+        }
         try {
             JsonNode errorNode = objectMapper.readTree(errorResponse).path("error");
             String userMsg = errorNode.path("error_user_msg").asText("");
@@ -568,22 +527,87 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         interactive.put("action", action);
         body.put("interactive", interactive);
 
-        try {
-            HttpEntity<Map<String, Object>> request = new HttpEntity<>(body, headers);
-            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+        return executeApiCallWithRetry(url, headers, body);
+    }
 
-            if (response != null && response.containsKey("messages")) {
-                Iterable<Map<String, Object>> messages = (Iterable<Map<String, Object>>) response.get("messages");
-                return (String) messages.iterator().next().get("id");
-            }
-            return "unknown_id";
-        } catch (HttpStatusCodeException e) {
-            String errorResponse = e.getResponseBodyAsString();
-            log.error("❌ [MetaWhatsAppClient] Failed to send interactive Flow message: {}", errorResponse);
-            throw new RuntimeException("Failed to send WhatsApp Flow message: " + parseMetaError(errorResponse, e.getStatusCode().toString()));
-        } catch (Exception e) {
-            log.error("❌ [MetaWhatsAppClient] Error sending Flow message: {}", e.getMessage());
-            throw new RuntimeException("Error communicating with WhatsApp Cloud API to send Flow message");
+    @Override
+    public com.chatcrmlite.backend.dto.MetaMediaDto fetchMediaMetadata(String mediaId, String accessToken) {
+        if (mediaId == null || mediaId.isBlank() || accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("mediaId and accessToken must not be null or blank");
         }
+
+        String url = String.format("https://graph.facebook.com/v18.0/%s", mediaId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.set(HttpHeaders.ACCEPT, MediaType.APPLICATION_JSON_VALUE);
+
+        Retry retry = retryRegistry.retry("whatsAppClient");
+
+        try {
+            return Retry.decorateSupplier(retry, () -> {
+                HttpEntity<Void> request = new HttpEntity<>(headers);
+                org.springframework.http.ResponseEntity<com.chatcrmlite.backend.dto.MetaMediaDto> response =
+                        restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, request, com.chatcrmlite.backend.dto.MetaMediaDto.class);
+                return response.getBody();
+            }).get();
+        } catch (HttpStatusCodeException e) {
+            String fullError = e.getResponseBodyAsString();
+            log.error("❌ [MetaAPI] Failed to fetch media metadata for mediaId {}: HTTP {} - {}", mediaId, e.getStatusCode(), fullError);
+            throw new RuntimeException("Meta Media Metadata Error: " + parseMetaError(fullError, e.getStatusCode().toString()), e);
+        } catch (Exception e) {
+            log.error("❌ [MetaAPI] Error fetching media metadata for mediaId {}: {}", mediaId, e.getMessage());
+            throw new RuntimeException("Failed to fetch WhatsApp media metadata: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public <T> T streamMedia(String mediaUrl, String accessToken, long maxSizeBytes, MediaStreamConsumer<T> consumer) {
+        if (mediaUrl == null || mediaUrl.isBlank() || accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("mediaUrl and accessToken must not be null or blank");
+        }
+        if (consumer == null) {
+            throw new IllegalArgumentException("MediaStreamConsumer must not be null");
+        }
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        headers.set(HttpHeaders.USER_AGENT, "Meta-WhatsApp-Client/1.0");
+
+        Retry retry = retryRegistry.retry("whatsAppClient");
+
+        try {
+            return Retry.decorateSupplier(retry, () -> {
+                return restTemplate.execute(mediaUrl, org.springframework.http.HttpMethod.GET, request -> {
+                    request.getHeaders().addAll(headers);
+                }, response -> {
+                    if (response.getStatusCode().isError()) {
+                        throw new org.springframework.web.client.HttpClientErrorException(
+                                response.getStatusCode(),
+                                "Meta media download failed with status " + response.getStatusCode()
+                        );
+                    }
+                    try (java.io.InputStream rawIn = response.getBody();
+                         com.chatcrmlite.backend.utils.BoundedCountingInputStream boundedIn =
+                                 new com.chatcrmlite.backend.utils.BoundedCountingInputStream(rawIn, maxSizeBytes)) {
+                        return consumer.consume(boundedIn);
+                    } catch (Exception e) {
+                        if (e instanceof RuntimeException re) throw re;
+                        throw new RuntimeException(e);
+                    }
+                });
+            }).get();
+        } catch (HttpStatusCodeException e) {
+            String fullError = e.getResponseBodyAsString();
+            log.error("❌ [MetaAPI] Failed to stream media from {}: HTTP {} - {}", mediaUrl, e.getStatusCode(), fullError);
+            throw new RuntimeException("Meta Media Stream Error: " + parseMetaError(fullError, e.getStatusCode().toString()), e);
+        } catch (Exception e) {
+            log.error("❌ [MetaAPI] Error streaming media from {}: {}", mediaUrl, e.getMessage());
+            throw new RuntimeException("Failed to stream WhatsApp media: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public byte[] downloadMedia(String mediaUrl, String accessToken) {
+        return streamMedia(mediaUrl, accessToken, 100L * 1024 * 1024, in -> in.readAllBytes());
     }
 }

@@ -30,7 +30,8 @@ public class WhatsAppConfig implements Serializable {
 
     private String wabaId;
 
-    @Column(length = 1000)
+    @Convert(converter = com.chatcrmlite.backend.utils.EncryptionConverter.class)
+    @Column(length = 2000)
     private String accessToken;
 
     private String verifyToken;
@@ -46,6 +47,27 @@ public class WhatsAppConfig implements Serializable {
 
     @Column(name = "connection_type")
     private String connectionType = "LEGACY"; // "LEGACY" or "EMBEDDED_SIGNUP_COEXISTENCE"
+
+    @Column(name = "connection_status")
+    private String connectionStatus = "ACTIVE"; // "ACTIVE", "FAILED", "DISCONNECTED"
+
+    @Column(name = "webhook_subscription_status")
+    private String webhookSubscriptionStatus = "PENDING"; // "PENDING", "ACTIVE", "FAILED"
+
+    @Column(name = "webhook_subscription_error", length = 1000)
+    private String webhookSubscriptionError;
+
+    @Column(name = "webhook_last_attempt_at")
+    private java.time.LocalDateTime webhookLastAttemptAt;
+
+    @Column(name = "webhook_subscribed_at")
+    private java.time.LocalDateTime webhookSubscribedAt;
+
+    @Column(name = "webhook_retry_count")
+    private Integer webhookRetryCount = 0;
+
+    @Column(name = "webhook_last_meta_error_code")
+    private Integer webhookLastMetaErrorCode;
 
     @Column(name = "embedded_business_id")
     private String embeddedBusinessId;
@@ -165,6 +187,21 @@ public class WhatsAppConfig implements Serializable {
     public String getBusinessId() { return businessId; }
     public String getDisplayPhoneNumber() { return displayPhoneNumber; }
     public String getConnectionType() { return connectionType != null ? connectionType : "LEGACY"; }
+    public String getConnectionStatus() { return connectionStatus != null ? connectionStatus : "ACTIVE"; }
+    public void setConnectionStatus(String connectionStatus) { this.connectionStatus = connectionStatus; }
+    public String getWebhookSubscriptionStatus() { return webhookSubscriptionStatus != null ? webhookSubscriptionStatus : "PENDING"; }
+    public void setWebhookSubscriptionStatus(String webhookSubscriptionStatus) { this.webhookSubscriptionStatus = webhookSubscriptionStatus; }
+    public String getWebhookSubscriptionError() { return webhookSubscriptionError; }
+    public void setWebhookSubscriptionError(String webhookSubscriptionError) { this.webhookSubscriptionError = webhookSubscriptionError; }
+    public java.time.LocalDateTime getWebhookLastAttemptAt() { return webhookLastAttemptAt; }
+    public void setWebhookLastAttemptAt(java.time.LocalDateTime webhookLastAttemptAt) { this.webhookLastAttemptAt = webhookLastAttemptAt; }
+    public java.time.LocalDateTime getWebhookSubscribedAt() { return webhookSubscribedAt; }
+    public void setWebhookSubscribedAt(java.time.LocalDateTime webhookSubscribedAt) { this.webhookSubscribedAt = webhookSubscribedAt; }
+    public Integer getWebhookRetryCount() { return webhookRetryCount != null ? webhookRetryCount : 0; }
+    public void setWebhookRetryCount(Integer webhookRetryCount) { this.webhookRetryCount = webhookRetryCount; }
+    public Integer getWebhookLastMetaErrorCode() { return webhookLastMetaErrorCode; }
+    public void setWebhookLastMetaErrorCode(Integer webhookLastMetaErrorCode) { this.webhookLastMetaErrorCode = webhookLastMetaErrorCode; }
+
     public String getEmbeddedBusinessId() { return embeddedBusinessId; }
     public String getEmbeddedWabaId() { return embeddedWabaId; }
     public String getEmbeddedPhoneId() { return embeddedPhoneId; }

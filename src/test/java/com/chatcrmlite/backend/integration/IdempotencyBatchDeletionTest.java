@@ -20,7 +20,7 @@ import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-@SpringBootTest(classes = ChatCrmBackendApplication.class)
+@SpringBootTest
 @ActiveProfiles("test")
 public class IdempotencyBatchDeletionTest {
 
@@ -46,10 +46,11 @@ public class IdempotencyBatchDeletionTest {
         processedMessageRepository.deleteAllInBatch();
         userRepository.deleteAllInBatch();
 
-        User owner = new User();
-        owner.setEmail("testowner@example.com");
-        owner.setPlanType(User.PlanType.FREE);
-        owner.setCreatedAt(LocalDateTime.now());
+        User owner = User.builder()
+                .email("testowner@example.com")
+                .password("password")
+                .role(User.Role.OWNER)
+                .build();
         testOwner = userRepository.saveAndFlush(owner);
     }
 

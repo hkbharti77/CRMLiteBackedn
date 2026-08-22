@@ -19,13 +19,14 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 
-@Slf4j
 @SpringBootTest
 @ActiveProfiles("test")
 @Disabled("Requires a live Redis queue consumer (WebhookWorker) to be running. " +
           "The test profile uses an embedded/mock Redis that does not spin up the blocking list-pop consumer. " +
           "This is an end-to-end infrastructure test; validate manually against a running environment.")
 public class WebhookAsyncQueueIntegrationTest {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(WebhookAsyncQueueIntegrationTest.class);
 
     @Autowired
     private WebhookQueueProducer producer;

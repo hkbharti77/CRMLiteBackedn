@@ -33,6 +33,8 @@ class QuotaEnforcerServiceTest {
     @Mock private TicketRepository ticketRepository;
     @Mock private CustomEmailRepository customEmailRepository;
     @Mock private TenantRepository tenantRepository;
+    @Mock private org.springframework.context.ApplicationEventPublisher eventPublisher;
+    @Mock private com.chatcrmlite.backend.services.tenant.EntitlementResolverService entitlementResolverService;
 
     @InjectMocks
     private QuotaEnforcerService quotaEnforcerService;
@@ -41,6 +43,8 @@ class QuotaEnforcerServiceTest {
     private SubscriptionPlan freePlan;
     private SubscriptionPlan proPlan;
     private TenantSubscription activeFreeSub;
+    private com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO freeEntitlements;
+    private com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO proEntitlements;
 
     @BeforeEach
     void setUp() {
@@ -52,6 +56,7 @@ class QuotaEnforcerServiceTest {
 
         Tenant tenant = new Tenant();
         tenant.setId(tenantId);
+        tenant.setPrimaryResource(Tenant.PrimaryResource.LEAD);
 
         activeFreeSub = TenantSubscription.builder()
                 .plan(freePlan)
@@ -60,6 +65,40 @@ class QuotaEnforcerServiceTest {
                 .currentPeriodEnd(LocalDateTime.now().plusMonths(1))
                 .tenant(tenant)
                 .build();
+
+        freeEntitlements = com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.builder()
+                .basePlanId("FREE")
+                .limits(com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.LimitsDTO.builder()
+                        .employeeLimit(1)
+                        .primaryResourceLimit(100)
+                        .secondaryResourceLimit(15)
+                        .ticketLimit(10)
+                        .emailLimit(500)
+                        .build())
+                .features(com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.FeaturesDTO.builder()
+                        .hasWhatsapp(false)
+                        .hasWhatsappCampaign(false)
+                        .hasCustomWidget(false)
+                        .build())
+                .build();
+
+        proEntitlements = com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.builder()
+                .basePlanId("PRO")
+                .limits(com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.LimitsDTO.builder()
+                        .employeeLimit(10)
+                        .primaryResourceLimit(1000000)
+                        .secondaryResourceLimit(1000000)
+                        .ticketLimit(1000000)
+                        .emailLimit(25000)
+                        .build())
+                .features(com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO.FeaturesDTO.builder()
+                        .hasWhatsapp(true)
+                        .hasWhatsappCampaign(true)
+                        .hasCustomWidget(true)
+                        .build())
+                .build();
+
+        lenient().when(entitlementResolverService.getEffectiveEntitlements(tenantId)).thenReturn(freeEntitlements);
     }
 
     @Test
@@ -133,6 +172,7 @@ class QuotaEnforcerServiceTest {
                 .build();
 
         when(tenantSubscriptionRepository.findByTenantId(tenantId)).thenReturn(Optional.of(proSub));
+        when(entitlementResolverService.getEffectiveEntitlements(tenantId)).thenReturn(proEntitlements);
         assertDoesNotThrow(() -> quotaEnforcerService.verifyWhatsAppIntegrationAllowed(tenantId));
     }
 

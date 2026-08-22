@@ -15,10 +15,10 @@ import java.util.UUID;
 /**
  * Stage Worker for Flow Execution (State Machine).
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FlowWorker implements StreamListener<String, ObjectRecord<String, String>> {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(FlowWorker.class);
 
     private final WorkflowOrchestrator orchestrator;
     private final FlowStateMachine flowStateMachine;
@@ -56,6 +56,9 @@ public class FlowWorker implements StreamListener<String, ObjectRecord<String, S
             redisTemplate.opsForStream().acknowledge(groupName, record);
         } catch (Exception e) {
             log.error("Flow Execution failed for {}", context.getMessageId(), e);
+            orchestrator.completeStage(context, ProcessingContext.WorkflowStage.FAILED);
+            dlqHandler.moveToDlq(record, e);
+            redisTemplate.opsForStream().acknowledge(groupName, record);
         }
     }
 

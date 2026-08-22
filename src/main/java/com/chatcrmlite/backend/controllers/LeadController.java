@@ -47,50 +47,63 @@ public class LeadController {
 
     @GetMapping("/export")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
-    public ResponseEntity<byte[]> exportLeads(
+    public void exportLeads(
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate,
-            @RequestParam(defaultValue = "csv") String format) {
+            @RequestParam(defaultValue = "csv") String format,
+            jakarta.servlet.http.HttpServletResponse response) throws java.io.IOException {
         User user = getAuthenticatedUser();
-        List<Lead> leads = leadService.getLeadsByUserPaged(user, 0, Integer.MAX_VALUE, null, null).getContent();
-
-        // Filter by Date Range (inclusive)
         LocalDateTime start = startDate != null ? startDate.atStartOfDay() : null;
         LocalDateTime end = endDate != null ? endDate.atTime(23, 59, 59, 999999999) : null;
-
-        List<Lead> filteredLeads = leads.stream()
-                .filter(lead -> {
-                    if (start != null && lead.getCreatedAt().isBefore(start)) {
-                        return false;
-                    }
-                    if (end != null && lead.getCreatedAt().isAfter(end)) {
-                        return false;
-                    }
-                    return true;
-                })
-                .collect(Collectors.toList());
-
-        byte[] fileBytes;
-        String filename;
-        MediaType mediaType;
-
         String timestamp = java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss").format(LocalDateTime.now());
         String businessName = user.getBusinessName();
+        final int batchSize = 500;
 
         if ("excel".equalsIgnoreCase(format)) {
-            fileBytes = leadExportService.exportToExcel(filteredLeads, businessName);
-            filename = "leads_export_" + timestamp + ".xlsx";
-            mediaType = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            List<Lead> filteredLeads = new java.util.ArrayList<>();
+            int page = 0;
+            boolean hasMore = true;
+            while (hasMore && filteredLeads.size() < 10000) {
+                var pageResult = leadService.getLeadsByUserPaged(user, page, batchSize, null, null);
+                for (Lead lead : pageResult.getContent()) {
+                    if (start != null && lead.getCreatedAt().isBefore(start)) continue;
+                    if (end != null && lead.getCreatedAt().isAfter(end)) continue;
+                    filteredLeads.add(lead);
+                }
+                hasMore = pageResult.hasNext();
+                page++;
+            }
+            byte[] fileBytes = leadExportService.exportToExcel(filteredLeads, businessName);
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"leads_export_" + timestamp + ".xlsx\"");
+            response.getOutputStream().write(fileBytes);
+            response.getOutputStream().flush();
         } else {
-            fileBytes = leadExportService.exportToCsv(filteredLeads, businessName);
-            filename = "leads_export_" + timestamp + ".csv";
-            mediaType = MediaType.parseMediaType("text/csv");
-        }
+            response.setContentType("text/csv; charset=UTF-8");
+            response.setHeader(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"leads_export_" + timestamp + ".csv\"");
 
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
-                .contentType(mediaType)
-                .body(fileBytes);
+            java.io.PrintWriter writer = response.getWriter();
+            int page = 0;
+            boolean hasMore = true;
+            boolean isFirstBatch = true;
+
+            while (hasMore) {
+                var pageResult = leadService.getLeadsByUserPaged(user, page, batchSize, null, null);
+                List<Lead> batch = pageResult.getContent().stream()
+                        .filter(lead -> {
+                            if (start != null && lead.getCreatedAt().isBefore(start)) return false;
+                            if (end != null && lead.getCreatedAt().isAfter(end)) return false;
+                            return true;
+                        })
+                        .collect(Collectors.toList());
+
+                leadExportService.exportToCsvStream(writer, batch, businessName, isFirstBatch);
+                isFirstBatch = false;
+                hasMore = pageResult.hasNext();
+                page++;
+            }
+            writer.flush();
+        }
     }
 
     // ── Lead Queries ───────────────────────────────────────────────────────

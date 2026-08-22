@@ -32,6 +32,12 @@ public class IdempotencyConcurrencyTest {
     @Autowired
     private UserRepository userRepository;
 
+    @Autowired
+    private com.chatcrmlite.backend.repositories.ProcessedMessageRepository processedMessageRepository;
+
+    @Autowired
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     @MockBean
     private StringRedisTemplate redisTemplate;
 
@@ -40,16 +46,32 @@ public class IdempotencyConcurrencyTest {
 
     private UUID testTenantId;
 
+    @org.junit.jupiter.api.AfterEach
+    void tearDown() {
+        processedMessageRepository.deleteAllInBatch();
+        userRepository.deleteAll();
+        tenantRepository.deleteAll();
+    }
+
     @BeforeEach
     void setUp() {
-        // Create a test user/tenant
+        // Create and persist Tenant first to satisfy NOT NULL FK constraint
+        com.chatcrmlite.backend.models.Tenant tenant = com.chatcrmlite.backend.models.Tenant.builder()
+                .businessName("Idempotency Test Business")
+                .businessType("GENERAL")
+                .businessSubType("GENERAL")
+                .build();
+        tenant = tenantRepository.save(tenant);
+        testTenantId = tenant.getId();
+
+        // Create a test user attached to this tenant
         User user = User.builder()
                 .email("test-tenant-" + UUID.randomUUID() + "@example.com")
                 .password("password")
                 .role(User.Role.OWNER)
+                .tenant(tenant)
                 .build();
-        user = userRepository.save(user);
-        testTenantId = user.getId();
+        userRepository.save(user);
 
         // Mock Redis to always "allow" the first attempt (simulating a cache miss or first write)
         // We want to test the DATABASE UNIQUE constraint race condition specifically.

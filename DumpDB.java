@@ -5,9 +5,10 @@ import java.sql.Statement;
 
 public class DumpDB {
     public static void main(String[] args) {
-        String url = "jdbc:postgresql://10.118.165.16:5432/chatcrmdb";
-        String user = "u0_a425";
-        String password = "Root@123";
+        // Credentials must be supplied via environment variables — never hardcoded.
+        String url = System.getenv("SPRING_DATASOURCE_URL");
+        String user = System.getenv("DB_USERNAME");
+        String password = System.getenv("DB_PASSWORD");
 
         try (Connection conn = DriverManager.getConnection(url, user, password);
              Statement stmt = conn.createStatement()) {

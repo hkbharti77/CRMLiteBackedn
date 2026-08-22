@@ -13,6 +13,12 @@ public class MessageDTO {
     private String content;
     private String direction; // INCOMING or OUTGOING
     private LocalDateTime timestamp;
+    private String mediaUrl;
+    private String mediaType;
+    private String mimeType;
+    private String fileName;
+    private Long fileSize;
+    private String thumbnailUrl;
 
     public MessageDTO() {}
 
@@ -53,6 +59,24 @@ public class MessageDTO {
     public LocalDateTime getTimestamp() { return timestamp; }
     public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
 
+    public String getMediaUrl() { return mediaUrl; }
+    public void setMediaUrl(String mediaUrl) { this.mediaUrl = mediaUrl; }
+
+    public String getMediaType() { return mediaType; }
+    public void setMediaType(String mediaType) { this.mediaType = mediaType; }
+
+    public String getMimeType() { return mimeType; }
+    public void setMimeType(String mimeType) { this.mimeType = mimeType; }
+
+    public String getFileName() { return fileName; }
+    public void setFileName(String fileName) { this.fileName = fileName; }
+
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
+
     public static MessageDTOBuilder builder() {
         return new MessageDTOBuilder();
     }
@@ -66,6 +90,12 @@ public class MessageDTO {
         private String content;
         private String direction;
         private LocalDateTime timestamp;
+        private String mediaUrl;
+        private String mediaType;
+        private String mimeType;
+        private String fileName;
+        private Long fileSize;
+        private String thumbnailUrl;
 
         public MessageDTOBuilder id(UUID id) { this.id = id; return this; }
         public MessageDTOBuilder waMessageId(String waMessageId) { this.waMessageId = waMessageId; return this; }
@@ -75,9 +105,22 @@ public class MessageDTO {
         public MessageDTOBuilder content(String content) { this.content = content; return this; }
         public MessageDTOBuilder direction(String direction) { this.direction = direction; return this; }
         public MessageDTOBuilder timestamp(LocalDateTime timestamp) { this.timestamp = timestamp; return this; }
+        public MessageDTOBuilder mediaUrl(String mediaUrl) { this.mediaUrl = mediaUrl; return this; }
+        public MessageDTOBuilder mediaType(String mediaType) { this.mediaType = mediaType; return this; }
+        public MessageDTOBuilder mimeType(String mimeType) { this.mimeType = mimeType; return this; }
+        public MessageDTOBuilder fileName(String fileName) { this.fileName = fileName; return this; }
+        public MessageDTOBuilder fileSize(Long fileSize) { this.fileSize = fileSize; return this; }
+        public MessageDTOBuilder thumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; return this; }
 
         public MessageDTO build() {
-            return new MessageDTO(id, waMessageId, tags, contactId, contactName, content, direction, timestamp);
+            MessageDTO dto = new MessageDTO(id, waMessageId, tags, contactId, contactName, content, direction, timestamp);
+            dto.setMediaUrl(this.mediaUrl);
+            dto.setMediaType(this.mediaType);
+            dto.setMimeType(this.mimeType);
+            dto.setFileName(this.fileName);
+            dto.setFileSize(this.fileSize);
+            dto.setThumbnailUrl(this.thumbnailUrl);
+            return dto;
         }
     }
 }

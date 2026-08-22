@@ -259,7 +259,9 @@ public class LeadApiIntegrationTest {
 
         mockMvc.perform(get("/api/v1/leads/contact/{contactId}/latest", emptyContact.getId())
                         .header("Authorization", "Bearer " + authToken))
-                .andExpect(status().isInternalServerError());
+                // Then: 404 is returned because LeadService throws ResponseStatusException(NOT_FOUND)
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("No lead found for this contact"));
     }
 
     @Test

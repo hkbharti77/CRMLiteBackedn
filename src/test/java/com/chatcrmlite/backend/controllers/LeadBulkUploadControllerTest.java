@@ -46,6 +46,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * the HTTP layer: routing, request parsing, status codes, and response bodies.
  */
 @WebMvcTest(LeadBulkUploadController.class)
+@org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc(addFilters = false)
 class LeadBulkUploadControllerTest {
 
     @Autowired MockMvc mockMvc;
@@ -58,6 +59,7 @@ class LeadBulkUploadControllerTest {
     @MockBean BulkLeadTemplateService templateService;
     @MockBean BulkUploadValidationConfigRepository validationConfigRepository;
     @MockBean UserRepository userRepository;
+    @MockBean com.chatcrmlite.backend.services.platform.PlatformMetricsInterceptor platformMetricsInterceptor;
 
     private User testUser;
     private UUID tenantId;
@@ -82,6 +84,7 @@ class LeadBulkUploadControllerTest {
         SecurityContextHolder.setContext(ctx);
 
         when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(testUser));
+        when(platformMetricsInterceptor.preHandle(any(), any(), any())).thenReturn(true);
     }
 
     // ── POST /api/v1/leads/bulk-upload ───────────────────────────────────────

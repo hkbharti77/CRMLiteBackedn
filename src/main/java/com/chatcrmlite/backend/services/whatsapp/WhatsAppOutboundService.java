@@ -133,7 +133,7 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
-            return recordOutgoing(contact, owner, caption != null ? caption : "Sent Image", metaMessageId, "IMAGE");
+            return recordOutgoing(contact, owner, caption != null ? caption : "", metaMessageId, "IMAGE", imageUrl);
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send IMAGE reply to contact={} owner={}: {}",
                     contact.getWaId(), owner.getId(), e.getMessage(), e);
@@ -162,6 +162,10 @@ public class WhatsAppOutboundService {
     }
 
     private Message recordOutgoing(Contact contact, User owner, String content, String metaMessageId, String responseType) {
+        return recordOutgoing(contact, owner, content, metaMessageId, responseType, null);
+    }
+
+    private Message recordOutgoing(Contact contact, User owner, String content, String metaMessageId, String responseType, String mediaUrl) {
         String storedMessageId = normalizeMetaMessageId(metaMessageId);
         Message message = Message.builder()
                 .contact(contact)
@@ -170,6 +174,9 @@ public class WhatsAppOutboundService {
                 .direction(Message.Direction.OUTGOING)
                 .timestamp(LocalDateTime.now())
                 .waMessageId(storedMessageId)
+                .mediaType(responseType)
+                .mediaUrl(mediaUrl)
+                .thumbnailUrl(mediaUrl)
                 .build();
 
         Message saved = messageRepository.save(message);
@@ -193,6 +200,14 @@ public class WhatsAppOutboundService {
         wsPayload.put("contactId", contact.getId().toString());
         wsPayload.put("contactName", contact.getName());
         wsPayload.put("content", message.getContent());
+        wsPayload.put("direction", "OUTGOING");
+        wsPayload.put("mediaUrl", message.getMediaUrl());
+        wsPayload.put("mediaType", message.getMediaType());
+        wsPayload.put("mimeType", message.getMimeType());
+        wsPayload.put("fileName", message.getFileName());
+        wsPayload.put("fileSize", message.getFileSize());
+        wsPayload.put("thumbnailUrl", message.getThumbnailUrl());
+
         UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : (owner != null ? owner.getId() : null);
         if (tenantId != null) {
             distributedWebSocketPublisher.publishMessage(tenantId, wsPayload);

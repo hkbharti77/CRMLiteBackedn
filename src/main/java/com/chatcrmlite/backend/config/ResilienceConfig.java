@@ -6,7 +6,11 @@ import io.github.resilience4j.retry.RetryConfig;
 import io.github.resilience4j.retry.RetryRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.web.client.HttpStatusCodeException;
+import org.springframework.web.client.ResourceAccessException;
 
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.time.Duration;
 
 /**
@@ -71,13 +75,22 @@ public class ResilienceConfig {
         RetryConfig geminiRetry = RetryConfig.custom()
                 .maxAttempts(3)
                 .waitDuration(Duration.ofSeconds(2))
-                .retryExceptions(java.io.IOException.class, java.net.SocketTimeoutException.class)
+                .retryExceptions(IOException.class, SocketTimeoutException.class)
                 .ignoreExceptions(IllegalArgumentException.class)
                 .build();
 
         RetryConfig whatsAppRetry = RetryConfig.custom()
                 .maxAttempts(2)
                 .waitDuration(Duration.ofMillis(500))
+                .retryOnException(throwable -> {
+                    if (throwable instanceof HttpStatusCodeException hsce) {
+                        return hsce.getStatusCode().is5xxServerError() || hsce.getStatusCode().value() == 429;
+                    }
+                    return throwable instanceof IOException 
+                        || throwable instanceof SocketTimeoutException
+                        || throwable instanceof ResourceAccessException;
+                })
+                .ignoreExceptions(IllegalArgumentException.class)
                 .build();
 
         RetryConfig ragRetry = RetryConfig.custom()

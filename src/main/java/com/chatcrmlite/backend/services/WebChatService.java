@@ -83,11 +83,17 @@ public class WebChatService {
 
     @Transactional(readOnly = true)
     public List<WebChatSession> getAllSessions(User owner) {
+        if (owner != null && owner.getTenant() != null) {
+            return sessionRepository.findByOwner_TenantOrderByUpdatedAtDesc(owner.getTenant());
+        }
         return sessionRepository.findByOwnerOrderByUpdatedAtDesc(owner);
     }
 
     @Transactional(readOnly = true)
     public WebChatSession getSession(UUID id, User owner) {
+        if (owner != null && owner.getTenant() != null) {
+            return sessionRepository.findByIdAndOwner_Tenant(id, owner.getTenant()).orElse(null);
+        }
         return sessionRepository.findByOwnerAndId(owner, id).orElse(null);
     }
 
@@ -98,11 +104,13 @@ public class WebChatService {
 
     @Transactional
     public boolean deleteSession(UUID id, User owner) {
-        return sessionRepository.findByOwnerAndId(owner, id).map(session -> {
+        WebChatSession session = getSession(id, owner);
+        if (session != null) {
             List<WebChatMessage> messages = messageRepository.findBySessionOrderByCreatedAtAsc(session);
             messageRepository.deleteAll(messages);
             sessionRepository.delete(session);
             return true;
-        }).orElse(false);
+        }
+        return false;
     }
 }

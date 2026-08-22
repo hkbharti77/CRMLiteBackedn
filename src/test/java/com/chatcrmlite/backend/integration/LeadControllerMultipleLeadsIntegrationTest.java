@@ -182,8 +182,8 @@ public class LeadControllerMultipleLeadsIntegrationTest {
         // When: Getting latest lead for the contact
         mockMvc.perform(get("/api/v1/leads/contact/{contactId}/latest", emptyContact.getId())
                         .header("Authorization", "Bearer " + authToken))
-                // Then: 500 is returned because LeadService throws RuntimeException
-                .andExpect(status().isInternalServerError());
+                // Then: 404 is returned because LeadService throws ResponseStatusException(NOT_FOUND)
+                .andExpect(status().isNotFound());
     }
 
     @Test

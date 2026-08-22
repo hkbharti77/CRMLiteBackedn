@@ -114,4 +114,35 @@ public class LeadExportService {
             throw new RuntimeException("Failed to generate CSV export", e);
         }
     }
+
+    public void exportToCsvStream(java.io.Writer writer, Iterable<Lead> leads, String businessName, boolean includeHeader) throws java.io.IOException {
+        CSVPrinter printer = new CSVPrinter(writer, CSVFormat.DEFAULT);
+        if (includeHeader) {
+            printer.printRecord(
+                "Lead ID", "Lead Number", "Contact Name", "Contact Phone (WaID)", "Contact Email",
+                "Business Name", "Status", "Deal Value", "Currency", "Score",
+                "Interest Category", "Owner", "Created At", "Last Activity"
+            );
+        }
+
+        for (Lead lead : leads) {
+            printer.printRecord(
+                lead.getId() != null ? lead.getId().toString() : "",
+                lead.getLeadNumber() != null ? lead.getLeadNumber() : "",
+                lead.getContact() != null ? lead.getContact().getName() : "",
+                lead.getContact() != null ? lead.getContact().getWaId() : "",
+                lead.getContact() != null ? lead.getContact().getEmail() : "",
+                businessName != null ? businessName : "",
+                lead.getStatus() != null ? lead.getStatus().name() : "",
+                lead.getDealValue() != null ? lead.getDealValue().toString() : "0.0",
+                lead.getCurrency() != null ? lead.getCurrency() : "INR",
+                lead.getScore() != null ? lead.getScore() : 0,
+                lead.getInterestCategory() != null ? lead.getInterestCategory() : "",
+                lead.getOwner() != null ? lead.getOwner().getDisplayName() : "",
+                lead.getCreatedAt() != null ? lead.getCreatedAt().toString() : "",
+                lead.getLastActivity() != null ? lead.getLastActivity().toString() : ""
+            );
+        }
+        printer.flush();
+    }
 }

@@ -11,19 +11,19 @@ public enum PermissionKey {
     MODULE_TEAM(true, null, "Team & Staff Management"), // Admin/Owner Only
     MODULE_SETTINGS(false, null, "Settings Hub"),
 
-    SETTINGS_PROFILE(false, MODULE_SETTINGS, "My Profile Settings"),
-    SETTINGS_WHATSAPP(false, MODULE_SETTINGS, "Meta WhatsApp BSP Configuration"),
-    SETTINGS_WIDGET(false, MODULE_SETTINGS, "Website Chat Widget Setup"),
-    SETTINGS_LIVECHAT(false, MODULE_SETTINGS, "Live Support Queue & SLA Controls"),
-    SETTINGS_BILLING(true, MODULE_SETTINGS, "Subscription Billing & Overrides"); // Admin/Owner Only
+    SETTINGS_PROFILE(false, "MODULE_SETTINGS", "My Profile Settings"),
+    SETTINGS_WHATSAPP(false, "MODULE_SETTINGS", "Meta WhatsApp BSP Configuration"),
+    SETTINGS_WIDGET(false, "MODULE_SETTINGS", "Website Chat Widget Setup"),
+    SETTINGS_LIVECHAT(false, "MODULE_SETTINGS", "Live Support Queue & SLA Controls"),
+    SETTINGS_BILLING(true, "MODULE_SETTINGS", "Subscription Billing & Overrides"); // Admin/Owner Only
 
     private final boolean adminOnly;
-    private final PermissionKey parentKey;
+    private final String parentKeyName;
     private final String description;
 
-    PermissionKey(boolean adminOnly, PermissionKey parentKey, String description) {
+    PermissionKey(boolean adminOnly, String parentKeyName, String description) {
         this.adminOnly = adminOnly;
-        this.parentKey = parentKey;
+        this.parentKeyName = parentKeyName;
         this.description = description;
     }
 
@@ -32,7 +32,7 @@ public enum PermissionKey {
     }
 
     public PermissionKey getParentKey() {
-        return parentKey;
+        return parentKeyName == null ? null : PermissionKey.valueOf(parentKeyName);
     }
 
     public String getDescription() {

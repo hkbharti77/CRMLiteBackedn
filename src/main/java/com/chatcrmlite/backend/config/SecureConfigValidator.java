@@ -26,14 +26,17 @@ public class SecureConfigValidator {
 
         checkSecret("jwt.secret", missingSecrets);
         String provider = env.getProperty("ai.provider", "google");
-        if ("google".equalsIgnoreCase(provider)) {
+        if ("google".equalsIgnoreCase(provider) || "gemini".equalsIgnoreCase(provider)) {
             checkSecret("langchain4j.google-ai.gemini.api-key", missingSecrets);
+        } else if ("openrouter".equalsIgnoreCase(provider)) {
+            checkSecret("ai.openrouter.api-key", missingSecrets);
         } else if ("openai".equalsIgnoreCase(provider) || "ollama".equalsIgnoreCase(provider) || "local".equalsIgnoreCase(provider)) {
             checkSecret("ai.openai.base-url", missingSecrets);
         }
         checkSecret("meta.app-secret", missingSecrets);
         checkSecret("whatsapp.verify-token", missingSecrets);
         checkSecret("spring.mail.password", missingSecrets);
+        checkSecret("encryption.secret-key", missingSecrets);
 
         if (!missingSecrets.isEmpty()) {
             log.error("❌ CRITICAL: Missing required environment variables: {}", missingSecrets);

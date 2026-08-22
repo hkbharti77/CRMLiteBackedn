@@ -54,6 +54,27 @@ public class Message extends BaseTenantEntity {
     @Column(name = "sentiment_score")
     private Double sentimentScore = 0.0;
 
+    @Column(name = "media_url", length = 1000)
+    private String mediaUrl;
+
+    @Column(name = "media_type", length = 50)
+    private String mediaType;
+
+    @Column(name = "mime_type", length = 100)
+    private String mimeType;
+
+    @Column(name = "file_name", length = 255)
+    private String fileName;
+
+    @Column(name = "file_size")
+    private Long fileSize;
+
+    @Column(name = "media_id", length = 255)
+    private String mediaId;
+
+    @Column(name = "thumbnail_url", length = 1000)
+    private String thumbnailUrl;
+
     public Message() {}
 
     public Message(UUID id, String waMessageId, List<String> tags, Contact contact, User owner, String content, Direction direction, LocalDateTime timestamp) {
@@ -89,6 +110,21 @@ public class Message extends BaseTenantEntity {
     public void setSentiment(Sentiment sentiment) { this.sentiment = sentiment; }
     public void setSentimentScore(Double sentimentScore) { this.sentimentScore = sentimentScore; }
 
+    public String getMediaUrl() { return mediaUrl; }
+    public void setMediaUrl(String mediaUrl) { this.mediaUrl = mediaUrl; }
+    public String getMediaType() { return mediaType; }
+    public void setMediaType(String mediaType) { this.mediaType = mediaType; }
+    public String getMimeType() { return mimeType; }
+    public void setMimeType(String mimeType) { this.mimeType = mimeType; }
+    public String getFileName() { return fileName; }
+    public void setFileName(String fileName) { this.fileName = fileName; }
+    public Long getFileSize() { return fileSize; }
+    public void setFileSize(Long fileSize) { this.fileSize = fileSize; }
+    public String getMediaId() { return mediaId; }
+    public void setMediaId(String mediaId) { this.mediaId = mediaId; }
+    public String getThumbnailUrl() { return thumbnailUrl; }
+    public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
+
     @PrePersist
     protected void onCreate() {
         if (timestamp == null) {
@@ -109,6 +145,13 @@ public class Message extends BaseTenantEntity {
         private LocalDateTime timestamp;
         private Sentiment sentiment = Sentiment.NEUTRAL;
         private Double sentimentScore = 0.0;
+        private String mediaUrl;
+        private String mediaType;
+        private String mimeType;
+        private String fileName;
+        private Long fileSize;
+        private String mediaId;
+        private String thumbnailUrl;
 
         public MessageBuilder id(UUID id) { this.id = id; return this; }
         public MessageBuilder waMessageId(String waMessageId) { this.waMessageId = waMessageId; return this; }
@@ -120,11 +163,25 @@ public class Message extends BaseTenantEntity {
         public MessageBuilder timestamp(LocalDateTime timestamp) { this.timestamp = timestamp; return this; }
         public MessageBuilder sentiment(Sentiment sentiment) { this.sentiment = sentiment; return this; }
         public MessageBuilder sentimentScore(Double sentimentScore) { this.sentimentScore = sentimentScore; return this; }
+        public MessageBuilder mediaUrl(String mediaUrl) { this.mediaUrl = mediaUrl; return this; }
+        public MessageBuilder mediaType(String mediaType) { this.mediaType = mediaType; return this; }
+        public MessageBuilder mimeType(String mimeType) { this.mimeType = mimeType; return this; }
+        public MessageBuilder fileName(String fileName) { this.fileName = fileName; return this; }
+        public MessageBuilder fileSize(Long fileSize) { this.fileSize = fileSize; return this; }
+        public MessageBuilder mediaId(String mediaId) { this.mediaId = mediaId; return this; }
+        public MessageBuilder thumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; return this; }
 
         public Message build() {
             Message msg = new Message(id, waMessageId, tags, contact, owner, content, direction, timestamp);
             msg.setSentiment(this.sentiment);
             msg.setSentimentScore(this.sentimentScore);
+            msg.setMediaUrl(this.mediaUrl);
+            msg.setMediaType(this.mediaType);
+            msg.setMimeType(this.mimeType);
+            msg.setFileName(this.fileName);
+            msg.setFileSize(this.fileSize);
+            msg.setMediaId(this.mediaId);
+            msg.setThumbnailUrl(this.thumbnailUrl);
             return msg;
         }
     }

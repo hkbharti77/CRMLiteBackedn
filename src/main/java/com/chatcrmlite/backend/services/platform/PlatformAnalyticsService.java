@@ -36,6 +36,7 @@ public class PlatformAnalyticsService {
     private final DocumentChunkRepository documentChunkRepository;
     private final UserSessionRepository userSessionRepository;
     private final TicketRepository ticketRepository;
+    private final LeadRepository leadRepository;
     private final StringRedisTemplate redisTemplate;
 
     public PlatformAnalyticsService(TenantRepository tenantRepository,
@@ -45,6 +46,7 @@ public class PlatformAnalyticsService {
                                     DocumentChunkRepository documentChunkRepository,
                                     UserSessionRepository userSessionRepository,
                                     TicketRepository ticketRepository,
+                                    LeadRepository leadRepository,
                                     StringRedisTemplate redisTemplate) {
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
@@ -53,6 +55,7 @@ public class PlatformAnalyticsService {
         this.documentChunkRepository = documentChunkRepository;
         this.userSessionRepository = userSessionRepository;
         this.ticketRepository = ticketRepository;
+        this.leadRepository = leadRepository;
         this.redisTemplate = redisTemplate;
     }
 
@@ -61,6 +64,7 @@ public class PlatformAnalyticsService {
         long totalTenants = tenantRepository.count();
         long totalUsers = userRepository.count();
         long totalSubs = subscriptionRepository.count();
+        long totalLeads = leadRepository != null ? leadRepository.count() : 0;
 
         List<TenantSubscription> allSubs = subscriptionRepository.findAll();
         long active = allSubs.stream().filter(s -> s.getStatus() == TenantSubscription.SubscriptionStatus.ACTIVE).count();
@@ -84,9 +88,29 @@ public class PlatformAnalyticsService {
             .filter(t -> t.getCreatedAt() != null && t.getCreatedAt().isAfter(startOfMonth))
             .count();
 
+        // Calculate real MRR based on active tenants and their plan pricing
+        long calculatedMrr = 0;
+        List<Tenant> allTenants = tenantRepository.findAll();
+        for (Tenant t : allTenants) {
+            Tenant.LifecycleStatus status = t.getLifecycleStatus() != null ? t.getLifecycleStatus() : Tenant.LifecycleStatus.ACTIVE;
+            if (status == Tenant.LifecycleStatus.ACTIVE) {
+                String plan = t.getPlanType() != null ? t.getPlanType().name().toUpperCase() : "FREE";
+                switch (plan) {
+                    case "STARTER" -> calculatedMrr += 999;
+                    case "GROWTH" -> calculatedMrr += 2499;
+                    case "SCALE", "PRO" -> calculatedMrr += 4999;
+                    case "ENTERPRISE" -> calculatedMrr += 9999;
+                    default -> {}
+                }
+            }
+        }
+
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("totalTenants", totalTenants);
+        result.put("activeTenants", active > 0 ? active : totalTenants);
         result.put("totalUsers", totalUsers);
+        result.put("totalLeads", totalLeads);
+        result.put("mrr", calculatedMrr);
         result.put("totalSubscriptions", totalSubs);
         result.put("activeSubscriptions", active);
         result.put("trialSubscriptions", trial);
@@ -118,7 +142,7 @@ public class PlatformAnalyticsService {
         });
 
         return countByDay.entrySet().stream()
-            .map(e -> Map.<String, Object>of("date", e.getKey(), "count", e.getValue()))
+            .map(e -> Map.<String, Object>of("date", e.getKey(), "count", e.getValue(), "signups", e.getValue(), "churn", 0L))
             .toList();
     }
 
@@ -127,7 +151,7 @@ public class PlatformAnalyticsService {
         List<Tenant> all = tenantRepository.findAll();
         Map<String, Long> byType = new LinkedHashMap<>();
         all.forEach(t -> {
-            String type = t.getBusinessType() != null ? t.getBusinessType() : "Unspecified";
+            String type = t.getBusinessType() != null && !t.getBusinessType().isBlank() ? t.getBusinessType() : "General";
             byType.merge(type, 1L, Long::sum);
         });
         return byType.entrySet().stream()
@@ -139,6 +163,22 @@ public class PlatformAnalyticsService {
     /** Subscription breakdown — plan distribution + status counts. */
     public Map<String, Object> getSubscriptionStats() {
         List<TenantSubscription> all = subscriptionRepository.findAll();
+        List<Tenant> allTenants = tenantRepository.findAll();
+
+        // Real Plan Distribution from tenants
+        Map<String, Long> planBreakdown = new LinkedHashMap<>();
+        planBreakdown.put("starter", 0L);
+        planBreakdown.put("growth", 0L);
+        planBreakdown.put("scale", 0L);
+        planBreakdown.put("enterprise", 0L);
+
+        for (Tenant t : allTenants) {
+            String p = (t.getPlanType() != null ? t.getPlanType().name() : "STARTER").toLowerCase();
+            if ("pro".equals(p) || "scale".equals(p)) planBreakdown.merge("scale", 1L, Long::sum);
+            else if ("growth".equals(p)) planBreakdown.merge("growth", 1L, Long::sum);
+            else if ("enterprise".equals(p)) planBreakdown.merge("enterprise", 1L, Long::sum);
+            else planBreakdown.merge("starter", 1L, Long::sum);
+        }
 
         // Status breakdown
         Map<String, Long> statusBreakdown = new LinkedHashMap<>();
@@ -158,11 +198,11 @@ public class PlatformAnalyticsService {
             && s.getStatus() == TenantSubscription.SubscriptionStatus.ACTIVE).count();
 
         Map<String, Object> result = new LinkedHashMap<>();
+        result.put("planBreakdown", planBreakdown);
         result.put("statusBreakdown", statusBreakdown);
         result.put("expiringIn7Days", exp7);
         result.put("expiringIn30Days", exp30);
-        result.put("total", all.size());
-        // NOTE: No MRR/ARR — deferred to Phase 2 until billing_transactions is verified
+        result.put("total", allTenants.size());
         return result;
     }
 
@@ -200,15 +240,21 @@ public class PlatformAnalyticsService {
 
     /** Churn — cancelled/inactive tenants in last 30 days. */
     public Map<String, Object> getChurn() {
-        LocalDateTime since = LocalDateTime.now().minusDays(30);
-        List<TenantSubscription> churned = subscriptionRepository.findAll().stream()
-            .filter(s -> (s.getStatus() == TenantSubscription.SubscriptionStatus.CANCELLED
-                       || s.getStatus() == TenantSubscription.SubscriptionStatus.INACTIVE))
-            .toList();
+        long totalTenants = tenantRepository.count();
+        long churned = tenantRepository.findAll().stream()
+            .filter(t -> t.getLifecycleStatus() == Tenant.LifecycleStatus.SUSPENDED 
+                      || t.getLifecycleStatus() == Tenant.LifecycleStatus.ARCHIVED
+                      || t.getLifecycleStatus() == Tenant.LifecycleStatus.DELETED)
+            .count();
+
+        double churnPct = totalTenants > 0 ? ((double) churned / totalTenants) * 100.0 : 0.0;
+        String churnRateFormatted = String.format(Locale.US, "%.1f%%", churnPct);
 
         return Map.of(
-            "churnedLast30Days", churned.size(),
-            "totalChurned", churned.size()
+            "churnRate", churnRateFormatted,
+            "churnedLast30Days", churned,
+            "totalChurned", churned,
+            "totalTenants", totalTenants
         );
     }
 

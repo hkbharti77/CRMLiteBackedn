@@ -5,8 +5,29 @@
 export function createStorageManager(businessId) {
     const HISTORY_KEY = `crm_chat_history_${businessId}`;
     const SESSION_KEY = `crm_chat_session_${businessId}`;
+    const THEME_KEY = `crm_chat_theme_${businessId}`;
 
     return {
+        loadTheme() {
+            try {
+                const raw = localStorage.getItem(THEME_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                console.warn('CRM Chat: Could not load cached theme', e);
+                return null;
+            }
+        },
+
+        saveTheme(theme) {
+            try {
+                if (theme) {
+                    localStorage.setItem(THEME_KEY, JSON.stringify(theme));
+                }
+            } catch (e) {
+                console.warn('CRM Chat: Could not save theme', e);
+            }
+        },
+
         loadHistory() {
             try {
                 const raw = localStorage.getItem(HISTORY_KEY);

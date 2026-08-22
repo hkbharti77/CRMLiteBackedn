@@ -47,6 +47,9 @@ public class WhatsAppConfigController {
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @Autowired
+    private com.chatcrmlite.backend.services.whatsapp.MetaOnboardingService metaOnboardingService;
+
+    @Autowired
     private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
 
     @Value("${app.public.url:}")
@@ -216,24 +219,23 @@ public class WhatsAppConfigController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         String code = body.get("code");
-        String wabaId = body.get("wabaId");
-        String phoneNumberId = body.get("phoneNumberId");
+        String sessionId = body.get("sessionId");
 
         if (code == null || code.isBlank()) {
             return ResponseEntity.badRequest().body("OAuth authorization code is required");
         }
 
-        WhatsAppConfig config = whatsappConfigRepository.findByUserId(user.getId())
-                .orElse(new WhatsAppConfig());
-
-        config.setUser(user);
-        config.setConnectionType("EMBEDDED_SIGNUP_COEXISTENCE");
-        if (wabaId != null) config.setWabaId(wabaId.trim());
-        if (phoneNumberId != null) config.setPhoneNumberId(phoneNumberId.trim());
-        config.setAccessToken(code.trim()); // Code or exchanged access token
-
-        whatsappConfigRepository.save(config);
-        return ResponseEntity.ok(Map.of("message", "WhatsApp Coexistence Embedded Signup Connected Successfully", "connectionType", "EMBEDDED_SIGNUP_COEXISTENCE"));
+        try {
+            // Ensure session exists or create one if legacy caller
+            if (sessionId == null || sessionId.isBlank()) {
+                Map<String, Object> session = metaOnboardingService.createSession(user);
+                sessionId = (String) session.get("sessionId");
+            }
+            Map<String, Object> result = metaOnboardingService.exchangeAndProvision(code, sessionId, user);
+            return ResponseEntity.ok(result);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Embedded signup exchange failed: " + e.getMessage()));
+        }
     }
 
     @DeleteMapping

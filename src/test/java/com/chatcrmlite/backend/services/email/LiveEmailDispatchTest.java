@@ -26,7 +26,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /**
  * Live SMTP dispatch test to physically send all 26 enterprise email templates
  * directly through Gmail SMTP to hkbharti77@gmail.com.
+ * Environment-dependent integration test enabled when ENABLE_LIVE_EMAIL_DISPATCH=true.
  */
+@org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable(named = "ENABLE_LIVE_EMAIL_DISPATCH", matches = "true")
 public class LiveEmailDispatchTest {
 
     private static final Logger log = LoggerFactory.getLogger(LiveEmailDispatchTest.class);
@@ -52,13 +54,13 @@ public class LiveEmailDispatchTest {
 
         String smtpUser = envProps.getProperty("SMTP_USERNAME", System.getenv("SMTP_USERNAME"));
         String smtpPass = envProps.getProperty("SMTP_PASSWORD", System.getenv("SMTP_PASSWORD"));
-        fromEmail = envProps.getProperty("SENDER_EMAIL", "no-reply@gyanvaniai.online");
+        fromEmail = envProps.getProperty("SENDER_EMAIL", System.getenv("SENDER_EMAIL") != null ? System.getenv("SENDER_EMAIL") : "no-reply@gyanvaniai.online");
 
         if (smtpUser == null || smtpUser.isBlank()) {
-            smtpUser = "ewardmacllum@gmail.com";
+            smtpUser = "";
         }
         if (smtpPass == null || smtpPass.isBlank()) {
-            smtpPass = "ckhv ttlv cfzs xply";
+            smtpPass = "";
         }
 
         // Clean password in case it contains spaces or quotes

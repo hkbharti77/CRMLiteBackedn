@@ -211,11 +211,15 @@ public class ConcurrentLeadCreationTest {
         // Start all updates simultaneously
         startLatch.countDown();
         
-        // Wait for completion
-        boolean completed = completionLatch.await(30, TimeUnit.SECONDS);
-        assertThat(completed).isTrue();
+        // Wait for completion — H2 in-memory DB uses table-level locks that can
+        // serialize concurrent transactions reading the same owner/tenant rows,
+        // unlike PostgreSQL's row-level MVCC. Use a generous timeout for H2.
+        boolean completed = completionLatch.await(60, TimeUnit.SECONDS);
 
         executor.shutdown();
+        executor.awaitTermination(5, TimeUnit.SECONDS);
+
+        assertThat(completed).as("All threads should complete within timeout (H2 may serialize concurrent reads)").isTrue();
 
         // Assert: Verify all updates succeeded
         assertThat(successCount.get()).isEqualTo(leads.size());

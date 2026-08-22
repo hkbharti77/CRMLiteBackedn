@@ -18,6 +18,8 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     List<Message> findByContactAndDirection(Contact contact, Message.Direction direction, org.springframework.data.domain.Pageable pageable);
     
     long countByContact(Contact contact);
+    
+    Optional<Message> findFirstByMediaIdOrderByTimestampDesc(String mediaId);
 
     /**
      * Fetch messages with contact eagerly - DTO conversion done in service layer.
