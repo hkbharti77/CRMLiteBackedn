@@ -110,7 +110,15 @@ public class PlatformAuthFilter extends OncePerRequestFilter {
         if (StringUtils.hasText(headerAuth) && headerAuth.startsWith("Bearer ")) {
             return headerAuth.substring(7);
         }
-        // Priority 2: platform_token cookie
+        // Priority 2: access_token or token query parameter
+        String paramToken = request.getParameter("access_token");
+        if (!StringUtils.hasText(paramToken)) {
+            paramToken = request.getParameter("token");
+        }
+        if (StringUtils.hasText(paramToken)) {
+            return paramToken;
+        }
+        // Priority 3: platform_token cookie
         Cookie[] cookies = request.getCookies();
         if (cookies == null) return null;
         return Arrays.stream(cookies)
