@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/platform-entitlements-360-profiles
 
 jobs:
   # ── JOB 1: BUILD & VERIFY ────────────────────────────────────────────────
