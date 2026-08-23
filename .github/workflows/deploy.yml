@@ -26,8 +26,7 @@ jobs:
       - name: Build Backend with Maven
         run: mvn clean package -DskipTests
 
-      # 💡 Note: If 'mvn clean package' fails, GitHub Actions halts execution here.
-      # The deploy-to-aws job below will NOT be triggered if this job fails.
+      # 💡 Note: If build fails, GitHub halts execution here and sends native email alert to repo owner.
 
   # ── JOB 2: DEPLOY TO AWS EC2 PRODUCTION ──────────────────────────────────
   deploy-to-aws:
