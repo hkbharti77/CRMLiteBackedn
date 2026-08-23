@@ -24,11 +24,35 @@ public class AiWarmupConfig {
         TenantContext.setAdminMode(true);
         try {
             log.info("[AI-Warmup] Initializing and fixing DB constraints...");
+            jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS vector");
             jdbcTemplate.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm");
             jdbcTemplate.execute("ALTER TABLE document_chunks DROP CONSTRAINT IF EXISTS content_length_limit");
             jdbcTemplate.execute("ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check");
             jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_reason TEXT");
             jdbcTemplate.execute("ALTER TABLE faq_items ALTER COLUMN category TYPE TEXT");
+
+            // Ensure document_chunks.embedding is converted from jsonb/text to vector(384)
+            try {
+                jdbcTemplate.execute(
+                    "DO $$ BEGIN " +
+                    "IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'document_chunks' AND column_name = 'embedding' AND udt_name != 'vector') THEN " +
+                    "  ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS embedding_vec vector(384); " +
+                    "  BEGIN " +
+                    "    UPDATE document_chunks SET embedding_vec = (SELECT array_agg(value::text::real) FROM jsonb_array_elements(embedding))::vector WHERE embedding IS NOT NULL AND embedding_vec IS NULL AND pg_typeof(embedding)::text = 'jsonb'; " +
+                    "  EXCEPTION WHEN OTHERS THEN NULL; END; " +
+                    "  BEGIN " +
+                    "    UPDATE document_chunks SET embedding_vec = embedding::text::vector WHERE embedding IS NOT NULL AND embedding_vec IS NULL; " +
+                    "  EXCEPTION WHEN OTHERS THEN NULL; END; " +
+                    "  ALTER TABLE document_chunks DROP COLUMN IF EXISTS embedding; " +
+                    "  ALTER TABLE document_chunks RENAME COLUMN embedding_vec TO embedding; " +
+                    "  ALTER TABLE document_chunks ALTER COLUMN embedding SET NOT NULL; " +
+                    "END IF; END $$;"
+                );
+                log.info("[AI-Warmup] Verified document_chunks.embedding column data type is vector(384).");
+            } catch (Exception e) {
+                log.warn("[AI-Warmup] vector column conversion check: {}", e.getMessage());
+            }
+
             log.info("[AI-Warmup] Successfully dropped content_length_limit constraint and initialized pg_trgm.");
             
             // ENSURE business_services TABLE EXISTS (Critical Fallback)
