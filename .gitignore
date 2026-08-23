@@ -42,10 +42,7 @@ postgres_data/
 *.sqlite3
 .jqwik-database
 
-# Environment
-.env
-.env.local
-.env.*.local
+# Environmengit 
 
 # OS files
 .DS_Store
