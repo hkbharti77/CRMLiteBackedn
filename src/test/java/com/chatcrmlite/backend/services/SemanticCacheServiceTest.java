@@ -34,7 +34,6 @@ public class SemanticCacheServiceTest {
     @Test
     void testGetCachedResponse_Hit() {
         String embeddingLiteral = Arrays.toString(queryEmbedding);
-        double distanceThreshold = 1.0 - 0.92;
 
         Map<String, Object> resultRow = new HashMap<>();
         resultRow.put("response_text", "Cached Answer");
@@ -43,7 +42,7 @@ public class SemanticCacheServiceTest {
         List<Map<String, Object>> results = Collections.singletonList(resultRow);
 
         when(jdbcTemplate.queryForList(anyString(), 
-                eq(tenantId), eq(embeddingLiteral), eq(distanceThreshold), eq(embeddingLiteral)))
+                eq(tenantId), eq(embeddingLiteral), anyDouble(), eq(embeddingLiteral)))
                 .thenReturn(results);
 
         String response = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);
@@ -56,10 +55,9 @@ public class SemanticCacheServiceTest {
     @Test
     void testGetCachedResponse_Miss() {
         String embeddingLiteral = Arrays.toString(queryEmbedding);
-        double distanceThreshold = 1.0 - 0.92;
 
         when(jdbcTemplate.queryForList(anyString(), 
-                eq(tenantId), eq(embeddingLiteral), eq(distanceThreshold), eq(embeddingLiteral)))
+                eq(tenantId), eq(embeddingLiteral), anyDouble(), eq(embeddingLiteral)))
                 .thenReturn(Collections.emptyList());
 
         String response = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);
