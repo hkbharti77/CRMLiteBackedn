@@ -7,12 +7,17 @@ import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.validation.ConstraintViolationException;
+import jakarta.servlet.http.HttpServletResponse;
 import org.slf4j.MDC;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotWritableException;
+import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.context.request.RequestContextHolder;
+import org.springframework.web.context.request.ServletRequestAttributes;
 
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -228,6 +233,18 @@ public class GlobalExceptionHandler {
                 "An unexpected error occurred. Reference ID: " + errorId, errorId);
     }
 
+    @ExceptionHandler(HttpMessageNotWritableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMessageNotWritable(HttpMessageNotWritableException ex) {
+        log.warn("[HttpMessageNotWritableException] Failed to write response message: {}", ex.getMessage());
+        return errorResponse(HttpStatus.INTERNAL_SERVER_ERROR, "Error rendering response.", null);
+    }
+
+    @ExceptionHandler(HttpMediaTypeNotAcceptableException.class)
+    public ResponseEntity<Map<String, Object>> handleHttpMediaTypeNotAcceptable(HttpMediaTypeNotAcceptableException ex) {
+        log.warn("[HttpMediaTypeNotAcceptableException] Not acceptable media type requested: {}", ex.getMessage());
+        return errorResponse(HttpStatus.NOT_ACCEPTABLE, "Requested media type is not supported.", null);
+    }
+
     // ── Shared helpers ────────────────────────────────────────────────────────
 
     private boolean isClientAbort(Throwable ex) {
@@ -245,6 +262,13 @@ public class GlobalExceptionHandler {
     }
 
     private ResponseEntity<Map<String, Object>> errorResponse(HttpStatus status, String message, String errorId) {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        if (attrs != null) {
+            HttpServletResponse response = attrs.getResponse();
+            if (response != null && !response.isCommitted()) {
+                response.setContentType(org.springframework.http.MediaType.APPLICATION_JSON_VALUE);
+            }
+        }
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("timestamp", Instant.now().toString());
         body.put("status", status.value());
