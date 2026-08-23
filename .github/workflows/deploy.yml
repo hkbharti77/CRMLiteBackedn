@@ -46,7 +46,9 @@ jobs:
             # 1. Navigate to backend directory
             cd ~/CRMLiteBackedn || cd /var/www/CRMLiteBackedn || exit 1
             
-            # 2. Pull latest commit from GitHub
+            # 2. Prevent SSH host key verification failure & pull latest code
+            mkdir -p ~/.ssh && ssh-keyscan github.com >> ~/.ssh/known_hosts 2>/dev/null || true
+            git remote set-url origin https://github.com/hkbharti77/CRMLiteBackedn.git || true
             git fetch origin
             git checkout ${{ github.ref_name }}
             git pull origin ${{ github.ref_name }}
