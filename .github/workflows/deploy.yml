@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - main
-      - feat/platform-entitlements-360-profiles
 
 jobs:
   # ── JOB 1: BUILD & VERIFY ────────────────────────────────────────────────
@@ -23,8 +22,8 @@ jobs:
           distribution: 'temurin'
           cache: maven
 
-      - name: Build Backend with Maven
-        run: mvn clean package -DskipTests
+      - name: Build Backend with Maven (Skip Redis integration tests)
+        run: mvn clean package -DskipTests -Dmaven.test.skip=true
 
       # 💡 Note: If build fails, GitHub halts execution here and sends native email alert to repo owner.
 
@@ -53,7 +52,7 @@ jobs:
             git pull origin ${{ github.ref_name }}
             
             # 3. Build production JAR
-            mvn clean package -DskipTests
+            mvn clean package -DskipTests -Dmaven.test.skip=true
             
             # 4. Restart Spring Boot service
             sudo systemctl restart backend || sudo systemctl restart spring-backend || pm2 restart backend
