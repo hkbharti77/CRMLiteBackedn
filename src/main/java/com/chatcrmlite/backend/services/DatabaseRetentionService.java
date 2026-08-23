@@ -32,11 +32,18 @@ public class DatabaseRetentionService {
         LocalDateTime cutoff = LocalDateTime.now().minusDays(90);
         log.info("[Retention] Starting data archival (cutoff: {})", cutoff);
 
+        ensureArchiveTablesExist();
         archiveActivityLogs(cutoff);
         archiveChatMessages(cutoff);
         archiveProcessedMessages(cutoff);
 
         log.info("[Retention] Archival process completed.");
+    }
+
+    private void ensureArchiveTablesExist() {
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS activity_logs_archive (LIKE activity_logs INCLUDING ALL)");
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS chat_messages_archive (LIKE chat_messages INCLUDING ALL)");
+        jdbcTemplate.execute("CREATE TABLE IF NOT EXISTS processed_messages_archive (LIKE processed_messages INCLUDING ALL)");
     }
 
     private void archiveActivityLogs(LocalDateTime cutoff) {
