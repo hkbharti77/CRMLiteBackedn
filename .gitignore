@@ -91,4 +91,5 @@ REFACTOR_ROADMAP.md
 tmp/
 temp/
 *.tmp
+*.hprof
 .cache/
