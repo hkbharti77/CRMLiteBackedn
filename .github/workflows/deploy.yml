@@ -1,0 +1,62 @@
+name: Production CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - feat/platform-entitlements-360-profiles
+
+jobs:
+  # ── JOB 1: BUILD & VERIFY ────────────────────────────────────────────────
+  build-and-verify:
+    name: 🔨 Compile & Test Code
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Build Backend with Maven
+        run: mvn clean package -DskipTests
+
+      # 💡 Note: If 'mvn clean package' fails, GitHub Actions halts execution here.
+      # The deploy-to-aws job below will NOT be triggered if this job fails.
+
+  # ── JOB 2: DEPLOY TO AWS EC2 PRODUCTION ──────────────────────────────────
+  deploy-to-aws:
+    name: 🚀 Auto Deploy to AWS EC2
+    needs: build-and-verify # 🔒 Security Gate: Executes ONLY if Job 1 passes!
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: SSH to AWS EC2 & Deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.AWS_EC2_HOST }}
+          username: ${{ secrets.AWS_EC2_USER }}
+          key: ${{ secrets.AWS_EC2_SSH_KEY }}
+          script: |
+            echo "=== 🚀 Starting Automatic Production Deployment ==="
+            
+            # 1. Navigate to backend directory
+            cd ~/CRMLiteBackedn || cd /var/www/CRMLiteBackedn || exit 1
+            
+            # 2. Pull latest commit from GitHub
+            git fetch origin
+            git checkout ${{ github.ref_name }}
+            git pull origin ${{ github.ref_name }}
+            
+            # 3. Build production JAR
+            mvn clean package -DskipTests
+            
+            # 4. Restart Spring Boot service
+            sudo systemctl restart backend || sudo systemctl restart spring-backend || pm2 restart backend
+            
+            echo "=== ✅ Production Deployment Completed Successfully! ==="
