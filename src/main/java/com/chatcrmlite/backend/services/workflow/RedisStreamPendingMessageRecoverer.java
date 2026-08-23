@@ -16,6 +16,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.context.annotation.Profile;
+
 /**
  * Recovers orphaned messages left in the Redis Stream Pending Entries List (PEL)
  * due to unexpected worker crashes or node failures.
@@ -24,6 +26,7 @@ import java.util.Map;
  */
 @Slf4j
 @Service
+@Profile("!test")
 @RequiredArgsConstructor
 public class RedisStreamPendingMessageRecoverer {
 

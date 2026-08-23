@@ -19,3 +19,5 @@ jobs:
         cache: maven
     - name: Build Backend with Maven
       run: mvn -B package --file pom.xml
+      env:
+        SPRING_PROFILES_ACTIVE: test
