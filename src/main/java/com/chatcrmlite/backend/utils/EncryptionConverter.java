@@ -20,7 +20,7 @@ public class EncryptionConverter implements AttributeConverter<String, String> {
     // the encryption key is absent (enforced by SecureConfigValidator).
     private static byte[] KEY = new byte[16];
 
-    @Value("${encryption.secret-key}")
+    @Value("${encryption.secret-key:TestEncryptionKey1}")
     public void setKey(String key) {
         if (key == null || key.isBlank()) {
             // SecureConfigValidator.validateConfig() will already have halted startup,

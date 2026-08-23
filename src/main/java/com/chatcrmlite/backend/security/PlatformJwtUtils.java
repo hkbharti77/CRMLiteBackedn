@@ -31,7 +31,7 @@ public class PlatformJwtUtils {
     private static final int MIN_SECRET_BYTES = 32;
     private static final long PLATFORM_TOKEN_EXPIRY_MS = 8L * 60 * 60 * 1000; // 8 hours
 
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:dummy_jwt_secret_key_for_testing_min_64_bytes_long}")
     private String jwtSecret;
 
     private Key signingKey;

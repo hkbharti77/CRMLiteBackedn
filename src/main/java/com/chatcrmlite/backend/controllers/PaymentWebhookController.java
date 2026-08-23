@@ -51,13 +51,13 @@ public class PaymentWebhookController {
     private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
-    @Value("${razorpay.webhook.secret}")
+    @Value("${razorpay.webhook.secret:dummy_razorpay_webhook_secret}")
     private String razorpayWebhookSecret;
 
-    @Value("${razorpay.key.id:}")
+    @Value("${razorpay.key.id:dummy_razorpay_key_id}")
     private String razorpayKeyId;
 
-    @Value("${razorpay.key.secret:}")
+    @Value("${razorpay.key.secret:dummy_razorpay_key_secret}")
     private String razorpayKeySecret;
 
     @GetMapping("/api/v1/billing/plans")

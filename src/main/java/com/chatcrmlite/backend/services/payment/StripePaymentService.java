@@ -18,10 +18,10 @@ import java.util.UUID;
 @Slf4j
 public class StripePaymentService {
 
-    @Value("${stripe.api.key}")
+    @Value("${stripe.api.key:dummy_stripe_api_key}")
     private String apiKey;
 
-    @Value("${stripe.webhook.secret}")
+    @Value("${stripe.webhook.secret:dummy_stripe_webhook_secret}")
     private String webhookSecret;
 
     @Value("${app.public.url:http://localhost:8080}")

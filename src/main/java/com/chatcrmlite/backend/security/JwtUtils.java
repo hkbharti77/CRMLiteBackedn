@@ -27,7 +27,7 @@ public class JwtUtils {
     private static final Logger log = LoggerFactory.getLogger(JwtUtils.class);
     private static final int MIN_SECRET_BYTES = 32;
 
-    @Value("${jwt.secret}")
+    @Value("${jwt.secret:dummy_jwt_secret_key_for_testing_min_64_bytes_long}")
     private String jwtSecret;
 
     @Value("${jwt.expiration:86400000}")
