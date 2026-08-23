@@ -57,6 +57,7 @@ jobs:
         run: mvn test -B -Dtest='**/*Test' -DfailIfNoTests=false
         env:
           SPRING_PROFILES_ACTIVE: test
+          MAVEN_OPTS: "-Xmx2048m"
 
       - name: Publish test results
         uses: dorny/test-reporter@v1

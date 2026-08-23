@@ -340,6 +340,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
         <configuration>
+          <argLine>-Xmx2048m -XX:+UseG1GC</argLine>
           <systemPropertyVariables>
             <spring.profiles.active>test</spring.profiles.active>
           </systemPropertyVariables>

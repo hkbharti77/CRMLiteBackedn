@@ -21,3 +21,4 @@ jobs:
       run: mvn -B package --file pom.xml
       env:
         SPRING_PROFILES_ACTIVE: test
+        MAVEN_OPTS: "-Xmx2048m"
