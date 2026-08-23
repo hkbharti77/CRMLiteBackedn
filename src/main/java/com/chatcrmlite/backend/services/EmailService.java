@@ -38,10 +38,10 @@ public class EmailService {
     @Value("${SENDER_EMAIL:no-reply@gyanvaniai.online}")
     private String from;
 
-    @Value("${PLATFORM_BRAND_URL:https://gyanvaniai.online}")
+    @Value("${platform.brand.url:https://gyanvaniai.online}")
     private String platformBrandUrl;
 
-    @Value("${PLATFORM_BRAND_NAME:GyanVaniAi}")
+    @Value("${platform.brand.name:GyanVaniAi}")
     private String platformBrandName;
 
     private static final String BRAND = "GyanVaniAi Connect";

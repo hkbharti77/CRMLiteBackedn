@@ -54,10 +54,14 @@ public class ResilienceConfig {
                 .build();
 
         CircuitBreakerConfig ragConfig = CircuitBreakerConfig.custom()
-                .failureRateThreshold(30)
-                .waitDurationInOpenState(Duration.ofSeconds(45))
+                .failureRateThreshold(40)
+                .slowCallRateThreshold(60)
+                .slowCallDurationThreshold(Duration.ofSeconds(25))
+                .waitDurationInOpenState(Duration.ofSeconds(30))
                 .slidingWindowSize(15)
-                .minimumNumberOfCalls(10)
+                .minimumNumberOfCalls(5)
+                .permittedNumberOfCallsInHalfOpenState(3)
+                .automaticTransitionFromOpenToHalfOpenEnabled(true)
                 .build();
 
         CircuitBreakerRegistry registry = CircuitBreakerRegistry.ofDefaults();

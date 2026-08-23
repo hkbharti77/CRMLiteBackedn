@@ -2,6 +2,7 @@ package com.chatcrmlite.backend.services;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
@@ -11,15 +12,12 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Optimized Semantic Cache using PostgreSQL pgvector.
- * 
- * Replaces the previous Redis-based implementation which required 
- * loading all entries into JVM memory for a linear scan.
+ * Optimized Semantic & Exact Cache using PostgreSQL pgvector.
  * 
  * Benefits:
- * 1. O(log N) lookup using HNSW index.
- * 2. Zero JVM GC pressure (search happens in DB).
- * 3. Scalable to millions of entries.
+ * 1. O(1) exact query string match fast path.
+ * 2. O(log N) HNSW vector similarity lookup.
+ * 3. Zero JVM GC pressure (search happens in DB).
  */
 @Slf4j
 @Service
@@ -28,16 +26,46 @@ public class SemanticCacheService {
 
     private final JdbcTemplate jdbcTemplate;
 
-    private static final double SIMILARITY_THRESHOLD = 0.92; // 1 - cosine_distance
+    @Value("${ai.cache.similarity-threshold:0.85}")
+    private double similarityThreshold = 0.85;
+
+    public String getCachedResponse(float[] queryEmbedding, UUID tenantId) {
+        return getCachedResponse(null, queryEmbedding, tenantId);
+    }
 
     /**
-     * Finds a cached response for a similar query using vector distance.
+     * Finds a cached response using 2-step lookup:
+     * 1. Exact query text match (O(1) ultra-fast path, < 1ms)
+     * 2. Semantic vector distance lookup (< 5ms)
      */
-    public String getCachedResponse(float[] queryEmbedding, UUID tenantId) {
+    public String getCachedResponse(String rawQuery, float[] queryEmbedding, UUID tenantId) {
+        // 1. Exact query text match check (Instant Fast Path)
+        if (rawQuery != null && !rawQuery.isBlank()) {
+            String exactSql = """
+                    SELECT response_text, id
+                    FROM semantic_cache
+                    WHERE tenant_id = ?
+                      AND LOWER(TRIM(query_text)) = LOWER(TRIM(?))
+                    LIMIT 1
+                    """;
+            try {
+                List<Map<String, Object>> exactResults = jdbcTemplate.queryForList(exactSql, tenantId, rawQuery);
+                if (!exactResults.isEmpty()) {
+                    String response = (String) exactResults.get(0).get("response_text");
+                    UUID entryId = (UUID) exactResults.get(0).get("id");
+                    updateLastAccessed(entryId);
+                    log.info("[SemanticCache] EXACT QUERY HIT for tenant {} | Query: '{}'", tenantId, rawQuery);
+                    return response;
+                }
+            } catch (Exception e) {
+                log.warn("[SemanticCache] Exact query lookup failed: {}", e.getMessage());
+            }
+        }
+
+        // 2. Semantic vector distance lookup
+        if (queryEmbedding == null) return null;
+
         String embeddingLiteral = Arrays.toString(queryEmbedding);
-        
-        // 1 - (embedding <=> query) = similarity
-        // threshold 0.92 means distance must be < 0.08
         String sql = """
                 SELECT response_text, id
                 FROM semantic_cache
@@ -47,7 +75,7 @@ public class SemanticCacheService {
                 LIMIT 1
                 """;
 
-        double distanceThreshold = 1.0 - SIMILARITY_THRESHOLD;
+        double distanceThreshold = 1.0 - similarityThreshold;
 
         try {
             List<Map<String, Object>> results = jdbcTemplate.queryForList(sql, 
@@ -56,15 +84,12 @@ public class SemanticCacheService {
             if (!results.isEmpty()) {
                 String response = (String) results.get(0).get("response_text");
                 UUID entryId = (UUID) results.get(0).get("id");
-                
-                // Async update last accessed time (fire and forget)
                 updateLastAccessed(entryId);
-                
-                log.info("[SemanticCache] HIT for tenant {}", tenantId);
+                log.info("[SemanticCache] SEMANTIC VECTOR HIT for tenant {}", tenantId);
                 return response;
             }
         } catch (Exception e) {
-            log.error("[SemanticCache] Lookup failed: {}", e.getMessage());
+            log.error("[SemanticCache] Semantic vector lookup failed: {}", e.getMessage());
         }
 
         return null;

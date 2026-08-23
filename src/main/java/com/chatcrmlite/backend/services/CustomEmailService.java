@@ -78,7 +78,7 @@ public class CustomEmailService {
     @Value("${SENDER_EMAIL:${spring.mail.username:no-reply@gyanvaniai.online}}")
     private String fromAddress;
 
-    @Value("${PLATFORM_BRAND_URL:https://gyanvaniai.online}")
+    @Value("${platform.brand.url:https://gyanvaniai.online}")
     private String platformBrandUrl;
 
     @Autowired

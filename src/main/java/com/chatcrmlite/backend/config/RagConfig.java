@@ -45,7 +45,7 @@ public class RagConfig {
     @Value("${ai.openrouter.base-url:https://openrouter.ai/api/v1}")
     private String openRouterBaseUrl;
 
-    @Value("${ai.openrouter.model-name:stealth/ox-alpha}")
+    @Value("${ai.openrouter.model-name:google/gemini-2.5-flash}")
     private String openRouterModelName;
 
     /**
@@ -94,7 +94,7 @@ public class RagConfig {
             return OpenAiChatModel.builder()
                     .baseUrl(url)
                     .apiKey(openRouterApiKey)
-                    .modelName(openRouterModelName != null && !openRouterModelName.isBlank() ? openRouterModelName : "stealth/ox-alpha")
+                    .modelName(openRouterModelName)
                     .timeout(java.time.Duration.ofSeconds(120))
                     .maxRetries(1)
                     .build();
@@ -189,7 +189,7 @@ public class RagConfig {
         @Override
         public String getModelName() {
             if ("openrouter".equalsIgnoreCase(aiProvider)) {
-                return openRouterModelName != null ? openRouterModelName : "stealth/ox-alpha";
+                return openRouterModelName;
             }
             if ("openai".equalsIgnoreCase(aiProvider) || "ollama".equalsIgnoreCase(aiProvider) || "local".equalsIgnoreCase(aiProvider)) {
                 return openAiModelName;

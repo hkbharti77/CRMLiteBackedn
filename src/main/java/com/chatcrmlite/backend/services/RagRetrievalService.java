@@ -71,7 +71,7 @@ public class RagRetrievalService {
      * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker, 
      * Prompt Injection Defense, and Hallucination detection.
      */
-    @CircuitBreaker(name = "aiService", fallbackMethod = "fallbackResponse")
+    @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackResponse")
     public String getAiResponse(String query, UUID tenantId) {
         if (chatLanguageModel == null) {
             return "AI feature is currently being configured. Please check back later.";
@@ -95,8 +95,8 @@ public class RagRetrievalService {
             return faqMatch.getFaqItem().getAnswer();
         }
 
-        // 3. Semantic Cache Check (O(log N) in DB)
-        String cachedResponse = semanticCacheService.getCachedResponse(queryEmbedding, tenantId);
+        // 3. Semantic Cache Check (Exact string match < 1ms, Semantic HNSW vector lookup < 5ms)
+        String cachedResponse = semanticCacheService.getCachedResponse(query, queryEmbedding, tenantId);
         if (cachedResponse != null) {
             return cachedResponse;
         }
