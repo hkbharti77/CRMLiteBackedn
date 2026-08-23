@@ -14,10 +14,10 @@ import java.math.BigDecimal;
 @Slf4j
 public class RazorpayPaymentService {
 
-    @Value("${razorpay.key.id}")
+    @Value("${razorpay.key.id:dummy_razorpay_key_id}")
     private String keyId;
 
-    @Value("${razorpay.key.secret}")
+    @Value("${razorpay.key.secret:dummy_razorpay_key_secret}")
     private String keySecret;
 
     /**
