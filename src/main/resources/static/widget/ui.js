@@ -4,6 +4,7 @@
 
 import { escapeHtml, getLocalDateString } from './markdown.js';
 import { validateFieldInput } from './validator.js';
+import { COUNTRY_CODES } from './constants.js';
 
 let fieldIdCounter = 0;
 
@@ -1154,9 +1155,22 @@ export function createUIController({
                         ta.value = val;
                         ta.oninput = (e) => {
                             formData[step.dataKey] = e.target.value;
-                            ta.classList.remove('input-error');
-                            const errEl = fieldWrap.querySelector('.crm-webflow-field-error');
-                            if (errEl) errEl.remove();
+                            const oldErr = fieldWrap.querySelector('.crm-webflow-field-error');
+                            if (oldErr) oldErr.remove();
+                            const rawVal = e.target.value.trim();
+                            const vErr = rawVal ? validateFieldInput(fieldType, step.dataKey, rawVal) : null;
+                            if (vErr) {
+                                ta.classList.add('input-error');
+                                ta.classList.remove('input-success');
+                                const errDiv = document.createElement('div');
+                                errDiv.className = 'crm-webflow-field-error';
+                                errDiv.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>${vErr}</span>`;
+                                fieldWrap.appendChild(errDiv);
+                            } else {
+                                ta.classList.remove('input-error');
+                                if (rawVal) ta.classList.add('input-success');
+                                else ta.classList.remove('input-success');
+                            }
                         };
                         fieldWrap.appendChild(ta);
                     } else {
@@ -1168,9 +1182,140 @@ export function createUIController({
                         if (fieldType === 'EMAIL') {
                             input.type = 'email';
                             input.placeholder = 'yourname@example.com';
+                            input.maxLength = 156;
                         } else if (fieldType === 'PHONE') {
+                            // --- Country Code Phone Widget ---
+                            const phoneWrapper = document.createElement('div');
+                            phoneWrapper.className = 'crm-phone-wrapper';
+
+                            // Default to India (index 0)
+                            let selectedCountry = COUNTRY_CODES[0];
                             input.type = 'tel';
-                            input.placeholder = '+1 555 000 0000';
+                            input.placeholder = 'Enter phone number';
+                            input.className = 'crm-webflow-input crm-phone-number-input';
+                            input.maxLength = 15;
+
+                            // Country code button
+                            const codeBtn = document.createElement('button');
+                            codeBtn.type = 'button';
+                            codeBtn.className = 'crm-phone-code-btn';
+                            codeBtn.innerHTML = `<span class="crm-phone-flag">${selectedCountry.flag}</span><span class="crm-phone-dial">${selectedCountry.dial}</span><svg class="crm-phone-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+
+                            // Dropdown panel
+                            const dropdown = document.createElement('div');
+                            dropdown.className = 'crm-phone-dropdown';
+                            dropdown.style.display = 'none';
+
+                            // Search input
+                            const searchWrap = document.createElement('div');
+                            searchWrap.className = 'crm-phone-search-wrap';
+                            const searchInput = document.createElement('input');
+                            searchInput.type = 'text';
+                            searchInput.className = 'crm-phone-search';
+                            searchInput.placeholder = 'Search country...';
+                            searchInput.autocomplete = 'off';
+                            searchWrap.appendChild(searchInput);
+                            dropdown.appendChild(searchWrap);
+
+                            // Scrollable list
+                            const listEl = document.createElement('div');
+                            listEl.className = 'crm-phone-list';
+
+                            function renderCountryList(filter) {
+                                listEl.innerHTML = '';
+                                const query = (filter || '').toLowerCase();
+                                const filtered = COUNTRY_CODES.filter(c =>
+                                    c.name.toLowerCase().includes(query) ||
+                                    c.dial.includes(query) ||
+                                    c.code.toLowerCase().includes(query)
+                                );
+                                if (filtered.length === 0) {
+                                    const empty = document.createElement('div');
+                                    empty.className = 'crm-phone-empty';
+                                    empty.textContent = 'No countries found';
+                                    listEl.appendChild(empty);
+                                    return;
+                                }
+                                filtered.forEach(country => {
+                                    const opt = document.createElement('div');
+                                    opt.className = 'crm-phone-option' + (country.code === selectedCountry.code ? ' selected' : '');
+                                    opt.innerHTML = `<span class="crm-phone-opt-flag">${country.flag}</span><span class="crm-phone-opt-name">${escapeHtml(country.name)}</span><span class="crm-phone-opt-dial">${country.dial}</span>`;
+                                    opt.onclick = (e) => {
+                                        e.stopPropagation();
+                                        selectedCountry = country;
+                                        codeBtn.innerHTML = `<span class="crm-phone-flag">${country.flag}</span><span class="crm-phone-dial">${country.dial}</span><svg class="crm-phone-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+                                        dropdown.style.display = 'none';
+                                        codeBtn.classList.remove('open');
+                                        searchInput.value = '';
+                                        // Update formData with new country code
+                                        const num = input.value.replace(/\D/g, '');
+                                        formData[step.dataKey] = num ? selectedCountry.dial + num : '';
+                                        input.focus();
+                                    };
+                                    listEl.appendChild(opt);
+                                });
+                            }
+
+                            renderCountryList('');
+                            dropdown.appendChild(listEl);
+
+                            searchInput.oninput = () => renderCountryList(searchInput.value);
+                            searchInput.onclick = (e) => e.stopPropagation();
+
+                            // Toggle dropdown
+                            codeBtn.onclick = (e) => {
+                                e.stopPropagation();
+                                const isOpen = dropdown.style.display !== 'none';
+                                dropdown.style.display = isOpen ? 'none' : '';
+                                codeBtn.classList.toggle('open', !isOpen);
+                                if (!isOpen) {
+                                    searchInput.value = '';
+                                    renderCountryList('');
+                                    setTimeout(() => searchInput.focus(), 50);
+                                }
+                            };
+
+                            // Close dropdown on outside click
+                            document.addEventListener('click', (e) => {
+                                if (!phoneWrapper.contains(e.target)) {
+                                    dropdown.style.display = 'none';
+                                    codeBtn.classList.remove('open');
+                                }
+                            });
+
+                            phoneWrapper.appendChild(codeBtn);
+                            phoneWrapper.appendChild(dropdown);
+                            phoneWrapper.appendChild(input);
+                            fieldWrap.appendChild(phoneWrapper);
+
+                            // Override oninput to prepend country code + real-time validation
+                            input.oninput = (e) => {
+                                const num = e.target.value.replace(/[^0-9]/g, '');
+                                e.target.value = num;
+                                const fullVal = num ? selectedCountry.dial + num : '';
+                                formData[step.dataKey] = fullVal;
+                                const oldErr = fieldWrap.querySelector('.crm-webflow-field-error');
+                                if (oldErr) oldErr.remove();
+                                const vErr = num ? validateFieldInput('PHONE', step.dataKey, fullVal) : null;
+                                if (vErr) {
+                                    input.classList.add('input-error');
+                                    input.classList.remove('input-success');
+                                    const errDiv = document.createElement('div');
+                                    errDiv.className = 'crm-webflow-field-error';
+                                    errDiv.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>${vErr}</span>`;
+                                    fieldWrap.appendChild(errDiv);
+                                } else {
+                                    input.classList.remove('input-error');
+                                    if (num) input.classList.add('input-success');
+                                    else input.classList.remove('input-success');
+                                }
+                            };
+
+                            // Skip the normal fieldWrap.appendChild(input) below
+                            // since we already appended to phoneWrapper
+                            bodyContainer.appendChild(fieldWrap);
+                            return;
+                            // --- End Country Code Phone Widget ---
                         } else if (fieldType === 'DATE') {
                             input.type = 'date';
                             input.min = getLocalDateString();
@@ -1184,11 +1329,34 @@ export function createUIController({
                             input.placeholder = 'Enter here...';
                         }
 
+                        // Set maxLength based on field type / dataKey
+                        const dk = (step.dataKey || '').toLowerCase();
+                        if (dk === 'name' || dk.endsWith('_name') || dk.startsWith('name_')) {
+                            input.maxLength = 66;
+                        } else if (fieldType === 'EMAIL') {
+                            // already set above
+                        } else if (dk === 'subject') {
+                            input.maxLength = 255;
+                        }
+
                         input.oninput = (e) => {
                             formData[step.dataKey] = e.target.value;
-                            input.classList.remove('input-error');
-                            const errEl = fieldWrap.querySelector('.crm-webflow-field-error');
-                            if (errEl) errEl.remove();
+                            const oldErr = fieldWrap.querySelector('.crm-webflow-field-error');
+                            if (oldErr) oldErr.remove();
+                            const rawVal = e.target.value.trim();
+                            const vErr = rawVal ? validateFieldInput(fieldType, step.dataKey, rawVal) : null;
+                            if (vErr) {
+                                input.classList.add('input-error');
+                                input.classList.remove('input-success');
+                                const errDiv = document.createElement('div');
+                                errDiv.className = 'crm-webflow-field-error';
+                                errDiv.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>${vErr}</span>`;
+                                fieldWrap.appendChild(errDiv);
+                            } else {
+                                input.classList.remove('input-error');
+                                if (rawVal) input.classList.add('input-success');
+                                else input.classList.remove('input-success');
+                            }
                         };
                         fieldWrap.appendChild(input);
                     }

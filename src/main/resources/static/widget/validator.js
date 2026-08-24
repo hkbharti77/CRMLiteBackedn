@@ -10,24 +10,33 @@ export function validateFieldInput(fieldType, key, value) {
 
     if (isNameField) {
         if (val.length < 2) return 'Name must be at least 2 characters long.';
-        if (val.length > 255) return 'Name must not exceed 255 characters.';
+        if (val.length > 66) return 'Name must not exceed 66 characters.';
+        const nameRegex = /^[a-zA-Z\s'.,-]+$/;
+        if (!nameRegex.test(val)) return 'Name can only contain letters, spaces, and basic punctuation.';
     }
 
     if (fieldType === 'EMAIL' || lowerKey === 'email') {
         if (val !== '') {
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (val.length > 156) return 'Email must not exceed 156 characters.';
+            const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
             if (!emailRegex.test(val)) return 'Please enter a valid email address.';
-            if (val.length > 255) return 'Email must not exceed 255 characters.';
         }
     }
 
     if (fieldType === 'PHONE' || lowerKey === 'phone' || lowerKey === 'mobile') {
         if (val !== '') {
-            const digits = val.replace(/\D/g, '');
-            if (digits.length < 10 || digits.length > 15) {
-                return 'Phone number must contain between 10 and 15 digits.';
+            // Strip country code prefix (e.g., +91) to get local digits
+            let localVal = val;
+            if (localVal.startsWith('+')) {
+                // Remove the + and up to 4 digits of country code
+                localVal = localVal.replace(/^\+\d{1,4}/, '');
             }
-            if (/^(\d)\1+$/.test(digits)) {
+            const digits = localVal.replace(/\D/g, '');
+            if (digits.length < 7 || digits.length > 15) {
+                return 'Phone number must be between 7 and 15 digits.';
+            }
+            const allDigits = val.replace(/\D/g, '');
+            if (/^(\d)\1+$/.test(allDigits)) {
                 return 'Please enter a valid active phone number.';
             }
             const phoneRegex = /^\+?[0-9\s\-()]+$/;

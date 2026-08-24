@@ -1623,6 +1623,12 @@
     background: #fffbfa;
 }
 
+.crm-webflow-input.input-success,
+.crm-webflow-select.input-success,
+.crm-webflow-textarea.input-success {
+    border-color: #10b981 !important;
+}
+
 .crm-webflow-field-error {
     font-size: 11.5px;
     color: #ef4444;
@@ -1634,6 +1640,198 @@
 
 .crm-webflow-field-error svg {
     flex-shrink: 0;
+}
+/* ── Phone Country Code Dropdown ── */
+.crm-phone-wrapper {
+    position: relative;
+    display: flex;
+    align-items: stretch;
+    gap: 0;
+    width: 100%;
+}
+
+.crm-phone-code-btn {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 8px 10px;
+    border: 1px solid var(--border-subtle);
+    border-right: none;
+    border-radius: 8px 0 0 8px;
+    background: var(--surface-muted);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: inherit;
+    color: var(--text-primary);
+    white-space: nowrap;
+    transition: background 0.15s ease, border-color 0.15s ease;
+    flex-shrink: 0;
+    min-width: 90px;
+    justify-content: center;
+}
+
+.crm-phone-code-btn:hover {
+    background: #f1f5f9;
+}
+
+.crm-phone-code-btn.open {
+    background: #f1f5f9;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.crm-phone-flag {
+    font-size: 16px;
+    line-height: 1;
+}
+
+.crm-phone-dial {
+    font-weight: 600;
+    font-size: 12.5px;
+    color: var(--text-primary);
+}
+
+.crm-phone-chevron {
+    opacity: 0.5;
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.crm-phone-code-btn.open .crm-phone-chevron {
+    transform: rotate(180deg);
+}
+
+.crm-phone-number-input {
+    border-radius: 0 8px 8px 0 !important;
+    flex: 1;
+    min-width: 0;
+}
+
+.crm-phone-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    width: 100%;
+    max-width: 320px;
+    background: #ffffff;
+    border: 1px solid var(--border-subtle);
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.06);
+    z-index: 9999;
+    overflow: hidden;
+    animation: crmPhoneDropIn 0.15s ease-out;
+}
+
+@keyframes crmPhoneDropIn {
+    from {
+        opacity: 0;
+        transform: translateY(-4px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.crm-phone-search-wrap {
+    padding: 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.crm-phone-search {
+    width: 100%;
+    padding: 7px 10px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 6px;
+    font-size: 12.5px;
+    font-family: inherit;
+    color: var(--text-primary);
+    background: var(--surface-muted);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    box-sizing: border-box;
+}
+
+.crm-phone-search:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 2px var(--primary-light);
+    background: #ffffff;
+}
+
+.crm-phone-search::placeholder {
+    color: #94a3b8;
+}
+
+.crm-phone-list {
+    max-height: 320px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+.crm-phone-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.crm-phone-list::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.crm-phone-list::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.crm-phone-option {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    transition: background 0.1s ease;
+    font-size: 12.5px;
+}
+
+.crm-phone-option:hover {
+    background: #f8fafc;
+}
+
+.crm-phone-option.selected {
+    background: var(--primary-light, #eff6ff);
+}
+
+.crm-phone-option.selected .crm-phone-opt-name {
+    font-weight: 600;
+    color: var(--primary-color);
+}
+
+.crm-phone-opt-flag {
+    font-size: 16px;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.crm-phone-opt-name {
+    flex: 1;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.crm-phone-opt-dial {
+    font-size: 11.5px;
+    color: #64748b;
+    font-weight: 500;
+    flex-shrink: 0;
+}
+
+.crm-phone-empty {
+    padding: 16px;
+    text-align: center;
+    font-size: 12.5px;
+    color: #94a3b8;
 }
 
 /* ── Radio choice cards (2 per row) ── */
