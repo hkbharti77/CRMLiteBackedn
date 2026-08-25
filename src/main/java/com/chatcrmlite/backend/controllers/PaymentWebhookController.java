@@ -1,11 +1,9 @@
 package com.chatcrmlite.backend.controllers;
 
 import com.chatcrmlite.backend.models.*;
-import com.chatcrmlite.backend.models.TenantSubscription.SubscriptionStatus;
-import com.chatcrmlite.backend.models.TenantSubscription.BillingCycle;
-import com.chatcrmlite.backend.models.BillingTransaction.TransactionStatus;
 import com.chatcrmlite.backend.models.BillingTransaction.PaymentGateway;
 import com.chatcrmlite.backend.repositories.*;
+import com.chatcrmlite.backend.services.billing.SubscriptionBillingService;
 import com.chatcrmlite.backend.services.payment.RazorpayPaymentService;
 import com.chatcrmlite.backend.services.payment.StripePaymentService;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
@@ -13,8 +11,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
-import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -22,8 +18,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
-import java.math.RoundingMode;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
@@ -35,13 +29,12 @@ import java.util.UUID;
 @Slf4j
 public class PaymentWebhookController {
 
+    private final SubscriptionBillingService subscriptionBillingService;
     private final StripePaymentService stripePaymentService;
     private final RazorpayPaymentService razorpayPaymentService;
-    private final TenantSubscriptionRepository tenantSubscriptionRepository;
     private final SubscriptionPlanRepository subscriptionPlanRepository;
     private final BillingTransactionRepository billingTransactionRepository;
     private final UserRepository userRepository;
-    private final TenantRepository tenantRepository;
     private final QuotaEnforcerService quotaEnforcerService;
     private final LeadRepository leadRepository;
     private final BookingRepository bookingRepository;
@@ -49,16 +42,9 @@ public class PaymentWebhookController {
     private final TicketRepository ticketRepository;
     private final CustomEmailRepository customEmailRepository;
     private final ObjectMapper objectMapper;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Value("${razorpay.webhook.secret:dummy_razorpay_webhook_secret}")
     private String razorpayWebhookSecret;
-
-    @Value("${razorpay.key.id:dummy_razorpay_key_id}")
-    private String razorpayKeyId;
-
-    @Value("${razorpay.key.secret:dummy_razorpay_key_secret}")
-    private String razorpayKeySecret;
 
     @GetMapping("/api/v1/billing/plans")
     public ResponseEntity<List<SubscriptionPlan>> getAvailablePlans(@RequestParam(required = false) String currency) {
@@ -136,6 +122,18 @@ public class PaymentWebhookController {
         return ResponseEntity.ok(transactions);
     }
 
+    @GetMapping(value = "/api/v1/billing/invoice/{transactionId}/download", produces = org.springframework.http.MediaType.TEXT_HTML_VALUE)
+    public ResponseEntity<String> downloadInvoice(
+            @PathVariable UUID transactionId,
+            @AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String invoiceHtml = subscriptionBillingService.generateInvoiceHtml(transactionId, user);
+        return ResponseEntity.ok()
+                .contentType(org.springframework.http.MediaType.TEXT_HTML)
+                .body(invoiceHtml);
+    }
+
     @PostMapping("/api/v1/billing/checkout")
     public ResponseEntity<?> initiateUpgrade(
             @AuthenticationPrincipal String email,
@@ -144,127 +142,17 @@ public class PaymentWebhookController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         
-        UUID tenantId = user.getTenant().getId();
-        String planId = request.get("planId");
-        String billingCycleStr = request.get("billingCycle"); // MONTHLY or YEARLY
-        String gatewayStr = request.get("gateway"); // STRIPE or RAZORPAY
-        String currency = request.getOrDefault("currency", gatewayStr != null && gatewayStr.equalsIgnoreCase("RAZORPAY") ? "INR" : "USD");
-
-        if (planId == null || billingCycleStr == null || gatewayStr == null) {
-            return ResponseEntity.badRequest().body("planId, billingCycle, and gateway are required.");
-        }
-
-        SubscriptionPlan plan = subscriptionPlanRepository.findById(planId.toUpperCase())
-                .orElseThrow(() -> new RuntimeException("Subscription plan not found: " + planId));
-
-        BigDecimal price;
-        if ("INR".equalsIgnoreCase(currency)) {
-            price = billingCycleStr.equalsIgnoreCase("YEARLY") ? 
-                    (plan.getPriceYearlyInr() != null ? plan.getPriceYearlyInr() : plan.getPriceYearly()) : 
-                    (plan.getPriceMonthlyInr() != null ? plan.getPriceMonthlyInr() : plan.getPriceMonthly());
-        } else {
-            price = billingCycleStr.equalsIgnoreCase("YEARLY") ? 
-                    (plan.getPriceYearlyUsd() != null ? plan.getPriceYearlyUsd() : plan.getPriceYearly()) : 
-                    (plan.getPriceMonthlyUsd() != null ? plan.getPriceMonthlyUsd() : plan.getPriceMonthly());
-        }
-        
-        // --- PRORATION LOGIC ---
         try {
-            TenantSubscription currentSub = quotaEnforcerService.getActiveSubscription(tenantId);
-            if (currentSub != null && currentSub.getStatus() == SubscriptionStatus.ACTIVE && !"FREE".equalsIgnoreCase(currentSub.getPlan().getId())) {
-                LocalDateTime start = currentSub.getCurrentPeriodStart();
-                LocalDateTime end = currentSub.getCurrentPeriodEnd();
-                LocalDateTime now = LocalDateTime.now();
-
-                if (now.isBefore(end)) {
-                    long totalDays = Duration.between(start, end).toDays();
-                    if (totalDays > 0) {
-                        long remainingDays = Duration.between(now, end).toDays();
-                        BigDecimal currentPlanPrice;
-                        if ("INR".equalsIgnoreCase(currency)) {
-                            currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
-                                    (currentSub.getPlan().getPriceYearlyInr() != null ? currentSub.getPlan().getPriceYearlyInr() : currentSub.getPlan().getPriceYearly()) : 
-                                    (currentSub.getPlan().getPriceMonthlyInr() != null ? currentSub.getPlan().getPriceMonthlyInr() : currentSub.getPlan().getPriceMonthly());
-                        } else {
-                            currentPlanPrice = currentSub.getBillingCycle() == BillingCycle.YEARLY ? 
-                                    (currentSub.getPlan().getPriceYearlyUsd() != null ? currentSub.getPlan().getPriceYearlyUsd() : currentSub.getPlan().getPriceYearly()) : 
-                                    (currentSub.getPlan().getPriceMonthlyUsd() != null ? currentSub.getPlan().getPriceMonthlyUsd() : currentSub.getPlan().getPriceMonthly());
-                        }
-
-                        BigDecimal unusedValue = currentPlanPrice
-                                .divide(BigDecimal.valueOf(totalDays), 2, RoundingMode.HALF_UP)
-                                .multiply(BigDecimal.valueOf(remainingDays));
-
-                        log.info("📊 Proration calculated - totalDays: {}, remainingDays: {}, currentPlanPrice: {}, unusedValue: {}", 
-                                totalDays, remainingDays, currentPlanPrice, unusedValue);
-
-                        price = price.subtract(unusedValue);
-                        if (price.compareTo(BigDecimal.ONE) < 0) {
-                            price = BigDecimal.ONE; // Minimum transaction amount
-                            log.info("📊 Final price clamped to minimum amount: {}", price);
-                        }
-                    }
-                }
-            }
+            Map<String, Object> checkoutData = subscriptionBillingService.initiateCheckout(user, request);
+            return ResponseEntity.ok(checkoutData);
+        } catch (org.springframework.web.server.ResponseStatusException rse) {
+            return ResponseEntity.status(rse.getStatusCode()).body(rse.getReason());
         } catch (Exception e) {
-            log.warn("⚠️ Could not calculate proration for tenant {}: {}", tenantId, e.getMessage());
-        }
-        // --- END PRORATION LOGIC ---
-
-        log.info("💰 Initiating checkout for tenant: {}, plan: {}, gateway: {}, currency: {}, finalPrice: {}", 
-                tenantId, planId, gatewayStr, currency, price);
-
-        try {
-            if (gatewayStr.equalsIgnoreCase("STRIPE")) {
-                String checkoutUrl = stripePaymentService.createCheckoutSession(
-                        tenantId, plan.getId(), billingCycleStr.toUpperCase(), price, currency);
-                
-                Map<String, Object> response = new HashMap<>();
-                response.put("checkoutUrl", checkoutUrl);
-                response.put("gateway", "STRIPE");
-                response.put("planId", plan.getId());
-                response.put("planName", plan.getName());
-                return ResponseEntity.ok(response);
-            } else if (gatewayStr.equalsIgnoreCase("RAZORPAY")) {
-                // Generate a unique transaction/receipt ID
-                String receiptId = "rcpt_" + tenantId.toString().substring(0, 8) + "_" + System.currentTimeMillis() % 100000;
-                String orderId = razorpayPaymentService.createOrder(price, currency, receiptId);
-
-                // Save pending transaction record
-                BillingTransaction transaction = BillingTransaction.builder()
-                        .amount(price)
-                        .currency(currency)
-                        .status(TransactionStatus.PENDING)
-                        .paymentGateway(PaymentGateway.RAZORPAY)
-                        .gatewayTransactionId(orderId)
-                        .tenant(user.getTenant())
-                        .build();
-                billingTransactionRepository.save(transaction);
-
-                String resolvedKeyId = (razorpayKeyId != null && !razorpayKeyId.isBlank()) ? 
-                        razorpayKeyId : razorpayPaymentService.getKeyId();
-
-                Map<String, Object> response = new HashMap<>();
-                response.put("orderId", orderId);
-                response.put("amount", price.multiply(BigDecimal.valueOf(100)).intValue()); // in paise for frontend SDK
-                response.put("currency", currency);
-                response.put("gateway", "RAZORPAY");
-                response.put("keyId", resolvedKeyId);
-                response.put("planId", plan.getId());
-                response.put("planName", plan.getName());
-                return ResponseEntity.ok(response);
-            } else {
-                return ResponseEntity.badRequest().body("Unsupported gateway: " + gatewayStr);
-            }
-        } catch (Exception e) {
-            log.error("❌ Checkout session initiation failed", e);
+            log.error("❌ Checkout initiation failed for user: {}", email, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }
     }
 
-    /**
-     * Client-side Razorpay payment verification endpoint.
-     */
     @PostMapping("/api/v1/billing/verify-razorpay")
     public ResponseEntity<?> verifyRazorpayPayment(
             @AuthenticationPrincipal String email,
@@ -272,58 +160,18 @@ public class PaymentWebhookController {
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        UUID tenantId = user.getTenant().getId();
 
-        String orderId = request.get("razorpayOrderId");
-        String paymentId = request.get("razorpayPaymentId");
-        String signature = request.get("razorpaySignature");
-        String planId = request.get("planId");
-        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
-
-        if (orderId == null || paymentId == null || signature == null || planId == null) {
-            return ResponseEntity.badRequest().body("razorpayOrderId, razorpayPaymentId, razorpaySignature, and planId are required.");
+        try {
+            Map<String, Object> verifyData = subscriptionBillingService.verifyRazorpayPayment(user, request);
+            return ResponseEntity.ok(verifyData);
+        } catch (org.springframework.web.server.ResponseStatusException rse) {
+            return ResponseEntity.status(rse.getStatusCode()).body(rse.getReason());
+        } catch (Exception e) {
+            log.error("❌ Razorpay verification failed for user: {}", email, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }
-
-        boolean isValid = razorpayPaymentService.verifyPaymentSignature(orderId, paymentId, signature);
-        if (!isValid) {
-            log.warn("⚠️ Invalid Razorpay payment signature for tenant: {}, orderId: {}, paymentId: {}", tenantId, orderId, paymentId);
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid payment signature verification.");
-        }
-
-        log.info("✅ Verified Razorpay payment signature for tenant: {}, order: {}, payment: {}, plan: {}", 
-                tenantId, orderId, paymentId, planId);
-
-        // Find or create transaction record
-        BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
-                .orElse(null);
-
-        if (transaction != null) {
-            transaction.setStatus(TransactionStatus.SUCCESS);
-            transaction.setGatewayTransactionId(paymentId);
-            billingTransactionRepository.save(transaction);
-        } else {
-            SubscriptionPlan plan = subscriptionPlanRepository.findById(planId.toUpperCase()).orElse(null);
-            BigDecimal price = plan != null ? 
-                    (billingCycleStr.equalsIgnoreCase("YEARLY") ? 
-                            (plan.getPriceYearlyInr() != null ? plan.getPriceYearlyInr() : plan.getPriceYearly()) : 
-                            (plan.getPriceMonthlyInr() != null ? plan.getPriceMonthlyInr() : plan.getPriceMonthly())) : BigDecimal.ZERO;
-            
-            saveBillingTransaction(tenantId, price, "INR", paymentId, PaymentGateway.RAZORPAY, TransactionStatus.SUCCESS);
-        }
-
-        // Upgrade subscription
-        updateTenantSubscription(tenantId, planId.toUpperCase(), billingCycleStr.toUpperCase(), null, orderId);
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("success", true);
-        response.put("message", "Payment verified and subscription activated successfully!");
-        response.put("planId", planId.toUpperCase());
-        return ResponseEntity.ok(response);
     }
 
-    /**
-     * Webhook receiver for Stripe payments.
-     */
     @PostMapping("/api/v1/public/webhooks/stripe")
     public ResponseEntity<String> handleStripeWebhook(
             @RequestBody String payload,
@@ -350,15 +198,13 @@ public class PaymentWebhookController {
                 String stripeSubId = sessionNode.has("subscription") ? sessionNode.get("subscription").asText() : null;
 
                 UUID tenantId = UUID.fromString(tenantIdStr);
-                log.info("✅ Successful Stripe Checkout Session. Tenant: {}, Plan: {}", tenantId, planId);
-
-                // Update tenant subscription status
-                updateTenantSubscription(tenantId, planId, billingCycleStr, stripeSubId, null);
-                
-                // Save success transaction
                 BigDecimal amount = BigDecimal.valueOf(sessionNode.get("amount_total").asDouble() / 100.0);
                 String stripeTxId = sessionNode.get("id").asText();
-                saveBillingTransaction(tenantId, amount, "USD", stripeTxId, PaymentGateway.STRIPE, TransactionStatus.SUCCESS);
+
+                log.info("✅ Successful Stripe Checkout Session. Tenant: {}, Plan: {}", tenantId, planId);
+
+                subscriptionBillingService.processPaymentSuccess(
+                        tenantId, planId, billingCycleStr, amount, "USD", stripeTxId, stripeSubId, PaymentGateway.STRIPE, null);
             }
 
             return ResponseEntity.ok("Success");
@@ -368,9 +214,6 @@ public class PaymentWebhookController {
         }
     }
 
-    /**
-     * Webhook receiver for Razorpay payments.
-     */
     @PostMapping("/api/v1/public/webhooks/razorpay")
     public ResponseEntity<String> handleRazorpayWebhook(
             @RequestBody String payload,
@@ -391,10 +234,9 @@ public class PaymentWebhookController {
                 JsonNode paymentNode = eventNode.get("payload").get("payment").get("object");
                 String orderId = paymentNode.get("order_id").asText();
                 String paymentId = paymentNode.get("id").asText();
-                BigDecimal amount = BigDecimal.valueOf(paymentNode.get("amount").asDouble() / 100.0); // convert paise to INR
+                BigDecimal amount = BigDecimal.valueOf(paymentNode.get("amount").asDouble() / 100.0);
                 String currency = paymentNode.get("currency").asText();
 
-                // Find pending transaction by order ID
                 BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
                         .orElse(null);
 
@@ -402,13 +244,8 @@ public class PaymentWebhookController {
                     UUID tenantId = transaction.getTenant().getId();
                     log.info("✅ Razorpay payment success. Tenant: {}, Order: {}", tenantId, orderId);
 
-                    // Update transaction
-                    transaction.setStatus(TransactionStatus.SUCCESS);
-                    transaction.setGatewayTransactionId(paymentId);
-                    billingTransactionRepository.save(transaction);
-
-                    // Upgrade subscription to PRO plan since standard Indian purchases are PRO
-                    updateTenantSubscription(tenantId, "PRO", "MONTHLY", null, orderId);
+                    subscriptionBillingService.processPaymentSuccess(
+                            tenantId, "PRO", "MONTHLY", amount, currency, orderId, paymentId, PaymentGateway.RAZORPAY, null);
                 } else {
                     log.warn("⚠️ Transaction not found in db for Razorpay order ID: {}", orderId);
                 }
@@ -419,6 +256,57 @@ public class PaymentWebhookController {
             log.error("❌ Razorpay webhook handling failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(e.getMessage());
         }
+    }
+
+    @PostMapping("/api/v1/billing/mock-success")
+    public ResponseEntity<?> mockPaymentSuccess(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> request) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        String orderId = request.get("orderId");
+        if (orderId == null) {
+            return ResponseEntity.badRequest().body("orderId is required.");
+        }
+        
+        BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
+                .orElse(null);
+        
+        if (transaction == null) {
+            return ResponseEntity.badRequest().body("Transaction not found for reference: " + orderId);
+        }
+        
+        UUID tenantId = transaction.getTenant().getId();
+        log.info("🧪 MOCK success trigger for tenant: {}, order: {}", tenantId, orderId);
+
+        String planId = request.get("planId");
+        if (planId == null || planId.isBlank()) {
+            planId = "PRO";
+            if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
+                planId = "ENTERPRISE";
+            }
+        }
+        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
+
+        BillingTransaction updatedTx = subscriptionBillingService.processPaymentSuccess(
+                tenantId,
+                planId.toUpperCase(),
+                billingCycleStr.toUpperCase(),
+                transaction.getAmount(),
+                transaction.getCurrency(),
+                orderId,
+                "mock_tx_" + System.currentTimeMillis(),
+                PaymentGateway.RAZORPAY,
+                user.getEmail()
+        );
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Mock payment processed successfully");
+        response.put("plan", planId.toUpperCase());
+        response.put("transactionId", updatedTx.getId());
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/api/v1/public/payment/success")
@@ -467,103 +355,5 @@ public class PaymentWebhookController {
         return ResponseEntity.ok()
                 .header("Content-Type", "text/html")
                 .body(html);
-    }
-
-    private void updateTenantSubscription(UUID tenantId, String planId, String billingCycleStr, String stripeSubId, String razorpaySubId) {
-        SubscriptionPlan plan = subscriptionPlanRepository.findById(planId)
-                .orElseThrow(() -> new RuntimeException("Plan not found: " + planId));
-
-        TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId)
-                .orElse(new TenantSubscription());
-
-        Tenant tenant = new Tenant();
-        tenant.setId(tenantId);
-        sub.setTenant(tenant);
-
-        sub.setPlan(plan);
-        sub.setStatus(SubscriptionStatus.ACTIVE);
-        sub.setBillingCycle(BillingCycle.valueOf(billingCycleStr.toUpperCase()));
-        sub.setCurrentPeriodStart(LocalDateTime.now());
-        
-        int periodMonths = billingCycleStr.equalsIgnoreCase("YEARLY") ? 12 : 1;
-        sub.setCurrentPeriodEnd(LocalDateTime.now().plusMonths(periodMonths));
-
-        if (stripeSubId != null) sub.setStripeSubscriptionId(stripeSubId);
-        if (razorpaySubId != null) sub.setRazorpaySubscriptionId(razorpaySubId);
-
-        tenantSubscriptionRepository.save(sub);
-
-        // Sync legacy Tenant.planType field so profile-based plan checks are consistent
-        tenantRepository.findById(tenantId).ifPresent(t -> {
-            try {
-                User.PlanType legacyPlan = User.PlanType.valueOf(planId.toUpperCase());
-                t.setPlanType(legacyPlan);
-                tenantRepository.save(t);
-            } catch (IllegalArgumentException e) {
-                log.warn("⚠️ Plan ID '{}' has no matching legacy PlanType enum — skipping Tenant.planType sync", planId);
-            }
-        });
-
-        eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
-        log.info("✅ Tenant {} subscription updated to plan: {} until {}", tenantId, planId, sub.getCurrentPeriodEnd());
-    }
-
-    @PostMapping("/api/v1/billing/mock-success")
-    public ResponseEntity<?> mockPaymentSuccess(
-            @AuthenticationPrincipal String email,
-            @RequestBody Map<String, String> request) {
-        
-        String orderId = request.get("orderId");
-        if (orderId == null) {
-            return ResponseEntity.badRequest().body("orderId is required.");
-        }
-        
-        BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
-                .orElse(null);
-        
-        if (transaction == null) {
-            return ResponseEntity.badRequest().body("Transaction not found for reference: " + orderId);
-        }
-        
-        UUID tenantId = transaction.getTenant().getId();
-        log.info("🧪 MOCK success trigger for tenant: {}, order: {}", tenantId, orderId);
-        
-        // Update transaction
-        transaction.setStatus(TransactionStatus.SUCCESS);
-        transaction.setGatewayTransactionId("mock_tx_" + System.currentTimeMillis());
-        billingTransactionRepository.save(transaction);
-        
-        // Upgrade subscription (PRO vs ENTERPRISE based on price/amount or request parameter)
-        String planId = request.get("planId");
-        if (planId == null || planId.isBlank()) {
-            planId = "PRO";
-            if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
-                planId = "ENTERPRISE";
-            }
-        }
-        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
-        
-        updateTenantSubscription(tenantId, planId, billingCycleStr, null, orderId);
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Mock payment processed successfully");
-        response.put("plan", planId);
-        return ResponseEntity.ok(response);
-    }
-
-    private void saveBillingTransaction(UUID tenantId, BigDecimal amount, String currency, String transactionId, PaymentGateway gateway, TransactionStatus status) {
-        Tenant tenant = new Tenant();
-        tenant.setId(tenantId);
-
-        BillingTransaction transaction = BillingTransaction.builder()
-                .amount(amount)
-                .currency(currency)
-                .status(status)
-                .paymentGateway(gateway)
-                .gatewayTransactionId(transactionId)
-                .tenant(tenant)
-                .build();
-        
-        billingTransactionRepository.save(transaction);
     }
 }

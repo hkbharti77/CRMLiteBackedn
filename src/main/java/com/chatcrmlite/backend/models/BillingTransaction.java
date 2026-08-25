@@ -31,6 +31,13 @@ public class BillingTransaction extends BaseTenantEntity {
     @Column(name = "gateway_transaction_id", nullable = false, length = 100)
     private String gatewayTransactionId;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "invoice_email_status", nullable = false, length = 20)
+    private InvoiceEmailStatus invoiceEmailStatus = InvoiceEmailStatus.PENDING;
+
+    @Column(name = "invoice_email_sent_at")
+    private LocalDateTime invoiceEmailSentAt;
+
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt = LocalDateTime.now();
 
@@ -43,11 +50,16 @@ public class BillingTransaction extends BaseTenantEntity {
         this.status = status != null ? status : TransactionStatus.PENDING;
         this.paymentGateway = paymentGateway != null ? paymentGateway : PaymentGateway.RAZORPAY;
         this.gatewayTransactionId = gatewayTransactionId;
+        this.invoiceEmailStatus = InvoiceEmailStatus.PENDING;
         this.createdAt = createdAt != null ? createdAt : LocalDateTime.now();
     }
 
     public enum TransactionStatus {
         SUCCESS, FAILED, PENDING
+    }
+
+    public enum InvoiceEmailStatus {
+        PENDING, SENT, FAILED
     }
 
     public enum PaymentGateway {
@@ -72,6 +84,12 @@ public class BillingTransaction extends BaseTenantEntity {
     public String getGatewayTransactionId() { return gatewayTransactionId; }
     public void setGatewayTransactionId(String gatewayTransactionId) { this.gatewayTransactionId = gatewayTransactionId; }
 
+    public InvoiceEmailStatus getInvoiceEmailStatus() { return invoiceEmailStatus; }
+    public void setInvoiceEmailStatus(InvoiceEmailStatus invoiceEmailStatus) { this.invoiceEmailStatus = invoiceEmailStatus; }
+
+    public LocalDateTime getInvoiceEmailSentAt() { return invoiceEmailSentAt; }
+    public void setInvoiceEmailSentAt(LocalDateTime invoiceEmailSentAt) { this.invoiceEmailSentAt = invoiceEmailSentAt; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -86,6 +104,8 @@ public class BillingTransaction extends BaseTenantEntity {
         private TransactionStatus status = TransactionStatus.PENDING;
         private PaymentGateway paymentGateway = PaymentGateway.RAZORPAY;
         private String gatewayTransactionId;
+        private InvoiceEmailStatus invoiceEmailStatus = InvoiceEmailStatus.PENDING;
+        private LocalDateTime invoiceEmailSentAt;
         private LocalDateTime createdAt = LocalDateTime.now();
         private Tenant tenant;
 
@@ -95,11 +115,15 @@ public class BillingTransaction extends BaseTenantEntity {
         public BillingTransactionBuilder status(TransactionStatus status) { this.status = status; return this; }
         public BillingTransactionBuilder paymentGateway(PaymentGateway paymentGateway) { this.paymentGateway = paymentGateway; return this; }
         public BillingTransactionBuilder gatewayTransactionId(String gatewayTransactionId) { this.gatewayTransactionId = gatewayTransactionId; return this; }
+        public BillingTransactionBuilder invoiceEmailStatus(InvoiceEmailStatus invoiceEmailStatus) { this.invoiceEmailStatus = invoiceEmailStatus; return this; }
+        public BillingTransactionBuilder invoiceEmailSentAt(LocalDateTime invoiceEmailSentAt) { this.invoiceEmailSentAt = invoiceEmailSentAt; return this; }
         public BillingTransactionBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public BillingTransactionBuilder tenant(Tenant tenant) { this.tenant = tenant; return this; }
 
         public BillingTransaction build() {
             BillingTransaction bt = new BillingTransaction(id, amount, currency, status, paymentGateway, gatewayTransactionId, createdAt);
+            if (invoiceEmailStatus != null) bt.setInvoiceEmailStatus(invoiceEmailStatus);
+            if (invoiceEmailSentAt != null) bt.setInvoiceEmailSentAt(invoiceEmailSentAt);
             if (tenant != null) {
                 bt.setTenant(tenant);
             }

@@ -105,10 +105,8 @@ public class RagRetrievalService {
         int topK = 8;
         List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
 
-        
-        if (chunks.isEmpty()) {
-            log.info("[RAG] No context found for tenant {} and query '{}'", tenantId, query);
-            return null; 
+        if (chunks == null || chunks.isEmpty()) {
+            log.info("[RAG] No document chunks found for tenant {} and query '{}'. Falling back to persona-based LLM generation.", tenantId, query);
         }
 
         // 5. Build Structured Prompt (Injection Resistant + Layered Persona)

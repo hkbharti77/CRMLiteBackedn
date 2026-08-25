@@ -64,6 +64,8 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS availability_status VARCHAR(255) DEFAULT 'AVAILABLE';");
             jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS max_concurrent_chats INT DEFAULT 2;");
             jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;");
+            jdbcTemplate.execute("ALTER TABLE billing_transactions ADD COLUMN IF NOT EXISTS invoice_email_status VARCHAR(20) DEFAULT 'PENDING';");
+            jdbcTemplate.execute("ALTER TABLE billing_transactions ADD COLUMN IF NOT EXISTS invoice_email_sent_at TIMESTAMP;");
         } catch (Exception e) {
             log.warn("[SchemaMigration] Column auto-migration notice: {}", e.getMessage());
         }

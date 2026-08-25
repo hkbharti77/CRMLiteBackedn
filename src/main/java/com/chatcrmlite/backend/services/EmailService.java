@@ -752,5 +752,57 @@ public class EmailService {
             log.error("[EmailService] Failed to send payment link email to {}: {}", toEmail, e.getMessage());
         }
     }
+
+    public void sendPlanPurchaseInvoiceEmail(
+            String toEmail,
+            String recipientName,
+            String planName,
+            String planId,
+            String billingCycle,
+            java.math.BigDecimal amount,
+            String currency,
+            String transactionId,
+            String paymentGateway,
+            java.time.LocalDateTime periodStart,
+            java.time.LocalDateTime periodEnd,
+            com.chatcrmlite.backend.models.SubscriptionPlan plan) {
+
+        Context ctx = new Context();
+        ctx.setVariable("heading", "Subscription Receipt & Invoice");
+        ctx.setVariable("greeting", "Hi " + (recipientName != null && !recipientName.isBlank() ? recipientName : "there") + ",");
+        ctx.setVariable("intro", "Thank you for subscribing to " + planName + " on " + BRAND + "! Your invoice and active plan details are summarized below.");
+        ctx.setVariable("footerNote", "Thank you for choosing " + BRAND + ". If you have billing questions, contact support anytime.");
+
+        String ctaUrl = System.getenv("FRONTEND_URL") != null ? System.getenv("FRONTEND_URL") + "/settings?tab=billing" : "http://localhost:5174/settings?tab=billing";
+        ctx.setVariable("ctaLabel", "Manage Subscription");
+        ctx.setVariable("ctaUrl", ctaUrl);
+
+        ctx.setVariable("planName", planName);
+        ctx.setVariable("planId", planId);
+        ctx.setVariable("billingCycle", billingCycle != null ? billingCycle.toUpperCase() : "MONTHLY");
+
+        String symbol = "INR".equalsIgnoreCase(currency) ? "₹" : "$";
+        String amountFormatted = symbol + (amount != null ? String.format("%,.2f", amount) : "0.00");
+        ctx.setVariable("amountFormatted", amountFormatted);
+
+        ctx.setVariable("transactionId", transactionId != null ? transactionId : "tx_N/A");
+        ctx.setVariable("paymentGateway", paymentGateway != null ? paymentGateway.toUpperCase() : "RAZORPAY");
+
+        java.time.format.DateTimeFormatter dtf = java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy");
+        ctx.setVariable("periodStartFormatted", periodStart != null ? periodStart.format(dtf) : "Today");
+        ctx.setVariable("periodEndFormatted", periodEnd != null ? periodEnd.format(dtf) : "Next Month");
+
+        if (plan != null) {
+            ctx.setVariable("employeeLimit", plan.getEmployeeLimit());
+            ctx.setVariable("primaryResourceLimit", plan.getPrimaryResourceLimit());
+            ctx.setVariable("emailLimit", plan.getEmailLimit());
+            ctx.setVariable("ticketLimit", plan.getTicketLimit());
+            ctx.setVariable("hasWhatsapp", plan.isHasWhatsapp());
+            ctx.setVariable("hasCustomWidget", plan.isHasCustomWidget());
+            ctx.setVariable("hasRagLlm", plan.isHasRagLlm());
+        }
+
+        sendTemplate(toEmail, "[" + BRAND + "] Subscription Receipt: " + planName, "plan-purchase-invoice", ctx);
+    }
 }
 

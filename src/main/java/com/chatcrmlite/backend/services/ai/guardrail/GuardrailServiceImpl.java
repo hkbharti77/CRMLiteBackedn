@@ -77,7 +77,7 @@ public class GuardrailServiceImpl implements GuardrailService {
                 return handleTrash(session);
             }
 
-            Decision decision = makeDecision(score, detectedIntents);
+            Decision decision = makeDecision(score, detectedIntents, entities, text);
             
             GuardrailResult result = GuardrailResult.builder()
                     .decision(decision)
@@ -105,17 +105,12 @@ public class GuardrailServiceImpl implements GuardrailService {
 
     private String prepareText(String rawText) {
         if (rawText == null) return "";
-        String text = rawText.trim();
-        if (text.length() > 5000) {
-            int cutIndex = text.substring(0, 5000).lastIndexOf(" ");
-            text = (cutIndex > 0) ? text.substring(0, cutIndex) : text.substring(0, 5000);
-        }
-        return text;
+        return rawText.trim();
     }
 
-
     private String normalize(String text) {
-        return text.toLowerCase().replaceAll("[^a-z0-9\\s?]", "");
+        if (text == null) return "";
+        return text.trim();
     }
 
     private String handleAbuse(UserSession session, AbuseDetectionService.AbuseResult abuse, NicheConfig config) {
@@ -158,13 +153,33 @@ public class GuardrailServiceImpl implements GuardrailService {
         return recordResult(GuardrailResult.builder().decision(Decision.MENU).reason("gibberish").build());
     }
 
-    private Decision makeDecision(int score, Set<String> intents) {
-        // If the user explicitly asks for the menu or intents strictly dictate it, return MENU
-        if (intents.contains("menu")) return Decision.MENU;
-        
-        if (intents.contains("greeting")) return Decision.GREETING;
-        
-        // Otherwise, trust the RAG LLM to handle the query and respond
+    /**
+     * Enterprise Multi-Tenant NLU Decision Engine:
+     * Evaluates domain intent signals and entity density to distinguish pure greetings from business inquiries.
+     */
+    private Decision makeDecision(int score, Set<String> intents, List<String> entities, String text) {
+        if (intents != null && intents.contains("menu")) {
+            return Decision.MENU;
+        }
+
+        // Domain Intent Signals (e.g. price, timing, services, location, appointment, support, contact)
+        boolean hasBusinessIntent = intents != null && intents.stream().anyMatch(i -> 
+            !"greeting".equalsIgnoreCase(i) && !"menu".equalsIgnoreCase(i)
+        );
+
+        // Domain Entity Signals (e.g. development, branding, design, crm, lead, deployment)
+        boolean hasEntitySignal = (entities != null && !entities.isEmpty());
+
+        // Active business query signals or high NLU score -> Route to RAG + LLM Engine
+        if (hasBusinessIntent || hasEntitySignal || score >= 20) {
+            return Decision.CALL_AI;
+        }
+
+        // Pure Greeting (Greeting intent detected without any business intent/entity signals)
+        if (intents != null && intents.contains("greeting")) {
+            return Decision.GREETING;
+        }
+
         return Decision.CALL_AI;
     }
 

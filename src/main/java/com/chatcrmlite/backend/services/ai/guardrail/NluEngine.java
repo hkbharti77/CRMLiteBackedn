@@ -127,7 +127,7 @@ public class NluEngine {
             do {
                 String matchedWord = matcher.group(1);
                 String replacement = config.getHinglish().get(matchedWord);
-                if (replacement != null) {
+                if (replacement != null && !"hi".equalsIgnoreCase(matchedWord)) {
                     matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(replacement));
                 } else {
                     matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(matchedWord));
@@ -159,18 +159,35 @@ public class NluEngine {
         io.micrometer.core.instrument.Timer.Sample sample = io.micrometer.core.instrument.Timer.start(meterRegistry);
         long start = System.currentTimeMillis();
         try {
-            if (text.length() < 3) {
+            if (text == null || text.trim().length() < 3) {
                 return false; 
             }
-            // Check for keyboard mashing consonant clusters (e.g. jjhdgkjdfkga, asdfghjkl)
-            if (CONSONANT_CLUSTER_PATTERN.matcher(text).find()) {
+            String trimmed = text.trim();
+            // Check for keyboard mashing repeated characters (e.g. hellooooo, aaaaa, bbbbbbb)
+            if (REPEATED_CHAR_PATTERN.matcher(trimmed).matches()) {
                 return true;
             }
-            Set<Character> uniqueChars = new HashSet<>();
-            for (char c : text.toCharArray()) uniqueChars.add(c);
-            double entropy = (double) uniqueChars.size() / text.length();
             
-            return entropy < 0.20 || REPEATED_CHAR_PATTERN.matcher(text).matches();
+            String[] words = trimmed.split("\\s+");
+            // Check individual words for keyboard mashing consonant clusters (e.g. jjhdgkjdfkga, asdfghjkl)
+            for (String word : words) {
+                if (CONSONANT_CLUSTER_PATTERN.matcher(word).find()) {
+                    return true;
+                }
+            }
+
+            // Low entropy check: Only evaluate for short single/double word inputs without spaces.
+            // Multi-word sentences naturally re-use standard alphabet characters causing global entropy to drop below 0.20.
+            if (words.length <= 2) {
+                Set<Character> uniqueChars = new HashSet<>();
+                for (char c : trimmed.toCharArray()) uniqueChars.add(c);
+                double entropy = (double) uniqueChars.size() / trimmed.length();
+                if (entropy < 0.20) {
+                    return true;
+                }
+            }
+
+            return false;
         } finally {
             long duration = System.currentTimeMillis() - start;
             sample.stop(meterRegistry.timer("nlu.regex.duration", "method", "isTrash"));
