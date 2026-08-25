@@ -104,13 +104,15 @@ public class GuardrailServiceImpl implements GuardrailService {
     }
 
     private String prepareText(String rawText) {
+        if (rawText == null) return "";
         String text = rawText.trim();
-        if (text.length() > 300) {
-            int cutIndex = text.substring(0, 300).lastIndexOf(" ");
-            text = (cutIndex > 0) ? text.substring(0, cutIndex) : text.substring(0, 300);
+        if (text.length() > 5000) {
+            int cutIndex = text.substring(0, 5000).lastIndexOf(" ");
+            text = (cutIndex > 0) ? text.substring(0, cutIndex) : text.substring(0, 5000);
         }
         return text;
     }
+
 
     private String normalize(String text) {
         return text.toLowerCase().replaceAll("[^a-z0-9\\s?]", "");

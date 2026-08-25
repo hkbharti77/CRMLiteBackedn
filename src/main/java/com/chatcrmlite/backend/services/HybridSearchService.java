@@ -98,12 +98,12 @@ public class HybridSearchService {
     }
 
     private List<Map.Entry<UUID, Double>> fetchTrigamResults(UUID tenantId, String query, int limit) {
-        // word_similarity uses pg_trgm and benefits from gin index
+        // word_similarity uses pg_trgm. We use > 0.05 threshold to support multi-line & multi-sentence queries
         String sql = """
                 SELECT id, word_similarity(?, content) AS sim
                 FROM document_chunks
                 WHERE tenant_id = ?
-                  AND content % ?
+                  AND word_similarity(?, content) > 0.05
                 ORDER BY sim DESC
                 LIMIT ?
                 """;
@@ -118,6 +118,7 @@ public class HybridSearchService {
             return List.of();
         }
     }
+
 
     private void applyRRF(List<Map.Entry<UUID, Double>> rankedList,
                           Map<UUID, Double> scores, double weight) {

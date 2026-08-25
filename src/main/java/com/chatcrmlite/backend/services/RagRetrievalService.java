@@ -102,8 +102,9 @@ public class RagRetrievalService {
         }
 
         // 4. Hybrid Retrieval (Vector + BM25)
-        int topK = 4;
+        int topK = 8;
         List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+
         
         if (chunks.isEmpty()) {
             log.info("[RAG] No context found for tenant {} and query '{}'", tenantId, query);

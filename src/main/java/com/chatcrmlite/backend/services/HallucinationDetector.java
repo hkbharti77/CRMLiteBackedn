@@ -48,13 +48,16 @@ public class HallucinationDetector {
 
         String lowerResponse = response.toLowerCase();
 
-        // 1. Check for explicit "I don't know"
-        for (String phrase : UNKNOWN_PHRASES) {
-            if (lowerResponse.contains(phrase)) {
-                log.info("[HallucinationDetector] Model explicitly stated unknown.");
-                return false;
+        // 1. Check for pure fallback/unknown response (short response consisting primarily of an unknown phrase)
+        if (response.trim().length() < 120) {
+            for (String phrase : UNKNOWN_PHRASES) {
+                if (lowerResponse.contains(phrase)) {
+                    log.info("[HallucinationDetector] Short model fallback detected ('{}').", phrase);
+                    return false;
+                }
             }
         }
+
 
         // 2. Check for heavy hedging (low confidence)
         long hedgingCount = HEDGING_PHRASES.stream()
