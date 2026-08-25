@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.event.TransactionPhase;
 import org.springframework.transaction.event.TransactionalEventListener;
 
+import org.springframework.scheduling.annotation.Async;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -30,11 +31,12 @@ public class SubscriptionBillingEventListener {
     private final UserRepository userRepository;
     private final EmailService emailService;
 
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handlePlanPaymentSuccess(PlanPaymentSuccessEvent event) {
-        log.info("📩 [AFTER_COMMIT] Processing PlanPaymentSuccessEvent for tenant: {}, tx: {}", 
-                event.getTenantId(), event.getTransactionId());
+        log.info("📩 [AFTER_COMMIT] Processing PlanPaymentSuccessEvent for tenant: {}, tx: {}, userEmail: {}", 
+                event.getTenantId(), event.getTransactionId(), event.getUserEmail());
 
         if (event.getTransactionId() == null) {
             log.warn("⚠️ Cannot send invoice email — null transaction ID in event.");

@@ -94,6 +94,15 @@ public class GlobalExceptionHandler {
         return errorResponse(HttpStatus.BAD_REQUEST, "Database constraint violation.", null);
     }
 
+    @ExceptionHandler({
+            org.springframework.orm.ObjectOptimisticLockingFailureException.class,
+            org.hibernate.StaleObjectStateException.class
+    })
+    public ResponseEntity<Map<String, Object>> handleOptimisticLockingFailure(Exception ex) {
+        log.warn("[OptimisticLock] Resource was modified or deleted concurrently: {}", ex.getMessage());
+        return errorResponse(HttpStatus.CONFLICT, "The resource was modified or deleted by another request.", null);
+    }
+
     // ── Billing & Quotas ──────────────────────────────────────────────────────
 
     @ExceptionHandler(QuotaEnforcerService.QuotaExceededException.class)

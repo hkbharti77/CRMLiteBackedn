@@ -134,6 +134,16 @@ public class PaymentWebhookController {
                 .body(invoiceHtml);
     }
 
+    @PostMapping("/api/v1/billing/invoice/{transactionId}/resend")
+    public ResponseEntity<?> resendInvoice(
+            @PathVariable UUID transactionId,
+            @AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        subscriptionBillingService.resendInvoiceEmail(transactionId, user);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Invoice email queued for dispatch."));
+    }
+
     @PostMapping("/api/v1/billing/checkout")
     public ResponseEntity<?> initiateUpgrade(
             @AuthenticationPrincipal String email,

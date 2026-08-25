@@ -84,12 +84,34 @@ public class FaqController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        FaqItem existing = faqItemRepository.findByIdAndTenantId(id, user.getId())
-                .orElseThrow(() -> new RuntimeException("FAQ item not found"));
-
-        faqItemRepository.delete(existing);
-        log.info("[FAQ-API] Deleted FAQ Item ID: {} for tenant: {}", id, user.getId());
+        int deletedCount = faqItemRepository.deleteByFaqIdAndTenantId(id, user.getId());
+        log.info("[FAQ-API] Deleted FAQ Item ID: {} for tenant: {} (affected: {})", id, user.getId(), deletedCount);
         return ResponseEntity.noContent().build();
+    }
+
+    @DeleteMapping("/all")
+    public ResponseEntity<?> deleteAllFaqs(@AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        int count = faqItemRepository.deleteAllByTenantId(user.getId());
+        log.info("[FAQ-API] Deleted ALL FAQ Items for tenant: {} (total deleted: {})", user.getId(), count);
+        return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "All FAQs deleted successfully."));
+    }
+
+    @PostMapping("/batch-delete")
+    public ResponseEntity<?> batchDeleteFaqs(@RequestBody java.util.Map<String, List<UUID>> payload, @AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        List<UUID> ids = payload != null ? payload.get("ids") : null;
+        if (ids == null || ids.isEmpty()) {
+            return ResponseEntity.badRequest().body(java.util.Map.of("error", "No FAQ IDs provided for deletion"));
+        }
+
+        int count = faqItemRepository.deleteByIdInAndTenantId(ids, user.getId());
+        log.info("[FAQ-API] Batch deleted {} FAQ Items for tenant: {}", count, user.getId());
+        return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "Selected FAQs deleted successfully."));
     }
 
     @PostMapping("/batch")

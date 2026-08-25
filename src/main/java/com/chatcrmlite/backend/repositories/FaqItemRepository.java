@@ -27,6 +27,21 @@ public interface FaqItemRepository extends JpaRepository<FaqItem, UUID> {
 
     @Modifying
     @Transactional
+    @Query("DELETE FROM FaqItem f WHERE f.id = :id AND f.tenantId = :tenantId")
+    int deleteByFaqIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM FaqItem f WHERE f.tenantId = :tenantId")
+    int deleteAllByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM FaqItem f WHERE f.id IN :ids AND f.tenantId = :tenantId")
+    int deleteByIdInAndTenantId(@Param("ids") List<UUID> ids, @Param("tenantId") UUID tenantId);
+
+    @Modifying
+    @Transactional
     @Query("UPDATE FaqItem f SET f.hitCount = f.hitCount + 1 WHERE f.id = :id")
     void incrementHitCount(@Param("id") UUID id);
 }
