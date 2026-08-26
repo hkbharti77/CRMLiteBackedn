@@ -36,9 +36,10 @@ public class QueueRouter {
     }
 
     private void enqueue(String streamName, ProcessingContext context) {
-        log.debug("[Workflow] Routing {} to stream {}", context.getMessageId(), streamName);
-        redisTemplate.opsForStream().add(streamName, 
-            Collections.singletonMap("payload", serialize(context)));
+        log.info("🔀 [Workflow] Routing {} to stream {}", context.getMessageId(), streamName);
+        org.springframework.data.redis.connection.stream.ObjectRecord<String, String> record = 
+                org.springframework.data.redis.connection.stream.ObjectRecord.create(streamName, serialize(context));
+        redisTemplate.opsForStream().add(record);
     }
 
     private String serialize(ProcessingContext context) {

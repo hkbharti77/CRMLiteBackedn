@@ -91,7 +91,15 @@ public class AIWorker implements StreamListener<String, ObjectRecord<String, Str
     }
 
     private ProcessingContext deserialize(String data) {
+        if (data == null || data.isBlank()) return null;
         try {
+            if (data.startsWith("{\"payload\":") || data.startsWith("{\"payload\" :")) {
+                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(data);
+                if (node.has("payload")) {
+                    String inner = node.get("payload").asText();
+                    return objectMapper.readValue(inner, ProcessingContext.class);
+                }
+            }
             return objectMapper.readValue(data, ProcessingContext.class);
         } catch (Exception e) {
             log.error("Failed to deserialize ProcessingContext: {}", data, e);
