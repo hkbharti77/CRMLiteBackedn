@@ -58,7 +58,7 @@ public class ContactController {
         return ResponseEntity.ok().build();
     }
 
-    @PatchMapping("/{id}/toggle-bot")
+    @RequestMapping(value = {"/{id}/toggle-bot", "/{id}/bot-paused"}, method = {RequestMethod.PATCH, RequestMethod.PUT})
     public ResponseEntity<Void> toggleBotPaused(@PathVariable UUID id, @RequestBody java.util.Map<String, Boolean> payload) {
         Boolean botPaused = payload.get("botPaused");
         if (botPaused != null) {
