@@ -53,9 +53,17 @@ public class SemanticCacheService {
                 if (!exactResults.isEmpty()) {
                     String response = (String) exactResults.get(0).get("response_text");
                     UUID entryId = (UUID) exactResults.get(0).get("id");
-                    updateLastAccessed(entryId);
-                    log.info("[SemanticCache] EXACT QUERY HIT for tenant {} | Query: '{}'", tenantId, rawQuery);
-                    return response;
+                    if (response != null && response.trim().length() >= 5 && !"bb".equalsIgnoreCase(response.trim())) {
+                        updateLastAccessed(entryId);
+                        log.info("[SemanticCache] EXACT QUERY HIT for tenant {} | Query: '{}'", tenantId, rawQuery);
+                        return response;
+                    } else {
+                        // Evict dummy/corrupted cache entry
+                        try {
+                            jdbcTemplate.update("DELETE FROM semantic_cache WHERE id = ?", entryId);
+                            log.warn("[SemanticCache] Evicted invalid cached response ('{}') for query '{}'", response, rawQuery);
+                        } catch (Exception ignored) {}
+                    }
                 }
             } catch (Exception e) {
                 log.warn("[SemanticCache] Exact query lookup failed: {}", e.getMessage());
@@ -84,9 +92,16 @@ public class SemanticCacheService {
             if (!results.isEmpty()) {
                 String response = (String) results.get(0).get("response_text");
                 UUID entryId = (UUID) results.get(0).get("id");
-                updateLastAccessed(entryId);
-                log.info("[SemanticCache] SEMANTIC VECTOR HIT for tenant {}", tenantId);
-                return response;
+                if (response != null && response.trim().length() >= 5 && !"bb".equalsIgnoreCase(response.trim())) {
+                    updateLastAccessed(entryId);
+                    log.info("[SemanticCache] SEMANTIC VECTOR HIT for tenant {}", tenantId);
+                    return response;
+                } else {
+                    try {
+                        jdbcTemplate.update("DELETE FROM semantic_cache WHERE id = ?", entryId);
+                        log.warn("[SemanticCache] Evicted invalid semantic cached response ('{}')", response);
+                    } catch (Exception ignored) {}
+                }
             }
         } catch (Exception e) {
             log.error("[SemanticCache] Semantic vector lookup failed: {}", e.getMessage());
@@ -99,6 +114,11 @@ public class SemanticCacheService {
      * Saves a new entry to the semantic cache.
      */
     public void putCachedResponse(String query, float[] queryEmbedding, String response, UUID tenantId) {
+        if (response == null || response.trim().length() < 5 || "bb".equalsIgnoreCase(response.trim())) {
+            log.debug("[SemanticCache] Skipping caching for short or dummy response: '{}'", response);
+            return;
+        }
+
         String embeddingLiteral = Arrays.toString(queryEmbedding);
         
         String sql = """

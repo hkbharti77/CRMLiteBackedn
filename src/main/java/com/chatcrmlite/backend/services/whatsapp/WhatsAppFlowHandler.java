@@ -95,8 +95,9 @@ public class WhatsAppFlowHandler {
             if (hasActiveFlow) {
                 // Do not intercept other keywords if a flow is active. Let the flow validate the input.
             } else {
-                boolean isGreeting = lower.matches("^(hi|hello|hey|namaste|hi there|hello there)$");
-                boolean isNavCommand = lower.matches("^(menu|options|help|start|services|show)$");
+                String cleanLower = lower.replaceAll("[^a-z0-9 ]", "").trim();
+                boolean isGreeting = cleanLower.matches("^(hi|hello|hey|namaste|hi there|hello there|good morning|good evening|good afternoon|hii|heyy)$");
+                boolean isNavCommand = cleanLower.matches("^(menu|options|help|start|services|show)$");
 
                 if ("text".equals(type) && (isGreeting || isNavCommand)) {
                     flowStateMachine.resetFlow(contact);

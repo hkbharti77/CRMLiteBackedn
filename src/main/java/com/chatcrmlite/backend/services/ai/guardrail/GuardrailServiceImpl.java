@@ -170,14 +170,17 @@ public class GuardrailServiceImpl implements GuardrailService {
         // Domain Entity Signals (e.g. development, branding, design, crm, lead, deployment)
         boolean hasEntitySignal = (entities != null && !entities.isEmpty());
 
+        String clean = (text != null ? text.trim().toLowerCase().replaceAll("[^a-z0-9 ]", "") : "");
+        boolean isExplicitGreeting = clean.matches("^(hi|hello|hey|namaste|hi there|hello there|good morning|good evening|good afternoon|greetings|hii|heyy)$");
+
+        // Pure Greeting (Greeting intent or explicit greeting detected without any business intent/entity signals)
+        if ((isExplicitGreeting || (intents != null && intents.contains("greeting"))) && !hasBusinessIntent && !hasEntitySignal) {
+            return Decision.GREETING;
+        }
+
         // Active business query signals or high NLU score -> Route to RAG + LLM Engine
         if (hasBusinessIntent || hasEntitySignal || score >= 20) {
             return Decision.CALL_AI;
-        }
-
-        // Pure Greeting (Greeting intent detected without any business intent/entity signals)
-        if (intents != null && intents.contains("greeting")) {
-            return Decision.GREETING;
         }
 
         return Decision.CALL_AI;

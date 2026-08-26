@@ -69,8 +69,9 @@ public class WorkflowOrchestrator {
 
             // Check if message is a flow trigger, navigation command, or form cancel
             String lower = (text != null ? text.trim().toLowerCase() : "");
-            boolean isCommandOrIntent = lower.matches("^(cancel|stop|exit|quit|terminate|menu|options|help|start|services|show|hi|hello|hey|namaste)$")
-                    || lower.matches(".*(appointment|doctor|clinic|consultation|checkup|specialist|dentist|physician|salon|spa|booking|reserve|slot|table|haircut|facial|massage|reservation|quote|pricing|inquiry|inquire|lead|enquiry|estimate|catalog|feedback|rating|review|survey|complaint|support).*");
+            String cleanLower = lower.replaceAll("[^a-z0-9 ]", "").trim();
+            boolean isCommandOrIntent = cleanLower.matches("^(cancel|stop|exit|quit|terminate|menu|options|help|start|services|show|hi|hello|hey|namaste|hii|heyy|hi there|hello there|good morning|good evening|good afternoon)$")
+                    || cleanLower.matches(".*(appointment|doctor|clinic|consultation|checkup|specialist|dentist|physician|salon|spa|booking|reserve|slot|table|haircut|facial|massage|reservation|quote|pricing|inquiry|inquire|lead|enquiry|estimate|catalog|feedback|rating|review|survey|complaint|support).*");
 
             // Route to flow worker if:
             //   1. An active form/flow is currently running for this contact (PRIORITY: isolates active form from RAG/AI), OR
