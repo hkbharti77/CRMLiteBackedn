@@ -26,6 +26,7 @@ public class WebhookSignatureService {
     private WhatsAppConfigRepository whatsAppConfigRepository;
 
     private static final String HMAC_SHA256 = "HmacSHA256";
+    private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\"timestamp\"\\s*:\\s*\"?(\\d+)\"?");
     private static final long MAX_SKEW_SECONDS = 1800; // 30 minutes tolerance for retries & clock skew
 
     /**
