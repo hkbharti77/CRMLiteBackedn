@@ -544,12 +544,20 @@ public class UserController {
             @AuthenticationPrincipal String email,
             @PathVariable UUID staffId,
             @RequestParam User.Role role) {
-        User caller = userRepository.findByEmail(email).orElseThrow();
+        User caller = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("Caller not found"));
         User target = userRepository.findById(staffId)
                 .orElseThrow(() -> new RuntimeException("Staff member not found"));
 
-        if (!target.getTenant().getId().equals(caller.getTenant().getId())) {
-            return ResponseEntity.status(403).body("Unauthorized");
+        if (caller.getTenant() == null || target.getTenant() == null 
+                || !target.getTenant().getId().equals(caller.getTenant().getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Unauthorized"));
+        }
+
+        // Security: Tenant Owner may only assign ADMIN or AGENT roles.
+        // Assigning OWNER, SUPER_ADMIN, or PLATFORM_ADMIN is strictly prohibited.
+        if (role != User.Role.ADMIN && role != User.Role.AGENT) {
+            return ResponseEntity.status(403).body(Map.of("error", "Tenant owners can only assign ADMIN or AGENT roles."));
         }
 
         target.setRole(role);

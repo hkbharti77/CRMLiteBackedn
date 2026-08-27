@@ -60,7 +60,7 @@ public class SubscriptionBillingService {
         String roleStr = user.getRole() != null ? user.getRole().name().toUpperCase() : "";
         String cleanEmail = user.getEmail() != null ? user.getEmail().toLowerCase().trim() : "";
 
-        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || cleanEmail.equals("gyanvaniai@gmail.com") || cleanEmail.startsWith("superadmin");
+        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
         boolean isOwnerOrAdmin = user.getRole() == User.Role.OWNER || user.getRole() == User.Role.ADMIN || isSuperAdmin;
 
         if (!isOwnerOrAdmin) {
@@ -354,7 +354,7 @@ public class SubscriptionBillingService {
         // Security check: tenant matching or super admin
         String roleStr = user.getRole() != null ? user.getRole().name().toUpperCase() : "";
         String cleanEmail = user.getEmail() != null ? user.getEmail().toLowerCase().trim() : "";
-        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || cleanEmail.equals("gyanvaniai@gmail.com") || cleanEmail.startsWith("superadmin");
+        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
 
         if (!isSuperAdmin && !tx.getTenant().getId().equals(user.getTenant().getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to this billing transaction receipt.");
@@ -509,7 +509,7 @@ public class SubscriptionBillingService {
 
         String roleStr = user.getRole() != null ? user.getRole().name().toUpperCase() : "";
         String cleanEmail = user.getEmail() != null ? user.getEmail().toLowerCase().trim() : "";
-        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || cleanEmail.equals("gyanvaniai@gmail.com") || cleanEmail.startsWith("superadmin");
+        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
 
         if (!isSuperAdmin && !tx.getTenant().getId().equals(user.getTenant().getId())) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to this billing transaction.");

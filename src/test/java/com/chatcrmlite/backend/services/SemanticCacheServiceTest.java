@@ -68,7 +68,7 @@ public class SemanticCacheServiceTest {
     @Test
     void testPutCachedResponse() {
         String query = "hello";
-        String response = "hi";
+        String response = "Hello there!";
         String embeddingLiteral = Arrays.toString(queryEmbedding);
 
         semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);

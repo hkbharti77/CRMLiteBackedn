@@ -64,19 +64,18 @@ public class PlatformAuthFilter extends OncePerRequestFilter {
                     }
                 }
                 // 2. Validate standard User JWT token (for SUPER_ADMIN users)
-                else if (jwtUtils.validateJwtToken(token)) {
-                    String email = jwtUtils.getEmailFromJwtToken(token);
-                    Optional<User> userOpt = userRepository.findByEmail(email);
-                    if (userOpt.isPresent()) {
-                        User user = userOpt.get();
-                        boolean isSuper = (user.getRole() == User.Role.SUPER_ADMIN)
-                                || "gyanvaniai@gmail.com".equalsIgnoreCase(email)
-                                || (email != null && email.toLowerCase().startsWith("superadmin"));
-                        if (isSuper) {
-                            setAdminAuthentication(email, request);
+                    else if (jwtUtils.validateJwtToken(token)) {
+                        String email = jwtUtils.getEmailFromJwtToken(token);
+                        Optional<User> userOpt = userRepository.findByEmail(email);
+                        if (userOpt.isPresent()) {
+                            User user = userOpt.get();
+                            boolean isSuper = (user.getRole() == User.Role.SUPER_ADMIN)
+                                    || "gyanvaniai@gmail.com".equalsIgnoreCase(email);
+                            if (isSuper) {
+                                setAdminAuthentication(email, request);
+                            }
                         }
                     }
-                }
             }
         } catch (Exception e) {
             log.error("[Platform] Auth filter error: {}", e.getMessage());

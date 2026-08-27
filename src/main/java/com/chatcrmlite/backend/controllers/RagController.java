@@ -31,7 +31,9 @@ public class RagController {
     private DocumentChunkRepository repository;
 
 
-    private final Map<UUID, CompletableFuture<Map<String, Object>>> activeTasks = new HashMap<>();
+    private record IngestionTask(UUID tenantId, CompletableFuture<Map<String, Object>> future) {}
+
+    private final Map<UUID, IngestionTask> activeTasks = new java.util.concurrent.ConcurrentHashMap<>();
 
     /**
      * Upload a document for RAG ingestion.
@@ -63,7 +65,8 @@ public class RagController {
         CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(
                 fileBytes, file.getOriginalFilename(), user.getId(), docId);
 
-        activeTasks.put(docId, task);
+        UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+        activeTasks.put(docId, new IngestionTask(tenantId, task));
 
         Map<String, Object> response = new HashMap<>();
         response.put("message", "Ingestion started in background");
@@ -75,15 +78,27 @@ public class RagController {
      * Check status of ingestion task.
      */
     @GetMapping("/status/{docId}")
-    public ResponseEntity<Map<String, Object>> getStatus(@PathVariable UUID docId) {
-        CompletableFuture<Map<String, Object>> task = activeTasks.get(docId);
-        if (task == null) {
+    public ResponseEntity<Map<String, Object>> getStatus(
+            @PathVariable UUID docId,
+            @AuthenticationPrincipal String email) {
+        if (email == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User user = userRepository.findByEmail(email).orElse(null);
+        if (user == null) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+        IngestionTask task = activeTasks.get(docId);
+        if (task == null || !task.tenantId().equals(tenantId)) {
             return ResponseEntity.notFound().build();
         }
 
-        if (task.isDone()) {
+        if (task.future().isDone()) {
             try {
-                return ResponseEntity.ok(task.get());
+                return ResponseEntity.ok(task.future().get());
             } catch (Exception e) {
                 Map<String, Object> error = new HashMap<>();
                 error.put("status", "FAILED");

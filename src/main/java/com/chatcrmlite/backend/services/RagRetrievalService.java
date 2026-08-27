@@ -4,16 +4,14 @@ import com.chatcrmlite.backend.models.DocumentChunk;
 import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
-import dev.langchain4j.model.chat.ChatLanguageModel;
+import com.chatcrmlite.backend.services.ai.AiOrchestrator;
+import com.chatcrmlite.backend.services.ai.AiRequest;
+import com.chatcrmlite.backend.services.ai.AiResponse;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
-import dev.langchain4j.data.message.AiMessage;
-import dev.langchain4j.data.message.UserMessage;
-import dev.langchain4j.model.output.Response;
-import dev.langchain4j.model.output.TokenUsage;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.UserRepository;
 
@@ -37,11 +35,8 @@ public class RagRetrievalService {
     @Autowired
     private HallucinationDetector hallucinationDetector;
 
-    /** 
-     * Injected automatically by langchain4j-google-ai-gemini-spring-boot-starter 
-     */
     @Autowired(required = false)
-    private ChatLanguageModel chatLanguageModel;
+    private AiOrchestrator aiOrchestrator;
 
     @Autowired
     private UserRepository userRepository;
@@ -73,7 +68,7 @@ public class RagRetrievalService {
      */
     @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackResponse")
     public String getAiResponse(String query, UUID tenantId) {
-        if (chatLanguageModel == null) {
+        if (aiOrchestrator == null) {
             return "AI feature is currently being configured. Please check back later.";
         }
 
@@ -118,26 +113,35 @@ public class RagRetrievalService {
         }
         String prompt = promptBuilder.buildRagPrompt(query, chunks, niche, tenantPersona);
 
-        // 6. Generate Response
-        Response<AiMessage> responseObj = chatLanguageModel.generate(List.of(UserMessage.from(prompt)));
-        String response = responseObj.content().text();
+        // 6. Generate Response via AiOrchestrator (Provider Routing & Fallback)
+        AiRequest aiRequest = AiRequest.builder()
+                .prompt(prompt)
+                .tenantId(tenantId)
+                .complexity(AiRequest.TaskComplexity.HIGH)
+                .build();
+
+        AiResponse aiResponse = aiOrchestrator.execute(aiRequest);
+        if (aiResponse == null || aiResponse.getContent() == null) {
+            return null;
+        }
+        String response = aiResponse.getContent();
         
         // 7. Post-generation Hallucination Guard
-        String contextString = String.join("\n", chunks);
+        String contextString = String.join("\n", chunks != null ? chunks : List.of());
         if (!hallucinationDetector.isValid(response, contextString)) {
             log.warn("[RAG] Response rejected by HallucinationDetector for query: {}", query);
             return null;
         }
 
         // 8. Track Usage & Costs
-        if (responseObj.tokenUsage() != null) {
-            TokenUsage usage = responseObj.tokenUsage();
-            tokenBudgetService.recordTokenUsage(tenantId, usage.inputTokenCount(), usage.outputTokenCount());
-            costTracker.trackCost(usage.inputTokenCount(), usage.outputTokenCount(), tenantId);
+        if (aiResponse.getTokensUsed() > 0) {
+            int totalTokens = aiResponse.getTokensUsed();
+            tokenBudgetService.recordTokenUsage(tenantId, totalTokens, 0);
+            costTracker.trackCost(totalTokens, 0, tenantId);
         }
 
         long latency = System.currentTimeMillis() - start;
-        log.info("[RAG] Success | Tenant: {} | Latency: {}ms", tenantId, latency);
+        log.info("[RAG] Success | Tenant: {} | Latency: {}ms | Provider: {}", tenantId, latency, aiResponse.getProvider());
 
         // 9. Cache successful result
         semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);

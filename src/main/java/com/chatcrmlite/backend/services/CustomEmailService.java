@@ -336,12 +336,34 @@ public class CustomEmailService {
     }
 
     /**
+     * Ownership verification helper ensuring the requested campaign belongs
+     * to the authenticated actor's tenant. Prevents IDOR vulnerabilities.
+     */
+    private CustomEmail findOwnedCampaign(UUID campaignId, User actor) {
+        if (campaignId == null) {
+            throw new IllegalArgumentException("Campaign not found or access denied");
+        }
+        if (actor == null || actor.getTenant() == null || actor.getTenant().getId() == null) {
+            throw new IllegalArgumentException("Campaign not found or access denied");
+        }
+        CustomEmail campaign = customEmailRepository.findById(campaignId)
+                .orElseThrow(() -> new IllegalArgumentException("Campaign not found or access denied"));
+
+        if (campaign.getOwner() == null || campaign.getOwner().getTenant() == null || campaign.getOwner().getTenant().getId() == null) {
+            throw new IllegalArgumentException("Campaign not found or access denied");
+        }
+        if (!campaign.getOwner().getTenant().getId().equals(actor.getTenant().getId())) {
+            throw new IllegalArgumentException("Campaign not found or access denied");
+        }
+        return campaign;
+    }
+
+    /**
      * Dry Run / Test Send: Sends a rendered preview message to a test email.
      */
     @Transactional
     public String sendTestEmail(UUID campaignId, String testEmailAddress, User actor) {
-        CustomEmail campaign = customEmailRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        CustomEmail campaign = findOwnedCampaign(campaignId, actor);
 
         if (!isValidEmail(testEmailAddress)) {
             throw new IllegalArgumentException("Invalid test email address");
@@ -419,7 +441,7 @@ public class CustomEmailService {
     public CustomEmailDTO scheduleOrExecuteCampaign(UUID campaignId, CustomEmailRequest req, User actor) {
         CustomEmail campaign;
         if (campaignId != null) {
-            campaign = customEmailRepository.findById(campaignId).orElseThrow(() -> new RuntimeException("Campaign not found"));
+            campaign = findOwnedCampaign(campaignId, actor);
             // Update fields if provided in request
             if (req.getName() != null) campaign.setName(req.getName().trim());
             if (req.getSubject() != null) campaign.setSubject(req.getSubject().trim());
@@ -634,16 +656,14 @@ public class CustomEmailService {
 
     @Transactional
     public CustomEmailDTO pauseCampaign(UUID campaignId, User actor) {
-        CustomEmail campaign = customEmailRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        CustomEmail campaign = findOwnedCampaign(campaignId, actor);
         stateService.transitionState(campaign, EmailStatus.PAUSED, actor);
         return toDTO(campaign);
     }
 
     @Transactional
     public CustomEmailDTO resumeCampaign(UUID campaignId, User actor) {
-        CustomEmail campaign = customEmailRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        CustomEmail campaign = findOwnedCampaign(campaignId, actor);
         stateService.transitionState(campaign, EmailStatus.SENDING, actor);
         startCampaignExecution(campaignId);
         return toDTO(campaign);
@@ -651,8 +671,7 @@ public class CustomEmailService {
 
     @Transactional
     public CustomEmailDTO cancelCampaign(UUID campaignId, User actor) {
-        CustomEmail campaign = customEmailRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        CustomEmail campaign = findOwnedCampaign(campaignId, actor);
         stateService.transitionState(campaign, EmailStatus.CANCELLED, actor);
         
         // Mark remaining pending as cancelled
@@ -683,10 +702,8 @@ public class CustomEmailService {
 
     @Transactional(readOnly = true)
     public CustomEmailDTO getById(UUID id, User owner) {
-        return customEmailRepository.findById(id)
-                .filter(e -> e.getOwner().getTenant().getId().equals(owner.getTenant().getId()))
-                .map(this::toDTO)
-                .orElseThrow(() -> new RuntimeException("Campaign not found"));
+        CustomEmail campaign = findOwnedCampaign(id, owner);
+        return toDTO(campaign);
     }
 
     private void sendOne(String to, String subject, String body,

@@ -86,27 +86,36 @@ public class AgentManagementController {
             @PathVariable UUID leadId,
             @RequestBody Map<String, String> body) {
         User requester = getAuthenticatedUser();
+        if (requester.getTenant() == null || requester.getTenant().getId() == null) {
+            return ResponseEntity.status(403).build();
+        }
+
         Lead lead = leadRepository.findById(leadId)
                 .orElseThrow(() -> new RuntimeException("Lead not found with id: " + leadId));
 
-        if (!lead.getOwner().getTenant().getId().equals(requester.getTenant().getId())) {
+        if (lead.getOwner() == null || lead.getOwner().getTenant() == null 
+                || !lead.getOwner().getTenant().getId().equals(requester.getTenant().getId())) {
             return ResponseEntity.status(403).build();
         }
 
         String agentIdStr = body.get("agentId");
-        if (agentIdStr == null) {
+        if (agentIdStr == null || agentIdStr.isBlank()) {
             // Auto round-robin assignment
             User assigned = agentAssignmentService.assignLeadRoundRobin(lead);
             return ResponseEntity.ok(Map.of(
                     "success", true,
                     "assignedAgentId", assigned != null ? assigned.getId().toString() : "none",
-                    "assignedAgentName", assigned != null ? assigned.getFirstName() : "Unassigned"
+                    "assignedAgentName", assigned != null ? (assigned.getFirstName() != null ? assigned.getFirstName() : assigned.getDisplayName()) : "Unassigned"
             ));
         }
 
         UUID agentId = UUID.fromString(agentIdStr);
         User agent = userRepository.findById(agentId)
                 .orElseThrow(() -> new RuntimeException("Agent not found with id: " + agentId));
+
+        if (agent.getTenant() == null || !agent.getTenant().getId().equals(requester.getTenant().getId())) {
+            return ResponseEntity.status(403).build();
+        }
 
         lead.setOwner(agent);
         if (lead.getContact() != null) {
@@ -117,7 +126,7 @@ public class AgentManagementController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "assignedAgentId", agent.getId().toString(),
-                "assignedAgentName", agent.getFirstName()
+                "assignedAgentName", agent.getFirstName() != null ? agent.getFirstName() : (agent.getDisplayName() != null ? agent.getDisplayName() : "Agent")
         ));
     }
 }
