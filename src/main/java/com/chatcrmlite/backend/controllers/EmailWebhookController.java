@@ -25,9 +25,37 @@ public class EmailWebhookController {
     private final EmailCampaignRecipientRepository recipientRepository;
     private final EmailSuppressionService suppressionService;
 
+    @org.springframework.beans.factory.annotation.Value("${email.webhook.secret:}")
+    private String configuredWebhookSecret;
+
     @PostMapping("/generic")
-    public ResponseEntity<Void> handleGenericWebhook(@RequestBody JsonNode payload) {
-        // This is a generic example. In production, this would be tailored to Resend, SendGrid, etc.
+    public ResponseEntity<Void> handleGenericWebhook(
+            @RequestHeader(value = "X-Webhook-Secret", required = false) String webhookSecret,
+            @RequestHeader(value = "X-Email-Webhook-Secret", required = false) String emailWebhookSecret,
+            @RequestBody JsonNode payload) {
+        
+        // 0. Cryptographic / Shared-Secret Authentication
+        String incomingSecret = (webhookSecret != null && !webhookSecret.isBlank()) ? webhookSecret : emailWebhookSecret;
+        if (configuredWebhookSecret == null || configuredWebhookSecret.isBlank()) {
+            log.error("[EmailWebhook] Email webhook secret is not configured in environment. Rejecting webhook request.");
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (incomingSecret == null || incomingSecret.isBlank()) {
+            log.warn("[EmailWebhook] Missing webhook secret header on /generic");
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
+        boolean isValidSecret = java.security.MessageDigest.isEqual(
+                incomingSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                configuredWebhookSecret.trim().getBytes(java.nio.charset.StandardCharsets.UTF_8)
+        );
+
+        if (!isValidSecret) {
+            log.warn("[EmailWebhook] Invalid webhook secret provided on /generic");
+            return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
+        }
+
         try {
             String eventId = payload.path("event_id").asText(null);
             String provider = payload.path("provider").asText("generic");

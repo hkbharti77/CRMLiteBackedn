@@ -45,29 +45,48 @@ public class MetaDataDeletionController {
             // signed_request is in the format: signature.payload
             String[] parts = signedRequest.split("\\.");
             if (parts.length != 2) {
+                logger.warn("Malformed signed_request: expected exactly two parts separated by '.'");
                 return ResponseEntity.badRequest().build();
             }
 
-            String encodedPayload = parts[1];
-            // Fix Base64 padding if necessary
-            int padding = 4 - (encodedPayload.length() % 4);
-            if (padding > 0 && padding < 4) {
-                encodedPayload += "=".repeat(padding);
+            if (appSecret == null || appSecret.isBlank()) {
+                logger.error("Meta app secret is not configured for data deletion verification");
+                return ResponseEntity.status(org.springframework.http.HttpStatus.UNAUTHORIZED).build();
             }
-            // Base64Url decode
-            encodedPayload = encodedPayload.replace('-', '+').replace('_', '/');
-            
-            String payloadStr = new String(Base64.getDecoder().decode(encodedPayload));
+
+            String encodedSig = parts[0];
+            String encodedPayload = parts[1];
+
+            // 1. Verify HMAC-SHA256 Signature
+            byte[] expectedSig = Base64.getUrlDecoder().decode(encodedSig);
+
+            javax.crypto.Mac hmac = javax.crypto.Mac.getInstance("HmacSHA256");
+            javax.crypto.spec.SecretKeySpec secretKey = new javax.crypto.spec.SecretKeySpec(
+                    appSecret.getBytes(java.nio.charset.StandardCharsets.UTF_8), "HmacSHA256");
+            hmac.init(secretKey);
+            byte[] actualSig = hmac.doFinal(encodedPayload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+            if (!java.security.MessageDigest.isEqual(expectedSig, actualSig)) {
+                logger.warn("🛑 [SECURITY] Meta signed_request signature mismatch");
+                return ResponseEntity.badRequest().build();
+            }
+
+            // 2. Decode and parse payload
+            byte[] payloadBytes = Base64.getUrlDecoder().decode(encodedPayload);
+            String payloadStr = new String(payloadBytes, java.nio.charset.StandardCharsets.UTF_8);
             JsonNode payloadNode = objectMapper.readTree(payloadStr);
+
+            String algorithm = payloadNode.path("algorithm").asText("");
+            if (!algorithm.isBlank() && !"HMAC-SHA256".equalsIgnoreCase(algorithm)) {
+                logger.warn("🛑 [SECURITY] Unsupported algorithm in Meta signed_request: {}", algorithm);
+                return ResponseEntity.badRequest().build();
+            }
 
             String metaUserId = payloadNode.has("user_id") ? payloadNode.get("user_id").asText() : "unknown";
             logger.info("Data deletion requested for Meta User ID: {}", metaUserId);
 
-            // TODO: Optional - look up WhatsAppConfig by metaUserId (if saved) and invalidate token.
-            // For now, we fulfill Meta's requirement by responding with the confirmation code.
-
             String confirmationCode = UUID.randomUUID().toString();
-            String statusUrl = "https://your-domain.com/data-deletion-status?code=" + confirmationCode; // Change domain in production
+            String statusUrl = "https://your-domain.com/data-deletion-status?code=" + confirmationCode;
 
             Map<String, String> response = new HashMap<>();
             response.put("url", statusUrl);

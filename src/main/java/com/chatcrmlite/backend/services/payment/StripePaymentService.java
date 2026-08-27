@@ -80,6 +80,14 @@ public class StripePaymentService {
      * Verifies Stripe Webhook signature.
      */
     public boolean verifyWebhookSignature(String payload, String sigHeader) {
+        if (webhookSecret == null || webhookSecret.isBlank() || "dummy_stripe_webhook_secret".equals(webhookSecret.trim())) {
+            log.error("❌ Stripe webhook secret is not configured or set to dummy value. Webhook verification rejected.");
+            return false;
+        }
+        if (sigHeader == null || sigHeader.isBlank()) {
+            log.warn("❌ Missing Stripe-Signature header");
+            return false;
+        }
         try {
             Webhook.Signature.verifyHeader(payload, sigHeader, webhookSecret, 300L);
             return true;

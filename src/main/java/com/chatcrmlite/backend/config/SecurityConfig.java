@@ -115,9 +115,11 @@ public class SecurityConfig {
                 .requestMatchers(
                     "/api/v1/auth/**",
                     "/api/v1/webhook/**",
+                    "/api/v1/webhooks/**",
                     "/api/v1/public/**",
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
                     "/api/v1/integrations/meta/gateway/**", // Meta WhatsApp Gateway launcher & callbacks
+                    "/api/v1/integrations/meta/data-deletion", // Meta Compliance Data Deletion (HMAC verified)
                     "/api/v1/business-categories/**",
                     "/api/v1/categories/**",
                     "/webhook/**",

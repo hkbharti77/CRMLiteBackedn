@@ -59,6 +59,14 @@ public class RazorpayPaymentService {
      * Verifies the integrity of webhook payloads received from Razorpay.
      */
     public boolean verifySignature(String payload, String signature, String webhookSecret) {
+        if (webhookSecret == null || webhookSecret.isBlank() || "dummy_razorpay_webhook_secret".equals(webhookSecret.trim())) {
+            log.error("❌ Razorpay webhook secret is not configured or set to dummy value. Webhook verification rejected.");
+            return false;
+        }
+        if (signature == null || signature.isBlank()) {
+            log.warn("❌ Missing X-Razorpay-Signature header");
+            return false;
+        }
         try {
             return Utils.verifySignature(payload, signature, webhookSecret);
         } catch (Exception e) {
