@@ -215,6 +215,10 @@ public class LiveSupportService {
         Contact contact = contactRepository.findById(contactId).orElseThrow(() -> new IllegalArgumentException("Contact not found"));
         Tenant tenant = contact.getTenant() != null ? contact.getTenant() : contact.getOwner().getTenant();
 
+        if (tenant == null || targetUser.getTenant() == null || !tenant.getId().equals(targetUser.getTenant().getId())) {
+            throw new SecurityException("Target user does not belong to the same tenant");
+        }
+
         if (!authorizationService.canTransfer(contact, currentUser)) {
             throw new SecurityException("User lacks permission to transfer this chat");
         }

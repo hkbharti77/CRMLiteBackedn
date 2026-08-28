@@ -75,6 +75,11 @@ public class LiveChatController {
 
         UUID targetUserId = UUID.fromString(targetUserIdStr);
         User targetUser = userRepository.findById(targetUserId).orElseThrow(() -> new IllegalArgumentException("Target user not found"));
+        
+        if (user.getTenant() == null || targetUser.getTenant() == null || !user.getTenant().getId().equals(targetUser.getTenant().getId())) {
+            return ResponseEntity.status(403).body(Map.of("error", "Target user does not belong to the same tenant"));
+        }
+        
         String requestId = UUID.randomUUID().toString();
 
         liveSupportService.transferChat(id, targetUser, user, reason, requestId);
