@@ -5,9 +5,14 @@ import com.chatcrmlite.backend.repositories.PlatformAdminRepository;
 import com.chatcrmlite.backend.services.platform.PlatformAdminService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.*;
+import com.chatcrmlite.backend.config.RateLimitConfig;
+import io.github.bucket4j.Bucket;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
@@ -20,13 +25,18 @@ import java.util.Map;
 @RequestMapping("/api/v1/platform/auth")
 public class PlatformAuthController {
 
+    private static final Logger log = LoggerFactory.getLogger(PlatformAuthController.class);
+
     private final PlatformAdminService adminService;
     private final PlatformAdminRepository adminRepository;
+    private final RateLimitConfig rateLimitConfig;
 
     public PlatformAuthController(PlatformAdminService adminService,
-                                  PlatformAdminRepository adminRepository) {
+                                  PlatformAdminRepository adminRepository,
+                                  RateLimitConfig rateLimitConfig) {
         this.adminService = adminService;
         this.adminRepository = adminRepository;
+        this.rateLimitConfig = rateLimitConfig;
     }
 
     public static class PlatformLoginRequest {
@@ -45,11 +55,27 @@ public class PlatformAuthController {
         public void setEmail(String email) { this.email = email; }
     }
 
+    private String getClientIp(HttpServletRequest request) {
+        String xff = request.getHeader("X-Forwarded-For");
+        if (xff != null && !xff.isBlank()) {
+            return xff.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
+    }
+
     @PostMapping("/login/request-otp")
     public ResponseEntity<Map<String, Object>> requestOtp(
             @RequestBody PlatformOtpRequest body,
             HttpServletRequest request) {
         
+        String clientIp = getClientIp(request);
+        Bucket bucket = rateLimitConfig.resolveBucket("platform-login-otp:" + clientIp);
+        if (!bucket.tryConsume(1)) {
+            log.warn("[PlatformAuth] Rate limit exceeded on /login/request-otp from IP={}", clientIp);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("status", "rate_limited", "message", "Too many requests. Please wait a minute before trying again."));
+        }
+
         String email = body.getEmail();
         if (email == null || email.isBlank()) {
             return ResponseEntity.badRequest().body(Map.of("status", "invalid", "message", "Email required"));
@@ -72,6 +98,14 @@ public class PlatformAuthController {
             @RequestBody PlatformLoginRequest body,
             HttpServletRequest request,
             HttpServletResponse response) {
+
+        String clientIp = getClientIp(request);
+        Bucket bucket = rateLimitConfig.resolveBucket("platform-login-verify:" + clientIp);
+        if (!bucket.tryConsume(1)) {
+            log.warn("[PlatformAuth] Rate limit exceeded on /login from IP={}", clientIp);
+            return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                    .body(Map.of("status", "rate_limited", "message", "Too many requests. Please wait a minute before trying again."));
+        }
 
         String email = body.getEmail();
         String otp = body.getOtp();
