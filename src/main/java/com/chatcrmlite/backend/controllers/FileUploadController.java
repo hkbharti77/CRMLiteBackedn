@@ -44,6 +44,15 @@ public class FileUploadController {
             return ResponseEntity.badRequest().body(Map.of("error", "File is empty"));
         }
 
+        if (folder != null) {
+            if (folder.contains("..") || folder.contains("\\") || folder.startsWith("/") || folder.contains("//")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid folder name: Path traversal is not allowed"));
+            }
+            if (!folder.matches("^[a-zA-Z0-9_/-]*$")) {
+                return ResponseEntity.badRequest().body(Map.of("error", "Invalid folder name: Contains invalid characters"));
+            }
+        }
+
         // Limit file size to 50MB
         if (file.getSize() > 50L * 1024 * 1024) {
             return ResponseEntity.badRequest().body(Map.of("error", "File size exceeds 50MB limit"));

@@ -58,7 +58,18 @@ public class CloudinaryStorageService {
 
     public String buildTenantKey(String tenantIdStr, String category, String filename) {
         String safeTenant = (tenantIdStr != null && !tenantIdStr.isBlank()) ? tenantIdStr.trim() : "default";
-        String safeCategory = (category != null && !category.isBlank()) ? category.trim().replaceAll("^/+|/+$", "") : "uploads";
+        
+        String safeCategory = "uploads";
+        if (category != null && !category.isBlank()) {
+            safeCategory = category.trim().replaceAll("^/+|/+$", "");
+            // Defense-in-depth: strip traversal chars if they bypass the controller
+            safeCategory = safeCategory.replace("..", "").replace("\\", "/");
+            safeCategory = safeCategory.replaceAll("[^a-zA-Z0-9_/-]", "");
+            if (safeCategory.isBlank()) {
+                safeCategory = "uploads";
+            }
+        }
+        
         String sanitized = (filename != null && !filename.isBlank()) 
                 ? filename.replaceAll("[^a-zA-Z0-9._-]", "_") 
                 : "file_" + System.currentTimeMillis();
