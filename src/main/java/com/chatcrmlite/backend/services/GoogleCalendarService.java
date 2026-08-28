@@ -49,12 +49,14 @@ public class GoogleCalendarService {
     /**
      * Builds the OAuth2 authorization URL that the user must visit to authorize access
      * to their Google Calendar.
+     * 
+     * @param state a cryptographically secure random string bound to the user's session
      */
-    public String buildAuthorizationUrl(UUID userId) throws IOException, GeneralSecurityException {
+    public String buildAuthorizationUrl(String state) throws IOException, GeneralSecurityException {
         GoogleAuthorizationCodeFlow flow = buildFlow();
         return flow.newAuthorizationUrl()
                 .setRedirectUri(googleConfig.getRedirectUri())
-                .setState(userId.toString()) // pass userId as state to identify user in callback
+                .setState(state) // pass secure opaque state to identify user in callback
                 .setAccessType("offline")
                 .set("prompt", "consent") // force refresh token every time
                 .build();
