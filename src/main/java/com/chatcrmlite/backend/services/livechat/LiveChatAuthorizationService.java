@@ -8,6 +8,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.UUID;
+
 @Service
 @Transactional(readOnly = true)
 public class LiveChatAuthorizationService {
@@ -24,7 +26,7 @@ public class LiveChatAuthorizationService {
 
         // AGENT can view if unassigned, or if assigned to themselves
         if (contact.getAssignedAgent() == null) return true;
-        return contact.getAssignedAgent().getId().equals(user.getId());
+        return contact.getAssignedAgent().getId() != null && contact.getAssignedAgent().getId().equals(user.getId());
     }
 
     public boolean canSendMessage(Contact contact, User user) {
@@ -34,7 +36,8 @@ public class LiveChatAuthorizationService {
         if (isAdminOrOwner(user)) return true;
 
         // Agent can only send messages if assigned to them or unassigned
-        return contact.getAssignedAgent() == null || contact.getAssignedAgent().getId().equals(user.getId());
+        return contact.getAssignedAgent() == null
+                || (contact.getAssignedAgent().getId() != null && contact.getAssignedAgent().getId().equals(user.getId()));
     }
 
     public boolean canTakeover(Contact contact, User user) {
@@ -52,7 +55,9 @@ public class LiveChatAuthorizationService {
         if (isAdminOrOwner(user)) return true;
 
         // Agent can transfer if assigned to them
-        return contact.getAssignedAgent() != null && contact.getAssignedAgent().getId().equals(user.getId());
+        return contact.getAssignedAgent() != null
+                && contact.getAssignedAgent().getId() != null
+                && contact.getAssignedAgent().getId().equals(user.getId());
     }
 
     public boolean canResolve(Contact contact, User user) {
@@ -61,7 +66,9 @@ public class LiveChatAuthorizationService {
 
         if (isAdminOrOwner(user)) return true;
 
-        return contact.getAssignedAgent() != null && contact.getAssignedAgent().getId().equals(user.getId());
+        return contact.getAssignedAgent() != null
+                && contact.getAssignedAgent().getId() != null
+                && contact.getAssignedAgent().getId().equals(user.getId());
     }
 
     public boolean isAdminOrOwner(User user) {
@@ -70,13 +77,24 @@ public class LiveChatAuthorizationService {
         return role == User.Role.ADMIN || role == User.Role.OWNER || role == User.Role.SUPER_ADMIN;
     }
 
-    private boolean isSameTenant(Contact contact, User user) {
-        if (contact.getTenant() != null && user.getTenant() != null) {
-            return contact.getTenant().getId().equals(user.getTenant().getId());
+    boolean isSameTenant(Contact contact, User user) {
+        if (contact == null || user == null) {
+            return false;
         }
-        if (contact.getOwner() != null && user.getTenant() != null) {
-            return contact.getOwner().getTenant().getId().equals(user.getTenant().getId());
+        if (user.getTenant() == null || user.getTenant().getId() == null) {
+            return false;
         }
-        return true;
+
+        UUID userTenantId = user.getTenant().getId();
+
+        if (contact.getTenant() != null && contact.getTenant().getId() != null) {
+            return contact.getTenant().getId().equals(userTenantId);
+        }
+
+        if (contact.getOwner() != null && contact.getOwner().getTenant() != null && contact.getOwner().getTenant().getId() != null) {
+            return contact.getOwner().getTenant().getId().equals(userTenantId);
+        }
+
+        return false;
     }
 }
