@@ -75,7 +75,7 @@ class RagControllerTest {
         CompletableFuture<Map<String, Object>> future = CompletableFuture.completedFuture(
                 Map.of("status", "SUCCESS", "totalChunks", 5)
         );
-        when(ingestionService.ingestDocument(any(), any(), eq(tenantAUser.getId()), any(UUID.class)))
+        when(ingestionService.ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class)))
                 .thenReturn(future);
 
         MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "content".getBytes());
@@ -100,7 +100,7 @@ class RagControllerTest {
         CompletableFuture<Map<String, Object>> future = CompletableFuture.completedFuture(
                 Map.of("status", "SUCCESS", "totalChunks", 5)
         );
-        when(ingestionService.ingestDocument(any(), any(), eq(tenantAUser.getId()), any(UUID.class)))
+        when(ingestionService.ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class)))
                 .thenReturn(future);
 
         MockMultipartFile file = new MockMultipartFile("file", "doc.pdf", "application/pdf", "content".getBytes());
@@ -127,5 +127,96 @@ class RagControllerTest {
     void testGetStatus_Unauthenticated_ReturnsUnauthorized() {
         ResponseEntity<Map<String, Object>> statusResp = ragController.getStatus(UUID.randomUUID(), null);
         assertEquals(HttpStatus.UNAUTHORIZED, statusResp.getStatusCode());
+    }
+
+    @Test
+    @DisplayName("Agent upload uses tenant ID, not agent's user ID")
+    void testUploadDocument_AgentUpload_UsesTenantId() throws Exception {
+        User agent = new User();
+        agent.setId(UUID.randomUUID());
+        agent.setEmail("agent@tenantA.com");
+        agent.setTenant(tenantA);
+
+        when(userRepository.findByEmail("agent@tenantA.com")).thenReturn(Optional.of(agent));
+        CompletableFuture<Map<String, Object>> future = CompletableFuture.completedFuture(Map.of("status", "SUCCESS"));
+        when(ingestionService.ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class))).thenReturn(future);
+
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", "content".getBytes());
+        ResponseEntity<Map<String, Object>> response = ragController.uploadDocument(file, "agent@tenantA.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        verify(ingestionService).ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class));
+    }
+
+    @Test
+    @DisplayName("Owner upload uses tenant ID")
+    void testUploadDocument_OwnerUpload_UsesTenantId() throws Exception {
+        User owner = new User();
+        owner.setId(UUID.randomUUID());
+        owner.setEmail("owner@tenantA.com");
+        owner.setTenant(tenantA);
+
+        when(userRepository.findByEmail("owner@tenantA.com")).thenReturn(Optional.of(owner));
+        CompletableFuture<Map<String, Object>> future = CompletableFuture.completedFuture(Map.of("status", "SUCCESS"));
+        when(ingestionService.ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class))).thenReturn(future);
+
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", "content".getBytes());
+        ResponseEntity<Map<String, Object>> response = ragController.uploadDocument(file, "owner@tenantA.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        verify(ingestionService).ingestDocument(any(), any(), eq(tenantA.getId()), any(UUID.class));
+    }
+
+    @Test
+    @DisplayName("User without tenant uses their user ID")
+    void testUploadDocument_UserWithoutTenant_UsesUserId() throws Exception {
+        User noTenantUser = new User();
+        noTenantUser.setId(UUID.randomUUID());
+        noTenantUser.setEmail("solo@example.com");
+        noTenantUser.setTenant(null);
+
+        when(userRepository.findByEmail("solo@example.com")).thenReturn(Optional.of(noTenantUser));
+        CompletableFuture<Map<String, Object>> future = CompletableFuture.completedFuture(Map.of("status", "SUCCESS"));
+        when(ingestionService.ingestDocument(any(), any(), eq(noTenantUser.getId()), any(UUID.class))).thenReturn(future);
+
+        MockMultipartFile file = new MockMultipartFile("file", "doc.txt", "text/plain", "content".getBytes());
+        ResponseEntity<Map<String, Object>> response = ragController.uploadDocument(file, "solo@example.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        verify(ingestionService).ingestDocument(any(), any(), eq(noTenantUser.getId()), any(UUID.class));
+    }
+
+    @Test
+    @DisplayName("Agent can list documents using tenant ID")
+    void testListDocuments_AgentList_UsesTenantId() {
+        User agent = new User();
+        agent.setId(UUID.randomUUID());
+        agent.setEmail("agent@tenantA.com");
+        agent.setTenant(tenantA);
+
+        when(userRepository.findByEmail("agent@tenantA.com")).thenReturn(Optional.of(agent));
+        when(repository.findDocumentStatsByTenantId(tenantA.getId())).thenReturn(java.util.List.of());
+
+        ResponseEntity<?> response = ragController.listDocuments("agent@tenantA.com");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+
+        verify(repository).findDocumentStatsByTenantId(tenantA.getId());
+    }
+
+    @Test
+    @DisplayName("Agent can delete documents using tenant ID")
+    void testDeleteDocument_AgentDelete_UsesTenantId() {
+        User agent = new User();
+        agent.setId(UUID.randomUUID());
+        agent.setEmail("agent@tenantA.com");
+        agent.setTenant(tenantA);
+
+        when(userRepository.findByEmail("agent@tenantA.com")).thenReturn(Optional.of(agent));
+        
+        UUID docId = UUID.randomUUID();
+        ResponseEntity<?> response = ragController.deleteDocument(docId, "agent@tenantA.com");
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+
+        verify(repository).deleteByDocumentIdAndTenantId(docId, tenantA.getId());
     }
 }

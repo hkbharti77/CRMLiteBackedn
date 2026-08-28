@@ -62,10 +62,11 @@ public class RagController {
             return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
         }
 
-        CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(
-                fileBytes, file.getOriginalFilename(), user.getId(), docId);
-
         UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+
+        CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(
+                fileBytes, file.getOriginalFilename(), tenantId, docId);
+
         activeTasks.put(docId, new IngestionTask(tenantId, task));
 
         Map<String, Object> response = new HashMap<>();
@@ -128,7 +129,8 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
-        repository.deleteByDocumentIdAndTenantId(docId, user.getId());
+        UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+        repository.deleteByDocumentIdAndTenantId(docId, tenantId);
         return ResponseEntity.noContent().build();
     }
 
@@ -141,7 +143,8 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
                 
-        List<Object[]> docs = repository.findDocumentStatsByTenantId(user.getId());
+        UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+        List<Object[]> docs = repository.findDocumentStatsByTenantId(tenantId);
         List<Map<String, Object>> response = docs.stream().map(d -> {
             Map<String, Object> map = new HashMap<>();
             map.put("documentId", d[0]);
@@ -170,7 +173,8 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
-        List<com.chatcrmlite.backend.models.DocumentChunk> chunks = repository.findByDocumentIdAndTenantId(docId, user.getId());
+        UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
+        List<com.chatcrmlite.backend.models.DocumentChunk> chunks = repository.findByDocumentIdAndTenantId(docId, tenantId);
         
         if (chunks.isEmpty()) {
             return ResponseEntity.notFound().build();
