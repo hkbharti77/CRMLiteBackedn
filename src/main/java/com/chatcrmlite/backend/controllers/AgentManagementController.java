@@ -52,11 +52,21 @@ public class AgentManagementController {
         User targetUser = userRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + id));
 
-        if (!targetUser.getTenant().getId().equals(requester.getTenant().getId())) {
+        if (requester.getTenant() == null || requester.getTenant().getId() == null
+                || targetUser.getTenant() == null || targetUser.getTenant().getId() == null
+                || !requester.getTenant().getId().equals(targetUser.getTenant().getId())) {
             return ResponseEntity.status(403).build();
         }
 
-        String statusStr = body.get("availabilityStatus");
+        if (requester.getRole() == User.Role.AGENT) {
+            if (requester.getId() == null || !requester.getId().equals(targetUser.getId())) {
+                return ResponseEntity.status(403).build();
+            }
+        } else if (requester.getRole() != User.Role.ADMIN && requester.getRole() != User.Role.OWNER && requester.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(403).build();
+        }
+
+        String statusStr = body != null ? body.get("availabilityStatus") : null;
         if (statusStr != null) {
             try {
                 User.AvailabilityStatus status = User.AvailabilityStatus.valueOf(statusStr.toUpperCase());
@@ -70,7 +80,7 @@ public class AgentManagementController {
         return ResponseEntity.ok(Map.of(
                 "success", true,
                 "message", "Availability status updated successfully",
-                "availabilityStatus", targetUser.getAvailabilityStatus().name()
+                "availabilityStatus", targetUser.getAvailabilityStatus() != null ? targetUser.getAvailabilityStatus().name() : "AVAILABLE"
         ));
     }
 
