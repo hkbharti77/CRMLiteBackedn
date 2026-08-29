@@ -1,7 +1,9 @@
 package com.chatcrmlite.backend.services;
 
+import com.chatcrmlite.backend.models.Lead;
 import com.chatcrmlite.backend.models.Reminder;
 import com.chatcrmlite.backend.models.User;
+import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.ReminderRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -18,17 +20,25 @@ public class ReminderService {
     @Autowired
     private ReminderRepository reminderRepository;
 
+    @Autowired
+    private LeadRepository leadRepository;
+
     public List<Reminder> getPendingReminders(User user) {
         return reminderRepository.findAllByOwnerAndIsCompletedFalse(user);
     }
 
     public Reminder createReminder(Reminder reminder) {
+        if (reminder.getLead() == null || reminder.getLead().getId() == null) {
+            throw new IllegalArgumentException("Reminder must be associated with a lead");
+        }
+        Lead lead = leadRepository.findByIdAndTenantId(reminder.getLead().getId(), reminder.getOwner().getTenant().getId())
+                .orElseThrow(() -> new RuntimeException("Lead not found"));
+        reminder.setLead(lead);
         return reminderRepository.save(reminder);
     }
 
-    public Reminder completeReminder(UUID reminderId, User owner) {
-        Reminder reminder = reminderRepository.findById(reminderId)
-                .filter(r -> r.getOwner().getId().equals(owner.getId()))
+    public Reminder completeReminder(UUID reminderId, User caller) {
+        Reminder reminder = reminderRepository.findByIdAndTenantId(reminderId, caller.getTenant().getId())
                 .orElseThrow(() -> new RuntimeException("Reminder not found"));
         reminder.setCompleted(true);
         return reminderRepository.save(reminder);

@@ -5,14 +5,17 @@ import com.chatcrmlite.backend.models.ConversationState;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 
 public interface ConversationStateRepository extends JpaRepository<ConversationState, UUID> {
-
     Optional<ConversationState> findByContact(Contact contact);
+
+    @Query("SELECT c FROM ConversationState c WHERE c.contact.id = :id AND c.contact.tenant.id = :tenantId")
+    Optional<ConversationState> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
     @Query("SELECT c FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != 'CLOSED'")
     Optional<ConversationState> findActiveByContact(Contact contact);

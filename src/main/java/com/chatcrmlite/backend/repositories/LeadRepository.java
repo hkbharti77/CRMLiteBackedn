@@ -21,6 +21,8 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     
     Optional<Lead> findByLeadNumber(String leadNumber);
 
+    Optional<Lead> findByIdAndTenantId(UUID id, UUID tenantId);
+
     List<Lead> findByOwnerAndStatusIn(User owner, List<Lead.LeadStatus> statuses);
 
     List<Lead> findAllByOwner(User owner);

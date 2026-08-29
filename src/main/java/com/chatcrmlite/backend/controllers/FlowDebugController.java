@@ -5,7 +5,11 @@ import com.chatcrmlite.backend.dto.flow.StateDef;
 import com.chatcrmlite.backend.dto.flow.TransitionDef;
 import com.chatcrmlite.backend.models.ConversationState;
 import com.chatcrmlite.backend.repositories.ConversationStateRepository;
+import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.services.flow.FlowDefinitionLoader;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -23,6 +27,19 @@ public class FlowDebugController {
 
     private final FlowDefinitionLoader definitionLoader;
     private final ConversationStateRepository stateRepository;
+    private final UserRepository userRepository;
+
+    private User getAuthenticatedUser() {
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String email;
+        if (principal instanceof UserDetails) {
+            email = ((UserDetails) principal).getUsername();
+        } else {
+            email = principal.toString();
+        }
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+    }
 
     /**
      * Generates a Mermaid.js diagram for a given Flow Definition ID.
@@ -72,7 +89,8 @@ public class FlowDebugController {
      */
     @GetMapping("/contact/{contactId}/history")
     public ResponseEntity<String> getContactFlowHistory(@PathVariable UUID contactId) {
-        ConversationState state = stateRepository.findById(contactId).orElse(null);
+        User user = getAuthenticatedUser();
+        ConversationState state = stateRepository.findByIdAndTenantId(contactId, user.getTenant().getId()).orElse(null);
         if (state == null) {
             return ResponseEntity.notFound().build();
         }
