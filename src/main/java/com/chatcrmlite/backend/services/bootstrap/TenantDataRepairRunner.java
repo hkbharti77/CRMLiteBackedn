@@ -40,16 +40,14 @@ public class TenantDataRepairRunner implements ApplicationRunner {
         try {
             log.info("🛠️ [DataRepair] Running tenant and lead integrity check on startup...");
 
-            // 1. Backfill tenant_id for all orphaned records
-            executeSqlSafely("UPDATE contacts SET tenant_id = (SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1) WHERE tenant_id IS NULL", "contacts.tenant_id");
-            executeSqlSafely("UPDATE leads SET tenant_id = (SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1) WHERE tenant_id IS NULL", "leads.tenant_id");
-            executeSqlSafely("UPDATE flow_submissions SET tenant_id = (SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1) WHERE tenant_id IS NULL", "flow_submissions.tenant_id");
-            executeSqlSafely("UPDATE flow_outbox_events SET tenant_id = (SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1) WHERE tenant_id IS NULL", "flow_outbox_events.tenant_id");
-            executeSqlSafely("UPDATE chat_messages SET tenant_id = (SELECT id FROM tenants ORDER BY created_at ASC LIMIT 1) WHERE tenant_id IS NULL", "chat_messages.tenant_id");
+            // 1. Backfill tenant_id safely by deriving it from owner_id (Intra-tenant repair)
+            executeSqlSafely("UPDATE contacts SET tenant_id = (SELECT tenant_id FROM app_users WHERE app_users.id = contacts.owner_id) WHERE tenant_id IS NULL AND owner_id IS NOT NULL", "contacts.tenant_id");
+            executeSqlSafely("UPDATE leads SET tenant_id = (SELECT tenant_id FROM app_users WHERE app_users.id = leads.owner_id) WHERE tenant_id IS NULL AND owner_id IS NOT NULL", "leads.tenant_id");
+            // Orphaned submissions or messages without tenant_id or owner_id are left untouched (fail closed) to prevent cross-tenant leakage.
 
-            // 2. Backfill owner_id for any orphaned leads and contacts
-            executeSqlSafely("UPDATE contacts SET owner_id = (SELECT id FROM app_users WHERE role IN ('OWNER', 'ADMIN') ORDER BY id ASC LIMIT 1) WHERE owner_id IS NULL", "contacts.owner_id");
-            executeSqlSafely("UPDATE leads SET owner_id = (SELECT id FROM app_users WHERE role IN ('OWNER', 'ADMIN') ORDER BY id ASC LIMIT 1) WHERE owner_id IS NULL", "leads.owner_id");
+            // 2. Backfill owner_id safely by finding the oldest ADMIN/OWNER of the same tenant_id
+            executeSqlSafely("UPDATE contacts SET owner_id = (SELECT id FROM app_users WHERE app_users.tenant_id = contacts.tenant_id AND app_users.role IN ('OWNER', 'ADMIN') ORDER BY app_users.created_at ASC LIMIT 1) WHERE owner_id IS NULL AND tenant_id IS NOT NULL", "contacts.owner_id");
+            executeSqlSafely("UPDATE leads SET owner_id = (SELECT id FROM app_users WHERE app_users.tenant_id = leads.tenant_id AND app_users.role IN ('OWNER', 'ADMIN') ORDER BY app_users.created_at ASC LIMIT 1) WHERE owner_id IS NULL AND tenant_id IS NOT NULL", "leads.owner_id");
 
             // 3. Reprocess any unprocessed / pending Flow Submissions
             try {
