@@ -45,16 +45,16 @@ public class BusinessCategoryController {
     }
 
     @GetMapping("/details")
-    public ResponseEntity<?> getAllCategoryDetails(@AuthenticationPrincipal String email) {
-        requireOwnerOrAdmin(email);
+    public ResponseEntity<?> getAllCategoryDetails(@AuthenticationPrincipal Object principal) {
+        requireOwnerOrAdmin(principal);
         return ResponseEntity.ok(categoryRepository.findAll());
     }
 
     @PostMapping
     public ResponseEntity<?> createCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @RequestBody CategoryRequest request) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         if (categoryRepository.existsByName(request.getName())) {
             return ResponseEntity.badRequest().body("Category '" + request.getName() + "' already exists.");
@@ -68,10 +68,10 @@ public class BusinessCategoryController {
 
     @PutMapping("/{id}")
     public ResponseEntity<?> updateCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @PathVariable Long id,
             @RequestBody CategoryRequest request) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         BusinessCategory category = categoryRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Category not found"));
@@ -81,9 +81,9 @@ public class BusinessCategoryController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<?> deleteCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @PathVariable Long id) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         if (!categoryRepository.existsById(id)) {
             return ResponseEntity.notFound().build();
@@ -94,10 +94,10 @@ public class BusinessCategoryController {
 
     @PostMapping("/{categoryId}/subcategories")
     public ResponseEntity<?> addSubCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @PathVariable Long categoryId,
             @RequestBody SubCategoryRequest request) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         BusinessCategory category = categoryRepository.findById(categoryId)
                 .orElseThrow(() -> new RuntimeException("Category not found"));
@@ -115,10 +115,10 @@ public class BusinessCategoryController {
 
     @PutMapping("/subcategories/{subId}")
     public ResponseEntity<?> updateSubCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @PathVariable Long subId,
             @RequestBody SubCategoryRequest request) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         BusinessSubCategory sub = subCategoryRepository.findById(subId)
                 .orElseThrow(() -> new RuntimeException("Sub-category not found"));
@@ -128,9 +128,9 @@ public class BusinessCategoryController {
 
     @DeleteMapping("/subcategories/{subId}")
     public ResponseEntity<?> deleteSubCategory(
-            @AuthenticationPrincipal String email,
+            @AuthenticationPrincipal Object principal,
             @PathVariable Long subId) {
-        requireOwnerOrAdmin(email);
+        requireSuperAdmin(principal);
 
         if (!subCategoryRepository.existsById(subId)) {
             return ResponseEntity.notFound().build();
@@ -139,11 +139,29 @@ public class BusinessCategoryController {
         return ResponseEntity.ok("Sub-category deleted successfully.");
     }
 
-    private void requireOwnerOrAdmin(String email) {
+    private String getEmailFromPrincipal(Object principal) {
+        if (principal == null) throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "Unauthorized");
+        if (principal instanceof org.springframework.security.core.userdetails.UserDetails) {
+            return ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername();
+        }
+        return principal.toString();
+    }
+
+    private void requireOwnerOrAdmin(Object principal) {
+        String email = getEmailFromPrincipal(principal);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN) {
-            throw new RuntimeException("Access denied: Only owners and admins can manage categories.");
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Access denied: Only owners and admins can view details.");
+        }
+    }
+
+    private void requireSuperAdmin(Object principal) {
+        String email = getEmailFromPrincipal(principal);
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.UNAUTHORIZED, "User not found"));
+        if (user.getRole() != User.Role.SUPER_ADMIN) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Access denied: Only SUPER_ADMIN can mutate global categories.");
         }
     }
 
