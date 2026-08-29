@@ -55,7 +55,7 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, text, metaMessageId, "TEXT");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send TEXT reply to contact={} owner={}: {}",
-                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }
     }
@@ -79,7 +79,7 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + bodyText + ")", metaMessageId, "FLOW");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send FLOW to contact={} owner={}: {}",
-                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }
     }
@@ -101,7 +101,7 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, crmContent, metaMessageId, "INTERACTIVE");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send INTERACTIVE reply to contact={} owner={}: {}",
-                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }
     }
@@ -118,7 +118,7 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, "Sent Catalog", metaMessageId, "CATALOG");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send CATALOG reply to contact={} owner={}: {}",
-                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }
     }
@@ -136,7 +136,7 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, caption != null ? caption : "", metaMessageId, "IMAGE", imageUrl);
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send IMAGE reply to contact={} owner={}: {}",
-                    contact.getWaId(), owner.getId(), e.getMessage(), e);
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }
     }
@@ -183,7 +183,7 @@ public class WhatsAppOutboundService {
         publishOutgoing(contact, owner, saved);
 
         log.info("[WhatsApp-Outbound] Sent {} reply to contact={} owner={} metaMessageId={} storedMessageId={}",
-                responseType, contact.getWaId(), owner.getId(), metaMessageId, storedMessageId);
+                responseType, contact.getWaId(), (owner != null ? owner.getId() : "null"), metaMessageId, storedMessageId);
         return saved;
     }
 

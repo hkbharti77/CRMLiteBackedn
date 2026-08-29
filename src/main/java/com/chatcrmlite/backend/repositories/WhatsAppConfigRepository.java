@@ -15,40 +15,40 @@ import java.util.UUID;
 public interface WhatsAppConfigRepository extends JpaRepository<WhatsAppConfig, UUID> {
 
     /**
-     * Finds config by phone number ID, eagerly joining tenant and its users
+     * Finds config by phone number ID (or embedded phone ID), eagerly joining tenant and its users
      * so that config.getUser() works outside a transaction (e.g. in async workers).
+     * Uses DISTINCT and LEFT JOIN FETCH to handle tenants with multiple users or 0 users.
      */
-    @Query("SELECT w FROM WhatsAppConfig w JOIN FETCH w.tenant t JOIN FETCH t.users WHERE w.phoneNumberId = :phoneNumberId")
+    @Query("SELECT DISTINCT w FROM WhatsAppConfig w LEFT JOIN FETCH w.tenant t LEFT JOIN FETCH t.users WHERE TRIM(w.phoneNumberId) = TRIM(:phoneNumberId) OR TRIM(w.embeddedPhoneId) = TRIM(:phoneNumberId)")
     Optional<WhatsAppConfig> findByPhoneNumberId(@Param("phoneNumberId") String phoneNumberId);
 
     /**
      * Finds config by the owner user's ID, eagerly joining tenant and users.
      * NOTE: :userId is the User.id (UUID), not the Tenant.id.
-     * The second JOIN FETCH ensures the User.tenant back-reference is initialized,
-     * preventing LazyInitializationException when owner.getBusinessSubType() is called
-     * after the session closes (e.g. in async worker threads).
      */
-    @Query("SELECT w FROM WhatsAppConfig w JOIN FETCH w.tenant t JOIN FETCH t.users u WHERE u.id = :userId")
+    @Query("SELECT DISTINCT w FROM WhatsAppConfig w LEFT JOIN FETCH w.tenant t LEFT JOIN FETCH t.users u WHERE u.id = :userId")
     Optional<WhatsAppConfig> findByUserId(@Param("userId") UUID userId);
 
-    @Query("SELECT w FROM WhatsAppConfig w JOIN FETCH w.tenant t JOIN FETCH t.users WHERE w.tenant.id = :tenantId")
+    /**
+     * Finds config by tenant ID, eagerly joining tenant and users.
+     * Uses DISTINCT and LEFT JOIN FETCH to prevent NonUniqueResultException when multiple users exist.
+     */
+    @Query("SELECT DISTINCT w FROM WhatsAppConfig w LEFT JOIN FETCH w.tenant t LEFT JOIN FETCH t.users WHERE w.tenant.id = :tenantId")
     Optional<WhatsAppConfig> findByTenantId(@Param("tenantId") UUID tenantId);
 
     /**
      * Returns just the owner user's ID for a given phone number ID.
-     * Used in async workers to avoid LazyInitializationException.
      */
-    @Query("SELECT u.id FROM WhatsAppConfig w JOIN w.tenant t JOIN t.users u WHERE w.phoneNumberId = :phoneNumberId AND u.role = 'OWNER'")
+    @Query("SELECT u.id FROM WhatsAppConfig w JOIN w.tenant t JOIN t.users u WHERE (TRIM(w.phoneNumberId) = TRIM(:phoneNumberId) OR TRIM(w.embeddedPhoneId) = TRIM(:phoneNumberId)) AND u.role = 'OWNER'")
     Optional<UUID> findOwnerIdByPhoneNumberId(@Param("phoneNumberId") String phoneNumberId);
 
     /**
-     * Returns just the tenant ID for a given phone number ID.
+     * Returns just the tenant ID for a given phone number ID (or embedded phone ID).
      */
-    @Query("SELECT t.id FROM WhatsAppConfig w JOIN w.tenant t WHERE w.phoneNumberId = :phoneNumberId")
+    @Query("SELECT t.id FROM WhatsAppConfig w JOIN w.tenant t WHERE TRIM(w.phoneNumberId) = TRIM(:phoneNumberId) OR TRIM(w.embeddedPhoneId) = TRIM(:phoneNumberId)")
     Optional<UUID> findTenantIdByPhoneNumberId(@Param("phoneNumberId") String phoneNumberId);
 
     Optional<WhatsAppConfig> findByWabaId(String wabaId);
-
 
     @Cacheable(value = "whatsapp_verify_tokens", key = "#verifyToken")
     boolean existsByVerifyToken(String verifyToken);

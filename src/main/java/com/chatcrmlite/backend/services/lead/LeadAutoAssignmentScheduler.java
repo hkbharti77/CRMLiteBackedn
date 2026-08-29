@@ -32,7 +32,7 @@ public class LeadAutoAssignmentScheduler {
      */
     @Scheduled(fixedDelay = 60000)
     public void processAutoAssignments() {
-        log.info("[Lead-Auto-Assignment] Starting auto-assignment job...");
+        log.debug("[Lead-Auto-Assignment] Starting auto-assignment job...");
 
         List<Tenant> activeTenants = tenantRepository.findAll();
 
@@ -42,6 +42,10 @@ public class LeadAutoAssignmentScheduler {
 
             // Fetch leads for this tenant that are UNASSIGNED or LIMIT_REACHED and older than cutoff
             List<UUID> leadsToProcess = leadRepository.findLeadsForAutoAssignment(tenant.getId(), cutoffTime);
+
+            if (!leadsToProcess.isEmpty()) {
+                log.info("[Lead-Auto-Assignment] Found {} leads to auto-assign for tenant {}", leadsToProcess.size(), tenant.getId());
+            }
 
             for (UUID leadId : leadsToProcess) {
                 try {

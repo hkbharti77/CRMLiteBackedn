@@ -2,11 +2,13 @@ package com.chatcrmlite.backend.services.workflow;
 
 import com.chatcrmlite.backend.services.tenant.TenantTierService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.connection.stream.ObjectRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
-
-import java.util.Collections;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Routes processing contexts to the appropriate specialized streams.
@@ -14,31 +16,36 @@ import java.util.Collections;
 @Service
 @RequiredArgsConstructor
 public class QueueRouter {
-    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(QueueRouter.class);
+    private static final Logger log = LoggerFactory.getLogger(QueueRouter.class);
 
     private final StringRedisTemplate redisTemplate;
     private final TenantTierService tierService;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
+
+    @Value("${workflow.stream.ai:workflow:ai}")
+    private String aiStream;
+
+    @Value("${workflow.stream.flow:workflow:flow}")
+    private String flowStream;
+
+    @Value("${workflow.stream.delivery:workflow:delivery}")
+    private String deliveryStream;
 
     public void routeToAi(ProcessingContext context) {
-        // Removed tier-based routing - all messages go to single stream
-        enqueue("workflow:ai", context);
+        enqueue(aiStream, context);
     }
 
     public void routeToFlow(ProcessingContext context) {
-        // Removed tier-based routing - all messages go to single stream
-        enqueue("workflow:flow", context);
+        enqueue(flowStream, context);
     }
 
     public void routeToDelivery(ProcessingContext context) {
-        // Removed tier-based routing - all messages go to single stream
-        enqueue("workflow:delivery", context);
+        enqueue(deliveryStream, context);
     }
 
-    private void enqueue(String streamName, ProcessingContext context) {
-        log.info("🔀 [Workflow] Routing {} to stream {}", context.getMessageId(), streamName);
-        org.springframework.data.redis.connection.stream.ObjectRecord<String, String> record = 
-                org.springframework.data.redis.connection.stream.ObjectRecord.create(streamName, serialize(context));
+    private void enqueue(String targetStream, ProcessingContext context) {
+        log.info("[WhatsApp-Queue] Routing messageId={} to stream={}", context.getMessageId(), targetStream);
+        ObjectRecord<String, String> record = ObjectRecord.create(targetStream, serialize(context));
         redisTemplate.opsForStream().add(record);
     }
 
@@ -46,7 +53,7 @@ public class QueueRouter {
         try {
             return objectMapper.writeValueAsString(context);
         } catch (Exception e) {
-            log.error("Failed to serialize ProcessingContext", e);
+            log.error("Failed to serialize ProcessingContext for messageId={}", context.getMessageId(), e);
             throw new RuntimeException(e);
         }
     }

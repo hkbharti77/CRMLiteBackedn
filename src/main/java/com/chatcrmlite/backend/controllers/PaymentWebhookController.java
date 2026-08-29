@@ -268,57 +268,6 @@ public class PaymentWebhookController {
         }
     }
 
-    @PostMapping("/api/v1/billing/mock-success")
-    public ResponseEntity<?> mockPaymentSuccess(
-            @AuthenticationPrincipal String email,
-            @RequestBody Map<String, String> request) {
-        
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-
-        String orderId = request.get("orderId");
-        if (orderId == null) {
-            return ResponseEntity.badRequest().body("orderId is required.");
-        }
-        
-        BillingTransaction transaction = billingTransactionRepository.findByGatewayTransactionId(orderId)
-                .orElse(null);
-        
-        if (transaction == null) {
-            return ResponseEntity.badRequest().body("Transaction not found for reference: " + orderId);
-        }
-        
-        UUID tenantId = transaction.getTenant().getId();
-        log.info("🧪 MOCK success trigger for tenant: {}, order: {}", tenantId, orderId);
-
-        String planId = request.get("planId");
-        if (planId == null || planId.isBlank()) {
-            planId = "PRO";
-            if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
-                planId = "ENTERPRISE";
-            }
-        }
-        String billingCycleStr = request.getOrDefault("billingCycle", "MONTHLY");
-
-        BillingTransaction updatedTx = subscriptionBillingService.processPaymentSuccess(
-                tenantId,
-                planId.toUpperCase(),
-                billingCycleStr.toUpperCase(),
-                transaction.getAmount(),
-                transaction.getCurrency(),
-                orderId,
-                "mock_tx_" + System.currentTimeMillis(),
-                PaymentGateway.RAZORPAY,
-                user.getEmail()
-        );
-
-        Map<String, Object> response = new HashMap<>();
-        response.put("message", "Mock payment processed successfully");
-        response.put("plan", planId.toUpperCase());
-        response.put("transactionId", updatedTx.getId());
-        return ResponseEntity.ok(response);
-    }
-
     @GetMapping("/api/v1/public/payment/success")
     public ResponseEntity<String> paymentSuccess(@RequestParam(value = "session_id", required = false) String sessionId) {
         String html = "<html><head><title>Payment Successful</title>"

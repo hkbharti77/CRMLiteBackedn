@@ -212,6 +212,29 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE).build();
     }
 
+    // ── HTTP Routing & Static Resources (404 / 405) ───────────────────────────
+
+    @ExceptionHandler(org.springframework.web.servlet.resource.NoResourceFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoResourceFound(
+            org.springframework.web.servlet.resource.NoResourceFoundException ex) {
+        log.debug("[NoResourceFound] Resource not found: {}", ex.getResourcePath());
+        return errorResponse(HttpStatus.NOT_FOUND, "Resource not found: " + ex.getResourcePath(), null);
+    }
+
+    @ExceptionHandler(org.springframework.web.servlet.NoHandlerFoundException.class)
+    public ResponseEntity<Map<String, Object>> handleNoHandlerFound(
+            org.springframework.web.servlet.NoHandlerFoundException ex) {
+        log.debug("[NoHandlerFound] No handler found for {} {}", ex.getHttpMethod(), ex.getRequestURL());
+        return errorResponse(HttpStatus.NOT_FOUND, "No endpoint found for " + ex.getHttpMethod() + " " + ex.getRequestURL(), null);
+    }
+
+    @ExceptionHandler(org.springframework.web.HttpRequestMethodNotSupportedException.class)
+    public ResponseEntity<Map<String, Object>> handleMethodNotSupported(
+            org.springframework.web.HttpRequestMethodNotSupportedException ex) {
+        log.debug("[MethodNotSupported] Method {} not supported for URL", ex.getMethod());
+        return errorResponse(HttpStatus.METHOD_NOT_ALLOWED, "HTTP method '" + ex.getMethod() + "' not supported for this endpoint.", null);
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
 
     /**

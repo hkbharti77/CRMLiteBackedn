@@ -198,8 +198,19 @@ public class WhatsAppFlowController {
 
     @GetMapping("/{id}/audit-logs")
     public ResponseEntity<List<WhatsAppFlowAuditLog>> getAuditLogs(@PathVariable("id") UUID id, @AuthenticationPrincipal Object principal) {
-        resolveAuthenticatedUser(principal);
-        return ResponseEntity.ok(auditLogRepository.findAllByFlowIdOrderByCreatedAtDesc(id));
+        // P3-03-02: Enforce tenant ownership before querying audit logs.
+        // flowService.getFlow() internally calls flowRepository.findByIdAndTenantId(id, tenantId)
+        // and throws NoSuchElementException when the flow belongs to another tenant or does not
+        // exist. We translate that to 404 so the auditLogRepository is NEVER queried for an
+        // unauthorized flow, preventing IDOR/BOLA.
+        User user = resolveAuthenticatedUser(principal);
+        WhatsAppFlow flow;
+        try {
+            flow = flowService.getFlow(id, user);
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(auditLogRepository.findAllByFlowIdOrderByCreatedAtDesc(flow.getId()));
     }
 
     @PostMapping("/sync-meta")
@@ -211,7 +222,18 @@ public class WhatsAppFlowController {
 
     @GetMapping("/{id}/submissions")
     public ResponseEntity<List<FlowSubmission>> getSubmissions(@PathVariable("id") UUID id, @AuthenticationPrincipal Object principal) {
-        resolveAuthenticatedUser(principal);
-        return ResponseEntity.ok(submissionRepository.findAllByFlowIdOrderByCreatedAtDesc(id));
+        // P3-03-01: Enforce tenant ownership before querying submissions.
+        // flowService.getFlow() internally calls flowRepository.findByIdAndTenantId(id, tenantId)
+        // and throws NoSuchElementException when the flow belongs to another tenant or does not
+        // exist. We translate that to 404 so the submissionRepository is NEVER queried for an
+        // unauthorized flow, and the caller cannot distinguish "wrong tenant" from "not found".
+        User user = resolveAuthenticatedUser(principal);
+        WhatsAppFlow flow;
+        try {
+            flow = flowService.getFlow(id, user);
+        } catch (java.util.NoSuchElementException e) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(submissionRepository.findAllByFlowIdOrderByCreatedAtDesc(flow.getId()));
     }
 }

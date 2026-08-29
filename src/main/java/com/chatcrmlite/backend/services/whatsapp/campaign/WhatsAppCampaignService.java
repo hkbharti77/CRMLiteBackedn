@@ -155,8 +155,7 @@ public class WhatsAppCampaignService {
      */
     @Transactional
     public String executeDryRun(UUID campaignId, String testPhoneNumber, User actor) {
-        WhatsAppCampaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
 
         WhatsAppConfig config = whatsAppConfigRepository.findByUserId(actor.getId())
                 .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for user"));
@@ -190,8 +189,7 @@ public class WhatsAppCampaignService {
      */
     @Transactional
     public WhatsAppCampaign scheduleOrExecuteCampaign(UUID campaignId, LocalDateTime scheduleTime, User actor) {
-        WhatsAppCampaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
 
         if (campaign.getStatus() == WhatsAppCampaign.Status.RUNNING || campaign.getStatus() == WhatsAppCampaign.Status.COMPLETED) {
             throw new IllegalStateException("Campaign is already in status: " + campaign.getStatus());
@@ -251,8 +249,7 @@ public class WhatsAppCampaignService {
 
     @Transactional
     public WhatsAppCampaign pauseCampaign(UUID campaignId, User actor) {
-        WhatsAppCampaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         campaign.setStatus(WhatsAppCampaign.Status.PAUSED);
         WhatsAppCampaign saved = campaignRepository.save(campaign);
         auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.PAUSED, "{}");
@@ -261,8 +258,7 @@ public class WhatsAppCampaignService {
 
     @Transactional
     public WhatsAppCampaign resumeCampaign(UUID campaignId, User actor) {
-        WhatsAppCampaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         campaign.setStatus(WhatsAppCampaign.Status.RUNNING);
         WhatsAppCampaign saved = campaignRepository.save(campaign);
         auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.RESUMED, "{}");
@@ -271,8 +267,7 @@ public class WhatsAppCampaignService {
 
     @Transactional
     public WhatsAppCampaign cancelCampaign(UUID campaignId, User actor) {
-        WhatsAppCampaign campaign = campaignRepository.findById(campaignId)
-                .orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         campaign.setStatus(WhatsAppCampaign.Status.CANCELLED);
         WhatsAppCampaign saved = campaignRepository.save(campaign);
         auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.CANCELLED, "{}");
@@ -280,27 +275,51 @@ public class WhatsAppCampaignService {
     }
 
     @Transactional(readOnly = true)
-    public Page<WhatsAppCampaign> getCampaigns(User owner, Pageable pageable) {
-        return campaignRepository.findByOwner(owner, pageable);
+    public Page<WhatsAppCampaign> getCampaigns(User actor, Pageable pageable) {
+        if (actor == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "User authentication required");
+        }
+        if (actor.getTenant() != null) {
+            return campaignRepository.findByTenantId(actor.getTenant().getId(), pageable);
+        }
+        return campaignRepository.findByOwner(actor, pageable);
     }
 
     @Transactional(readOnly = true)
-    public WhatsAppCampaign getCampaign(UUID id) {
-        return campaignRepository.findById(id).orElseThrow(() -> new IllegalArgumentException("Campaign not found"));
+    public WhatsAppCampaign getCampaign(UUID id, User actor) {
+        if (actor == null) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.UNAUTHORIZED, "User authentication required");
+        }
+        UUID tenantId = (actor.getTenant() != null) ? actor.getTenant().getId() : null;
+        if (tenantId != null) {
+            return campaignRepository.findByIdAndTenantId(id, tenantId)
+                    .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                            org.springframework.http.HttpStatus.NOT_FOUND, "Campaign not found"));
+        }
+        WhatsAppCampaign campaign = campaignRepository.findById(id)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "Campaign not found"));
+        if (campaign.getOwner() == null || !campaign.getOwner().getId().equals(actor.getId())) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.NOT_FOUND, "Campaign not found");
+        }
+        return campaign;
     }
 
-    public WhatsAppCampaignAnalytics getAnalytics(UUID campaignId) {
-        WhatsAppCampaign campaign = getCampaign(campaignId);
+    public WhatsAppCampaignAnalytics getAnalytics(UUID campaignId, User actor) {
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         return analyticsService.updateAnalyticsRollup(campaign);
     }
 
-    public List<WhatsAppCampaignAuditLog> getAuditLogs(UUID campaignId) {
-        WhatsAppCampaign campaign = getCampaign(campaignId);
+    public List<WhatsAppCampaignAuditLog> getAuditLogs(UUID campaignId, User actor) {
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         return auditService.getAuditLogs(campaign);
     }
 
-    public Page<WhatsAppCampaignRecipient> getRecipients(UUID campaignId, Pageable pageable) {
-        WhatsAppCampaign campaign = getCampaign(campaignId);
+    public Page<WhatsAppCampaignRecipient> getRecipients(UUID campaignId, User actor, Pageable pageable) {
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         return recipientRepository.findByCampaign(campaign, pageable);
     }
 }

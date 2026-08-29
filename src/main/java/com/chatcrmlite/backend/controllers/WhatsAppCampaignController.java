@@ -82,8 +82,11 @@ public class WhatsAppCampaignController {
     }
 
     @GetMapping("/{id}")
-    public ResponseEntity<WhatsAppCampaign> getCampaign(@PathVariable UUID id) {
-        return ResponseEntity.ok(campaignService.getCampaign(id));
+    public ResponseEntity<WhatsAppCampaign> getCampaign(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(campaignService.getCampaign(id, user));
     }
 
     @PostMapping("/{id}/dry-run")
@@ -135,21 +138,29 @@ public class WhatsAppCampaignController {
     }
 
     @GetMapping("/{id}/analytics")
-    public ResponseEntity<WhatsAppCampaignAnalytics> getAnalytics(@PathVariable UUID id) {
-        return ResponseEntity.ok(campaignService.getAnalytics(id));
+    public ResponseEntity<WhatsAppCampaignAnalytics> getAnalytics(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(campaignService.getAnalytics(id, user));
     }
 
     @GetMapping("/{id}/audit-logs")
-    public ResponseEntity<List<WhatsAppCampaignAuditLog>> getAuditLogs(@PathVariable UUID id) {
-        return ResponseEntity.ok(campaignService.getAuditLogs(id));
+    public ResponseEntity<List<WhatsAppCampaignAuditLog>> getAuditLogs(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(campaignService.getAuditLogs(id, user));
     }
 
     @GetMapping("/{id}/recipients")
     public ResponseEntity<Page<com.chatcrmlite.backend.models.WhatsAppCampaignRecipient>> getRecipients(
             @PathVariable UUID id,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "50") int size) {
-        return ResponseEntity.ok(campaignService.getRecipients(id, PageRequest.of(page, size)));
+            @RequestParam(defaultValue = "50") int size,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(campaignService.getRecipients(id, user, PageRequest.of(page, size)));
     }
 
     // ── CSV Upload Endpoint ──────────────────────────────────────────────────

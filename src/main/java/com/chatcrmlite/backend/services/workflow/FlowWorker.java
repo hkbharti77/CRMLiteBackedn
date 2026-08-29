@@ -3,29 +3,30 @@ package com.chatcrmlite.backend.services.workflow;
 import com.chatcrmlite.backend.services.DeadLetterHandler;
 import com.chatcrmlite.backend.services.flow.FlowStateMachine;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.connection.stream.ObjectRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Service;
-
-import java.util.UUID;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * Stage Worker for Flow Execution (State Machine).
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FlowWorker implements StreamListener<String, ObjectRecord<String, String>> {
+    private static final Logger log = LoggerFactory.getLogger(FlowWorker.class);
 
     private final WorkflowOrchestrator orchestrator;
     private final FlowStateMachine flowStateMachine;
     private final StringRedisTemplate redisTemplate;
     private final DeadLetterHandler dlqHandler;
     private final com.chatcrmlite.backend.services.whatsapp.WhatsAppFlowHandler whatsappFlowHandler;
-    private final com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+    private final ObjectMapper objectMapper;
 
     @Value("${whatsapp.async.group}")
     private String groupName;
@@ -33,20 +34,22 @@ public class FlowWorker implements StreamListener<String, ObjectRecord<String, S
     @Override
     public void onMessage(ObjectRecord<String, String> record) {
         String payload = record.getValue();
+        String streamMessageId = record.getId().toString();
 
         // Skip initialization dummy messages
-        if ("true".equals(payload) || (payload != null && payload.contains("_init"))) {
+        if (payload == null || payload.isBlank() || "true".equals(payload) || payload.contains("_init")) {
             redisTemplate.opsForStream().acknowledge(groupName, record);
             return;
         }
 
         ProcessingContext context = deserialize(payload);
         if (context == null) {
+            log.warn("⚠️ [WhatsApp-Flow] Failed to deserialize ProcessingContext for streamMessageId={}. Clearing.", streamMessageId);
             redisTemplate.opsForStream().acknowledge(groupName, record);
             return;
         }
 
-        log.info("🔀 [Flow-Worker] Executing flow for message {}", context.getMessageId());
+        log.info("[WhatsApp-Flow] Executing flow logic correlationId={} messageId={}", context.getMessageId(), context.getMessageId());
 
         try {
             // EXECUTE FLOW LOGIC
@@ -54,8 +57,9 @@ public class FlowWorker implements StreamListener<String, ObjectRecord<String, S
             
             orchestrator.completeStage(context, ProcessingContext.WorkflowStage.DELIVERY);
             redisTemplate.opsForStream().acknowledge(groupName, record);
+            log.info("[WhatsApp-Queue] ACK Flow stage streamMessageId={} messageId={}", streamMessageId, context.getMessageId());
         } catch (Exception e) {
-            log.error("Flow Execution failed for {}", context.getMessageId(), e);
+            log.error("[WhatsApp-Flow] FAILED correlationId={} messageId={} error={}", context.getMessageId(), context.getMessageId(), e.getMessage(), e);
             orchestrator.completeStage(context, ProcessingContext.WorkflowStage.FAILED);
             dlqHandler.moveToDlq(record, e);
             redisTemplate.opsForStream().acknowledge(groupName, record);
@@ -66,7 +70,7 @@ public class FlowWorker implements StreamListener<String, ObjectRecord<String, S
         if (data == null || data.isBlank()) return null;
         try {
             if (data.startsWith("{\"payload\":") || data.startsWith("{\"payload\" :")) {
-                com.fasterxml.jackson.databind.JsonNode node = objectMapper.readTree(data);
+                JsonNode node = objectMapper.readTree(data);
                 if (node.has("payload")) {
                     String inner = node.get("payload").asText();
                     return objectMapper.readValue(inner, ProcessingContext.class);

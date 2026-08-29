@@ -4,33 +4,46 @@ import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.ContactRepository;
+import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import com.chatcrmlite.backend.services.workflow.ProcessingContext;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class WhatsAppDeliveryHandler {
+    private static final Logger log = LoggerFactory.getLogger(WhatsAppDeliveryHandler.class);
 
     private final WhatsAppConfigRepository whatsappConfigRepository;
     private final ContactRepository contactRepository;
     private final WhatsAppMessageService messageService;
     private final WhatsAppMenuService menuService;
+    @Autowired(required = false) private UserRepository userRepository;
 
     public void deliverResponse(ProcessingContext context) throws Exception {
         try {
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
-                    .orElseThrow(() -> new RuntimeException("WhatsApp config not found for tenant: " + context.getTenantId()));
+                    .orElseThrow(() -> new IllegalStateException("WhatsApp config not found for tenant: " + context.getTenantId()));
+
             User owner = config.getUser();
+            if (owner == null && userRepository != null && config.getTenant() != null) {
+                owner = userRepository.findByTenantIdAndRole(context.getTenantId(), User.Role.OWNER)
+                        .stream().findFirst()
+                        .orElseGet(() -> userRepository.findAllByTenant(config.getTenant()).stream().findFirst().orElse(null));
+            }
+
             Contact contact = contactRepository.findByWaIdAndTenant_Id(context.getWaId(), context.getTenantId())
-                    .orElseThrow(() -> new RuntimeException("Contact not found for tenant: " + context.getTenantId()));
+                    .orElseThrow(() -> new IllegalStateException("Contact not found for tenant: " + context.getTenantId()));
 
             String responseType = (String) context.getMetadata().getOrDefault("responseType", "NONE");
             String pendingResponse = (String) context.getMetadata().get("pendingResponse");
+
+            log.info("[WhatsApp-Outbound] Dispatching response responseType={} correlationId={} messageId={}",
+                    responseType, context.getMessageId(), context.getMessageId());
 
             switch (responseType) {
                 case "AI":
@@ -60,9 +73,10 @@ public class WhatsAppDeliveryHandler {
                 case "NONE":
                     break;
             }
-            log.info("🚚 [Delivery-Stage] Dispatched response type {} for {}", responseType, context.getMessageId());
+            log.info("[WhatsApp-Outbound] Successfully dispatched response responseType={} correlationId={}",
+                    responseType, context.getMessageId());
         } catch (Exception e) {
-            log.error("❌ [Delivery-Stage] Delivery failed for messageId={}: {}", context.getMessageId(), e.getMessage());
+            log.error("[WhatsApp-Outbound] FAILED delivery for messageId={} error={}", context.getMessageId(), e.getMessage(), e);
             throw e;
         }
     }

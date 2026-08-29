@@ -1,6 +1,6 @@
 package com.chatcrmlite.backend.services.tenant;
 
-import com.chatcrmlite.backend.controllers.PaymentWebhookController;
+import com.chatcrmlite.backend.controllers.dev.DevMockPaymentController;
 import com.chatcrmlite.backend.models.BillingTransaction;
 import com.chatcrmlite.backend.models.SubscriptionPlan;
 import com.chatcrmlite.backend.models.Tenant;
@@ -39,7 +39,7 @@ public class SubscriptionCacheInvalidationIntegrationTest {
     private QuotaEnforcerService quotaEnforcerService;
 
     @Autowired
-    private PaymentWebhookController paymentWebhookController;
+    private DevMockPaymentController devMockPaymentController;
 
     @Autowired
     private TenantRepository tenantRepository;
@@ -131,7 +131,7 @@ public class SubscriptionCacheInvalidationIntegrationTest {
             request.put("orderId", "test_order_123");
             
             // This should update to PRO and fire the event
-            paymentWebhookController.mockPaymentSuccess(testUser.getEmail(), request);
+            devMockPaymentController.mockPaymentSuccess(testUser.getEmail(), request);
         });
 
         // 3. Second lookup -> cache should have been invalidated, pulling PRO from DB

@@ -18,6 +18,12 @@ public interface WhatsAppCampaignRepository extends JpaRepository<WhatsAppCampai
     @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
     Page<WhatsAppCampaign> findByOwner(User owner, Pageable pageable);
 
+    @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
+    Page<WhatsAppCampaign> findByTenantId(UUID tenantId, Pageable pageable);
+
+    @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
+    Optional<WhatsAppCampaign> findByIdAndTenantId(UUID id, UUID tenantId);
+
     @Override
     @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
     Optional<WhatsAppCampaign> findById(UUID id);
