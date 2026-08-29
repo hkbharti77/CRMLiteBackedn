@@ -44,9 +44,18 @@ public interface ActivityLogRepository extends JpaRepository<ActivityLog, UUID> 
 
     /**
      * Fetch all logs for a specific entity (e.g., a single booking's history).
+     * @deprecated Use findByEntityAndTenantId instead to prevent IDOR.
      */
     @Query("SELECT a FROM ActivityLog a WHERE a.entityType = :type AND a.entityId = :id ORDER BY a.createdAt DESC")
+    @Deprecated
     List<ActivityLog> findByEntity(@Param("type") String entityType, @Param("id") UUID entityId);
+
+    /**
+     * Tenant-scoped fetch for a specific entity's activity logs.
+     * Prevents cross-tenant access to timeline data.
+     */
+    @Query("SELECT a FROM ActivityLog a WHERE a.entityType = :type AND a.entityId = :id AND a.owner.tenant.id = :tenantId ORDER BY a.createdAt DESC")
+    List<ActivityLog> findByEntityAndTenantId(@Param("type") String entityType, @Param("id") UUID entityId, @Param("tenantId") UUID tenantId);
 
     /**
      * Fetch recent N activities for a contact — used for a quick-glance sidebar.

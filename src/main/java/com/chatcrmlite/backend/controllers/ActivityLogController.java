@@ -34,7 +34,10 @@ public class ActivityLogController {
     // ── Auth helper ────────────────────────────────────────────────────────
 
     private User getAuthenticatedUser() {
-        String email = (String) SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        Object principal = SecurityContextHolder.getContext().getAuthentication().getPrincipal();
+        String email = principal instanceof org.springframework.security.core.userdetails.UserDetails
+                ? ((org.springframework.security.core.userdetails.UserDetails) principal).getUsername()
+                : principal.toString();
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
     }
@@ -86,7 +89,8 @@ public class ActivityLogController {
             @PathVariable String entityType,
             @PathVariable UUID entityId) {
 
-        return ResponseEntity.ok(activityLogService.getEntityHistory(entityType, entityId));
+        User caller = getAuthenticatedUser();
+        return ResponseEntity.ok(activityLogService.getEntityHistory(entityType, entityId, caller));
     }
 
     /**

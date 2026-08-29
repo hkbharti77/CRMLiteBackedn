@@ -61,8 +61,11 @@ public class ActivityLogService {
     }
 
     @Transactional(readOnly = true)
-    public List<ActivityLogDTO> getEntityHistory(String entityType, UUID entityId) {
-        List<ActivityLog> logs = activityLogRepository.findByEntity(entityType, entityId);
+    public List<ActivityLogDTO> getEntityHistory(String entityType, UUID entityId, User caller) {
+        if (caller == null || caller.getTenant() == null) {
+            return List.of();
+        }
+        List<ActivityLog> logs = activityLogRepository.findByEntityAndTenantId(entityType, entityId, caller.getTenant().getId());
         return logs.stream()
                 .map(ActivityLogDTO::fromEntity)
                 .collect(Collectors.toList());
