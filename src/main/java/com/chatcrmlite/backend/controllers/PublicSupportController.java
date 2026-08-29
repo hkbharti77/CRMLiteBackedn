@@ -68,11 +68,7 @@ public class PublicSupportController {
     }
 
     private String getClientIP(jakarta.servlet.http.HttpServletRequest request) {
-        String xfHeader = request.getHeader("X-Forwarded-For");
-        if (xfHeader == null) {
-            return request.getRemoteAddr();
-        }
-        return xfHeader.split(",")[0];
+        return request.getRemoteAddr();
     }
 
     public static class BusinessNotFoundException extends RuntimeException {

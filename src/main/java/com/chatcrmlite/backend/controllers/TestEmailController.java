@@ -20,6 +20,7 @@ import java.util.*;
 @RestController
 @RequestMapping("/api/v1/test-emails")
 @org.springframework.security.access.prepost.PreAuthorize("hasAnyRole('ADMIN', 'OWNER')")
+@org.springframework.context.annotation.Profile({"dev", "test"})
 @CrossOrigin(origins = "*")
 public class TestEmailController {
 

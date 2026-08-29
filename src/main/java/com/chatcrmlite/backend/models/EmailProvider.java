@@ -31,6 +31,7 @@ public class EmailProvider {
 
     @Column(name = "credentials_payload", columnDefinition = "TEXT", nullable = false)
     @Convert(converter = EncryptionConverter.class)
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     private String credentialsPayload; // JSON string encrypted in DB
 
     @Column(name = "is_default")

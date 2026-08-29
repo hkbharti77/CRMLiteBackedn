@@ -37,11 +37,15 @@ public class EmailProviderService {
         if (provider.getId() == null || provider.getId().isEmpty()) {
             provider.setId(UUID.randomUUID().toString());
         } else {
-            repository.findById(provider.getId()).ifPresent(existing -> {
-                if (provider.getBusinessId() == null || provider.getBusinessId().isEmpty()) {
-                    provider.setBusinessId(existing.getBusinessId());
-                }
-            });
+            EmailProvider existing = repository.findById(provider.getId())
+                    .orElseThrow(() -> new RuntimeException("Provider not found"));
+            if (provider.getBusinessId() != null && !provider.getBusinessId().isEmpty() &&
+                !existing.getBusinessId().equals(provider.getBusinessId())) {
+                throw new org.springframework.security.access.AccessDeniedException("Cannot modify provider belonging to another business");
+            }
+            if (provider.getBusinessId() == null || provider.getBusinessId().isEmpty()) {
+                provider.setBusinessId(existing.getBusinessId());
+            }
         }
         
         // If this is the first provider for the business, make it default

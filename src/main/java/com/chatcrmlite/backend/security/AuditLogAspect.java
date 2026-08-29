@@ -99,10 +99,6 @@ public class AuditLogAspect {
             ServletRequestAttributes attrs =
                     (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attrs != null) {
-                String xff = attrs.getRequest().getHeader("X-Forwarded-For");
-                if (xff != null && !xff.isBlank()) {
-                    return xff.split(",")[0].trim();
-                }
                 return attrs.getRequest().getRemoteAddr();
             }
         } catch (Exception ignored) {

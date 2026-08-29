@@ -62,8 +62,6 @@ public class PlatformAuditService {
 
     private String resolveIp(HttpServletRequest request) {
         if (request == null) return "0.0.0.0";
-        String xff = request.getHeader("X-Forwarded-For");
-        if (xff != null && !xff.isBlank()) return xff.split(",")[0].trim();
         return request.getRemoteAddr();
     }
 }
