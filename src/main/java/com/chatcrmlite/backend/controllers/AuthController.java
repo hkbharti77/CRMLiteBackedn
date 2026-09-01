@@ -51,6 +51,7 @@ public class AuthController {
     @Autowired private SecurityService securityService;
     @Autowired private RateLimitConfig rateLimitConfig;
     @Autowired private com.chatcrmlite.backend.services.platform.PlatformAuditService platformAuditService;
+    @Autowired private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
 
     /**
      * Step 1: Initiate login or signup — sends OTP to the provided email.
@@ -187,6 +188,18 @@ public class AuthController {
 
             String roleStr = user.getRole() != null ? user.getRole().name() : (isSuperAdminUser ? "SUPER_ADMIN" : "OWNER");
 
+            String planTypeStr = "FREE";
+            if (isSuperAdminUser || user.getRole() == User.Role.SUPER_ADMIN) {
+                planTypeStr = "ENTERPRISE";
+            } else if (user.getTenant() != null && user.getTenant().getId() != null) {
+                User.PlanType tier = tenantTierService.getTier(user.getTenant().getId());
+                if (tier != null) {
+                    planTypeStr = tier.name();
+                }
+            } else if (user.getPlanType() != null) {
+                planTypeStr = user.getPlanType().name();
+            }
+
             return ResponseEntity.ok(new AuthResponse(
                 token,
                 user.getId().toString(),
@@ -195,7 +208,8 @@ public class AuthController {
                 user.getDisplayName(),
                 user.getBusinessName(),
                 roleStr,
-                user.getOnboardingCompleted() != null && user.getOnboardingCompleted()
+                user.getOnboardingCompleted() != null && user.getOnboardingCompleted(),
+                planTypeStr
             ));
         }
 
@@ -297,9 +311,10 @@ public class AuthController {
         private String businessName;
         private String role;
         private boolean onboardingCompleted;
+        private String planType;
 
         public AuthResponse() {}
-        public AuthResponse(String token, String userId, String tenantId, String email, String displayName, String businessName, String role, boolean onboardingCompleted) {
+        public AuthResponse(String token, String userId, String tenantId, String email, String displayName, String businessName, String role, boolean onboardingCompleted, String planType) {
             this.token = token;
             this.userId = userId;
             this.tenantId = tenantId;
@@ -308,6 +323,7 @@ public class AuthController {
             this.businessName = businessName;
             this.role = role;
             this.onboardingCompleted = onboardingCompleted;
+            this.planType = planType;
         }
 
         public String getToken() { return token; }
@@ -318,6 +334,7 @@ public class AuthController {
         public String getBusinessName() { return businessName; }
         public String getRole() { return role; }
         public boolean isOnboardingCompleted() { return onboardingCompleted; }
+        public String getPlanType() { return planType; }
     }
 
     public static class MessageResponse {

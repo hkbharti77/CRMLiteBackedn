@@ -166,6 +166,7 @@ public class SecurityConfig {
                         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
                         "img-src 'self' data: https:; " +
                         "font-src 'self' https://fonts.gstatic.com; " +
+                        "media-src 'self' data: blob: https:; " +
                         "connect-src 'self' *; " +
                         "frame-ancestors *; " +
                         "form-action 'self'; " +
@@ -174,9 +175,9 @@ public class SecurityConfig {
                 )
                 // Referrer-Policy — don't leak full URL in Referer header
                 .referrerPolicy(rp -> rp.policy(ReferrerPolicyHeaderWriter.ReferrerPolicy.STRICT_ORIGIN_WHEN_CROSS_ORIGIN))
-                // Permissions-Policy — disable dangerous browser APIs
+                // Permissions-Policy — allow microphone for voice assistant while disabling unused APIs
                 .permissionsPolicy(pp -> pp
-                    .policy("geolocation=(), microphone=(), camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()")
+                    .policy("geolocation=(), microphone=*, camera=(), payment=(), usb=(), magnetometer=(), gyroscope=()")
                 )
             );
 

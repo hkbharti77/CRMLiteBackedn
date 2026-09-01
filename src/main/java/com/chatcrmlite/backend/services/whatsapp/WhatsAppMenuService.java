@@ -73,7 +73,7 @@ public class WhatsAppMenuService {
     }
 
     private void sendTenantMenuToContact(Contact contact, WhatsAppConfig config, String overrideBodyText, User owner) {
-        MenuDto menu = parseMenuJson(config != null ? config.getInteractiveMenuJson() : null, owner);
+        MenuDto menu = parseMenuJson(config != null ? config.getInteractiveMenuJson() : null, owner, config);
 
         if (overrideBodyText != null) menu.setBodyText(overrideBodyText);
         if (config != null) injectDynamicFeatures(menu, config);
@@ -92,7 +92,11 @@ public class WhatsAppMenuService {
     }
 
     public MenuDto parseMenuJson(String json, User owner) {
-        if (json == null || json.isBlank()) return buildDefaultMenu(owner);
+        return parseMenuJson(json, owner, null);
+    }
+
+    public MenuDto parseMenuJson(String json, User owner, WhatsAppConfig config) {
+        if (json == null || json.isBlank()) return buildDefaultMenu(owner, config);
         try {
             com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(json);
             String type = root.path("type").asText("list");
@@ -151,7 +155,7 @@ public class WhatsAppMenuService {
             }
 
             if (sections.isEmpty() || sections.get(0).getRows() == null || sections.get(0).getRows().isEmpty()) {
-                return buildDefaultMenu(owner);
+                return buildDefaultMenu(owner, config);
             }
 
             MenuDto menu = MenuDto.builder()
@@ -160,11 +164,11 @@ public class WhatsAppMenuService {
                     .bodyText(bodyText)
                     .sections(sections)
                     .build();
-            refreshTriggerLabels(menu, owner);
+            refreshTriggerLabels(menu, owner, config);
             return menu;
         } catch (Exception e) {
             log.error("[WhatsAppMenuService] Failed to parse custom menu JSON: {}", e.getMessage());
-            return buildDefaultMenu(owner);
+            return buildDefaultMenu(owner, config);
         }
     }
 
@@ -509,7 +513,19 @@ public class WhatsAppMenuService {
         }
     }
 
-    private void refreshTriggerLabels(MenuDto menu, User owner) {
+    private String resolveFlowLabel(String customLabel, User owner, String flowType) {
+        if (customLabel != null && !customLabel.isBlank()) {
+            String trimmed = customLabel.trim();
+            return trimmed.length() > 24 ? trimmed.substring(0, 24) : trimmed;
+        }
+        return templateEngine.getTriggerButtonLabel(owner, flowType);
+    }
+
+    public void refreshTriggerLabels(MenuDto menu, User owner) {
+        refreshTriggerLabels(menu, owner, null);
+    }
+
+    public void refreshTriggerLabels(MenuDto menu, User owner, WhatsAppConfig config) {
         if (menu == null || owner == null) {
             log.warn("[WhatsAppMenuService] Cannot refresh trigger labels: menu or owner is null");
             return;
@@ -531,21 +547,24 @@ public class WhatsAppMenuService {
         }
 
         if (hasLead) {
+            String label = resolveFlowLabel(config != null ? config.getLeadButtonLabel() : null, owner, "lead");
             flowRows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_lead")
-                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
         if (hasAppointment) {
+            String label = resolveFlowLabel(config != null ? config.getAppointmentButtonLabel() : null, owner, "appointment");
             flowRows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_appointment")
-                .title(templateEngine.getTriggerButtonLabel(owner, "appointment")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
         if (hasBooking) {
+            String label = resolveFlowLabel(config != null ? config.getBookingButtonLabel() : null, owner, "booking");
             flowRows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_booking")
-                .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
 
@@ -563,7 +582,11 @@ public class WhatsAppMenuService {
                     boolean flowRowsAdded = false;
                     for (MenuDto.MenuRowDto r : s.getRows()) {
                         if (r != null && (r.getId().equals("trigger_flow") || r.getId().startsWith("trigger_flow_"))) {
-                            if (!flowRowsAdded) {
+                            // If user defined a custom title in interactiveMenuJson AND no explicit config button label override, preserve that custom title
+                            if (r.getId().equals("trigger_flow_lead") && (config == null || config.getLeadButtonLabel() == null) && r.getTitle() != null && !r.getTitle().isBlank()) {
+                                newRows.add(r);
+                                flowRowsAdded = true;
+                            } else if (!flowRowsAdded) {
                                 newRows.addAll(flowRows);
                                 flowRowsAdded = true;
                             }
@@ -583,7 +606,11 @@ public class WhatsAppMenuService {
         }
     }
 
-    private MenuDto buildDefaultMenu(User owner) {
+    public MenuDto buildDefaultMenu(User owner) {
+        return buildDefaultMenu(owner, null);
+    }
+
+    public MenuDto buildDefaultMenu(User owner, WhatsAppConfig config) {
         List<MenuDto.MenuRowDto> rows = new ArrayList<>();
         boolean hasSpecificToggles = false;
 
@@ -600,21 +627,24 @@ public class WhatsAppMenuService {
         }
 
         if (hasLead) {
+            String label = resolveFlowLabel(config != null ? config.getLeadButtonLabel() : null, owner, "lead");
             rows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_lead")
-                .title(templateEngine.getTriggerButtonLabel(owner, "lead")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
         if (hasAppointment) {
+            String label = resolveFlowLabel(config != null ? config.getAppointmentButtonLabel() : null, owner, "appointment");
             rows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_appointment")
-                .title(templateEngine.getTriggerButtonLabel(owner, "appointment")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
         if (hasBooking) {
+            String label = resolveFlowLabel(config != null ? config.getBookingButtonLabel() : null, owner, "booking");
             rows.add(MenuDto.MenuRowDto.builder()
                 .id("trigger_flow_booking")
-                .title(templateEngine.getTriggerButtonLabel(owner, "booking")).build());
+                .title(label).build());
             hasSpecificToggles = true;
         }
 

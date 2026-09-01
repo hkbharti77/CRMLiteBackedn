@@ -149,8 +149,100 @@ public class RagRetrievalService {
         return response;
     }
 
+    /**
+     * Dedicated High-Speed Voice RAG Gate.
+     * Uses human spoken prompt, limits token output to max 85 tokens (1-2 sentences),
+     * and delivers conversational responses with sub-second LLM latency.
+     */
+    @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackVoiceResponse")
+    public String getVoiceAiResponse(String query, UUID tenantId, String languageMode) {
+        if (aiOrchestrator == null) {
+            return "Hello! Connecting to assistant, please hold on.";
+        }
+
+        long start = System.currentTimeMillis();
+
+        // 1. Quota Check
+        User user = userRepository.findById(tenantId).orElseThrow(() -> new RuntimeException("Tenant not found"));
+        quotaService.checkAndEnforceQuota(tenantId, user.getPlanType());
+
+        // 2. Generate Query Embedding
+        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
+        float[] queryEmbedding = embedding.vector();
+
+        // 2b. FAQ High-Confidence Fast Path
+        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
+        if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
+            log.info("[Voice-FAQ] High-confidence match (Score: {}) for tenant {}",
+                    String.format("%.4f", faqMatch.getScore()), tenantId);
+            return faqMatch.getFaqItem().getAnswer();
+        }
+
+        // 3. Semantic Cache Check
+        String cachedResponse = semanticCacheService.getCachedResponse(query, queryEmbedding, tenantId);
+        if (cachedResponse != null) {
+            return cachedResponse;
+        }
+
+        // 4. Fast Retrieval (Top 4 chunks for low voice latency)
+        int topK = 4;
+        List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+
+        // 5. Build Dedicated Spoken-First Voice Prompt with Tenant Voice Persona
+        String niche = user.getBusinessType();
+        String tenantPersona = null;
+        String assistantName = "Priya";
+        if (user.getTenant() != null) {
+            Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
+            if (tenant != null) {
+                tenantPersona = (tenant.getVoicePersonaPrompt() != null && !tenant.getVoicePersonaPrompt().isBlank())
+                        ? tenant.getVoicePersonaPrompt()
+                        : tenant.getAiPersonaPrompt();
+                if (tenant.getVoiceAssistantName() != null && !tenant.getVoiceAssistantName().isBlank()) {
+                    assistantName = tenant.getVoiceAssistantName();
+                }
+            }
+        }
+        String prompt = promptBuilder.buildVoiceRagPrompt(query, chunks, niche, tenantPersona, assistantName, languageMode);
+
+        // 6. Fast LLM Routing with max 85 tokens (< 800ms)
+        AiRequest aiRequest = AiRequest.builder()
+                .prompt(prompt)
+                .tenantId(tenantId)
+                .complexity(AiRequest.TaskComplexity.LOW)
+                .maxTokens(85)
+                .temperature(0.4)
+                .build();
+
+        AiResponse aiResponse = aiOrchestrator.execute(aiRequest);
+        if (aiResponse == null || aiResponse.getContent() == null) {
+            return null;
+        }
+        String response = aiResponse.getContent();
+
+        // 7. Track Usage
+        if (aiResponse.getTokensUsed() > 0) {
+            int totalTokens = aiResponse.getTokensUsed();
+            tokenBudgetService.recordTokenUsage(tenantId, totalTokens, 0);
+            costTracker.trackCost(totalTokens, 0, tenantId);
+        }
+
+        long latency = System.currentTimeMillis() - start;
+        log.info("[Voice-RAG] Success in {}ms | Provider: {} | Tenant: {}", latency, aiResponse.getProvider(), tenantId);
+
+        // 8. Cache response
+        semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);
+
+        return response;
+    }
+
     public String fallbackResponse(String query, UUID tenantId, Throwable t) {
         log.error("[RAG-Fallback] Circuit breaker triggered for query: {}. Error: {}", query, t.getMessage());
         return "I'm having trouble connecting to my knowledge base right now. Please try again later.";
+    }
+
+    public String fallbackVoiceResponse(String query, UUID tenantId, String languageMode, Throwable t) {
+        log.error("[Voice-RAG-Fallback] Circuit breaker triggered for voice query: {}. Error: {}", query, t.getMessage());
+        return "I am having trouble connecting right now. Please try again in a moment.";
     }
 }

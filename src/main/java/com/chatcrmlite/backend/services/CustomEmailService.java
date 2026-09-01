@@ -129,10 +129,23 @@ public class CustomEmailService {
     private CostTracker costTracker;
 
     @Autowired
+    private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
+    private User.PlanType resolvePlan(User user) {
+        if (user.getRole() == User.Role.SUPER_ADMIN) {
+            return User.PlanType.ENTERPRISE;
+        }
+        if (user.getTenant() != null && user.getTenant().getId() != null) {
+            return tenantTierService.getTier(user.getTenant().getId());
+        }
+        return user.getPlanType() != null ? user.getPlanType() : User.PlanType.FREE;
+    }
+
     public AiContentResponse generateAiContent(User user, String prompt) {
-        aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
+        aiQuotaService.checkAndEnforceQuota(user.getTenant() != null ? user.getTenant().getId() : user.getId(), resolvePlan(user));
 
         String systemInstruction = 
             "You are a professional email marketing assistant. " +
@@ -169,7 +182,7 @@ public class CustomEmailService {
     }
 
     public AiTemplateResponse generateAiTemplate(User user, String prompt) {
-        aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
+        aiQuotaService.checkAndEnforceQuota(user.getTenant() != null ? user.getTenant().getId() : user.getId(), resolvePlan(user));
 
         String systemInstruction = 
             "You are a professional email marketing assistant and web designer. " +

@@ -59,6 +59,13 @@ public class Tenant implements Serializable {
     @Column(name = "ai_persona_updated_by")
     private UUID aiPersonaUpdatedBy;
 
+    @Size(max = 4000)
+    @Column(name = "voice_persona_prompt", columnDefinition = "TEXT")
+    private String voicePersonaPrompt;
+
+    @Column(name = "voice_assistant_name", length = 100)
+    private String voiceAssistantName = "Priya";
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private User.PlanType planType = User.PlanType.FREE;
@@ -201,6 +208,12 @@ public class Tenant implements Serializable {
 
     public UUID getAiPersonaUpdatedBy() { return aiPersonaUpdatedBy; }
     public void setAiPersonaUpdatedBy(UUID aiPersonaUpdatedBy) { this.aiPersonaUpdatedBy = aiPersonaUpdatedBy; }
+
+    public String getVoicePersonaPrompt() { return voicePersonaPrompt; }
+    public void setVoicePersonaPrompt(String voicePersonaPrompt) { this.voicePersonaPrompt = voicePersonaPrompt; }
+
+    public String getVoiceAssistantName() { return voiceAssistantName != null ? voiceAssistantName : "Priya"; }
+    public void setVoiceAssistantName(String voiceAssistantName) { this.voiceAssistantName = voiceAssistantName; }
 
     public User.PlanType getPlanType() { return planType; }
     public void setPlanType(User.PlanType planType) { this.planType = planType; }

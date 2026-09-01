@@ -67,12 +67,24 @@ public class UserController {
     @Autowired
     private com.chatcrmlite.backend.services.AgentPermissionService agentPermissionService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
+
     @GetMapping("/me")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<?> getCurrentUser(@AuthenticationPrincipal String email) {
         User user = userRepository.findByEmailWithTenant(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
-        return ResponseEntity.ok(UserProfileDto.from(user));
+        UserProfileDto dto = UserProfileDto.from(user);
+        if (user.getRole() == User.Role.SUPER_ADMIN) {
+            dto.setPlanType("ENTERPRISE");
+        } else if (user.getTenant() != null && user.getTenant().getId() != null) {
+            User.PlanType tier = tenantTierService.getTier(user.getTenant().getId());
+            if (tier != null) {
+                dto.setPlanType(tier.name());
+            }
+        }
+        return ResponseEntity.ok(dto);
     }
 
     @PutMapping("/me")
@@ -121,7 +133,16 @@ public class UserController {
 
         userRepository.save(user);
 
-        return ResponseEntity.ok(UserProfileDto.from(user));
+        UserProfileDto dto = UserProfileDto.from(user);
+        if (user.getRole() == User.Role.SUPER_ADMIN) {
+            dto.setPlanType("ENTERPRISE");
+        } else if (user.getTenant() != null && user.getTenant().getId() != null) {
+            User.PlanType tier = tenantTierService.getTier(user.getTenant().getId());
+            if (tier != null) {
+                dto.setPlanType(tier.name());
+            }
+        }
+        return ResponseEntity.ok(dto);
     }
 
     @PutMapping("/me/password")
@@ -917,7 +938,9 @@ public class UserController {
             dto.setPermissionVersion(user.getPermissionVersion());
             
             // Fix: Pull plan type from Tenant if available, fallback to user's plan type
-            if (user.getTenant() != null && user.getTenant().getPlanType() != null) {
+            if (user.getRole() == User.Role.SUPER_ADMIN) {
+                dto.setPlanType("ENTERPRISE");
+            } else if (user.getTenant() != null && user.getTenant().getPlanType() != null) {
                 dto.setPlanType(user.getTenant().getPlanType().name());
             } else {
                 dto.setPlanType(user.getPlanType() != null ? user.getPlanType().name() : "FREE");

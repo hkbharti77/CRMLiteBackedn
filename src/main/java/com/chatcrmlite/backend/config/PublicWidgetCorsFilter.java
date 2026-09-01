@@ -36,6 +36,7 @@ public class PublicWidgetCorsFilter implements Filter {
             response.setHeader("Access-Control-Allow-Headers", "*");
             response.setHeader("Access-Control-Expose-Headers", "*");
             response.setHeader("Access-Control-Max-Age", "3600");
+            response.setHeader("Permissions-Policy", "microphone=*");
 
             // Handle browser CORS preflight directly
             if ("OPTIONS".equalsIgnoreCase(request.getMethod())) {

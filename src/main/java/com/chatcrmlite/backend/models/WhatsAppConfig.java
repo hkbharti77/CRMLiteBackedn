@@ -149,6 +149,15 @@ public class WhatsAppConfig implements Serializable {
     private Boolean showSosButton = true;
     private Boolean showSupportFormButton = true;
 
+    @Column(name = "lead_button_label", length = 50)
+    private String leadButtonLabel;
+
+    @Column(name = "appointment_button_label", length = 50)
+    private String appointmentButtonLabel;
+
+    @Column(name = "booking_button_label", length = 50)
+    private String bookingButtonLabel;
+
     public WhatsAppConfig() {}
 
     public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String portfolioUrl, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showSosButton, Boolean showSupportFormButton) {
@@ -299,6 +308,12 @@ public class WhatsAppConfig implements Serializable {
     public void setShowAboutContact(Boolean showAboutContact) { this.showAboutContact = showAboutContact; }
     public void setShowSosButton(Boolean showSosButton) { this.showSosButton = showSosButton; }
     public void setShowSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; }
+    public String getLeadButtonLabel() { return leadButtonLabel; }
+    public void setLeadButtonLabel(String leadButtonLabel) { this.leadButtonLabel = leadButtonLabel; }
+    public String getAppointmentButtonLabel() { return appointmentButtonLabel; }
+    public void setAppointmentButtonLabel(String appointmentButtonLabel) { this.appointmentButtonLabel = appointmentButtonLabel; }
+    public String getBookingButtonLabel() { return bookingButtonLabel; }
+    public void setBookingButtonLabel(String bookingButtonLabel) { this.bookingButtonLabel = bookingButtonLabel; }
 
     public static WhatsAppConfigBuilder builder() { return new WhatsAppConfigBuilder(); }
 
@@ -328,6 +343,13 @@ public class WhatsAppConfig implements Serializable {
         private Boolean showAboutContact = true;
         private Boolean showSosButton = true;
         private Boolean showSupportFormButton = true;
+        private String leadButtonLabel;
+        private String appointmentButtonLabel;
+        private String bookingButtonLabel;
+
+        public WhatsAppConfigBuilder leadButtonLabel(String leadButtonLabel) { this.leadButtonLabel = leadButtonLabel; return this; }
+        public WhatsAppConfigBuilder appointmentButtonLabel(String appointmentButtonLabel) { this.appointmentButtonLabel = appointmentButtonLabel; return this; }
+        public WhatsAppConfigBuilder bookingButtonLabel(String bookingButtonLabel) { this.bookingButtonLabel = bookingButtonLabel; return this; }
 
         public WhatsAppConfigBuilder id(UUID id) { this.id = id; return this; }
         public WhatsAppConfigBuilder tenant(Tenant tenant) { this.tenant = tenant; return this; }
@@ -364,6 +386,9 @@ public class WhatsAppConfig implements Serializable {
         public WhatsAppConfig build() {
             WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, portfolioUrl, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showSosButton, showSupportFormButton);
             config.setFlowsRoutingConfigJson(flowsRoutingConfigJson);
+            config.setLeadButtonLabel(leadButtonLabel);
+            config.setAppointmentButtonLabel(appointmentButtonLabel);
+            config.setBookingButtonLabel(bookingButtonLabel);
             if (user != null) {
                 config.setUser(user);
             }

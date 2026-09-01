@@ -144,7 +144,12 @@ public class User implements Serializable {
     public String getLogoUrl() { return isTenantInitialized() ? tenant.getLogoUrl() : null; }
     public String getWidgetIconUrl() { return isTenantInitialized() ? tenant.getWidgetIconUrl() : null; }
     public Boolean getOnboardingCompleted() { return isTenantInitialized() ? tenant.getOnboardingCompleted() : false; }
-    public PlanType getPlanType() { return isTenantInitialized() && tenant.getPlanType() != null ? PlanType.valueOf(tenant.getPlanType().name()) : PlanType.FREE; }
+    public PlanType getPlanType() { 
+        if (this.role == Role.SUPER_ADMIN) {
+            return PlanType.ENTERPRISE;
+        }
+        return isTenantInitialized() && tenant.getPlanType() != null ? PlanType.valueOf(tenant.getPlanType().name()) : PlanType.FREE; 
+    }
 
     // ── Backward Compatibility Delegation Setters ──
     public void setBusinessName(String name) { if (isTenantInitialized()) tenant.setBusinessName(name); }

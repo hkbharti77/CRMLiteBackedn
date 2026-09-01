@@ -44,6 +44,9 @@ public class WhatsAppTemplateService {
     @Autowired
     private AIQuotaService aiQuotaService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
+
     @Transactional
     public List<WhatsAppTemplateDto> getTemplatesForTenant(User currentUser, boolean forceSync) {
         UUID tenantId = currentUser.getTenant().getId();
@@ -238,7 +241,15 @@ public class WhatsAppTemplateService {
     }
 
     public WhatsAppAiTemplateResponse generateAiTemplate(User user, String prompt) {
-        aiQuotaService.checkAndEnforceQuota(user.getTenant().getId(), user.getPlanType());
+        User.PlanType plan = User.PlanType.FREE;
+        if (user.getRole() == User.Role.SUPER_ADMIN) {
+            plan = User.PlanType.ENTERPRISE;
+        } else if (user.getTenant() != null && user.getTenant().getId() != null) {
+            plan = tenantTierService.getTier(user.getTenant().getId());
+        } else if (user.getPlanType() != null) {
+            plan = user.getPlanType();
+        }
+        aiQuotaService.checkAndEnforceQuota(user.getTenant() != null ? user.getTenant().getId() : user.getId(), plan);
 
         String systemInstruction = 
             "You are an expert WhatsApp marketing copywriter. " +

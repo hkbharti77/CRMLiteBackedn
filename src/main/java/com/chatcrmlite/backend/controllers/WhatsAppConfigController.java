@@ -169,6 +169,18 @@ public class WhatsAppConfigController {
             String menuJson = (String) body.get("interactiveMenuJson");
             config.setInteractiveMenuJson(menuJson != null && !menuJson.isBlank() ? menuJson.trim() : null);
         }
+        if (body.containsKey("leadButtonLabel")) {
+            String val = (String) body.get("leadButtonLabel");
+            config.setLeadButtonLabel(val != null && !val.isBlank() ? val.trim() : null);
+        }
+        if (body.containsKey("appointmentButtonLabel")) {
+            String val = (String) body.get("appointmentButtonLabel");
+            config.setAppointmentButtonLabel(val != null && !val.isBlank() ? val.trim() : null);
+        }
+        if (body.containsKey("bookingButtonLabel")) {
+            String val = (String) body.get("bookingButtonLabel");
+            config.setBookingButtonLabel(val != null && !val.isBlank() ? val.trim() : null);
+        }
         if (body.containsKey("phoneNumberId")) {
             String phoneNumberId = (String) body.get("phoneNumberId");
             if (phoneNumberId != null && !phoneNumberId.isBlank()) config.setPhoneNumberId(phoneNumberId.trim());

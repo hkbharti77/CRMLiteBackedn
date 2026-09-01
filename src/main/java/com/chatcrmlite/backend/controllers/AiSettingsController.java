@@ -110,4 +110,70 @@ public class AiSettingsController {
         response.put("updatedBy", tenant.getAiPersonaUpdatedBy());
         return ResponseEntity.ok(response);
     }
+
+    // ─── GET  /api/v1/settings/ai/voice-persona ──────────────────────────────
+    @GetMapping("/voice-persona")
+    public ResponseEntity<Map<String, Object>> getVoicePersona(@AuthenticationPrincipal String email) {
+        if (email == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        Tenant tenant = user.getTenant();
+        if (tenant == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("voicePersonaPrompt", tenant.getVoicePersonaPrompt());
+        response.put("voiceAssistantName", tenant.getVoiceAssistantName());
+        response.put("aiPersonaPrompt", tenant.getAiPersonaPrompt());
+        return ResponseEntity.ok(response);
+    }
+
+    // ─── PUT  /api/v1/settings/ai/voice-persona ──────────────────────────────
+    @PutMapping("/voice-persona")
+    public ResponseEntity<Map<String, Object>> updateVoicePersona(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> body) {
+
+        if (email == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only owners or admins can modify voice persona settings."));
+        }
+
+        Tenant tenant = user.getTenant();
+        if (tenant == null) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
+
+        String voicePrompt = body.getOrDefault("voicePersonaPrompt", "");
+        String assistantName = body.getOrDefault("voiceAssistantName", "Priya");
+
+        if (voicePrompt.length() > 4000) {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Map.of("error", "Voice persona prompt must not exceed 4000 characters."));
+        }
+
+        tenant.setVoicePersonaPrompt(voicePrompt.isBlank() ? null : voicePrompt.trim());
+        tenant.setVoiceAssistantName(assistantName.isBlank() ? "Priya" : assistantName.trim());
+        tenantRepository.save(tenant);
+
+        log.info("[AiSettings] Voice persona updated for tenant {} by user {}", tenant.getId(), user.getEmail());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Voice persona updated successfully.");
+        response.put("voicePersonaPrompt", tenant.getVoicePersonaPrompt());
+        response.put("voiceAssistantName", tenant.getVoiceAssistantName());
+        return ResponseEntity.ok(response);
+    }
 }

@@ -105,6 +105,59 @@ public class PromptBuilder {
         return buildRagPrompt(rawQuery, chunks, niche, null);
     }
 
+    public String buildVoiceRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona, String languageMode) {
+        return buildVoiceRagPrompt(rawQuery, chunks, niche, tenantPersona, "Priya", "en");
+    }
+
+    /**
+     * Builds an ultra-concise, conversational, spoken-first RAG prompt for Voice Assistants (English-only).
+     * Enforces human spoken cadence, zero bullet points/markdown, and 1-2 sentence brevity.
+     */
+    public String buildVoiceRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona, String assistantName, String languageMode) {
+        String sanitizedQuery = sanitize(rawQuery);
+        String context = buildContext(chunks);
+        String name = (assistantName != null && !assistantName.isBlank()) ? assistantName.trim() : "Priya";
+        String basePersona = buildPersona(niche) + "\nYour name is " + name + ". You are speaking as the warm, polite voice receptionist of this business.";
+        String tenantLayer = buildTenantPersonaLayer(tenantPersona);
+
+        String langInstruction = """
+                CRITICAL LANGUAGE ENFORCEMENT:
+                   - The caller may speak in ANY language (English, Hindi, Hinglish, Spanish, or any regional language). Understand whatever query they ask.
+                   - BUT YOU MUST ALWAYS RESPOND 100%% STRICTLY IN POLITE, NATURAL SPOKEN ENGLISH ONLY.
+                   - NEVER respond in Hindi, Hinglish, or any non-English language. Always reply in English as %s, the front-desk receptionist.""".formatted(name);
+
+        return """
+                <SYSTEM>
+                %s
+                %s
+                
+                VOICE ASSISTANT SPOKEN-FIRST RULES (STRICT):
+                1. CONCISE HUMAN SPEECH (CRITICAL):
+                   - Keep response to EXACTLY 1 OR 2 SHORT SPOKEN SENTENCES (strictly under 35 words).
+                   - Speak like a real, warm human front-desk assistant, NOT an AI or a search engine.
+                   - NEVER use bullet points, numbered lists, markdown, asterisks (**), headers (#), or code.
+                   - NEVER say robotic phrases like "Based on the provided documents", "Here are the details:", or disclaimers.
+                2. STRICT ENGLISH OUTPUT (REGARDLESS OF INPUT LANGUAGE):
+                   %s
+                   - Use polite conversational phrasing (e.g. "Sure, I can help you with that...", "Certainly, let me check that for you...").
+                   - For example, if user asks in Hindi ("Mujhe appointment book karna hai"), understand it and answer in English ("Certainly! I can help you schedule an appointment. Which date works best for you?").
+                   - If user asks a broad question, give a direct 1-sentence answer in English and politely ask how to proceed.
+                3. CONTEXT USAGE:
+                   - Answer using facts in the <CONTEXT> block when available.
+                   - If info is not in context, answer politely in 1 short sentence based on your role.
+                </SYSTEM>
+                
+                <CONTEXT>
+                %s
+                </CONTEXT>
+                
+                <USER_SPOKEN_QUERY>
+                %s
+                </USER_SPOKEN_QUERY>
+                
+                SPOKEN_RESPONSE:""".formatted(basePersona, tenantLayer, langInstruction, context, sanitizedQuery);
+    }
+
     /**
      * Sanitizes user input against injection patterns and enforces length limits.
      */

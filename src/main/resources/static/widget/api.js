@@ -135,6 +135,56 @@ export function createApiClient(apiBase, businessId) {
                 status: res.status,
                 data: result
             };
+        },
+
+        async sendVoiceTurn(audioBlob, sessionId, visitorId, transcript, preferredLang) {
+            const formData = new FormData();
+            if (audioBlob) {
+                formData.append('audio', audioBlob, 'recording.webm');
+            }
+            if (sessionId) {
+                formData.append('sessionId', sessionId);
+            }
+            if (visitorId) {
+                formData.append('visitorId', visitorId);
+            }
+            if (transcript) {
+                formData.append('transcript', transcript);
+            }
+            if (preferredLang) {
+                formData.append('preferredLang', preferredLang);
+            }
+
+            const res = await fetch(`${base}/voice/${businessId}`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) {
+                throw new Error(`Voice API error: ${res.status}`);
+            }
+            return await res.json();
+        },
+
+        async sendBargeIn(sessionId, turnNumber) {
+            try {
+                await fetch(`${base}/voice/${businessId}/barge-in`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId, turnNumber })
+                });
+            } catch (e) {
+                // Non-blocking barge-in acknowledgment
+            }
+        },
+
+        async fetchVoiceConfig() {
+            try {
+                const res = await fetch(`${base}/voice/config/${businessId}`);
+                return res.ok ? await res.json() : null;
+            } catch (e) {
+                return null;
+            }
         }
     };
 }

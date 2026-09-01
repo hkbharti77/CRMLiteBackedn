@@ -243,7 +243,48 @@ export function createUIController({
                         <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
                         <div class="chat-composer">
                             <textarea id="chat-input" class="chat-input" rows="1" placeholder="Loading..." autocomplete="off" disabled aria-label="Message"></textarea>
+                            <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input">
+                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                    <line x1="12" y1="19" x2="12" y2="22"></line>
+                                    <line x1="8" y1="22" x2="16" y2="22"></line>
+                                </svg>
+                            </button>
                             <button type="button" id="chat-send" class="send-btn" title="Send message" disabled aria-label="Send">${icons.send}</button>
+                        </div>
+                    </div>
+                    <!-- Voice Full-Duplex Live Overlay -->
+                    <div class="chat-voice-overlay" id="chat-voice-overlay" style="display: none;">
+                        <div class="voice-modal-card">
+                            <div class="voice-avatar-pulse-wrap" id="voice-mic-orb" style="cursor: pointer;" title="Click to Stop & Send or Interrupt">
+                                <div class="voice-pulse-ring ring-1"></div>
+                                <div class="voice-pulse-ring ring-2"></div>
+                                <div class="voice-avatar-center">
+                                    <svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2">
+                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                        <line x1="12" y1="19" x2="12" y2="22"></line>
+                                        <line x1="8" y1="22" x2="16" y2="22"></line>
+                                    </svg>
+                                </div>
+                            </div>
+                            <div class="voice-status-text" id="voice-status-text">Listening...</div>
+                            <div class="voice-status-sub" id="voice-status-sub">Ask anything. Priya is listening...</div>
+                            <div class="voice-lang-selector" id="voice-lang-selector" style="display: none;">
+                                <button type="button" class="voice-lang-btn active" data-lang="en-US" id="voice-lang-en">🌐 English</button>
+                            </div>
+                            <div class="voice-wave-bars" id="voice-wave-bars">
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                                <div class="wave-bar"></div>
+                            </div>
+                            <div class="voice-actions-wrap" id="voice-actions-wrap">
+                                <button type="button" class="voice-action-btn" id="voice-action-btn" style="display: none;">Allow Microphone</button>
+                                <button type="button" class="voice-close-btn" id="voice-close-btn">End Voice Mode</button>
+                            </div>
                         </div>
                     </div>
                     <div class="chat-confirm-overlay" id="chat-confirm-overlay">
@@ -279,6 +320,14 @@ export function createUIController({
                 panel: document.getElementById('chat-panel'),
                 toggle: document.getElementById('chat-toggle'),
                 input: document.getElementById('chat-input'),
+                voiceBtn: document.getElementById('chat-voice-btn'),
+                voiceOverlay: document.getElementById('chat-voice-overlay'),
+                voiceMicOrb: document.getElementById('voice-mic-orb'),
+                voiceStatusText: document.getElementById('voice-status-text'),
+                voiceStatusSub: document.getElementById('voice-status-sub'),
+                voiceWaveBars: document.getElementById('voice-wave-bars'),
+                voiceActionBtn: document.getElementById('voice-action-btn'),
+                voiceCloseBtn: document.getElementById('voice-close-btn'),
                 sendBtn: document.getElementById('chat-send'),
                 messages: document.getElementById('chat-messages'),
                 typing: document.getElementById('typing'),
@@ -576,6 +625,81 @@ export function createUIController({
             msgDiv.appendChild(textSpan);
             msgDiv.appendChild(timeSpan);
             return appendMessageRow(container, sender, msgDiv);
+        },
+
+        renderVoiceBubble(result, containerEl) {
+            const container = containerEl || elements.messages;
+            if (!container || !result) return;
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot message-voice-bubble';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'message-text';
+            textSpan.innerHTML = parseMarkdown(result.botResponseText || '');
+
+            const playerWrap = document.createElement('div');
+            playerWrap.className = 'voice-player-bar';
+
+            let audio = null;
+            if (result.audioBase64) {
+                audio = new Audio(`data:audio/mp3;base64,${result.audioBase64}`);
+            }
+
+            const playBtn = document.createElement('button');
+            playBtn.type = 'button';
+            playBtn.className = 'voice-player-play-btn';
+            playBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+            
+            const wavesWrap = document.createElement('div');
+            wavesWrap.className = 'voice-player-wave';
+            for (let i = 0; i < 12; i++) {
+                const bar = document.createElement('span');
+                bar.className = 'v-bar';
+                bar.style.animationDelay = `${(i * 0.1).toFixed(1)}s`;
+                wavesWrap.appendChild(bar);
+            }
+
+            const durationSpan = document.createElement('span');
+            durationSpan.className = 'voice-player-duration';
+            durationSpan.textContent = `${result.audioDurationSeconds || 0}s`;
+
+            if (audio) {
+                playBtn.onclick = () => {
+                    if (audio.paused) {
+                        audio.play();
+                        playBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>`;
+                        wavesWrap.classList.add('playing');
+                    } else {
+                        audio.pause();
+                        playBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                        wavesWrap.classList.remove('playing');
+                    }
+                };
+
+                audio.onended = () => {
+                    playBtn.innerHTML = `<svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`;
+                    wavesWrap.classList.remove('playing');
+                };
+            } else {
+                playBtn.disabled = true;
+            }
+
+            playerWrap.appendChild(playBtn);
+            playerWrap.appendChild(wavesWrap);
+            playerWrap.appendChild(durationSpan);
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            msgDiv.appendChild(textSpan);
+            if (result.audioBase64) {
+                msgDiv.appendChild(playerWrap);
+            }
+            msgDiv.appendChild(timeSpan);
+
+            return appendMessageRow(container, 'bot', msgDiv);
         },
 
         renderBotBubbleWithCTAs(text, ctaButtons, onCtaSelect, ctasUsed = false) {

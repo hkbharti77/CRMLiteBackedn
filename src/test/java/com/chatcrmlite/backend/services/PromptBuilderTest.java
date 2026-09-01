@@ -181,4 +181,23 @@ class PromptBuilderTest {
         assertTrue(sanitized.contains("[removed]"),
                 "Injection pattern should be replaced with [removed]");
     }
+
+    @Test
+    @DisplayName("Voice RAG prompt enforces spoken rules, brevity, and tenant persona")
+    void voiceRagPromptEnforcesSpokenRules() {
+        String prompt = promptBuilder.buildVoiceRagPrompt(
+                "What is your consulting fee?",
+                List.of("Consulting fee is $200 per hour."),
+                "consulting",
+                "Be cheerful and friendly.",
+                "Priya",
+                "en"
+        );
+
+        assertTrue(prompt.contains("VOICE ASSISTANT SPOKEN-FIRST RULES"), "Should contain voice rules");
+        assertTrue(prompt.contains("EXACTLY 1 OR 2 SHORT SPOKEN SENTENCES"), "Should enforce 1-2 sentence brevity");
+        assertTrue(prompt.contains("NEVER use bullet points"), "Should forbid bullet points");
+        assertTrue(prompt.contains("STRICT ENGLISH OUTPUT"), "Should enforce English output");
+        assertTrue(prompt.contains("Be cheerful and friendly."), "Should incorporate tenant persona");
+    }
 }

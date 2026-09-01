@@ -211,9 +211,21 @@
             </code>
         </div>
 
-        <p class="niche-hint">
+        <div class="mic-test-wrap" style="margin-top: 20px; padding: 14px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; text-align: left;">
+            <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 8px;">
+                <span style="font-size: 13px; font-weight: 700; color: #1e293b;">🎙️ Microphone Permission Diagnostic</span>
+                <button type="button" id="test-mic-btn" onclick="testMicDirectly()" style="padding: 6px 12px; background: #2563eb; color: #fff; border: none; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;">
+                    Test Browser Mic
+                </button>
+            </div>
+            <div id="mic-status-msg" style="font-size: 12px; color: #64748b;">
+                Click "Test Browser Mic" to verify if this browser tab can prompt for and capture your microphone.
+            </div>
+        </div>
+
+        <p class="niche-hint" style="margin-top: 14px;">
             <span class="status-dot"></span>
-            Backend must be running on <strong>localhost:8080</strong>
+            Backend running on <strong>localhost:8080</strong>
         </p>
     </div>
 
@@ -228,17 +240,14 @@
         }
 
         window.addEventListener('DOMContentLoaded', () => {
-            const id = urlParams.get('businessId') || '';
-            if (id) {
-                document.getElementById('biz-id').value = id;
-                injectWidget(id);
-            }
+            const id = urlParams.get('businessId') || document.getElementById('biz-id').value.trim() || '00000000-0000-0000-0000-000000000000';
+            document.getElementById('biz-id').value = id;
+            document.getElementById('snippet-id').textContent = id;
+            injectWidget(id);
         });
 
         function loadWidget() {
-            const id = document.getElementById('biz-id').value.trim();
-            if (!id) { alert('Please enter a Business UUID'); return; }
-
+            const id = document.getElementById('biz-id').value.trim() || '00000000-0000-0000-0000-000000000000';
             const url = new URL(window.location.href);
             url.searchParams.set('businessId', id);
             window.history.replaceState({}, '', url.toString());
@@ -260,12 +269,14 @@
             script.setAttribute('data-business-id', businessId);
 
             if (isEmbedMode) {
-                script.onload = () => {
-                    setTimeout(() => {
-                        const chatBtn = document.querySelector('.chat-button');
-                        if (chatBtn) chatBtn.click();
-                    }, 400);
-                };
+                const checkInterval = setInterval(() => {
+                    const chatBtn = document.querySelector('.chat-button');
+                    if (chatBtn) {
+                        chatBtn.click();
+                        clearInterval(checkInterval);
+                    }
+                }, 100);
+                setTimeout(() => clearInterval(checkInterval), 5000);
             }
 
             document.body.appendChild(script);
@@ -279,6 +290,46 @@
                 btn.textContent = 'Copied!';
                 setTimeout(() => btn.textContent = 'Copy', 2000);
             });
+        }
+
+        async function testMicDirectly() {
+            const statusEl = document.getElementById('mic-status-msg');
+            const btn = document.getElementById('test-mic-btn');
+            statusEl.innerHTML = '⏳ Requesting microphone permission from browser...';
+            btn.disabled = true;
+
+            if (typeof window !== 'undefined' && window.isSecureContext === false &&
+                window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+                statusEl.innerHTML = '<span style="color: #ef4444; font-weight: 600;">❌ Insecure Context:</span> Browsers only allow mic over HTTPS or http://localhost.';
+                btn.disabled = false;
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                statusEl.innerHTML = '<span style="color: #ef4444; font-weight: 600;">❌ navigator.mediaDevices.getUserMedia is not supported</span> in this browser.';
+                btn.disabled = false;
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const tracks = stream.getAudioTracks();
+                const deviceLabel = tracks.length > 0 ? (tracks[0].label || 'Default Microphone') : 'Active Audio';
+                statusEl.innerHTML = `<span style="color: #10b981; font-weight: 700;">✅ Microphone Allowed!</span> Connected to: <em>${deviceLabel}</em>. The voice assistant is fully ready to record!`;
+                // Stop tracks after test
+                tracks.forEach(t => t.stop());
+            } catch (err) {
+                console.error('Test mic error:', err);
+                let helpMsg = err.message;
+                if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+                    helpMsg = 'Permission denied. Click the lock / tune icon in your address bar, switch Microphone to "Allow", and reload.';
+                } else if (err.name === 'NotFoundError') {
+                    helpMsg = 'No physical microphone was detected on your computer.';
+                }
+                statusEl.innerHTML = `<span style="color: #ef4444; font-weight: 700;">❌ Mic Blocked (${err.name}):</span> ${helpMsg}`;
+            } finally {
+                btn.disabled = false;
+            }
         }
     </script>
 
