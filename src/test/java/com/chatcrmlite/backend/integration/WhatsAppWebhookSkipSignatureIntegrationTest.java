@@ -45,6 +45,5 @@ class WhatsAppWebhookSkipSignatureIntegrationTest {
 
         verify(webhookIngressService, times(1)).ingress(payload);
         verify(signatureService, never()).verifySignature(anyString(), anyString());
-        verify(signatureService, never()).isTimestampValid(anyString());
     }
 }

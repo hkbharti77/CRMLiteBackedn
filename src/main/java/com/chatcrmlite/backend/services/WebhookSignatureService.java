@@ -4,6 +4,7 @@ import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import javax.crypto.Mac;
@@ -25,13 +26,15 @@ public class WebhookSignatureService {
     @Autowired
     private WhatsAppConfigRepository whatsAppConfigRepository;
 
+    @Value("${meta.app-secret:${META_APP_SECRET:}}")
+    private String globalAppSecret;
+
     private static final String HMAC_SHA256 = "HmacSHA256";
-    private static final Pattern TIMESTAMP_PATTERN = Pattern.compile("\"timestamp\"\\s*:\\s*\"?(\\d+)\"?");
-    private static final long MAX_SKEW_SECONDS = 1800; // 30 minutes tolerance for retries & clock skew
 
     /**
      * Verifies the signature of the incoming webhook payload.
-     * Gets the app secret from the database based on the phone number ID in the payload.
+     * Computes HMAC-SHA256 of the exact raw payload using the resolved app secret
+     * and performs constant-time comparison against the X-Hub-Signature-256 header.
      * 
      * @param payload The raw string payload from the request body.
      * @param signatureHeader The value of the X-Hub-Signature-256 header.
@@ -43,23 +46,14 @@ public class WebhookSignatureService {
             return false;
         }
 
-        // Extract phone number ID from payload to find the correct WhatsApp config
-        String phoneNumberId = extractPhoneNumberIdFromPayload(payload);
-        if (phoneNumberId == null) {
-            log.warn("Could not extract phone_number_id from payload for signature verification");
+        if (payload == null) {
+            log.warn("Webhook payload is null.");
             return false;
         }
 
-        // Get the app secret from database
-        WhatsAppConfig config = whatsAppConfigRepository.findByPhoneNumberId(phoneNumberId).orElse(null);
-        if (config == null) {
-            log.warn("No WhatsApp config found for phone_number_id: {}", phoneNumberId);
-            return false;
-        }
-
-        String appSecret = config.getAppSecret();
+        String appSecret = resolveAppSecret(payload);
         if (appSecret == null || appSecret.isBlank()) {
-            log.error("CRITICAL: App secret is not configured for phone_number_id: {}. Webhook verification will fail.", phoneNumberId);
+            log.error("CRITICAL: Meta App secret is not configured. Webhook verification cannot proceed.");
             return false;
         }
 
@@ -92,35 +86,40 @@ public class WebhookSignatureService {
     }
 
     /**
-     * Validates that the payload contains a recent timestamp to prevent replay attacks.
-     * Note: Meta WhatsApp payloads include timestamps in the JSON.
-     * 
-     * @param payload The raw payload string.
-     * @return true if the timestamp is within the allowed skew, false otherwise.
+     * Resolves the Meta App Secret to use for HMAC verification.
+     * First attempts to look up the tenant WhatsAppConfig by phone_number_id.
+     * If not found or if the config has no secret, falls back to the globally configured meta.app-secret.
+     *
+     * @param payload The raw webhook payload
+     * @return The app secret to verify against, or null if unconfigured
      */
-    public boolean isTimestampValid(String payload) {
-        Matcher matcher = TIMESTAMP_PATTERN.matcher(payload);
-        
-        if (matcher.find()) {
+    private String resolveAppSecret(String payload) {
+        String phoneNumberId = extractPhoneNumberIdFromPayload(payload);
+        if (phoneNumberId != null && !phoneNumberId.isBlank()) {
             try {
-                long payloadTimestamp = Long.parseLong(matcher.group(1));
-                long currentTimestamp = System.currentTimeMillis() / 1000;
-                long diff = Math.abs(currentTimestamp - payloadTimestamp);
-                
-                if (diff > MAX_SKEW_SECONDS) {
-                    log.warn("Replay Protection: Webhook timestamp is too old or too far in the future. Diff: {}s", diff);
-                    return false;
+                WhatsAppConfig config = whatsAppConfigRepository.findByPhoneNumberId(phoneNumberId).orElse(null);
+                if (config != null && config.getAppSecret() != null && !config.getAppSecret().isBlank()) {
+                    return config.getAppSecret();
                 }
-                return true;
-            } catch (NumberFormatException e) {
-                log.error("Failed to parse timestamp from payload: {}", matcher.group(1));
+            } catch (Exception e) {
+                log.warn("Error looking up WhatsAppConfig for phone_number_id: {}. Falling back to global secret.", phoneNumberId, e);
             }
         }
-        
-        // If no timestamp found, we allow it but log a debug message.
-        // Some Meta payloads (like account updates) might have different structures.
-        log.debug("No timestamp found in payload for replay protection check.");
-        return true; 
+        return (globalAppSecret != null && !globalAppSecret.isBlank()) ? globalAppSecret : null;
+    }
+
+    /**
+     * @deprecated Payload timestamp validation has been removed from the WhatsApp webhook authentication path.
+     * Meta WhatsApp payloads contain internal message/status event timestamps (which can be hours or days old
+     * during webhook retries or delayed deliveries), not HTTP transport replay timestamps.
+     * Always returns true for backward compatibility.
+     *
+     * @param payload The raw payload string.
+     * @return true always.
+     */
+    @Deprecated(since = "1.0.0", forRemoval = true)
+    public boolean isTimestampValid(String payload) {
+        return true;
     }
 
     /**

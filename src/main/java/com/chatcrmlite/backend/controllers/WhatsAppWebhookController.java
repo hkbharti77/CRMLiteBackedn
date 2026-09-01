@@ -77,18 +77,12 @@ public class WhatsAppWebhookController {
 
         if (hasPayload) {
             if (skipSignatureVerification) {
-                log.warn("⚠️ [SECURITY] Webhook signature and timestamp verification is SKIPPED due to skip-signature-verification=true");
+                log.warn("⚠️ [SECURITY] Webhook signature verification is SKIPPED due to skip-signature-verification=true");
             } else {
                 if (!signatureService.verifySignature(payload, signature)) {
                     log.warn("🛑 [SECURITY] Invalid Webhook Signature from IP: {} | Header: {}", 
                              request.getRemoteAddr(), signature);
                     return ResponseEntity.status(401).body("Invalid signature");
-                }
-
-                if (!signatureService.isTimestampValid(payload)) {
-                    log.warn("🛑 [SECURITY] Webhook Timestamp Validation Failed from IP: {}", 
-                             request.getRemoteAddr());
-                    return ResponseEntity.status(401).body("Invalid timestamp");
                 }
             }
 

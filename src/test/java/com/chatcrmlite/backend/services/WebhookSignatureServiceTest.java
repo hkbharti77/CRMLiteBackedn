@@ -1,22 +1,26 @@
 package com.chatcrmlite.backend.services;
 
+import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.test.util.ReflectionTestUtils;
-import org.mockito.Mock;
 import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.Mockito.when;
 
 class WebhookSignatureServiceTest {
 
     @Mock
-    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository configRepository;
+    private WhatsAppConfigRepository configRepository;
 
     @InjectMocks
     private WebhookSignatureService service;
@@ -32,11 +36,10 @@ class WebhookSignatureServiceTest {
     @Test
     void testValidSignature() throws Exception {
         String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
-        
-        com.chatcrmlite.backend.models.WhatsAppConfig config = new com.chatcrmlite.backend.models.WhatsAppConfig();
+
+        WhatsAppConfig config = new WhatsAppConfig();
         config.setAppSecret(testSecret);
-        org.mockito.Mockito.when(configRepository.findByPhoneNumberId(phoneId))
-                .thenReturn(java.util.Optional.of(config));
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
 
         String expectedSignature = calculateHmac(payload, testSecret);
         String header = "sha256=" + expectedSignature;
@@ -49,44 +52,147 @@ class WebhookSignatureServiceTest {
         String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
         String header = "sha256=invalid_signature_hex_code";
 
-        com.chatcrmlite.backend.models.WhatsAppConfig config = new com.chatcrmlite.backend.models.WhatsAppConfig();
+        WhatsAppConfig config = new WhatsAppConfig();
         config.setAppSecret(testSecret);
-        org.mockito.Mockito.when(configRepository.findByPhoneNumberId(phoneId))
-                .thenReturn(java.util.Optional.of(config));
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
 
         assertFalse(service.verifySignature(payload, header), "Invalid signature should fail");
+    }
+
+    @Test
+    void testMissingSignature() {
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
+        assertFalse(service.verifySignature(payload, null), "Missing signature header should fail");
+        assertFalse(service.verifySignature(payload, ""), "Empty signature header should fail");
     }
 
     @Test
     void testMalformedHeader() {
         String payload = "{}";
         assertFalse(service.verifySignature(payload, "invalid_format_no_sha_prefix"), "Malformed header should fail");
-        assertFalse(service.verifySignature(payload, null), "Missing header should fail");
+        assertFalse(service.verifySignature(payload, "sha1=1234567890abcdef"), "Non-sha256 header prefix should fail");
     }
 
     @Test
-    void testTimestampValidation() {
+    void testModifiedRequestBody_TamperedPayloadRejected() throws Exception {
+        String originalPayload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}},\"messages\":[{\"id\":\"wamid.123\",\"text\":{\"body\":\"Original text\"}}]}]}]}";
+
+        WhatsAppConfig config = new WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
+
+        // Generate signature for the original payload
+        String originalSignature = "sha256=" + calculateHmac(originalPayload, testSecret);
+
+        // Tamper with the payload (e.g. change message text)
+        String tamperedPayload = originalPayload.replace("Original text", "Tampered text");
+
+        assertFalse(service.verifySignature(tamperedPayload, originalSignature),
+                "Tampered payload must be rejected even with valid signature for original payload");
+    }
+
+    @Test
+    void testSignatureCalculatedAgainstExactRawBody() throws Exception {
+        // Any change in whitespace or formatting must alter the HMAC and fail verification
+        String payloadWithWhitespace = "{\n  \"object\": \"whatsapp_business_account\",\n  \"entry\": [{\"changes\": [{\"value\": {\"metadata\": {\"phone_number_id\": \"test-phone-id\"}}}]}]\n}";
+
+        WhatsAppConfig config = new WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
+
+        String validSig = "sha256=" + calculateHmac(payloadWithWhitespace, testSecret);
+        assertTrue(service.verifySignature(payloadWithWhitespace, validSig), "Raw exact body must verify successfully");
+
+        // Minified or formatted variant of the same JSON
+        String minifiedPayload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}}}]}]}";
+        assertFalse(service.verifySignature(minifiedPayload, validSig),
+                "Signature must be against exact raw body bytes; reformatting changes HMAC");
+    }
+
+    @Test
+    void testValidSignature_WithOldInternalMessageTimestamp_Accepted() throws Exception {
+        long oldTimestamp = (System.currentTimeMillis() / 1000) - 7200; // 2 hours old
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}},\"messages\":[{\"timestamp\":\"" + oldTimestamp + "\"}]}}]}]}";
+
+        WhatsAppConfig config = new WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
+
+        String header = "sha256=" + calculateHmac(payload, testSecret);
+
+        assertTrue(service.verifySignature(payload, header),
+                "Valid webhook with an old internal message timestamp must NOT be rejected by signature verification");
+    }
+
+    @Test
+    void testValidSignature_WithFutureInternalMessageTimestamp_Accepted() throws Exception {
+        long futureTimestamp = (System.currentTimeMillis() / 1000) + 3600; // 1 hour in future
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"test-phone-id\"}},\"messages\":[{\"timestamp\":\"" + futureTimestamp + "\"}]}}]}]}";
+
+        WhatsAppConfig config = new WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
+
+        String header = "sha256=" + calculateHmac(payload, testSecret);
+
+        assertTrue(service.verifySignature(payload, header),
+                "Valid webhook with future message timestamp must NOT be rejected by signature verification");
+    }
+
+    @Test
+    void testRegression_84966sDiffPayloadNotRejected() throws Exception {
+        // Production incident scenario: valid Meta retry with message timestamp ~23.6 hours (84966s) old
+        long nowSeconds = System.currentTimeMillis() / 1000;
+        long productionMessageTimestamp = nowSeconds - 84966;
+
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"WABA_123\",\"changes\":[{\"value\":{\"messaging_product\":\"whatsapp\",\"metadata\":{\"display_phone_number\":\"15551234567\",\"phone_number_id\":\"test-phone-id\"},\"messages\":[{\"from\":\"919999999999\",\"id\":\"wamid.HBgLM...\",\"timestamp\":\"" + productionMessageTimestamp + "\",\"text\":{\"body\":\"Hello CRM\"},\"type\":\"text\"}]},\"field\":\"messages\"}]}]}";
+
+        WhatsAppConfig config = new WhatsAppConfig();
+        config.setAppSecret(testSecret);
+        when(configRepository.findByPhoneNumberId(phoneId)).thenReturn(Optional.of(config));
+
+        String validSignatureHeader = "sha256=" + calculateHmac(payload, testSecret);
+
+        assertTrue(service.verifySignature(payload, validSignatureHeader),
+                "Regression: Webhook payload with 84966s skew must NOT be rejected when cryptographically valid");
+    }
+
+    @Test
+    void testFallbackToGlobalAppSecretWhenConfigAppSecretMissing() throws Exception {
+        String globalSecret = "global_meta_secret_xyz";
+        ReflectionTestUtils.setField(service, "globalAppSecret", globalSecret);
+
+        String payload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"changes\":[{\"value\":{\"metadata\":{\"phone_number_id\":\"unknown-phone-id\"}}}]}]}";
+        when(configRepository.findByPhoneNumberId("unknown-phone-id")).thenReturn(Optional.empty());
+
+        String header = "sha256=" + calculateHmac(payload, globalSecret);
+
+        assertTrue(service.verifySignature(payload, header),
+                "Signature verification should fall back to global meta.app-secret if phone config is absent");
+    }
+
+    @Test
+    void testFallbackToGlobalAppSecretWhenPayloadHasNoPhoneNumberId() throws Exception {
+        String globalSecret = "global_meta_secret_xyz";
+        ReflectionTestUtils.setField(service, "globalAppSecret", globalSecret);
+
+        // Account update payload without phone_number_id
+        String accountUpdatePayload = "{\"object\":\"whatsapp_business_account\",\"entry\":[{\"id\":\"WABA_ID_999\",\"changes\":[{\"value\":{\"event\":\"APPROVED\"},\"field\":\"account_update\"}]}]}";
+
+        String header = "sha256=" + calculateHmac(accountUpdatePayload, globalSecret);
+
+        assertTrue(service.verifySignature(accountUpdatePayload, header),
+                "Signature verification should fall back to global secret for account update payloads without phone_number_id");
+    }
+
+    @Test
+    void testTimestampValidation_DeprecatedAlwaysTrue() {
+        // Ensures backward compatibility: isTimestampValid always returns true
         long now = System.currentTimeMillis() / 1000;
-        String validPayload = "{\"timestamp\": " + now + "}";
-        String oldPayload = "{\"timestamp\": " + (now - 600) + "}"; // 10 mins old
-        String futurePayload = "{\"timestamp\": " + (now + 600) + "}"; // 10 mins future
-
-        assertTrue(service.isTimestampValid(validPayload), "Recent timestamp should be valid");
-        assertFalse(service.isTimestampValid(oldPayload), "Old timestamp should be invalid");
-        assertFalse(service.isTimestampValid(futurePayload), "Future timestamp should be invalid");
-    }
-
-    @Test
-    void testTimestampValidationInQuotes() {
-        long now = System.currentTimeMillis() / 1000;
-        String validPayload = "{\"timestamp\": \"" + now + "\"}";
-        assertTrue(service.isTimestampValid(validPayload), "Timestamp in quotes should be valid");
-    }
-
-    @Test
-    void testTimestampValidationNoTimestamp() {
-        String payload = "{\"object\": \"whatsapp\"}";
-        assertTrue(service.isTimestampValid(payload), "Payload without timestamp should be allowed (fail-safe)");
+        assertTrue(service.isTimestampValid("{\"timestamp\": " + now + "}"));
+        assertTrue(service.isTimestampValid("{\"timestamp\": " + (now - 84966) + "}"));
+        assertTrue(service.isTimestampValid("{\"timestamp\": " + (now + 86400) + "}"));
+        assertTrue(service.isTimestampValid("{}"));
     }
 
     private String calculateHmac(String payload, String secret) throws Exception {
