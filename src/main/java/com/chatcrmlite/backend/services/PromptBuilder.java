@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.regex.Pattern;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 
 /**
  * Structured prompt builder with prompt injection defense.
@@ -48,21 +49,22 @@ public class PromptBuilder {
      * Layers (top → bottom):
      *   1. Base System Prompt   — core AI behavior, rules, guardrails
      *   2. Tenant Persona       — customized tone, style, instructions (optional)
-     *   3. Business Info         — niche / business type context
+     *   3. Conversation History — previous turns from ConversationContext
      *   4. Knowledge Base (RAG) — retrieved document chunks
      *   5. User Question        — the actual query (sanitized)
      *
-     * @param rawQuery       User's raw input (will be sanitized)
+     * @param memContext     Memory context (history & latest query)
      * @param chunks         Retrieved context chunks (will be trimmed)
      * @param niche          Business niche for persona tuning
      * @param tenantPersona  Tenant's custom AI persona prompt (nullable)
      * @return               Final prompt string ready for LLM consumption
      */
-    public String buildRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona) {
-        String sanitizedQuery = sanitize(rawQuery);
+    public String buildRagPrompt(ConversationContext memContext, List<String> chunks, String niche, String tenantPersona) {
+        String sanitizedQuery = sanitize(memContext.getLatestQuery());
         String context = buildContext(chunks);
         String basePersona = buildPersona(niche);
         String tenantLayer = buildTenantPersonaLayer(tenantPersona);
+        String history = memContext.getFormattedRecentTurns() != null ? memContext.getFormattedRecentTurns() : "(No recent history)";
 
         // Structural delimiters prevent the user from breaking out of the [USER_QUERY] block
         return """
@@ -87,6 +89,10 @@ public class PromptBuilder {
                    - The above DYNAMIC RESPONSE LENGTH & MASTER FORMATTING RULES take priority over any tenant persona instructions.
                 </SYSTEM>
                 
+                <CONVERSATION_HISTORY>
+                %s
+                </CONVERSATION_HISTORY>
+                
                 <CONTEXT>
                 %s
                 </CONTEXT>
@@ -95,7 +101,13 @@ public class PromptBuilder {
                 %s
                 </USER_QUERY>
                 
-                RESPONSE:""".formatted(basePersona, tenantLayer, context, sanitizedQuery);
+                RESPONSE:""".formatted(basePersona, tenantLayer, history, context, sanitizedQuery);
+    }
+    
+    // Fallback wrapper for backwards compatibility
+    public String buildRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona) {
+        ConversationContext memContext = ConversationContext.builder().latestQuery(rawQuery).build();
+        return buildRagPrompt(memContext, chunks, niche, tenantPersona);
     }
 
     /**
@@ -105,20 +117,27 @@ public class PromptBuilder {
         return buildRagPrompt(rawQuery, chunks, niche, null);
     }
 
+    public String buildVoiceRagPrompt(ConversationContext memContext, List<String> chunks, String niche, String tenantPersona, String languageMode) {
+        return buildVoiceRagPrompt(memContext, chunks, niche, tenantPersona, "Priya", "en");
+    }
+    
+    // Fallback wrapper for backwards compatibility
     public String buildVoiceRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona, String languageMode) {
-        return buildVoiceRagPrompt(rawQuery, chunks, niche, tenantPersona, "Priya", "en");
+        ConversationContext memContext = ConversationContext.builder().latestQuery(rawQuery).build();
+        return buildVoiceRagPrompt(memContext, chunks, niche, tenantPersona, languageMode);
     }
 
     /**
      * Builds an ultra-concise, conversational, spoken-first RAG prompt for Voice Assistants (English-only).
      * Enforces human spoken cadence, zero bullet points/markdown, and 1-2 sentence brevity.
      */
-    public String buildVoiceRagPrompt(String rawQuery, List<String> chunks, String niche, String tenantPersona, String assistantName, String languageMode) {
-        String sanitizedQuery = sanitize(rawQuery);
+    public String buildVoiceRagPrompt(ConversationContext memContext, List<String> chunks, String niche, String tenantPersona, String assistantName, String languageMode) {
+        String sanitizedQuery = sanitize(memContext.getLatestQuery());
         String context = buildContext(chunks);
         String name = (assistantName != null && !assistantName.isBlank()) ? assistantName.trim() : "Priya";
         String basePersona = buildPersona(niche) + "\nYour name is " + name + ". You are speaking as the warm, polite voice receptionist of this business.";
         String tenantLayer = buildTenantPersonaLayer(tenantPersona);
+        String history = memContext.getFormattedRecentTurns() != null ? memContext.getFormattedRecentTurns() : "(No recent history)";
 
         String langInstruction = """
                 CRITICAL LANGUAGE ENFORCEMENT:
@@ -147,6 +166,10 @@ public class PromptBuilder {
                    - If info is not in context, answer politely in 1 short sentence based on your role.
                 </SYSTEM>
                 
+                <CONVERSATION_HISTORY>
+                %s
+                </CONVERSATION_HISTORY>
+                
                 <CONTEXT>
                 %s
                 </CONTEXT>
@@ -155,7 +178,7 @@ public class PromptBuilder {
                 %s
                 </USER_SPOKEN_QUERY>
                 
-                SPOKEN_RESPONSE:""".formatted(basePersona, tenantLayer, langInstruction, context, sanitizedQuery);
+                SPOKEN_RESPONSE:""".formatted(basePersona, tenantLayer, langInstruction, history, context, sanitizedQuery);
     }
 
     /**

@@ -11,4 +11,7 @@ import java.util.UUID;
 @Repository
 public interface WebChatMessageRepository extends JpaRepository<WebChatMessage, UUID> {
     List<WebChatMessage> findBySessionOrderByCreatedAtAsc(WebChatSession session);
+    
+    // For Conversation Memory (Recent Turns)
+    List<WebChatMessage> findTop50BySessionOrderByCreatedAtDesc(WebChatSession session);
 }

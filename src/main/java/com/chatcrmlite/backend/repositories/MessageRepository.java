@@ -14,6 +14,10 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
     List<Message> findAllByContactIn(Collection<Contact> contacts);
     Optional<Message> findByWaMessageId(String waMessageId);
     
+    // For Conversation Memory (Recent Turns & Time Window)
+    List<Message> findTop50ByContactOrderByTimestampDesc(Contact contact);
+    List<Message> findByContactAndTimestampAfterOrderByTimestampAsc(Contact contact, java.time.Instant timestamp);
+    
     // For RAG Context Analysis
     List<Message> findByContactAndDirection(Contact contact, Message.Direction direction, org.springframework.data.domain.Pageable pageable);
     

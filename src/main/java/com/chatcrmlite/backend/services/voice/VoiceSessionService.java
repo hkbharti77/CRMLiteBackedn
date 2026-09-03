@@ -13,6 +13,8 @@ import com.chatcrmlite.backend.repositories.voice.VoiceTurnRepository;
 import com.chatcrmlite.backend.repositories.voice.VoiceUsageRepository;
 import com.chatcrmlite.backend.services.RagRetrievalService;
 import com.chatcrmlite.backend.services.WebChatService;
+import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import com.chatcrmlite.backend.services.ai.DeepgramVoiceService;
 import com.chatcrmlite.backend.services.livechat.LiveSupportService;
 import lombok.RequiredArgsConstructor;
@@ -42,6 +44,7 @@ public class VoiceSessionService {
     private final RagRetrievalService ragRetrievalService;
     private final WebChatService webChatService;
     private final LiveSupportService liveSupportService;
+    private final ConversationMemoryService conversationMemoryService;
 
     @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
@@ -181,7 +184,8 @@ public class VoiceSessionService {
             triggerHumanHandoff(business, visitorId, session.getId().toString());
             session.setStatus(VoiceSession.VoiceSessionStatus.ESCALATED);
         } else {
-            botReplyText = ragRetrievalService.getVoiceAiResponse(transcript, businessId, "en");
+            ConversationContext memContext = conversationMemoryService.getVoiceContext(session.getId(), transcript);
+            botReplyText = ragRetrievalService.getVoiceAiResponse(memContext, businessId, "en");
             if (botReplyText == null || botReplyText.isBlank()) {
                 botReplyText = "Thank you for reaching out! How else can I assist you with our services today?";
             }

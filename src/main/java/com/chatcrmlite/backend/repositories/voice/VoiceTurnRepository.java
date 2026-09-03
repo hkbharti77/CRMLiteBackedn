@@ -10,4 +10,7 @@ import java.util.UUID;
 @Repository
 public interface VoiceTurnRepository extends JpaRepository<VoiceTurn, UUID> {
     List<VoiceTurn> findBySessionIdOrderByTurnNumberAsc(UUID sessionId);
+    
+    // For Conversation Memory (Recent Turns)
+    List<VoiceTurn> findTop50BySessionIdOrderByTurnNumberDesc(UUID sessionId);
 }

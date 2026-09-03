@@ -10,6 +10,8 @@ import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import com.chatcrmlite.backend.services.RagRetrievalService;
 import com.chatcrmlite.backend.services.ai.guardrail.GuardrailService;
+import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import com.chatcrmlite.backend.dto.ai.Decision;
 import com.chatcrmlite.backend.dto.ai.GuardrailResult;
 import com.chatcrmlite.backend.services.workflow.ProcessingContext;
@@ -35,6 +37,7 @@ public class WhatsAppAiService {
     private final MessageRepository messageRepository;
     private final GuardrailService guardrailService;
     private final RagRetrievalService ragRetrievalService;
+    private final ConversationMemoryService conversationMemoryService;
     @Autowired(required = false) private UserRepository userRepository;
 
     @Transactional
@@ -88,7 +91,8 @@ public class WhatsAppAiService {
                     context.getMetadata().put("responseType", "GREETING");
                     break;
                 case CALL_AI:
-                    String aiResponse = ragRetrievalService.getAiResponse(text, ownerId);
+                    ConversationContext memContext = conversationMemoryService.getWhatsAppContext(contact, text);
+                    String aiResponse = ragRetrievalService.getAiResponse(memContext, ownerId);
                     if (aiResponse != null && !aiResponse.isBlank()) {
                         context.getMetadata().put("pendingResponse", aiResponse);
                         context.getMetadata().put("responseType", "AI");

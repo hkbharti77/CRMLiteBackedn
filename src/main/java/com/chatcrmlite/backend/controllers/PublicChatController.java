@@ -18,6 +18,8 @@ import com.chatcrmlite.backend.dto.ai.GuardrailResult;
 import com.chatcrmlite.backend.dto.ai.Decision;
 import com.chatcrmlite.backend.services.WebChatService;
 import com.chatcrmlite.backend.models.WebChatMessage;
+import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 
 @RestController
 @RequestMapping("/api/v1/public")
@@ -46,6 +48,9 @@ public class PublicChatController {
 
     @Autowired
     private com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
+
+    @Autowired
+    private ConversationMemoryService conversationMemoryService;
 
     @PostMapping("/livechat/request/{businessId}")
     public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
@@ -196,7 +201,8 @@ public class PublicChatController {
             }
         }
 
-        String response = ragRetrievalService.getAiResponse(message, businessId);
+        ConversationContext memContext = conversationMemoryService.getWebChatContext(owner, sessionId, message);
+        String response = ragRetrievalService.getAiResponse(memContext, businessId);
         
         if (response == null || response.isBlank()) {
             response = "I'm sorry, I don't have information about that. How else can I help you?";

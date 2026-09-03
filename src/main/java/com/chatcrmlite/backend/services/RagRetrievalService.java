@@ -21,6 +21,7 @@ import com.chatcrmlite.backend.repositories.TenantRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 
 @Slf4j
 @Service
@@ -67,10 +68,12 @@ public class RagRetrievalService {
      * Prompt Injection Defense, and Hallucination detection.
      */
     @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackResponse")
-    public String getAiResponse(String query, UUID tenantId) {
+    public String getAiResponse(ConversationContext context, UUID tenantId) {
         if (aiOrchestrator == null) {
             return "AI feature is currently being configured. Please check back later.";
         }
+        
+        String query = context.getLatestQuery();
 
         long start = System.currentTimeMillis();
 
@@ -96,12 +99,17 @@ public class RagRetrievalService {
             return cachedResponse;
         }
 
-        // 4. Hybrid Retrieval (Vector + BM25)
-        int topK = 8;
-        List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+        // 4. Hybrid Retrieval (Vector + BM25) if RAG is required
+        List<String> chunks = null;
+        if (context.isRequiresRag()) {
+            int topK = 8;
+            chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
 
-        if (chunks == null || chunks.isEmpty()) {
-            log.info("[RAG] No document chunks found for tenant {} and query '{}'. Falling back to persona-based LLM generation.", tenantId, query);
+            if (chunks == null || chunks.isEmpty()) {
+                log.info("[RAG] No document chunks found for tenant {} and query '{}'. Falling back to persona-based LLM generation.", tenantId, query);
+            }
+        } else {
+            log.info("[RAG-Router] RAG skipped for tenant {} and query '{}'. Reason: Router determined NO_RAG.", tenantId, query);
         }
 
         // 5. Build Structured Prompt (Injection Resistant + Layered Persona)
@@ -111,7 +119,7 @@ public class RagRetrievalService {
         if (tenant != null) {
             tenantPersona = tenant.getAiPersonaPrompt();
         }
-        String prompt = promptBuilder.buildRagPrompt(query, chunks, niche, tenantPersona);
+        String prompt = promptBuilder.buildRagPrompt(context, chunks, niche, tenantPersona);
 
         // 6. Generate Response via AiOrchestrator (Provider Routing & Fallback)
         AiRequest aiRequest = AiRequest.builder()
@@ -155,10 +163,12 @@ public class RagRetrievalService {
      * and delivers conversational responses with sub-second LLM latency.
      */
     @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackVoiceResponse")
-    public String getVoiceAiResponse(String query, UUID tenantId, String languageMode) {
+    public String getVoiceAiResponse(ConversationContext context, UUID tenantId, String languageMode) {
         if (aiOrchestrator == null) {
             return "Hello! Connecting to assistant, please hold on.";
         }
+        
+        String query = context.getLatestQuery();
 
         long start = System.currentTimeMillis();
 
@@ -184,9 +194,14 @@ public class RagRetrievalService {
             return cachedResponse;
         }
 
-        // 4. Fast Retrieval (Top 4 chunks for low voice latency)
-        int topK = 4;
-        List<String> chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+        // 4. Fast Retrieval if RAG is required
+        List<String> chunks = null;
+        if (context.isRequiresRag()) {
+            int topK = 4;
+            chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+        } else {
+            log.info("[Voice-RAG-Router] RAG skipped for tenant {} and query '{}'", tenantId, query);
+        }
 
         // 5. Build Dedicated Spoken-First Voice Prompt with Tenant Voice Persona
         String niche = user.getBusinessType();
@@ -203,7 +218,7 @@ public class RagRetrievalService {
                 }
             }
         }
-        String prompt = promptBuilder.buildVoiceRagPrompt(query, chunks, niche, tenantPersona, assistantName, languageMode);
+        String prompt = promptBuilder.buildVoiceRagPrompt(context, chunks, niche, tenantPersona, assistantName, languageMode);
 
         // 6. Fast LLM Routing with max 85 tokens (< 800ms)
         AiRequest aiRequest = AiRequest.builder()
@@ -236,13 +251,13 @@ public class RagRetrievalService {
         return response;
     }
 
-    public String fallbackResponse(String query, UUID tenantId, Throwable t) {
-        log.error("[RAG-Fallback] Circuit breaker triggered for query: {}. Error: {}", query, t.getMessage());
+    public String fallbackResponse(ConversationContext context, UUID tenantId, Throwable t) {
+        log.error("[RAG-Fallback] Circuit breaker triggered for query: {}. Error: {}", context.getLatestQuery(), t.getMessage());
         return "I'm having trouble connecting to my knowledge base right now. Please try again later.";
     }
 
-    public String fallbackVoiceResponse(String query, UUID tenantId, String languageMode, Throwable t) {
-        log.error("[Voice-RAG-Fallback] Circuit breaker triggered for voice query: {}. Error: {}", query, t.getMessage());
+    public String fallbackVoiceResponse(ConversationContext context, UUID tenantId, String languageMode, Throwable t) {
+        log.error("[Voice-RAG-Fallback] Circuit breaker triggered for voice query: {}. Error: {}", context.getLatestQuery(), t.getMessage());
         return "I am having trouble connecting right now. Please try again in a moment.";
     }
 }
