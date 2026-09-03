@@ -42,16 +42,16 @@ public class DeepgramVoiceService {
     @Value("${deepgram.stt.detect-language:true}")
     private boolean detectLanguage;
 
-    @Value("${deepgram.tts.model:aura-asteria-en}")
+    @Value("${deepgram.tts.model:aura-stella-en}")
     private String ttsModel;
 
-    @Value("${deepgram.connect-timeout-ms:3000}")
+    @Value("${deepgram.connect-timeout-ms:2500}")
     private int connectTimeoutMs;
 
-    @Value("${deepgram.read-timeout-ms:10000}")
+    @Value("${deepgram.read-timeout-ms:4000}")
     private int readTimeoutMs;
 
-    @Value("${deepgram.max-retries:1}")
+    @Value("${deepgram.max-retries:0}")
     private int maxRetries;
 
     private final RestTemplate restTemplate;
@@ -59,8 +59,8 @@ public class DeepgramVoiceService {
 
     public DeepgramVoiceService(RestTemplateBuilder builder) {
         this.restTemplate = builder
-                .setConnectTimeout(Duration.ofMillis(3000))
-                .setReadTimeout(Duration.ofMillis(10000))
+                .setConnectTimeout(Duration.ofMillis(2500))
+                .setReadTimeout(Duration.ofMillis(4000))
                 .build();
         this.objectMapper = new ObjectMapper();
     }

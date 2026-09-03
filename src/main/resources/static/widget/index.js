@@ -195,6 +195,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
     });
 
     // Initialize Full-Duplex Voice Engine immediately so mic button works even before bootstrap finishes
+    let lastBotReplyText = '';
     const voiceEngine = new VoiceEngine(apiClient, {
         onStateChange: (state, payload) => {
             if (!elements.voiceOverlay) return;
@@ -227,11 +228,15 @@ export async function initWidget({ businessId, apiBase } = {}) {
                     case VoiceState.THINKING:
                     case VoiceState.PROCESSING:
                         elements.voiceStatusText.textContent = 'Thinking...';
-                        elements.voiceStatusSub.textContent = 'Processing your question with AI...';
+                        elements.voiceStatusSub.textContent = 'Generating quick answer...';
                         break;
                     case VoiceState.SPEAKING:
                         elements.voiceStatusText.textContent = 'Priya Speaking...';
-                        elements.voiceStatusSub.textContent = 'Please listen to the response.';
+                        if (lastBotReplyText) {
+                            elements.voiceStatusSub.textContent = `"${lastBotReplyText}"`;
+                        } else {
+                            elements.voiceStatusSub.textContent = 'Please listen to the response.';
+                        }
                         break;
                     case VoiceState.INTERRUPTED:
                         elements.voiceStatusText.textContent = 'Listening...';
@@ -245,6 +250,11 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         elements.voiceStatusText.textContent = 'Ready';
                         elements.voiceStatusSub.textContent = 'Microphone connected';
                 }
+            }
+        },
+        onTranscript: (liveText) => {
+            if (elements.voiceStatusSub && voiceEngine.getState() === VoiceState.LISTENING) {
+                elements.voiceStatusSub.innerHTML = `<em>"${liveText}"</em>`;
             }
         },
         onVolumeChange: (vol) => {
@@ -262,7 +272,11 @@ export async function initWidget({ businessId, apiBase } = {}) {
                 flowEngine.addUserBubble(result.userTranscript);
             }
             if (result.botResponseText) {
+                lastBotReplyText = result.botResponseText;
                 ui.renderVoiceBubble(result);
+                if (elements.voiceStatusSub) {
+                    elements.voiceStatusSub.textContent = `"${result.botResponseText}"`;
+                }
             }
         },
         onError: (errMsg) => {

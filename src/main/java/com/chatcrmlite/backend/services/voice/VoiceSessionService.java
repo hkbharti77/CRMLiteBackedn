@@ -43,7 +43,7 @@ public class VoiceSessionService {
     private final WebChatService webChatService;
     private final LiveSupportService liveSupportService;
 
-    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-asteria-en}")
+    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
 
     @org.springframework.beans.factory.annotation.Value("${voice.max-audio-size-bytes:10485760}")

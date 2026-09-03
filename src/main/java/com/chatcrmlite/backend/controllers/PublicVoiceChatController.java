@@ -26,7 +26,7 @@ public class PublicVoiceChatController {
     private final com.chatcrmlite.backend.services.ai.DeepgramVoiceService deepgramVoiceService;
     private final com.chatcrmlite.backend.services.voice.SpeechNormalizer speechNormalizer;
 
-    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-asteria-en}")
+    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
 
     @org.springframework.beans.factory.annotation.Value("${deepgram.stt.model:nova-2}")

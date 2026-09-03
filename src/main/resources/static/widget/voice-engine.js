@@ -41,10 +41,10 @@ export class VoiceEngine {
         // Language Configuration (English-only voice assistant)
         this.currentLang = 'en-US';
 
-        // VAD Tuning parameters
+        // VAD Tuning parameters (Optimized for lightning-fast sub-second conversational latency)
         this.SILENCE_THRESHOLD_DB = -42; // dB
-        this.SILENCE_DURATION_MS = 2200; // ms of silence to finish user's query turn
-        this.MIN_SPEECH_DURATION_MS = 750; // ms to avoid accidental click triggers
+        this.SILENCE_DURATION_MS = 900; // ms of silence to finish user's query turn (fast conversational cutoff)
+        this.MIN_SPEECH_DURATION_MS = 350; // ms to allow quick responses ("yes", "hi", "pricing")
         this.speechStartTime = 0;
         this.hasSpoken = false;
         this.vadCheckInterval = null;
@@ -353,7 +353,30 @@ export class VoiceEngine {
                         fullText += event.results[i][0].transcript + ' ';
                     }
                     this.liveTranscript = fullText.trim();
+                    if (this.liveTranscript) {
+                        this.hasSpoken = true;
+                        this.speechStartTime = this.speechStartTime || Date.now();
+                        this.callbacks.onTranscript(this.liveTranscript);
+                        // Reset silence timer on fresh speech text
+                        if (this.silenceTimer) {
+                            clearTimeout(this.silenceTimer);
+                            this.silenceTimer = null;
+                        }
+                    }
                 };
+
+                this.activeSpeechRec.onspeechend = () => {
+                    if (this.hasSpoken && this.liveTranscript && this.currentState === VoiceState.LISTENING) {
+                        if (!this.silenceTimer) {
+                            this.silenceTimer = setTimeout(() => {
+                                if (this.currentState === VoiceState.LISTENING) {
+                                    this.finishListening();
+                                }
+                            }, 500);
+                        }
+                    }
+                };
+
                 this.activeSpeechRec.start();
             } catch (e) {
                 // Ignore speech rec start errors if already running
@@ -423,7 +446,10 @@ export class VoiceEngine {
         this.setState(VoiceState.PROCESSING);
 
         try {
-            const result = await this.api.sendVoiceTurn(audioBlob, this.sessionId, null, transcript, this.currentLang || 'en-US');
+            // Speed Optimization: If transcript is already recognized by browser SpeechRecognition,
+            // don't upload large audio binary over network. Saves 500ms-1500ms transfer time.
+            const payloadBlob = hasText ? null : audioBlob;
+            const result = await this.api.sendVoiceTurn(payloadBlob, this.sessionId, null, transcript, this.currentLang || 'en-US');
             if (result && result.sessionId) {
                 this.sessionId = result.sessionId;
             }
