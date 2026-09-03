@@ -8,6 +8,8 @@ import java.util.UUID;
 public class AiRequest {
     private String prompt;
     private String systemInstruction;
+    private java.util.List<dev.langchain4j.data.message.ChatMessage> messages;
+    private java.util.List<dev.langchain4j.agent.tool.ToolSpecification> tools;
     private double temperature;
     private int maxTokens;
     private UUID tenantId;

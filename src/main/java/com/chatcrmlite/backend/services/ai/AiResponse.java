@@ -11,4 +11,5 @@ public class AiResponse {
     private long latencyMs;
     private String provider;
     private Map<String, Object> metadata;
+    private java.util.List<dev.langchain4j.agent.tool.ToolExecutionRequest> toolExecutionRequests;
 }

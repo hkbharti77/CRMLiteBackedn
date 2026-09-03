@@ -167,19 +167,31 @@ public class RagConfig {
                 throw new IllegalStateException("No active ChatLanguageModel bean configured!");
             }
             long start = System.currentTimeMillis();
-            List<dev.langchain4j.data.message.ChatMessage> messages = new java.util.ArrayList<>();
-            if (request.getSystemInstruction() != null && !request.getSystemInstruction().isBlank()) {
-                messages.add(SystemMessage.from(request.getSystemInstruction()));
+            
+            List<dev.langchain4j.data.message.ChatMessage> messages = request.getMessages();
+            if (messages == null || messages.isEmpty()) {
+                messages = new java.util.ArrayList<>();
+                if (request.getSystemInstruction() != null && !request.getSystemInstruction().isBlank()) {
+                    messages.add(SystemMessage.from(request.getSystemInstruction()));
+                }
+                messages.add(UserMessage.from(request.getPrompt()));
             }
-            messages.add(UserMessage.from(request.getPrompt()));
 
-            Response<AiMessage> response = chatLanguageModel.generate(messages);
+            Response<AiMessage> response;
+            if (request.getTools() != null && !request.getTools().isEmpty()) {
+                response = chatLanguageModel.generate(messages, request.getTools());
+            } else {
+                response = chatLanguageModel.generate(messages);
+            }
+            
             long duration = System.currentTimeMillis() - start;
-
             int tokens = response.tokenUsage() != null ? response.tokenUsage().totalTokenCount() : 0;
-
+            
+            AiMessage aiMessage = response.content();
+            
             return AiResponse.builder()
-                    .content(response.content().text())
+                    .content(aiMessage.text())
+                    .toolExecutionRequests(aiMessage.toolExecutionRequests())
                     .tokensUsed(tokens)
                     .latencyMs(duration)
                     .provider(aiProvider)

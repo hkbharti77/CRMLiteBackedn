@@ -16,6 +16,8 @@ import com.chatcrmlite.backend.services.WebChatService;
 import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
 import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import com.chatcrmlite.backend.services.ai.DeepgramVoiceService;
+import com.chatcrmlite.backend.services.ai.SarvamVoiceService;
+import com.chatcrmlite.backend.services.ai.TtsFreeVoiceService;
 import com.chatcrmlite.backend.services.livechat.LiveSupportService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -45,6 +47,11 @@ public class VoiceSessionService {
     private final WebChatService webChatService;
     private final LiveSupportService liveSupportService;
     private final ConversationMemoryService conversationMemoryService;
+    private final SarvamVoiceService sarvamVoiceService;
+    private final TtsFreeVoiceService ttsFreeVoiceService;
+
+    @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
+    private String ttsProvider;
 
     @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
@@ -150,7 +157,7 @@ public class VoiceSessionService {
                         deepgramVoiceService.transcribeAudio(audioBytes, mimeType, "en");
                 if (sttRes.isSuccess() && !sttRes.getTranscript().isBlank()) {
                     transcript = sttRes.getTranscript();
-                    rawDetectedLanguage = "en";
+                    rawDetectedLanguage = sttRes.getDetectedLanguage();
                 }
             }
         }
@@ -161,7 +168,10 @@ public class VoiceSessionService {
         }
 
         // 3. Language Mode & Handoff
-        String languageMode = "en";
+        String languageMode = detectLanguage(transcript);
+        if (rawDetectedLanguage != null && rawDetectedLanguage.startsWith("gu")) {
+            languageMode = "gu";
+        }
         boolean isHumanHandoffRequested = detectHumanHandoffIntent(transcript);
 
         // 4. Stale-Turn Check (Barge-in check before LLM)
@@ -185,7 +195,7 @@ public class VoiceSessionService {
             session.setStatus(VoiceSession.VoiceSessionStatus.ESCALATED);
         } else {
             ConversationContext memContext = conversationMemoryService.getVoiceContext(session.getId(), transcript);
-            botReplyText = ragRetrievalService.getVoiceAiResponse(memContext, businessId, "en");
+            botReplyText = ragRetrievalService.getVoiceAiResponse(memContext, businessId, languageMode);
             if (botReplyText == null || botReplyText.isBlank()) {
                 botReplyText = "Thank you for reaching out! How else can I assist you with our services today?";
             }
@@ -205,13 +215,32 @@ public class VoiceSessionService {
         // 7. Advanced Speech Normalization
         String speakableText = speechNormalizer.normalize(botReplyText);
 
-        // 8. Text-to-Speech (TTS) via Deepgram Aura
+        // 8. Text-to-Speech (TTS)
         long ttsStart = System.currentTimeMillis();
-        String requestedVoiceId = (session.getVoiceId() != null && !session.getVoiceId().toLowerCase().contains("fish-audio"))
-                ? session.getVoiceId()
-                : defaultTtsModel;
+        byte[] speechAudio;
 
-        byte[] speechAudio = deepgramVoiceService.synthesizeSpeech(speakableText, requestedVoiceId);
+        if ("sarvam".equalsIgnoreCase(ttsProvider)) {
+            // Use Sarvam AI TTS (Map detected language to Sarvam code)
+            String targetLangCode = "en-IN";
+            if ("hi".equals(languageMode) || "hinglish".equals(languageMode)) targetLangCode = "hi-IN";
+            else if ("gu".equals(languageMode)) targetLangCode = "gu-IN";
+            
+            speechAudio = sarvamVoiceService.synthesizeSpeech(speakableText, targetLangCode, null);
+        } else if ("ttsfree".equalsIgnoreCase(ttsProvider)) {
+            // Use TTSFree API
+            String ttsFreeLang = "English";
+            if ("hi".equals(languageMode) || "hinglish".equals(languageMode)) ttsFreeLang = "Hindi";
+            else if ("gu".equals(languageMode)) ttsFreeLang = "Gujarati";
+            
+            speechAudio = ttsFreeVoiceService.synthesizeSpeech(speakableText, ttsFreeLang);
+        } else {
+            // Use Deepgram TTS
+            String requestedVoiceId = (session.getVoiceId() != null && !session.getVoiceId().toLowerCase().contains("fish-audio"))
+                    ? session.getVoiceId()
+                    : defaultTtsModel;
+            speechAudio = deepgramVoiceService.synthesizeSpeech(speakableText, requestedVoiceId);
+        }
+
         int ttsLatency = (int) (System.currentTimeMillis() - ttsStart);
         int ttfa = (int) (System.currentTimeMillis() - overallStart);
 
