@@ -13,6 +13,9 @@ import com.chatcrmlite.backend.repositories.voice.VoiceTurnRepository;
 import com.chatcrmlite.backend.repositories.voice.VoiceUsageRepository;
 import com.chatcrmlite.backend.services.RagRetrievalService;
 import com.chatcrmlite.backend.services.WebChatService;
+import com.chatcrmlite.backend.services.voice.ConversationOrchestrator;
+import com.chatcrmlite.backend.services.voice.dto.AudioChunk;
+import com.chatcrmlite.backend.services.voice.dto.CallState;
 import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
 import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import com.chatcrmlite.backend.services.ai.DeepgramVoiceService;
@@ -49,6 +52,7 @@ public class VoiceSessionService {
     private final ConversationMemoryService conversationMemoryService;
     private final SarvamVoiceService sarvamVoiceService;
     private final TtsFreeVoiceService ttsFreeVoiceService;
+    private final ConversationOrchestrator conversationOrchestrator;
 
     @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
     private String ttsProvider;
@@ -195,7 +199,24 @@ public class VoiceSessionService {
             session.setStatus(VoiceSession.VoiceSessionStatus.ESCALATED);
         } else {
             ConversationContext memContext = conversationMemoryService.getVoiceContext(session.getId(), transcript);
-            botReplyText = ragRetrievalService.getVoiceAiResponse(memContext, businessId, languageMode);
+            
+            // Create ToolExecutionContext for the Orchestrator
+            com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext toolContext = 
+                new com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext(
+                    businessId, businessId, session.getId(), session.getId().toString(), 
+                    session.getId().toString(), visitorId, "+919999999999"
+                );
+
+            String systemPrompt = "You are a helpful AI voice assistant for " + business.getDisplayName() + 
+                                  ". Keep answers short and conversational. You can help users book appointments and create leads.";
+            
+            botReplyText = conversationOrchestrator.executeTurn(
+                    systemPrompt,
+                    transcript,
+                    List.of(), // TODO: use real chat message history from memContext if needed
+                    toolContext
+            );
+            
             if (botReplyText == null || botReplyText.isBlank()) {
                 botReplyText = "Thank you for reaching out! How else can I assist you with our services today?";
             }

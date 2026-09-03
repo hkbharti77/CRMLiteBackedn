@@ -31,13 +31,46 @@ public class ExotelStreamService {
     private final SpeechNormalizer speechNormalizer;
 
     public ExotelCallSession createSession(String streamId, ExotelCallSession session) {
-        activeSessions.put(streamId, session);
-        log.info("Created new Exotel stream session: {}", streamId);
-        
+        // Close any pre-existing session under this key (e.g. ghost from 'connected' event)
+        ExotelCallSession existing = activeSessions.put(streamId, session);
+        if (existing != null && existing != session) {
+            existing.transitionTo(CallState.CLOSED);
+            log.info("[ExotelStream] Replaced existing session for streamId={}", streamId);
+        }
+        log.info("[ExotelStream] Session created | streamId={} | callId={} | caller={}",
+                streamId, session.getCallId(), session.getPhoneNumber());
+
+        // Immediately send a greeting so the caller hears the bot and Exotel doesn't timeout
+        executorService.submit(() -> sendGreeting(session));
+
         // Start background processing pipeline for this session
         startSttPipeline(session);
-        
+
         return session;
+    }
+
+    private void sendGreeting(ExotelCallSession session) {
+        try {
+            session.transitionTo(CallState.SPEAKING);
+            String greetingText = "Hello! This is Gyan Vani A I. How can I help you today?";
+            
+            // Exotel strictly requires 8000Hz mu-law audio. Deepgram natively supports this.
+            // Sarvam outputs 22050Hz WAV which sounds like static if fed directly to Exotel.
+            byte[] ttsAudio = deepgramVoiceService.synthesizeSpeech(greetingText, "aura-asteria-en");
+            
+            if (ttsAudio != null && ttsAudio.length > 0) {
+                // The chunk must reflect the format: mulaw, 8000Hz
+                AudioChunk outChunk = new AudioChunk(ttsAudio, "mulaw", 8000, 1, System.currentTimeMillis(), false);
+                session.getOutboundAudioQueue().offer(outChunk);
+                log.info("[ExotelStream] Sent initial greeting to streamId={}", session.getStreamId());
+            } else {
+                log.warn("[ExotelStream] Failed to synthesize greeting for streamId={}", session.getStreamId());
+            }
+            session.transitionTo(CallState.LISTENING);
+        } catch (Exception e) {
+            log.error("[ExotelStream] Error sending greeting", e);
+            session.transitionTo(CallState.LISTENING);
+        }
     }
 
     public ExotelCallSession getSession(String streamId) {
@@ -138,8 +171,9 @@ public class ExotelStreamService {
                 // 1. STT
                 if (cancelToken.get()) return;
                 long sttStart = System.currentTimeMillis();
+                // Exotel sends 8kHz mulaw
                 DeepgramVoiceService.DeepgramTranscriptionResult sttRes = 
-                    deepgramVoiceService.transcribeAudio(audioBytes, "audio/L16", "en"); // Assuming linear16 or mulaw encoded raw
+                    deepgramVoiceService.transcribeAudio(audioBytes, "audio/mulaw;rate=8000", "en-IN");
                 session.setSttFinalMs(System.currentTimeMillis());
                 
                 String transcript = sttRes.getTranscript();
@@ -186,9 +220,9 @@ public class ExotelStreamService {
                     
                     String speakableText = speechNormalizer.normalize(sentence);
                     
-                    // 4. TTS (using Deepgram/Sarvam)
-                    // Synthesize chunk
-                    byte[] ttsAudio = deepgramVoiceService.synthesizeSpeech(speakableText, "aura-stella-en");
+                    // 4. TTS (using Deepgram for native 8kHz mu-law support)
+                    // Exotel requires raw mu-law bytes. Deepgram API provides this natively.
+                    byte[] ttsAudio = deepgramVoiceService.synthesizeSpeech(speakableText, "aura-asteria-en");
                     
                     if (first) {
                         session.setFirstSentenceReadyMs(System.currentTimeMillis());
@@ -198,9 +232,11 @@ public class ExotelStreamService {
 
                     if (cancelToken.get()) break;
 
-                    // Push to outbound queue
-                    AudioChunk outChunk = new AudioChunk(ttsAudio, "mp3", 24000, 1, System.currentTimeMillis(), false);
-                    session.getOutboundAudioQueue().offer(outChunk);
+                    if (ttsAudio != null && ttsAudio.length > 0) {
+                        // Push to outbound queue with correct mulaw/8000 settings
+                        AudioChunk outChunk = new AudioChunk(ttsAudio, "mulaw", 8000, 1, System.currentTimeMillis(), false);
+                        session.getOutboundAudioQueue().offer(outChunk);
+                    }
                 }
 
                 if (!cancelToken.get()) {

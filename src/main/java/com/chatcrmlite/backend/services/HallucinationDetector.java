@@ -249,13 +249,17 @@ public class HallucinationDetector {
         Set<String> contextTimeTokens = extractTimes(context);
 
         for (Double num : responseNumbers) {
-            // Allow small structural numbers (1st, 2, 3) unless it is a specific currency/count
             if (contextNumbers.contains(num)) {
                 continue;
             }
 
             // Check if this number is supported in context words (e.g. "five hundred" -> 500.0)
             if (isNumberSupportedInText(num, context)) {
+                continue;
+            }
+
+            // Allow small structural numbers (1 to 10) commonly used in bullet lists or conversational counting
+            if (num >= 1.0 && num <= 10.0 && num == Math.floor(num)) {
                 continue;
             }
 

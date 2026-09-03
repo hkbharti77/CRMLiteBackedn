@@ -107,6 +107,11 @@ public class DeepgramVoiceService {
                 : "en-IN";
         urlBuilder.append("&language=").append(dgLang);
 
+        // If the audio is raw mu-law from Exotel, we must tell Deepgram explicitly via query params
+        if (contentType.toLowerCase().contains("mulaw")) {
+            urlBuilder.append("&encoding=mulaw&sample_rate=8000");
+        }
+
         String url = urlBuilder.toString();
         log.info("[Deepgram-STT] Initiating Nova-2 transcription (Bytes: {}, MIME: {}, Model: {}, Key: {})",
                 audioBytes.length, contentType, sttModel, safeKey);
@@ -212,7 +217,7 @@ public class DeepgramVoiceService {
         String activeModel = (customModel != null && !customModel.isBlank()) ? customModel : ttsModel;
         String safeKey = maskKey(apiKey);
 
-        String url = "https://api.deepgram.com/v1/speak?model=" + activeModel;
+        String url = "https://api.deepgram.com/v1/speak?model=" + activeModel + "&encoding=mulaw&sample_rate=8000&container=none";
         log.info("[Deepgram-TTS] Synthesizing speech with model={} for text length={} (Key: {})",
                 activeModel, spokenText.length(), safeKey);
 

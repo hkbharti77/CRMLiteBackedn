@@ -9,6 +9,7 @@ import com.chatcrmlite.backend.repositories.MessageRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
 import com.chatcrmlite.backend.services.DeadLetterHandler;
+import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
 import com.chatcrmlite.backend.services.RagRetrievalService;
 import com.chatcrmlite.backend.services.RedisStateService;
 import com.chatcrmlite.backend.services.WebhookWorker;
@@ -65,6 +66,9 @@ class WhatsAppPipelineEndToEndIntegrationTest {
 
     @Mock
     private RagRetrievalService ragRetrievalService;
+
+    @Mock
+    private ConversationMemoryService conversationMemoryService;
 
     @Mock
     private WhatsAppMessageService messageService;
@@ -163,7 +167,8 @@ class WhatsAppPipelineEndToEndIntegrationTest {
                 contactRepository,
                 messageRepository,
                 guardrailService,
-                ragRetrievalService
+                ragRetrievalService,
+                conversationMemoryService
         );
         ReflectionTestUtils.setField(whatsappAiService, "userRepository", userRepository);
 
@@ -277,9 +282,11 @@ class WhatsAppPipelineEndToEndIntegrationTest {
                 .decision(Decision.CALL_AI)
                 .reason("intent_recognized")
                 .build();
+        com.chatcrmlite.backend.dto.memory.ConversationContext memCtx = com.chatcrmlite.backend.dto.memory.ConversationContext.builder().latestQuery("What are your business hours?").build();
+        when(conversationMemoryService.getWhatsAppContext(any(), anyString())).thenReturn(memCtx);
         when(guardrailService.evaluate(any(), any(), anyBoolean(), any(), any()))
                 .thenReturn(guardrailResult);
-        when(ragRetrievalService.getAiResponse(any(), any()))
+        when(ragRetrievalService.getAiResponse(any(com.chatcrmlite.backend.dto.memory.ConversationContext.class), any()))
                 .thenReturn("We are open Monday to Friday, 9am to 6pm.");
 
         when(redisTemplate.opsForStream().acknowledge("whatsapp-workers", aiRecord)).thenReturn(1L);

@@ -3,7 +3,7 @@ package com.chatcrmlite.backend.services;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -186,7 +186,7 @@ class PromptBuilderTest {
     @DisplayName("Voice RAG prompt enforces spoken rules, brevity, and tenant persona")
     void voiceRagPromptEnforcesSpokenRules() {
         String prompt = promptBuilder.buildVoiceRagPrompt(
-                "What is your consulting fee?",
+                ConversationContext.builder().latestQuery("What is your consulting fee?").build(),
                 List.of("Consulting fee is $200 per hour."),
                 "consulting",
                 "Be cheerful and friendly.",

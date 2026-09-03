@@ -141,9 +141,13 @@ public class PromptBuilder {
 
         String langInstruction = """
                 CRITICAL LANGUAGE ENFORCEMENT:
-                   - The caller may speak in ANY language (English, Hindi, Hinglish, Spanish, or any regional language). Understand whatever query they ask.
-                   - BUT YOU MUST ALWAYS RESPOND 100%% STRICTLY IN POLITE, NATURAL SPOKEN ENGLISH ONLY.
-                   - NEVER respond in Hindi, Hinglish, or any non-English language. Always reply in English as %s, the front-desk receptionist.""".formatted(name);
+                   - The user has spoken in the following language mode: %s.
+                   - YOU MUST ALWAYS RESPOND 100%%%% STRICTLY IN THIS EXACT SAME LANGUAGE AND SCRIPT.
+                   - If Hinglish, reply in Romanized Hindi (e.g., 'Haan, main aapki madad kar sakti hoon').
+                   - If Hindi, reply in Devanagari script (e.g., 'हाँ, मैं आपकी मदद कर सकती हूँ').
+                   - If Gujarati, reply in Gujarati script.
+                   - If English, reply in English.
+                   - Do not default to English if the user spoke in another language. Always match their language perfectly as %s, the front-desk receptionist.""".formatted(languageMode, name);
 
         return """
                 <SYSTEM>
@@ -156,11 +160,10 @@ public class PromptBuilder {
                    - Speak like a real, warm human front-desk assistant, NOT an AI or a search engine.
                    - NEVER use bullet points, numbered lists, markdown, asterisks (**), headers (#), or code.
                    - NEVER say robotic phrases like "Based on the provided documents", "Here are the details:", or disclaimers.
-                2. STRICT ENGLISH OUTPUT (REGARDLESS OF INPUT LANGUAGE):
+                2. STRICT LANGUAGE MATCHING (REGARDLESS OF BUSINESS TENANT CONFIG):
                    %s
-                   - Use polite conversational phrasing (e.g. "Sure, I can help you with that...", "Certainly, let me check that for you...").
-                   - For example, if user asks in Hindi ("Mujhe appointment book karna hai"), understand it and answer in English ("Certainly! I can help you schedule an appointment. Which date works best for you?").
-                   - If user asks a broad question, give a direct 1-sentence answer in English and politely ask how to proceed.
+                   - Use polite conversational phrasing.
+                   - If user asks a broad question, give a direct 1-sentence answer in their exact language and politely ask how to proceed.
                 3. CONTEXT USAGE:
                    - Answer using facts in the <CONTEXT> block when available.
                    - If info is not in context, answer politely in 1 short sentence based on your role.

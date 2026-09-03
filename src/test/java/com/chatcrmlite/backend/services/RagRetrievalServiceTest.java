@@ -25,6 +25,7 @@ import org.mockito.quality.Strictness;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -112,7 +113,7 @@ class RagRetrievalServiceTest {
 
         List<String> chunks = List.of("Property pricing starts at $200k.");
         when(hybridSearchService.hybridSearch(eq(tenantId), any(), eq(query), eq(8))).thenReturn(chunks);
-        when(promptBuilder.buildRagPrompt(eq(query), eq(chunks), any(), any()))
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), eq(chunks), any(), any()))
                 .thenReturn("Formatted prompt with context");
 
         AiResponse aiResponse = AiResponse.builder()
@@ -124,7 +125,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(aiResponse);
         when(hallucinationDetector.isValid(anyString(), anyString())).thenReturn(true);
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).requiresRag(true).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertEquals("Our properties start at $200,000.", result);
         verify(aiOrchestrator, times(1)).execute(any(AiRequest.class));
@@ -143,7 +145,7 @@ class RagRetrievalServiceTest {
 
         when(hybridSearchService.hybridSearch(eq(tenantId), any(), eq(query), eq(8)))
                 .thenReturn(List.of("Viewings can be booked online."));
-        when(promptBuilder.buildRagPrompt(anyString(), anyList(), any(), any()))
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), anyList(), any(), any()))
                 .thenReturn("Structured prompt");
 
         AiResponse aiResponse = AiResponse.builder()
@@ -155,7 +157,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(aiResponse);
         when(hallucinationDetector.isValid(anyString(), anyString())).thenReturn(true);
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).requiresRag(true).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertNotNull(result);
         assertEquals("You can book a viewing directly from our website.", result);
@@ -173,7 +176,7 @@ class RagRetrievalServiceTest {
         );
         when(semanticCacheService.getCachedResponse(eq(query), any(), eq(tenantId))).thenReturn(null);
         when(hybridSearchService.hybridSearch(any(), any(), any(), anyInt())).thenReturn(List.of("Office is in NY."));
-        when(promptBuilder.buildRagPrompt(any(), any(), any(), any())).thenReturn("Prompt");
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), any(), any(), any())).thenReturn("Prompt");
 
         // AiOrchestrator successfully failed over to OpenRouter
         AiResponse fallbackResponse = AiResponse.builder()
@@ -185,7 +188,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(fallbackResponse);
         when(hallucinationDetector.isValid(anyString(), anyString())).thenReturn(true);
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).requiresRag(true).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertEquals("Our office is located at 123 Main St, New York.", result);
         verify(aiOrchestrator).execute(any(AiRequest.class));
@@ -201,13 +205,14 @@ class RagRetrievalServiceTest {
         );
         when(semanticCacheService.getCachedResponse(any(), any(), any())).thenReturn(null);
         when(hybridSearchService.hybridSearch(any(), any(), any(), anyInt())).thenReturn(List.of());
-        when(promptBuilder.buildRagPrompt(any(), any(), any(), any())).thenReturn("Prompt");
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), any(), any(), any())).thenReturn("Prompt");
 
         when(aiOrchestrator.execute(any(AiRequest.class)))
                 .thenThrow(new RuntimeException("Fallback failed: All AI providers are down!"));
 
         // Direct call to fallbackResponse method (which circuit breaker executes on error)
-        String fallback = ragRetrievalService.fallbackResponse(query, tenantId, new RuntimeException("All providers down"));
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).build();
+        String fallback = ragRetrievalService.fallbackResponse(ctx, tenantId, new RuntimeException("All providers down"));
 
         assertNotNull(fallback);
         assertTrue(fallback.contains("trouble connecting to my knowledge base"));
@@ -227,7 +232,8 @@ class RagRetrievalServiceTest {
                 new FaqMatchingService.MatchResult(faqItem, 0.95f, true)
         );
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertEquals("We offer a full 30-day money-back guarantee.", result);
         verify(aiOrchestrator, never()).execute(any());
@@ -246,7 +252,8 @@ class RagRetrievalServiceTest {
         when(semanticCacheService.getCachedResponse(eq(query), any(), eq(tenantId)))
                 .thenReturn("Yes, free parking is available on-site.");
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertEquals("Yes, free parking is available on-site.", result);
         verify(aiOrchestrator, never()).execute(any());
@@ -263,7 +270,7 @@ class RagRetrievalServiceTest {
         );
         when(semanticCacheService.getCachedResponse(any(), any(), any())).thenReturn(null);
         when(hybridSearchService.hybridSearch(any(), any(), any(), anyInt())).thenReturn(List.of("1-year warranty."));
-        when(promptBuilder.buildRagPrompt(any(), any(), any(), any())).thenReturn("Prompt content");
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), any(), any(), any())).thenReturn("Prompt content");
 
         AiResponse aiResponse = AiResponse.builder()
                 .content("We offer a 1-year comprehensive warranty.")
@@ -274,7 +281,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(aiResponse);
         when(hallucinationDetector.isValid(anyString(), anyString())).thenReturn(true);
 
-        ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).requiresRag(true).build();
+        ragRetrievalService.getAiResponse(ctx, tenantId);
 
         ArgumentCaptor<AiRequest> requestCaptor = ArgumentCaptor.forClass(AiRequest.class);
         verify(aiOrchestrator).execute(requestCaptor.capture());
@@ -296,7 +304,7 @@ class RagRetrievalServiceTest {
         );
         when(semanticCacheService.getCachedResponse(any(), any(), any())).thenReturn(null);
         when(hybridSearchService.hybridSearch(any(), any(), any(), anyInt())).thenReturn(List.of("Company context without CEO name."));
-        when(promptBuilder.buildRagPrompt(any(), any(), any(), any())).thenReturn("Prompt content");
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), any(), any(), any())).thenReturn("Prompt content");
 
         AiResponse aiResponse = AiResponse.builder()
                 .content("I am not sure, perhaps it might be John Doe.")
@@ -307,7 +315,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(aiResponse);
         when(hallucinationDetector.isValid(anyString(), anyString())).thenReturn(false); // Detected hallucination
 
-        String result = ragRetrievalService.getAiResponse(query, tenantId);
+        ConversationContext ctx = ConversationContext.builder().latestQuery(query).requiresRag(true).build();
+        String result = ragRetrievalService.getAiResponse(ctx, tenantId);
 
         assertNull(result, "Response rejected by hallucination detector should return null");
         verify(semanticCacheService, never()).putCachedResponse(any(), any(), any(), any());
@@ -317,7 +326,8 @@ class RagRetrievalServiceTest {
     @DisplayName("AiOrchestrator null check returns configuration message")
     void testAiOrchestratorNull_ReturnsConfigurationMessage() {
         RagRetrievalService unconfiguredService = new RagRetrievalService();
-        String response = unconfiguredService.getAiResponse("Any query", UUID.randomUUID());
+        ConversationContext ctx = ConversationContext.builder().latestQuery("Any query").build();
+        String response = unconfiguredService.getAiResponse(ctx, UUID.randomUUID());
         assertEquals("AI feature is currently being configured. Please check back later.", response);
     }
 
@@ -344,7 +354,7 @@ class RagRetrievalServiceTest {
         when(semanticCacheService.getCachedResponse(anyString(), any(), eq(tenantB))).thenReturn(null);
         when(hybridSearchService.hybridSearch(eq(tenantB), any(), anyString(), eq(8)))
                 .thenReturn(List.of("Clinic B consultation fee is ₹700."));
-        when(promptBuilder.buildRagPrompt(anyString(), anyList(), anyString(), any()))
+        when(promptBuilder.buildRagPrompt(any(ConversationContext.class), anyList(), anyString(), any()))
                 .thenReturn("Prompt for Tenant B");
 
         AiResponse aiResponse = AiResponse.builder()
@@ -356,7 +366,8 @@ class RagRetrievalServiceTest {
         when(aiOrchestrator.execute(any(AiRequest.class))).thenReturn(aiResponse);
         when(hallucinationDetector.isValid(eq("Consultation fee is ₹700."), anyString())).thenReturn(true);
 
-        String responseB = ragRetrievalService.getAiResponse("What is the consultation fee?", tenantB);
+        ConversationContext ctx = ConversationContext.builder().latestQuery("What is the consultation fee?").requiresRag(true).build();
+        String responseB = ragRetrievalService.getAiResponse(ctx, tenantB);
 
         assertEquals("Consultation fee is ₹700.", responseB);
         // Verify hybrid search was strictly called with tenantB
