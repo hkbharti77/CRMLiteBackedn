@@ -125,6 +125,8 @@ public class RedisStreamConfig {
                             String msg = t != null ? t.getMessage() : "";
                             if (msg != null && (msg.contains("Redisson is shutdown") || msg.contains("RedissonShutdownException"))) {
                                 log.debug("Redis stream worker [{}] stopped gracefully (Redisson shutdown).", consumerName);
+                            } else if (t instanceof NullPointerException && msg != null && msg.contains("\"records\" is null")) {
+                                log.debug("Redis stream worker [{}] encountered null records (often due to read timeout). Retrying...", consumerName);
                             } else {
                                 log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}",
                                         consumerName, stream, (t != null ? t.getMessage() : "unknown error"), t);
