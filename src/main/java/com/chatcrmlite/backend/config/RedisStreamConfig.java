@@ -56,8 +56,9 @@ public class RedisStreamConfig {
     @Bean(name = "redisStreamTaskExecutor")
     public TaskExecutor redisStreamTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
-        executor.setCorePoolSize(Math.max(4, concurrency * 2));
-        executor.setMaxPoolSize(Math.max(8, concurrency * 4));
+        // Reduced from Math.max(4, concurrency * 2) to prevent context-switching overload on 2-core EC2
+        executor.setCorePoolSize(2);
+        executor.setMaxPoolSize(4);
         executor.setQueueCapacity(200);
         executor.setThreadNamePrefix("RedisStreamWorker-");
         executor.setDaemon(true);

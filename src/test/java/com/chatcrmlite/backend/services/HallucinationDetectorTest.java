@@ -182,18 +182,28 @@ public class HallucinationDetectorTest {
     }
 
     @Test
-    @DisplayName("21. Existing refusal handling → REJECT/FAIL (triggers safe fallback)")
+    @DisplayName("21. Existing refusal handling → GROUNDED_REFUSAL")
     void testRefusalHandling_Fails() {
         String context = "Some context here.";
         String answer = "I don't know based on the provided information.";
+        assertEquals(HallucinationCheckResult.GROUNDED_REFUSAL, detector.check(answer, context, null));
         assertFalse(detector.isValid(answer, context));
     }
 
     @Test
-    @DisplayName("22. Existing hedging behavior (2+ hedging phrases) → FAIL")
-    void testExcessiveHedging_Fails() {
+    @DisplayName("22. Hedging behavior (2+ hedging phrases) → PASS (no longer fails)")
+    void testExcessiveHedging_Passes() {
         String context = "Fee is ₹500.";
         String answer = "I think it is possible that the fee is ₹500, but perhaps it might vary.";
-        assertFalse(detector.isValid(answer, context));
+        assertTrue(detector.isValid(answer, context));
+        assertEquals(HallucinationCheckResult.GROUNDED, detector.check(answer, context, null));
+    }
+
+    @Test
+    @DisplayName("23. Semantic check skipped if AiOrchestrator is missing → GROUNDED")
+    void testSemanticCheckSkipped() {
+        String context2 = "Dental implants start at ₹40,000.";
+        String answer2 = "Dental implants start at ₹40,000 and include a free consultation.";
+        assertEquals(HallucinationCheckResult.GROUNDED, detector.check(answer2, context2, null));
     }
 }

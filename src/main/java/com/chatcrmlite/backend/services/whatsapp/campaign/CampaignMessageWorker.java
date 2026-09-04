@@ -39,8 +39,10 @@ public class CampaignMessageWorker {
      */
     @Scheduled(fixedDelay = 2000)
     public void processRunningCampaigns() {
-        List<WhatsAppCampaign> runningCampaigns = campaignRepository.findAll().stream()
-                .filter(c -> c.getStatus() == WhatsAppCampaign.Status.RUNNING)
+        // DB-level filter: only RUNNING campaigns are loaded — avoids full-table scan every 2s.
+        List<WhatsAppCampaign> runningCampaigns = campaignRepository
+                .findAllByStatus(WhatsAppCampaign.Status.RUNNING)
+                .stream()
                 .sorted(Comparator.comparingInt(this::calculateEffectivePriority).reversed())
                 .toList();
 
@@ -61,8 +63,18 @@ public class CampaignMessageWorker {
         return baseRank;
     }
 
-    @Async
-    @Transactional
+    /**
+     * Processes one batch of outbound messages for a single campaign.
+     *
+     * Transaction note: @Transactional is intentionally NOT present on this method.
+     * Each repository call (findById, save, count) carries its own @Transactional from
+     * SimpleJpaRepository, so connections are borrowed and returned per-call rather than
+     * being held for the full duration of this method (which includes Thread.sleep delays).
+     *
+     * Executor note: runs on the bounded "campaignTaskExecutor" (core=2, max=3) instead
+     * of the default SimpleAsyncTaskExecutor, which spawned an unbounded thread per campaign.
+     */
+    @Async("campaignTaskExecutor")
     public void processCampaignBatch(UUID campaignId) {
         WhatsAppCampaign campaign = campaignRepository.findById(campaignId).orElse(null);
         if (campaign == null || campaign.getStatus() != WhatsAppCampaign.Status.RUNNING) {

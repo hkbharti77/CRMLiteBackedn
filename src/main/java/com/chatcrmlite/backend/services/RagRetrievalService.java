@@ -136,8 +136,9 @@ public class RagRetrievalService {
         
         // 7. Post-generation Hallucination Guard
         String contextString = String.join("\n", chunks != null ? chunks : List.of());
-        if (!hallucinationDetector.isValid(response, contextString)) {
-            log.warn("[RAG] Response rejected by HallucinationDetector for query: {}", query);
+        HallucinationCheckResult guardResult = hallucinationDetector.check(response, contextString, tenantId);
+        if (guardResult != HallucinationCheckResult.GROUNDED && guardResult != HallucinationCheckResult.GROUNDED_REFUSAL) {
+            log.warn("[RAG] Response rejected by HallucinationDetector for query: {}. Result: {}", query, guardResult);
             return null;
         }
 

@@ -34,23 +34,26 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
            "ORDER BY l.lastActivity DESC")
     List<Lead> findAllByStatusAndOwner(@Param("status") Lead.LeadStatus status, @Param("owner") User owner);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
+    @Query("SELECT DISTINCT l FROM Lead l " +
            "JOIN FETCH l.contact c " +
            "LEFT JOIN FETCH c.tags " +
+           "WHERE l.id IN :ids")
+    List<Lead> findAllWithContactAndTagsByIdIn(@Param("ids") List<UUID> ids);
+
+    @Query(value = "SELECT l.id FROM Lead l " +
+           "JOIN l.contact c " +
            "WHERE l.status = :status AND l.owner = :owner " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.status = :status AND l.owner = :owner " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Lead> findAllByStatusAndOwnerAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, @Param("search") String search, Pageable pageable);
+    Page<UUID> findIdsByStatusAndOwnerAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, @Param("search") String search, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    @Query(value = "SELECT l.id FROM Lead l " +
            "WHERE l.status = :status AND l.owner = :owner " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.status = :status AND l.owner = :owner")
-    Page<Lead> findAllByStatusAndOwnerPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, Pageable pageable);
+    Page<UUID> findIdsByStatusAndOwnerPaged(@Param("status") Lead.LeadStatus status, @Param("owner") User owner, Pageable pageable);
 
     List<Lead> findAllByOwnerAndDeletedTrue(User owner);
 
@@ -69,24 +72,21 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     Optional<Lead> findTopByContactAndStatusNotInOrderByCreatedAtDesc(
             Contact contact, List<Lead.LeadStatus> excludedStatuses);
 
-    /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    /** Optimized: fetch paginated leads IDs to avoid lazy initialization memory issues */
+    @Query(value = "SELECT l.id FROM Lead l " +
            "WHERE l.owner = :owner " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.owner = :owner")
-    Page<Lead> findAllByOwnerPaged(@Param("owner") User owner, Pageable pageable);
+    Page<UUID> findIdsByOwnerPaged(@Param("owner") User owner, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    @Query(value = "SELECT l.id FROM Lead l " +
+           "JOIN l.contact c " +
            "WHERE l.owner = :owner " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.owner = :owner " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Lead> findAllByOwnerAndSearchPaged(@Param("owner") User owner, @Param("search") String search, Pageable pageable);
+    Page<UUID> findIdsByOwnerAndSearchPaged(@Param("owner") User owner, @Param("search") String search, Pageable pageable);
 
     /** Optimized: fetch leads with contact eagerly to avoid N+1 queries */
     @Query("SELECT l FROM Lead l JOIN FETCH l.contact WHERE l.owner = :owner ORDER BY l.lastActivity DESC")
@@ -146,40 +146,34 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
 
     // ── Tenant-Wide Methods (Filtered automatically by Hibernate @Filter) ──
 
-    /** Optimized: fetch paginated leads with contact and tags eagerly to avoid lazy initialization */
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    /** Optimized: fetch paginated leads IDs */
+    @Query(value = "SELECT l.id FROM Lead l " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l")
-    Page<Lead> findAllPaged(Pageable pageable);
+    Page<UUID> findIdsPaged(Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    @Query(value = "SELECT l.id FROM Lead l " +
+           "JOIN l.contact c " +
            "WHERE (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE " +
            "(LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Lead> findAllAndSearchPaged(@Param("search") String search, Pageable pageable);
+    Page<UUID> findIdsAndSearchPaged(@Param("search") String search, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    @Query(value = "SELECT l.id FROM Lead l " +
            "WHERE l.status = :status " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l WHERE l.status = :status")
-    Page<Lead> findAllByStatusPaged(@Param("status") Lead.LeadStatus status, Pageable pageable);
+    Page<UUID> findIdsByStatusPaged(@Param("status") Lead.LeadStatus status, Pageable pageable);
 
-    @Query(value = "SELECT DISTINCT l FROM Lead l " +
-           "JOIN FETCH l.contact c " +
-           "LEFT JOIN FETCH c.tags " +
+    @Query(value = "SELECT l.id FROM Lead l " +
+           "JOIN l.contact c " +
            "WHERE l.status = :status " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%'))) " +
            "ORDER BY l.lastActivity DESC",
            countQuery = "SELECT COUNT(l) FROM Lead l JOIN l.contact c WHERE l.status = :status " +
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
-    Page<Lead> findAllByStatusAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("search") String search, Pageable pageable);
+    Page<UUID> findIdsByStatusAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("search") String search, Pageable pageable);
 
     @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
            "COALESCE(SUM(l.dealValue), 0), " +

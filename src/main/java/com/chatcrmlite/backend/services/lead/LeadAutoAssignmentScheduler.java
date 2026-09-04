@@ -34,7 +34,7 @@ public class LeadAutoAssignmentScheduler {
     public void processAutoAssignments() {
         log.debug("[Lead-Auto-Assignment] Starting auto-assignment job...");
 
-        List<Tenant> activeTenants = tenantRepository.findAll();
+        List<Tenant> activeTenants = tenantRepository.findAllByLifecycleStatus(Tenant.LifecycleStatus.ACTIVE);
 
         for (Tenant tenant : activeTenants) {
             int delayMinutes = tenant.getAutoAssignmentDelayMinutes() != null ? tenant.getAutoAssignmentDelayMinutes() : 5;

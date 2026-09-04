@@ -3,6 +3,11 @@ package com.chatcrmlite.backend.services;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import com.chatcrmlite.backend.services.ai.AiOrchestrator;
+import com.chatcrmlite.backend.services.ai.AiRequest;
+import com.chatcrmlite.backend.services.ai.AiResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -17,6 +22,9 @@ import java.util.regex.Pattern;
 @Slf4j
 @Component
 public class HallucinationDetector {
+
+    @Autowired(required = false)
+    private AiOrchestrator aiOrchestrator;
 
     private static final List<String> UNKNOWN_PHRASES = List.of(
         "i don't know",
@@ -74,45 +82,102 @@ public class HallucinationDetector {
      * @return true if the response is valid and grounded, false if ungrounded/hallucinated
      */
     public boolean isValid(String response, String context) {
+        HallucinationCheckResult result = check(response, context, null);
+        return result == HallucinationCheckResult.GROUNDED;
+    }
+
+    /**
+     * Claim-level evaluation of response grounding.
+     * 
+     * @param response The LLM generated response
+     * @param context  The retrieved RAG context chunks
+     * @param tenantId The tenant ID for isolation and LLM usage
+     * @return Granular HallucinationCheckResult
+     */
+    public HallucinationCheckResult check(String response, String context, UUID tenantId) {
         if (response == null || response.isBlank()) {
-            return false;
+            return HallucinationCheckResult.EMPTY_RESPONSE;
         }
 
         // 1. Check for pure fallback / unknown response
         if (isUnknownOrRefusal(response)) {
             log.info("[HallucinationDetector] Model refusal / unknown response detected.");
-            return false;
+            return HallucinationCheckResult.GROUNDED_REFUSAL;
         }
 
-        // 2. Check for excessive hedging (low confidence)
+        // 2. Check for excessive hedging (low confidence) - warning only
         if (isExcessiveHedging(response)) {
-            log.warn("[HallucinationDetector] High hedging detected. Possible low confidence.");
-            return false;
+            log.info("[HallucinationDetector] High hedging detected, but allowing as warning.");
         }
 
         // 3. Handle Empty Context
         if (context == null || context.isBlank()) {
-            return isValidWithoutContext(response);
+            if (!isValidWithoutContext(response)) {
+                return HallucinationCheckResult.UNSUPPORTED_CLAIM;
+            }
+            return HallucinationCheckResult.GROUNDED;
         }
 
         // 4. Deterministic Grounding Checks with Context
         if (!verifyContactAndUrlClaims(response, context)) {
-            return false;
+            return HallucinationCheckResult.CONTACT_MISMATCH;
         }
 
         if (!verifyTimeAndScheduleClaims(response, context)) {
-            return false;
+            return HallucinationCheckResult.TEMPORAL_MISMATCH;
         }
 
         if (!verifyNumericalAndCurrencyClaims(response, context)) {
-            return false;
+            return HallucinationCheckResult.NUMERIC_MISMATCH;
         }
 
         if (!verifyNamedEntitiesAndLocations(response, context)) {
-            return false;
+            return HallucinationCheckResult.ENTITY_MISMATCH;
         }
 
-        return true;
+        // 5. Semantic Claim Verification using LLM
+        if (tenantId != null && aiOrchestrator != null) {
+            return verifySemanticClaims(response, context, tenantId);
+        }
+
+        return HallucinationCheckResult.GROUNDED;
+    }
+
+    private HallucinationCheckResult verifySemanticClaims(String response, String context, UUID tenantId) {
+        String prompt = "You are a factual claim verifier. " +
+                "Evaluate if the factual claims in the 'Response' are fully supported by the 'Context'.\n\n" +
+                "Context:\n" + context + "\n\n" +
+                "Response:\n" + response + "\n\n" +
+                "Output ONLY one of the following words:\n" +
+                "SUPPORTED (if all claims are fully supported or implied safely)\n" +
+                "UNSUPPORTED (if any claim contradicts or adds new specific facts not in context)\n" +
+                "UNCERTAIN (if unclear)\n";
+
+        AiRequest request = AiRequest.builder()
+                .prompt(prompt)
+                .tenantId(tenantId)
+                .complexity(AiRequest.TaskComplexity.LOW)
+                .maxTokens(10)
+                .temperature(0.0)
+                .build();
+
+        try {
+            AiResponse aiResponse = aiOrchestrator.execute(request);
+            if (aiResponse != null && aiResponse.getContent() != null) {
+                String resultStr = aiResponse.getContent().trim().toUpperCase();
+                if (resultStr.contains("UNSUPPORTED")) {
+                    log.warn("[HallucinationDetector] Semantic verification failed. Unsupported claims found.");
+                    return HallucinationCheckResult.UNSUPPORTED_CLAIM;
+                } else if (resultStr.contains("UNCERTAIN")) {
+                    log.warn("[HallucinationDetector] Semantic verification uncertain.");
+                    return HallucinationCheckResult.UNCERTAIN;
+                }
+            }
+        } catch (Exception e) {
+            log.error("[HallucinationDetector] Semantic verification failed due to error: {}", e.getMessage());
+            // Fallback to GROUNDED if semantic check fails technically, since deterministic checks passed
+        }
+        return HallucinationCheckResult.GROUNDED;
     }
 
     /**

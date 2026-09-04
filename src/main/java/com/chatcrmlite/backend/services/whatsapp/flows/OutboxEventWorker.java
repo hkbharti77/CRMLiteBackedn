@@ -35,7 +35,7 @@ public class OutboxEventWorker {
     /**
      * Polls pending Transactional Outbox events every 3 seconds.
      */
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelay = 7000)
     public void processOutboxEvents() {
         com.chatcrmlite.backend.security.TenantContext.setAdminMode(true);
         try {

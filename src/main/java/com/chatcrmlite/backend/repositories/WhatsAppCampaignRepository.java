@@ -30,4 +30,10 @@ public interface WhatsAppCampaignRepository extends JpaRepository<WhatsAppCampai
 
     List<WhatsAppCampaign> findByStatusAndScheduledAtBefore(WhatsAppCampaign.Status status, LocalDateTime now);
     long countByOwnerAndStatus(User owner, WhatsAppCampaign.Status status);
+
+    /**
+     * Returns only campaigns with the given status — pushes the filter to the DB.
+     * Used by CampaignMessageWorker to avoid loading all campaigns and filtering in Java.
+     */
+    List<WhatsAppCampaign> findAllByStatus(WhatsAppCampaign.Status status);
 }

@@ -28,7 +28,7 @@ public class LiveChatOutboxProcessor {
     @Autowired private UserRepository userRepository;
     @Autowired private ObjectMapper objectMapper;
 
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelay = 7000)
     @Transactional
     public void processOutboxEvents() {
         List<OutboxEvent> pending = outboxEventRepository.findPendingEvents(5);

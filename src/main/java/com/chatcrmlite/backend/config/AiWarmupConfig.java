@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.config;
 
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
+import dev.langchain4j.model.embedding.EmbeddingModel;
+import dev.langchain4j.data.segment.TextSegment;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -18,6 +19,14 @@ public class AiWarmupConfig {
      */
     @org.springframework.beans.factory.annotation.Autowired
     private org.springframework.jdbc.core.JdbcTemplate jdbcTemplate;
+
+    /**
+     * Reuse the EmbeddingModel bean created by RagConfig — avoids loading the ONNX
+     * model a second time at startup. Both this class and RagConfig share @Profile("!test"),
+     * so this field is always populated when warmUp() fires.
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    private EmbeddingModel embeddingModel;
 
     @EventListener(ApplicationReadyEvent.class)
     public void warmUp() {
@@ -78,9 +87,11 @@ public class AiWarmupConfig {
         }
 
         try {
-            AllMiniLmL6V2QuantizedEmbeddingModel model = new AllMiniLmL6V2QuantizedEmbeddingModel();
-            // Run a dummy embedding to force model loading into memory
-            model.embed("Hello world to warm up the sentence transformer model");
+            // Use the existing Spring bean — do NOT construct a second ONNX model instance.
+            // RagConfig.embeddingModel() already loaded AllMiniLmL6V2QuantizedEmbeddingModel
+            // before ApplicationReadyEvent fires. Creating another instance wasted ~1-3s of
+            // startup CPU and ~22 MB of off-heap memory for no benefit.
+            embeddingModel.embed(TextSegment.from("Hello world to warm up the sentence transformer model"));
             log.info("[AI-Warmup] Embedding model ready.");
         } catch (Exception e) {
             log.error("[AI-Warmup] Failed to warm up model: {}", e.getMessage());

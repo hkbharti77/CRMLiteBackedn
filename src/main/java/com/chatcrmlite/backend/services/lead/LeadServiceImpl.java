@@ -207,26 +207,46 @@ public class LeadServiceImpl implements LeadService {
     @Override
     public Page<Lead> getLeadsByUserPaged(User user, int page, int size, Lead.LeadStatus status, String search) {
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "lastActivity"));
-        Page<Lead> result;
+        Page<UUID> idPage;
         boolean hasSearch = search != null && !search.trim().isEmpty();
         
+        // Step 1: Query IDs without JOIN FETCH (avoids HHH90003004 memory pagination)
         if (isAdmin(user)) {
             if (status != null) {
-                result = hasSearch ? leadRepository.findAllByStatusAndSearchPaged(status, search, pageable) 
-                                   : leadRepository.findAllByStatusPaged(status, pageable);
+                idPage = hasSearch ? leadRepository.findIdsByStatusAndSearchPaged(status, search, pageable) 
+                                   : leadRepository.findIdsByStatusPaged(status, pageable);
             } else {
-                result = hasSearch ? leadRepository.findAllAndSearchPaged(search, pageable)
-                                   : leadRepository.findAllPaged(pageable);
+                idPage = hasSearch ? leadRepository.findIdsAndSearchPaged(search, pageable)
+                                   : leadRepository.findIdsPaged(pageable);
             }
         } else {
             if (status != null) {
-                result = hasSearch ? leadRepository.findAllByStatusAndOwnerAndSearchPaged(status, user, search, pageable)
-                                   : leadRepository.findAllByStatusAndOwnerPaged(status, user, pageable);
+                idPage = hasSearch ? leadRepository.findIdsByStatusAndOwnerAndSearchPaged(status, user, search, pageable)
+                                   : leadRepository.findIdsByStatusAndOwnerPaged(status, user, pageable);
             } else {
-                result = hasSearch ? leadRepository.findAllByOwnerAndSearchPaged(user, search, pageable)
-                                   : leadRepository.findAllByOwnerPaged(user, pageable);
+                idPage = hasSearch ? leadRepository.findIdsByOwnerAndSearchPaged(user, search, pageable)
+                                   : leadRepository.findIdsByOwnerPaged(user, pageable);
             }
         }
+
+        if (idPage.isEmpty()) {
+            return org.springframework.data.domain.Page.empty(pageable);
+        }
+
+        // Step 2: Fetch full entities with JOIN FETCH
+        List<UUID> ids = idPage.getContent();
+        List<Lead> unsortedLeads = leadRepository.findAllWithContactAndTagsByIdIn(ids);
+
+        // Step 3: Re-order leads to match the original ID page order (which is sorted by lastActivity DESC)
+        java.util.Map<UUID, Lead> leadMap = unsortedLeads.stream().collect(java.util.stream.Collectors.toMap(Lead::getId, l -> l));
+        List<Lead> sortedLeads = ids.stream()
+                .map(leadMap::get)
+                .filter(java.util.Objects::nonNull)
+                .collect(java.util.stream.Collectors.toList());
+
+        // Step 4: Construct the final Page object
+        Page<Lead> result = new org.springframework.data.domain.PageImpl<>(sortedLeads, pageable, idPage.getTotalElements());
+        
         initializeLeads(result);
         return result;
     }
