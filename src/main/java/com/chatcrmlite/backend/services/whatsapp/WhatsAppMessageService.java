@@ -45,8 +45,9 @@ public class WhatsAppMessageService {
     }
 
     public void sendInteractiveAiResponse(Contact contact, String response, String imgUrl, WhatsAppConfig config, User owner) {
+        String formattedResponse = outboundService.convertToWhatsAppMarkdown(response);
         // Meta limit: body text <= 1024 chars
-        String body = (response != null && response.length() > 1024) ? response.substring(0, 1021) + "..." : response;
+        String body = (formattedResponse != null && formattedResponse.length() > 1024) ? formattedResponse.substring(0, 1021) + "..." : formattedResponse;
 
         String menuJson = config != null ? config.getAiResponseMenuJson() : null;
         MenuDto menu = null;

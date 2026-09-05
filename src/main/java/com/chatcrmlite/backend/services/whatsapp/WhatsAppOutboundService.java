@@ -31,7 +31,7 @@ public class WhatsAppOutboundService {
     private final MessageRepository messageRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
 
-    private String convertToWhatsAppMarkdown(String text) {
+    public String convertToWhatsAppMarkdown(String text) {
         if (text == null) return null;
         return text
                 .replaceAll("(?s)\\*\\*(.*?)\\*\\*", "*$1*") // **bold** -> *bold*

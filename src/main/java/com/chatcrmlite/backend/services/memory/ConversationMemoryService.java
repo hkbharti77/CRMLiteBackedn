@@ -65,7 +65,7 @@ public class ConversationMemoryService {
 
     public ConversationContext getWhatsAppContext(Contact contact, String latestQuery) {
         // WhatsApp active context window (e.g. 24h conversational policy)
-        Instant windowStart = Instant.now().minus(24, ChronoUnit.HOURS);
+        java.time.LocalDateTime windowStart = java.time.LocalDateTime.now().minusHours(24);
         List<Message> recentTurns = messageRepository.findByContactAndTimestampAfterOrderByTimestampAsc(contact, windowStart);
         
         // Limit to 50 most recent if window has too many
