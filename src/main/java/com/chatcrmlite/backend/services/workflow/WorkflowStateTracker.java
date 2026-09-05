@@ -33,7 +33,7 @@ public class WorkflowStateTracker {
      * Prevents Message B from overtaking Message A if both are in flight.
      */
     public boolean acquireUserLock(String waId) {
-        return acquireUserLock(waId, Duration.ofSeconds(3), Duration.ofMinutes(1));
+        return acquireUserLock(waId, Duration.ofSeconds(45), Duration.ofMinutes(1));
     }
 
     public boolean acquireUserLock(String waId, Duration waitTimeout, Duration lockTtl) {

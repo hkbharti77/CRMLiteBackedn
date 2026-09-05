@@ -203,12 +203,15 @@ public class VoiceSessionService {
             // Create ToolExecutionContext for the Orchestrator
             com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext toolContext = 
                 new com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext(
-                    businessId, businessId, session.getId(), session.getId().toString(), 
+                    business.getTenant().getId(), businessId, session.getId(), session.getId().toString(), 
                     session.getId().toString(), visitorId, "+919999999999"
                 );
 
-            String systemPrompt = "You are a helpful AI voice assistant for " + business.getDisplayName() + 
-                                  ". Keep answers short and conversational. You can help users book appointments and create leads.";
+            String systemPrompt = business.getTenant().getVoicePersonaPrompt();
+            if (systemPrompt == null || systemPrompt.isBlank()) {
+                systemPrompt = "You are a helpful AI voice assistant for " + business.getDisplayName() + 
+                               ". Keep answers short and conversational. You can help users book appointments and create leads.";
+            }
             
             botReplyText = conversationOrchestrator.executeTurn(
                     systemPrompt,
