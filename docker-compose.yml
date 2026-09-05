@@ -51,13 +51,13 @@ services:
       dockerfile: Dockerfile
     container_name: chatcrm_backend
     restart: unless-stopped
-    mem_limit: 400m
+    mem_limit: 600m
     ports:
       - "8080:8080"
     env_file:
       - .env
     environment:
-      JAVA_TOOL_OPTIONS: "-XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -Xmx128m -Xms128m"
+      JAVA_TOOL_OPTIONS: "-XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m -Xmx256m -Xms256m"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
       SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-chatcrmdb}
       DB_USERNAME: ${DB_USERNAME:-root}

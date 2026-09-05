@@ -38,4 +38,4 @@ EXPOSE 8080
 #   UseSerialGC: uses minimal memory footprint compared to G1GC
 #   MaxMetaspaceSize: class metadata memory (Spring Boot 3 requires ~150MB)
 #   Xss256k: thread stack size
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms128m", "-Xmx350m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=256m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-cp", ".:lib/*", "com.chatcrmlite.backend.ChatCrmBackendApplication"]
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms256m", "-Xmx256m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=128m", "-XX:ReservedCodeCacheSize=64m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-cp", ".:lib/*", "com.chatcrmlite.backend.ChatCrmBackendApplication"]
