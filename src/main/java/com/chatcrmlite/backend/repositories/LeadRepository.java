@@ -114,16 +114,15 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
             @Param("owner") User owner, 
             @Param("excludedStatuses") List<Lead.LeadStatus> excludedStatuses);
 
-    @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
-           "COALESCE(SUM(l.dealValue), 0), " +
-           "COALESCE(SUM(CASE WHEN l.paymentStatus = 'PAID' THEN l.dealValue ELSE 0 END), 0), " +
-           "COALESCE(SUM(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN l.dealValue ELSE 0 END), 0), " +
-           "COUNT(CASE WHEN l.dealValue IS NOT NULL THEN 1 END), " +
-           "COUNT(CASE WHEN l.paymentStatus = 'PAID' THEN 1 END), " +
-           "COUNT(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN 1 END), " +
-           "'INR') " +
-           "FROM Lead l WHERE l.owner = :owner")
-    com.chatcrmlite.backend.dto.RevenueReportDTO calculateRevenueReport(@Param("owner") User owner);
+    @Query(value = "SELECT " +
+           "COALESCE(SUM(deal_value), 0), " +
+           "COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN deal_value ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN payment_status IN ('PENDING', 'PARTIAL') THEN deal_value ELSE 0 END), 0), " +
+           "COUNT(CASE WHEN deal_value IS NOT NULL THEN 1 END), " +
+           "COUNT(CASE WHEN payment_status = 'PAID' THEN 1 END), " +
+           "COUNT(CASE WHEN payment_status IN ('PENDING', 'PARTIAL') THEN 1 END) " +
+           "FROM leads WHERE owner_id = :ownerId", nativeQuery = true)
+    List<Object[]> calculateRevenueReportRaw(@Param("ownerId") UUID ownerId);
 
     @org.springframework.data.jpa.repository.Modifying
     @Query("UPDATE Lead l SET l.lastActivity = :lastActivity WHERE l.id = :id")
@@ -175,16 +174,15 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
            "AND (LOWER(c.name) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(l.dealLabel) LIKE LOWER(CONCAT('%', :search, '%')) OR LOWER(c.waId) LIKE LOWER(CONCAT('%', :search, '%')))")
     Page<UUID> findIdsByStatusAndSearchPaged(@Param("status") Lead.LeadStatus status, @Param("search") String search, Pageable pageable);
 
-    @Query("SELECT new com.chatcrmlite.backend.dto.RevenueReportDTO(" +
-           "COALESCE(SUM(l.dealValue), 0), " +
-           "COALESCE(SUM(CASE WHEN l.paymentStatus = 'PAID' THEN l.dealValue ELSE 0 END), 0), " +
-           "COALESCE(SUM(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN l.dealValue ELSE 0 END), 0), " +
-           "COUNT(CASE WHEN l.dealValue IS NOT NULL THEN 1 END), " +
-           "COUNT(CASE WHEN l.paymentStatus = 'PAID' THEN 1 END), " +
-           "COUNT(CASE WHEN l.paymentStatus IN ('PENDING', 'PARTIAL') THEN 1 END), " +
-           "'INR') " +
-           "FROM Lead l")
-    com.chatcrmlite.backend.dto.RevenueReportDTO calculateTenantRevenueReport();
+    @Query(value = "SELECT " +
+           "COALESCE(SUM(deal_value), 0), " +
+           "COALESCE(SUM(CASE WHEN payment_status = 'PAID' THEN deal_value ELSE 0 END), 0), " +
+           "COALESCE(SUM(CASE WHEN payment_status IN ('PENDING', 'PARTIAL') THEN deal_value ELSE 0 END), 0), " +
+           "COUNT(CASE WHEN deal_value IS NOT NULL THEN 1 END), " +
+           "COUNT(CASE WHEN payment_status = 'PAID' THEN 1 END), " +
+           "COUNT(CASE WHEN payment_status IN ('PENDING', 'PARTIAL') THEN 1 END) " +
+           "FROM leads", nativeQuery = true)
+    List<Object[]> calculateTenantRevenueReportRaw();
 
     long countByStatus(Lead.LeadStatus status);
 

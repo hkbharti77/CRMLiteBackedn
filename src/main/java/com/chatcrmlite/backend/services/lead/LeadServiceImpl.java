@@ -351,10 +351,26 @@ public class LeadServiceImpl implements LeadService {
     @Override
     @Cacheable(value = "revenueReport", key = "#owner.id")
     public RevenueReportDTO getRevenueReport(User owner) {
+        List<Object[]> rawData;
         if (isAdmin(owner)) {
-            return leadRepository.calculateTenantRevenueReport();
+            rawData = leadRepository.calculateTenantRevenueReportRaw();
+        } else {
+            rawData = leadRepository.calculateRevenueReportRaw(owner.getId());
         }
-        return leadRepository.calculateRevenueReport(owner);
+        
+        if (rawData == null || rawData.isEmpty() || rawData.get(0) == null) {
+            return new RevenueReportDTO(java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, java.math.BigDecimal.ZERO, 0L, 0L, 0L, "INR");
+        }
+        
+        Object[] row = rawData.get(0);
+        java.math.BigDecimal totalRevenue = row[0] != null ? new java.math.BigDecimal(row[0].toString()) : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal paidRevenue = row[1] != null ? new java.math.BigDecimal(row[1].toString()) : java.math.BigDecimal.ZERO;
+        java.math.BigDecimal pendingRevenue = row[2] != null ? new java.math.BigDecimal(row[2].toString()) : java.math.BigDecimal.ZERO;
+        Long totalDeals = row[3] != null ? Long.parseLong(row[3].toString()) : 0L;
+        Long paidDeals = row[4] != null ? Long.parseLong(row[4].toString()) : 0L;
+        Long pendingDeals = row[5] != null ? Long.parseLong(row[5].toString()) : 0L;
+        
+        return new RevenueReportDTO(totalRevenue, paidRevenue, pendingRevenue, totalDeals, paidDeals, pendingDeals, "INR");
     }
 
     @Override
