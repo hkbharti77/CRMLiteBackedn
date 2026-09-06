@@ -5,7 +5,9 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -45,7 +47,9 @@ public class QueueRouter {
 
     private void enqueue(String targetStream, ProcessingContext context) {
         log.info("[WhatsApp-Queue] Routing messageId={} to stream={}", context.getMessageId(), targetStream);
-        ObjectRecord<String, String> record = ObjectRecord.create(targetStream, serialize(context));
+        MapRecord<String, String, String> record = StreamRecords.newRecord()
+                .in(targetStream)
+                .ofMap(Collections.singletonMap("payload", serialize(context)));
         redisTemplate.opsForStream().add(record);
     }
 

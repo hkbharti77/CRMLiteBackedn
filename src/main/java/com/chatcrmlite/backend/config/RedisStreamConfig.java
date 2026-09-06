@@ -11,7 +11,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.connection.stream.Consumer;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.ReadOffset;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -111,17 +111,16 @@ public class RedisStreamConfig {
     }
 
     private Subscription createSubscription(RedisConnectionFactory factory, String stream, String consumerName,
-                                           StreamListener<String, ObjectRecord<String, String>> listener,
+                                           StreamListener<String, MapRecord<String, String, String>> listener,
                                            TaskExecutor taskExecutor) {
         log.info("[WhatsApp-Queue] Consumer starting. Stream: {}, Consumer group: {}, Consumer name: {}",
                 stream, groupName, consumerName);
 
-        StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, ObjectRecord<String, String>> options =
+        StreamMessageListenerContainer.StreamMessageListenerContainerOptions<String, MapRecord<String, String, String>> options =
                 StreamMessageListenerContainer.StreamMessageListenerContainerOptions
                         .builder()
                         .pollTimeout(Duration.ofSeconds(1))
                         .batchSize(10)
-                        .targetType(String.class)
                         .executor(taskExecutor)
                         .errorHandler(t -> {
                             String msg = t != null ? t.getMessage() : "";
@@ -136,7 +135,7 @@ public class RedisStreamConfig {
                         })
                         .build();
 
-        StreamMessageListenerContainer<String, ObjectRecord<String, String>> container =
+        StreamMessageListenerContainer<String, MapRecord<String, String, String>> container =
                 StreamMessageListenerContainer.create(factory, options);
 
         Subscription subscription = container.receive(

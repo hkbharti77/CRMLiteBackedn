@@ -4,7 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Service;
@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
-public class WebhookWorker implements StreamListener<String, ObjectRecord<String, String>> {
+public class WebhookWorker implements StreamListener<String, MapRecord<String, String, String>> {
     private static final Logger log = LoggerFactory.getLogger(WebhookWorker.class);
 
     private final com.chatcrmlite.backend.services.workflow.WorkflowOrchestrator workflowOrchestrator;
@@ -41,8 +41,8 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
     private int maxRetries;
 
     @Override
-    public void onMessage(ObjectRecord<String, String> record) {
-        String rawData = record.getValue();
+    public void onMessage(MapRecord<String, String, String> record) {
+        String rawData = record.getValue().get("payload");
         String streamMessageId = record.getId().toString();
 
         // Skip initialization dummy messages
@@ -306,7 +306,7 @@ public class WebhookWorker implements StreamListener<String, ObjectRecord<String
         }
     }
 
-    private void handleFailure(ObjectRecord<String, String> record, Exception e) {
+    private void handleFailure(MapRecord<String, String, String> record, Exception e) {
         String messageId = record.getId().toString();
         String retryKey = "worker:retry:" + messageId;
         Long currentRetries = redisStateService.increment(retryKey, java.time.Duration.ofHours(1));

@@ -2,7 +2,7 @@ package com.chatcrmlite.backend.services;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -24,8 +24,8 @@ public class DeadLetterHandler {
     /**
      * Moves a failed message to the Dead Letter Queue.
      */
-    public void moveToDlq(ObjectRecord<String, String> record, Throwable cause) {
-        String payload = record.getValue();
+    public void moveToDlq(MapRecord<String, String, String> record, Throwable cause) {
+        String payload = record.getValue().get("payload");
         String messageId = record.getId().getValue();
         
         log.error("💀 Moving message {} to DLQ. Reason: {}", messageId, cause.getMessage());

@@ -11,7 +11,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -78,7 +80,7 @@ class WebhookWorkerTest {
     @Test
     @DisplayName("Status-only webhook is acknowledged without starting message workflow")
     void statusOnlyWebhookIsAcknowledgedWithoutStartingMessageWorkflow() {
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", statusPayload())
                 .withId(RecordId.of("1779381961261-0"));
         when(redisTemplate.opsForStream().acknowledge("whatsapp-workers", record)).thenReturn(1L);
@@ -94,7 +96,7 @@ class WebhookWorkerTest {
     @DisplayName("Valid incoming text message is parsed, handed to orchestrator, and acknowledged")
     void validIncomingMessage_StartsWorkflowAndAcknowledges() {
         String msgPayload = incomingMessagePayload("123456", "919876543210", "wamid.msg.001", "Hello Bot");
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", msgPayload)
                 .withId(RecordId.of("1779381961262-0"));
 
@@ -114,7 +116,7 @@ class WebhookWorkerTest {
     void wrappedPayload_IsSafelyUnwrappedAndProcessed() {
         String innerPayload = incomingMessagePayload("123456", "919876543210", "wamid.msg.002", "Hi again");
         String wrappedJson = "{\"payload\":" + new ObjectMapper().valueToTree(innerPayload).toString() + "}";
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", wrappedJson)
                 .withId(RecordId.of("1779381961263-0"));
 
@@ -131,7 +133,7 @@ class WebhookWorkerTest {
     @Test
     @DisplayName("Malformed or empty payload is safely acknowledged without crashing")
     void emptyOrMalformedPayload_AcknowledgedSafely() {
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", "{\"invalid\":\"json_no_entry\"}")
                 .withId(RecordId.of("1779381961264-0"));
 
@@ -145,7 +147,7 @@ class WebhookWorkerTest {
     @DisplayName("Unknown phoneNumberId safely acknowledges and drops message without crashing")
     void unknownPhoneNumberId_SafelyAcknowledged() {
         String msgPayload = incomingMessagePayload("unknown-phone-id", "919876543210", "wamid.msg.003", "Test");
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", msgPayload)
                 .withId(RecordId.of("1779381961265-0"));
 

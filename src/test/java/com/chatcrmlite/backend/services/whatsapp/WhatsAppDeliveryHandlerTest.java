@@ -17,7 +17,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import org.springframework.data.redis.core.StreamOperations;
@@ -119,7 +121,7 @@ public class WhatsAppDeliveryHandlerTest {
         context.getMetadata().put("pendingResponse", "AI generated reply");
 
         String jsonPayload = objectMapper.writeValueAsString(context);
-        ObjectRecord<String, String> record = StreamRecords.newRecord()
+        MapRecord<String, String, String> record = StreamRecords.newRecord()
                 .in("workflow:delivery")
                 .withId(RecordId.of("1700000000000-0"))
                 .ofObject(jsonPayload);

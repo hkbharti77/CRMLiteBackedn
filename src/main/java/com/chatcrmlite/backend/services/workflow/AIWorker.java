@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.stream.StreamListener;
 import org.springframework.stereotype.Service;
@@ -21,7 +21,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
  */
 @Service
 @RequiredArgsConstructor
-public class AIWorker implements StreamListener<String, ObjectRecord<String, String>> {
+public class AIWorker implements StreamListener<String, MapRecord<String, String, String>> {
     private static final Logger log = LoggerFactory.getLogger(AIWorker.class);
 
     private final WorkflowOrchestrator orchestrator;
@@ -37,8 +37,8 @@ public class AIWorker implements StreamListener<String, ObjectRecord<String, Str
     private String groupName;
 
     @Override
-    public void onMessage(ObjectRecord<String, String> record) {
-        String payload = record.getValue();
+    public void onMessage(MapRecord<String, String, String> record) {
+        String payload = record.getValue().get("payload");
         String streamMessageId = record.getId().toString();
 
         // Skip initialization dummy messages

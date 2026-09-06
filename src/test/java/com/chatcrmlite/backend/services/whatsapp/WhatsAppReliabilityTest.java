@@ -28,7 +28,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.http.HttpHeaders;
@@ -227,7 +229,7 @@ class WhatsAppReliabilityTest {
         when(resourceManager.canConsume(eq(tenantId), eq(TenantResourceManager.ResourceType.MESSAGES_PER_SECOND), eq(1)))
                 .thenReturn(false);
 
-        ObjectRecord<String, String> record = ObjectRecord
+        MapRecord<String, String, String> record = ObjectRecord
                 .create("whatsapp:ingress:stream", messagePayload)
                 .withId(RecordId.of("1779381961261-0"));
 

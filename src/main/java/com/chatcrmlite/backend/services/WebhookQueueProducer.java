@@ -3,8 +3,9 @@ package com.chatcrmlite.backend.services;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
 import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -41,7 +42,9 @@ public class WebhookQueueProducer {
             // but for now, we log and continue to prioritize delivery.
         }
 
-        ObjectRecord<String, String> record = ObjectRecord.create(streamName, payload);
+        MapRecord<String, String, String> record = StreamRecords.newRecord()
+                .in(streamName)
+                .ofMap(Collections.singletonMap("payload", payload));
         
         redisTemplate.opsForStream().add(record);
         log.info("📥 [Queue] Enqueued webhook payload. CorrelationId: {}, Stream: {}", correlationId, streamName);

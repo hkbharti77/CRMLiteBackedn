@@ -32,7 +32,9 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.redis.connection.stream.ObjectRecord;
+import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.StreamRecords;
+import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -244,7 +246,7 @@ class WhatsAppPipelineEndToEndIntegrationTest {
                 }
                 """.formatted(phoneNumberId, waId, waId, waMessageId);
 
-        ObjectRecord<String, String> ingressRecord = ObjectRecord
+        MapRecord<String, String, String> ingressRecord = ObjectRecord
                 .create("whatsapp:ingress:stream", webhookJson)
                 .withId(RecordId.of("1779381961001-0"));
 
@@ -268,7 +270,7 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         context.getMetadata().put("text", "What are your business hours?");
 
         String aiRecordValue = objectMapper.writeValueAsString(context);
-        ObjectRecord<String, String> aiRecord = ObjectRecord
+        MapRecord<String, String, String> aiRecord = ObjectRecord
                 .create("workflow:ai", aiRecordValue)
                 .withId(RecordId.of("1779381961002-0"));
 
@@ -304,7 +306,7 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         // Stage 3: Delivery Worker Stage
         aiCompletedContext.setCurrentStage(ProcessingContext.WorkflowStage.DELIVERY);
         String deliveryRecordValue = objectMapper.writeValueAsString(aiCompletedContext);
-        ObjectRecord<String, String> deliveryRecord = ObjectRecord
+        MapRecord<String, String, String> deliveryRecord = ObjectRecord
                 .create("workflow:delivery", deliveryRecordValue)
                 .withId(RecordId.of("1779381961003-0"));
 
@@ -339,7 +341,7 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         context.getMetadata().put("text", "Hello");
 
         String aiRecordValue = objectMapper.writeValueAsString(context);
-        ObjectRecord<String, String> aiRecord = ObjectRecord
+        MapRecord<String, String, String> aiRecord = ObjectRecord
                 .create("workflow:ai", aiRecordValue)
                 .withId(RecordId.of("1779381961004-0"));
 

@@ -65,7 +65,7 @@ public class RedisStreamPendingMessageRecoverer {
         recoverStream(deliveryStream, deliveryWorker);
     }
 
-    public int recoverStream(String streamKey, StreamListener<String, ObjectRecord<String, String>> listener) {
+    public int recoverStream(String streamKey, StreamListener<String, MapRecord<String, String, String>> listener) {
         int recoveredCount = 0;
         try {
             if (streamKey == null || Boolean.FALSE.equals(redisTemplate.hasKey(streamKey))) {
@@ -115,10 +115,10 @@ public class RedisStreamPendingMessageRecoverer {
                     continue;
                 }
 
-                ObjectRecord<String, String> objectRecord = StreamRecords.newRecord()
+                MapRecord<String, String, String> objectRecord = StreamRecords.newRecord()
                         .in(streamKey)
                         .withId(mapRecord.getId())
-                        .ofObject(payload);
+                        .ofMap(java.util.Collections.singletonMap("payload", payload));
 
                 if (pending.getTotalDeliveryCount() >= MAX_DELIVERY_COUNT) {
                     log.error("❌ [PEL-Recovery] Message {} exceeded max delivery count ({}). Moving directly to DLQ.",
