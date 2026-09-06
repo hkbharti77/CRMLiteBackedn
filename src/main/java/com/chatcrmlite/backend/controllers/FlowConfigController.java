@@ -124,7 +124,10 @@ public class FlowConfigController {
                 "subCategory",        subCategory != null ? subCategory : "",
                 "triggerButtonLabel", templateEngine.getTriggerButtonLabel(user),
                 "triggerListLabel",   templateEngine.getTriggerListLabel(user),
-                "servicesLabel",      templateEngine.getServicesLabel(user)
+                "servicesLabel",      templateEngine.getServicesLabel(user),
+                "leadLabel",          templateEngine.getTriggerButtonLabel(user, "lead"),
+                "appointmentLabel",   templateEngine.getTriggerButtonLabel(user, "appointment"),
+                "bookingLabel",       templateEngine.getTriggerButtonLabel(user, "booking")
         ));
     }
 

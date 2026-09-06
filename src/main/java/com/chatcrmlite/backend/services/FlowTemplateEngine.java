@@ -25,6 +25,9 @@ public class FlowTemplateEngine {
     private BusinessSubCategoryRepository subCategoryRepository;
 
     @Autowired
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
+
+    @Autowired
     private ObjectMapper objectMapper;
 
     private final Map<String, LabelPair> labelCache = new ConcurrentHashMap<>();
@@ -43,6 +46,22 @@ public class FlowTemplateEngine {
         String baseLabel = getLabels(subCategoryName).trigger();
         String emoji = extractEmoji(baseLabel);
         
+        if (user != null && user.getTenant() != null && whatsappConfigRepository != null) {
+            java.util.Optional<com.chatcrmlite.backend.models.WhatsAppConfig> configOpt = whatsappConfigRepository.findByTenantId(user.getTenant().getId());
+            if (configOpt.isPresent()) {
+                com.chatcrmlite.backend.models.WhatsAppConfig config = configOpt.get();
+                if (explicitSuffix != null && !explicitSuffix.isBlank()) {
+                    if (explicitSuffix.equalsIgnoreCase("appointment") && config.getAppointmentButtonLabel() != null && !config.getAppointmentButtonLabel().isBlank()) {
+                        return config.getAppointmentButtonLabel();
+                    } else if (explicitSuffix.equalsIgnoreCase("booking") && config.getBookingButtonLabel() != null && !config.getBookingButtonLabel().isBlank()) {
+                        return config.getBookingButtonLabel();
+                    } else if (explicitSuffix.equalsIgnoreCase("lead") && config.getLeadButtonLabel() != null && !config.getLeadButtonLabel().isBlank()) {
+                        return config.getLeadButtonLabel();
+                    }
+                }
+            }
+        }
+
         if (explicitSuffix != null && !explicitSuffix.isBlank()) {
             if (explicitSuffix.equalsIgnoreCase("appointment")) {
                 return emoji + "Book Appointment";
@@ -53,15 +72,6 @@ public class FlowTemplateEngine {
             }
         }
         
-        if (user != null) {
-            if (Boolean.TRUE.equals(user.getForceShowAppointment())) {
-                return emoji + "Book Appointment";
-            } else if (Boolean.TRUE.equals(user.getForceShowBooking())) {
-                return emoji + "Book Service";
-            } else if (Boolean.TRUE.equals(user.getForceShowLeads())) {
-                return emoji + "Enquire Now";
-            }
-        }
         return baseLabel;
     }
 
