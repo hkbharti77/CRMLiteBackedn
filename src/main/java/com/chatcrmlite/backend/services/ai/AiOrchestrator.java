@@ -39,14 +39,17 @@ public class AiOrchestrator {
     }
 
     private AiProvider route(AiRequest request) {
-        // Simple strategy:
-        // - If complexity is LOW, use the cheapest healthy provider.
-        // - If complexity is HIGH, use the most powerful (e.g. Gemini Pro / GPT-4).
-        
+        if (providers == null || providers.isEmpty()) {
+            throw new IllegalStateException("No AI providers configured in Spring context!");
+        }
+
         return providers.stream()
                 .filter(AiProvider::isHealthy)
                 .min(Comparator.comparingDouble(p -> calculateScore(p, request)))
-                .orElseThrow(() -> new RuntimeException("No healthy AI providers available!"));
+                .orElseGet(() -> {
+                    log.warn("⚠️ [AI-Orchestrator] All providers circuit-open/unhealthy. Falling back to primary provider: {}", providers.get(0).getModelName());
+                    return providers.get(0);
+                });
     }
 
     private double calculateScore(AiProvider provider, AiRequest request) {
@@ -58,11 +61,16 @@ public class AiOrchestrator {
     }
 
     private AiResponse fallback(AiRequest request, AiProvider failedProvider) {
-        // Try the next best healthy provider
         return providers.stream()
-                .filter(p -> !p.equals(failedProvider) && p.isHealthy())
+                .filter(p -> !p.equals(failedProvider))
                 .findFirst()
-                .map(p -> p.generate(request))
-                .orElseThrow(() -> new RuntimeException("Fallback failed: All AI providers are down!"));
+                .map(p -> {
+                    log.info("🔄 [AI-Orchestrator] Falling back to provider: {}", p.getModelName());
+                    return p.generate(request);
+                })
+                .orElseGet(() -> {
+                    log.warn("⚠️ [AI-Orchestrator] No alternative providers available. Attempting direct execution on {}", failedProvider.getModelName());
+                    return failedProvider.generate(request);
+                });
     }
 }

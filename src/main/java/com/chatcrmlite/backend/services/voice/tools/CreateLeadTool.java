@@ -60,21 +60,34 @@ public class CreateLeadTool implements VoiceTool {
     public ToolExecutionResult execute(String toolCallId, String jsonArguments, ToolExecutionContext context) {
         try {
             JsonNode args = objectMapper.readTree(jsonArguments);
-            String name = args.has("customer_name") ? args.get("customer_name").asText() : null;
-            String email = args.has("customer_email") ? args.get("customer_email").asText() : null;
-            String details = args.has("enquiry_details") ? args.get("enquiry_details").asText() : "Voice Bot Lead";
+            
+            String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name", "visitor_name", "first_name");
+            String email = extractFirstNonBlank(args, "customer_email", "email", "email_address", "mail");
+            String details = extractFirstNonBlank(args, "enquiry_details", "details", "message", "enquiry", "notes", "requirements", "service", "query");
 
-            if (name == null || name.isBlank()) {
-                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required field: customer_name", "VALIDATION_FAILED");
+            if (details == null || details.isBlank()) {
+                details = buildSummaryFromArgs(args);
             }
 
-            User owner = userRepository.findById(context.userId()).orElse(null);
+            if (rawName == null || rawName.isBlank()) {
+                rawName = extractAnyString(args);
+                if (rawName == null || rawName.isBlank()) {
+                    rawName = "Voice Lead (" + (context.callerPhone() != null && !context.callerPhone().isBlank() ? context.callerPhone() : "Visitor") + ")";
+                }
+            }
+
+            final String name = rawName;
+
+            User owner = userRepository.findById(context.userId())
+                    .or(() -> userRepository.findFirstByTenantIdAndRole(context.tenantId(), User.Role.ADMIN))
+                    .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+
             if (owner == null) {
                 return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Owner user not found.", "SYSTEM_ERROR");
             }
 
             // Find or create contact based on caller phone
-            String waId = context.callerPhone();
+            String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
             Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
@@ -122,12 +135,45 @@ public class CreateLeadTool implements VoiceTool {
             
             leadEnquiryService.appendEnquiry(savedLead, details, "VOICE_BOT", "voice-bot", data);
 
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Lead created successfully. Lead Number: " + leadNumber, null);
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Enquiry and details submitted successfully. Do not speak lead numbers to the user.", null);
 
         } catch (com.chatcrmlite.backend.services.tenant.QuotaEnforcerService.QuotaExceededException e) {
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Tenant lead quota exceeded.", "QUOTA_EXCEEDED");
         } catch (Exception e) {
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or internal error.", "INTERNAL_ERROR");
         }
+    }
+
+    private String extractFirstNonBlank(JsonNode args, String... keys) {
+        if (args == null) return null;
+        for (String k : keys) {
+            if (args.has(k) && !args.get(k).isNull() && !args.get(k).asText().isBlank()) {
+                return args.get(k).asText().trim();
+            }
+        }
+        return null;
+    }
+
+    private String extractAnyString(JsonNode args) {
+        if (args == null || !args.isObject()) return null;
+        var fields = args.fields();
+        while (fields.hasNext()) {
+            var entry = fields.next();
+            if (!entry.getValue().isNull() && !entry.getValue().asText().isBlank()) {
+                return entry.getValue().asText().trim();
+            }
+        }
+        return null;
+    }
+
+    private String buildSummaryFromArgs(JsonNode args) {
+        if (args == null || !args.isObject()) return "Voice Bot Lead";
+        StringBuilder sb = new StringBuilder();
+        args.fields().forEachRemaining(entry -> {
+            if (!entry.getValue().isNull() && !entry.getValue().asText().isBlank()) {
+                sb.append(entry.getKey()).append(": ").append(entry.getValue().asText()).append("; ");
+            }
+        });
+        return sb.length() > 0 ? sb.toString().trim() : "Voice Bot Lead";
     }
 }

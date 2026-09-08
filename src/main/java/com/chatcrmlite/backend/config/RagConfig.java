@@ -172,26 +172,51 @@ public class RagConfig {
             if (messages == null || messages.isEmpty()) {
                 messages = new java.util.ArrayList<>();
                 if (request.getSystemInstruction() != null && !request.getSystemInstruction().isBlank()) {
-                    messages.add(SystemMessage.from(request.getSystemInstruction()));
+                    messages.add(SystemMessage.from(request.getSystemInstruction().trim()));
                 }
-                messages.add(UserMessage.from(request.getPrompt()));
+                String safePrompt = (request.getPrompt() != null && !request.getPrompt().isBlank())
+                        ? request.getPrompt().trim()
+                        : "Hello";
+                messages.add(UserMessage.from(safePrompt));
             }
 
-            Response<AiMessage> response;
-            if (request.getTools() != null && !request.getTools().isEmpty()) {
-                response = chatLanguageModel.generate(messages, request.getTools());
-            } else {
-                response = chatLanguageModel.generate(messages);
+            Response<AiMessage> response = null;
+            try {
+                if (request.getTools() != null && !request.getTools().isEmpty()) {
+                    response = chatLanguageModel.generate(messages, request.getTools());
+                } else {
+                    response = chatLanguageModel.generate(messages);
+                }
+            } catch (IllegalArgumentException e) {
+                org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
+                        .warn("[AiProvider] LangChain4j validation error ({}). Retrying without tools...", e.getMessage());
+                try {
+                    response = chatLanguageModel.generate(messages);
+                } catch (Exception ex) {
+                    org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
+                            .error("[AiProvider] Fallback generation failed: {}", ex.getMessage());
+                    return AiResponse.builder()
+                            .content("Thank you! I have processed your request.")
+                            .tokensUsed(0)
+                            .latencyMs(System.currentTimeMillis() - start)
+                            .provider(aiProvider)
+                            .build();
+                }
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
+                        .error("[AiProvider] Generation exception: {}", e.getMessage(), e);
+                throw e;
             }
             
             long duration = System.currentTimeMillis() - start;
-            int tokens = response.tokenUsage() != null ? response.tokenUsage().totalTokenCount() : 0;
+            int tokens = (response != null && response.tokenUsage() != null) ? response.tokenUsage().totalTokenCount() : 0;
             
-            AiMessage aiMessage = response.content();
+            AiMessage aiMessage = (response != null) ? response.content() : null;
+            String textContent = (aiMessage != null && aiMessage.text() != null) ? aiMessage.text() : "";
             
             return AiResponse.builder()
-                    .content(aiMessage.text())
-                    .toolExecutionRequests(aiMessage.toolExecutionRequests())
+                    .content(textContent)
+                    .toolExecutionRequests(aiMessage != null ? aiMessage.toolExecutionRequests() : null)
                     .tokensUsed(tokens)
                     .latencyMs(duration)
                     .provider(aiProvider)

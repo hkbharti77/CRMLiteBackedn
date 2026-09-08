@@ -22,6 +22,9 @@ import com.chatcrmlite.backend.services.ai.DeepgramVoiceService;
 import com.chatcrmlite.backend.services.ai.SarvamVoiceService;
 import com.chatcrmlite.backend.services.ai.TtsFreeVoiceService;
 import com.chatcrmlite.backend.services.livechat.LiveSupportService;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -53,6 +56,7 @@ public class VoiceSessionService {
     private final SarvamVoiceService sarvamVoiceService;
     private final TtsFreeVoiceService ttsFreeVoiceService;
     private final ConversationOrchestrator conversationOrchestrator;
+    private final com.chatcrmlite.backend.repositories.voice.VoiceAssistantConfigRepository voiceConfigRepository;
 
     @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
     private String ttsProvider;
@@ -207,16 +211,33 @@ public class VoiceSessionService {
                     session.getId().toString(), visitorId, "+919999999999"
                 );
 
-            String systemPrompt = business.getTenant().getVoicePersonaPrompt();
-            if (systemPrompt == null || systemPrompt.isBlank()) {
-                systemPrompt = "You are a helpful AI voice assistant for " + business.getDisplayName() + 
-                               ". Keep answers short and conversational. You can help users book appointments and create leads.";
+            com.chatcrmlite.backend.models.voice.VoiceAssistantConfig voiceConfig = (business.getTenant() != null)
+                    ? voiceConfigRepository.findByTenantId(business.getTenant().getId()).orElse(null)
+                    : null;
+            String systemPrompt = (voiceConfig != null && voiceConfig.getPersonaPrompt() != null && !voiceConfig.getPersonaPrompt().isBlank())
+                    ? voiceConfig.getPersonaPrompt()
+                    : "You are a helpful, professional AI voice assistant for " + business.getDisplayName() + ". Keep answers short and conversational.";
+
+            List<ChatMessage> previousMessages = new ArrayList<>();
+            try {
+                List<VoiceTurn> pastTurns = turnRepository.findTop50BySessionIdOrderByTurnNumberDesc(session.getId());
+                Collections.reverse(pastTurns);
+                for (VoiceTurn t : pastTurns) {
+                    if (t.getUserTranscript() != null && !t.getUserTranscript().isBlank()) {
+                        previousMessages.add(UserMessage.from(t.getUserTranscript()));
+                    }
+                    if (t.getBotResponseText() != null && !t.getBotResponseText().isBlank()) {
+                        previousMessages.add(AiMessage.from(t.getBotResponseText()));
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[VoiceSessionService] Error fetching turn history for session={}: {}", session.getId(), e.getMessage());
             }
             
             botReplyText = conversationOrchestrator.executeTurn(
                     systemPrompt,
                     transcript,
-                    List.of(), // TODO: use real chat message history from memContext if needed
+                    previousMessages,
                     toolContext
             );
             

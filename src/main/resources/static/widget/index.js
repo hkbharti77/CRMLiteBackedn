@@ -194,6 +194,32 @@ export async function initWidget({ businessId, apiBase } = {}) {
         setTheme: (newTheme) => { theme = newTheme; }
     });
 
+    // Helper to extract dynamic agent/persona name configured per tenant
+    const getAgentName = () => {
+        if (theme && theme.botName && theme.botName.trim()) return theme.botName.trim();
+        if (theme && theme.agentName && theme.agentName.trim()) return theme.agentName.trim();
+        if (theme && theme.personaName && theme.personaName.trim()) return theme.personaName.trim();
+        if (theme && theme.businessName && theme.businessName.trim()) return theme.businessName.trim();
+        return "Assistant";
+    };
+
+    // Helper to sanitize raw markdown/table syntax for overlay display
+    const cleanVoiceText = (text) => {
+        if (!text) return '';
+        let cleaned = String(text);
+        // Strip markdown tables
+        cleaned = cleaned.replace(/\|[^\n]*\|/g, ' ');
+        cleaned = cleaned.replace(/\|/g, ' ');
+        // Strip markdown formatting symbols
+        cleaned = cleaned.replace(/\*\*([^*]+)\*\*/g, '$1');
+        cleaned = cleaned.replace(/\*([^*]+)\*/g, '$1');
+        cleaned = cleaned.replace(/#+\s+/g, '');
+        cleaned = cleaned.replace(/--+/g, ' ');
+        // Collapse spaces
+        cleaned = cleaned.replace(/\s+/g, ' ').trim();
+        return cleaned;
+    };
+
     // Initialize Full-Duplex Voice Engine immediately so mic button works even before bootstrap finishes
     let lastBotReplyText = '';
     const voiceEngine = new VoiceEngine(apiClient, {
@@ -216,6 +242,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
             }
 
             if (elements.voiceStatusText) {
+                const agentName = getAgentName();
                 switch (state) {
                     case VoiceState.MIC_PERMISSION:
                         elements.voiceStatusText.textContent = 'Allow Microphone';
@@ -223,7 +250,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         break;
                     case VoiceState.LISTENING:
                         elements.voiceStatusText.textContent = 'Listening...';
-                        elements.voiceStatusSub.textContent = 'Ask anything. Priya is listening...';
+                        elements.voiceStatusSub.textContent = `Ask anything. ${agentName} is listening...`;
                         break;
                     case VoiceState.THINKING:
                     case VoiceState.PROCESSING:
@@ -231,9 +258,9 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         elements.voiceStatusSub.textContent = 'Generating quick answer...';
                         break;
                     case VoiceState.SPEAKING:
-                        elements.voiceStatusText.textContent = 'Priya Speaking...';
+                        elements.voiceStatusText.textContent = `${agentName} Speaking...`;
                         if (lastBotReplyText) {
-                            elements.voiceStatusSub.textContent = `"${lastBotReplyText}"`;
+                            elements.voiceStatusSub.textContent = `"${cleanVoiceText(lastBotReplyText)}"`;
                         } else {
                             elements.voiceStatusSub.textContent = 'Please listen to the response.';
                         }
@@ -254,7 +281,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
         },
         onTranscript: (liveText) => {
             if (elements.voiceStatusSub && voiceEngine.getState() === VoiceState.LISTENING) {
-                elements.voiceStatusSub.innerHTML = `<em>"${liveText}"</em>`;
+                elements.voiceStatusSub.innerHTML = `<em>"${cleanVoiceText(liveText)}"</em>`;
             }
         },
         onVolumeChange: (vol) => {
@@ -275,7 +302,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
                 lastBotReplyText = result.botResponseText;
                 ui.renderVoiceBubble(result);
                 if (elements.voiceStatusSub) {
-                    elements.voiceStatusSub.textContent = `"${result.botResponseText}"`;
+                    elements.voiceStatusSub.textContent = `"${cleanVoiceText(result.botResponseText)}"`;
                 }
             }
         },

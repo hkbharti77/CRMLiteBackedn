@@ -41,22 +41,46 @@ public class ConversationOrchestrator {
      */
     public String executeTurn(String systemPrompt, String userTranscript, List<ChatMessage> previousMessages, ToolExecutionContext context) {
         
-        List<ChatMessage> messages = new ArrayList<>();
-        if (systemPrompt != null && !systemPrompt.isBlank()) {
-            messages.add(SystemMessage.from(systemPrompt));
-        }
-        if (previousMessages != null) {
-            messages.addAll(previousMessages);
-        }
-        messages.add(UserMessage.from(userTranscript));
-
         // ── Dynamic specs from FlowConfigService (same as WhatsApp/chat bots) ──
         List<ToolSpecification> tools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId());
         log.debug("[Orchestrator] Turn for tenant={} with {} dynamic tools", context.tenantId(), tools.size());
 
+        StringBuilder fullSystemPrompt = new StringBuilder();
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            fullSystemPrompt.append(systemPrompt.trim()).append("\n\n");
+        }
+
+        if (tools != null && !tools.isEmpty()) {
+            fullSystemPrompt.append("--- INSTRUCTIONS FOR DYNAMIC VOICE FORMS & INTENT ROUTING ---\n")
+                    .append("1. INTENT MATCHING: Identify if the user wants to enquire/leave details (lead), book an appointment, make a reservation, or file a support ticket.\n")
+                    .append("2. CONVERSATIONAL SLOT FILLING: Look at the required parameters for the corresponding tool specification.\n")
+                    .append("   - If any required field is missing in conversation memory, ask the caller for it conversationally (ask 1-2 questions at a time).\n")
+                    .append("   - Keep asking naturally until all required parameters are collected.\n")
+                    .append("3. AUTOMATIC TOOL EXECUTION: Once all required fields are collected, call the matching tool immediately and summarize the outcome to the caller verbally.\n")
+                    .append("4. IMPORTANT VOICE RULE: Never say or read out lead numbers, ticket IDs, or internal reference numbers to the caller. Simply tell them that their enquiry, demo request, or ticket has been submitted successfully.\n");
+        }
+
+        List<ChatMessage> messages = new ArrayList<>();
+        String trimmedPrompt = fullSystemPrompt.toString().trim();
+        if (!trimmedPrompt.isBlank()) {
+            messages.add(SystemMessage.from(trimmedPrompt));
+        }
+
+        if (previousMessages != null) {
+            for (ChatMessage m : previousMessages) {
+                if (m != null) {
+                    messages.add(m);
+                }
+            }
+        }
+
+        String safeTranscript = (userTranscript != null && !userTranscript.isBlank()) ? userTranscript.trim() : "Hello";
+        messages.add(UserMessage.from(safeTranscript));
+
         int maxHops = 3;
         int currentHop = 0;
         StringBuilder finalResponse = new StringBuilder();
+        boolean toolExecuted = false;
 
         while (currentHop < maxHops) {
             AiRequest request = AiRequest.builder()
@@ -71,18 +95,26 @@ public class ConversationOrchestrator {
             AiResponse response = aiOrchestrator.execute(request);
 
             if (response == null) {
-                return "I'm sorry, I'm having trouble processing that right now.";
+                break;
             }
 
             // If there's text content, append it
             if (response.getContent() != null && !response.getContent().isBlank()) {
-                finalResponse.append(response.getContent()).append(" ");
+                finalResponse.append(response.getContent().trim()).append(" ");
             }
 
             // Check if tools were called
             if (response.getToolExecutionRequests() != null && !response.getToolExecutionRequests().isEmpty()) {
-                // For Langchain4j proper history, we must add the exact AiMessage with ToolExecutionRequests
-                AiMessage aiMessage = AiMessage.from(response.getToolExecutionRequests());
+                toolExecuted = true;
+
+                // Add exact AiMessage using direct constructor to avoid LangChain4j null/blank text exception
+                AiMessage aiMessage;
+                String responseContent = (response.getContent() != null && !response.getContent().isBlank()) ? response.getContent().trim() : null;
+                if (responseContent != null) {
+                    aiMessage = new AiMessage(responseContent, response.getToolExecutionRequests());
+                } else {
+                    aiMessage = new AiMessage(response.getToolExecutionRequests());
+                }
                 messages.add(aiMessage);
 
                 for (ToolExecutionRequest toolReq : response.getToolExecutionRequests()) {
@@ -93,7 +125,11 @@ public class ConversationOrchestrator {
                     String resultString = String.format("Status: %s\nResult: %s\nErrorCode: %s", 
                             toolResult.status(), toolResult.result(), toolResult.errorCode());
                     
-                    messages.add(ToolExecutionResultMessage.from(toolReq.id(), toolReq.name(), resultString));
+                    String safeId = (toolReq.id() != null && !toolReq.id().isBlank()) ? toolReq.id().trim() : "call_" + java.util.UUID.randomUUID().toString().substring(0, 8);
+                    String safeName = (toolReq.name() != null && !toolReq.name().isBlank()) ? toolReq.name().trim() : "tool";
+                    String safeResult = (!resultString.isBlank()) ? resultString.trim() : "Success";
+
+                    messages.add(ToolExecutionResultMessage.from(safeId, safeName, safeResult));
                 }
                 
                 // Hop again to let LLM read the tool result and respond
@@ -105,7 +141,10 @@ public class ConversationOrchestrator {
         }
 
         if (finalResponse.length() == 0) {
-            return "I'm sorry, an error occurred while processing your request.";
+            if (toolExecuted) {
+                return "Thank you! I have saved your details successfully. Is there anything else I can help you with?";
+            }
+            return "Thank you for reaching out! How can I assist you with our services today?";
         }
 
         return finalResponse.toString().trim();

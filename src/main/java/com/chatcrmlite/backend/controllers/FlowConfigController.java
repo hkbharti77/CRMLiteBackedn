@@ -96,6 +96,31 @@ public class FlowConfigController {
         ));
     }
 
+    @GetMapping("/intent")
+    public ResponseEntity<Map<String, Object>> getFlowIntent(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        return ResponseEntity.ok(flowConfigService.getFlowIntent(user, flowType));
+    }
+
+    @PostMapping("/intent")
+    public ResponseEntity<Map<String, String>> saveFlowIntent(
+            @AuthenticationPrincipal String email,
+            @RequestParam(required = false) String flowType,
+            @RequestBody Map<String, Object> body) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        String intentDescription = (String) body.get("intentDescription");
+        List<String> triggerExamples = (List<String>) body.get("triggerExamples");
+        flowConfigService.saveFlowIntent(user, flowType, intentDescription, triggerExamples);
+        return ResponseEntity.ok(Map.of(
+                "status", "ok",
+                "message", "Flow intent configuration saved successfully."
+        ));
+    }
+
     // ════════════════════════════════════════════════════════════════════════
     //  Trigger Label Config
     // ════════════════════════════════════════════════════════════════════════

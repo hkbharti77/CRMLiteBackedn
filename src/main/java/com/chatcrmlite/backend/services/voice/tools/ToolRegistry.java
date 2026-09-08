@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.services.voice.tools;
 
 import com.chatcrmlite.backend.models.Tenant;
+import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.TenantRepository;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +20,14 @@ public class ToolRegistry {
 
     private final Map<String, VoiceTool> tools;
     private final TenantRepository tenantRepository;
+    private final com.chatcrmlite.backend.repositories.UserRepository userRepository;
     private final VoiceFormConfigAdapter voiceFormConfigAdapter;
 
-    public ToolRegistry(List<VoiceTool> toolBeans, TenantRepository tenantRepository, VoiceFormConfigAdapter voiceFormConfigAdapter) {
+    public ToolRegistry(List<VoiceTool> toolBeans, TenantRepository tenantRepository, com.chatcrmlite.backend.repositories.UserRepository userRepository, VoiceFormConfigAdapter voiceFormConfigAdapter) {
         this.tools = toolBeans.stream()
                 .collect(Collectors.toMap(VoiceTool::getName, tool -> tool));
         this.tenantRepository = tenantRepository;
+        this.userRepository = userRepository;
         this.voiceFormConfigAdapter = voiceFormConfigAdapter;
     }
 
@@ -52,58 +55,71 @@ public class ToolRegistry {
      * No hardcoded questions — all driven by admin panel settings.
      */
     public List<ToolSpecification> getEnabledToolSpecsForTenant(UUID tenantId) {
-        Optional<Tenant> tenantOpt = tenantRepository.findById(tenantId);
-        if (tenantOpt.isEmpty()) {
+        Tenant tenant = resolveTenant(tenantId);
+        if (tenant == null) {
             log.warn("[ToolRegistry] Tenant not found for id={}, returning empty tool specs", tenantId);
             return List.of();
         }
-        Tenant tenant = tenantOpt.get();
+        UUID effectiveTenantId = tenant.getId();
         List<ToolSpecification> specs = new ArrayList<>();
 
-        if (Boolean.TRUE.equals(tenant.getForceShowLeads())) {
+        if (!Boolean.FALSE.equals(tenant.getForceShowLeads())) {
             try {
-                specs.add(voiceFormConfigAdapter.buildLeadToolSpec(tenantId));
+                specs.add(voiceFormConfigAdapter.buildLeadToolSpec(effectiveTenantId));
             } catch (Exception e) {
-                log.error("[ToolRegistry] Failed to build lead tool spec for tenant={}: {}", tenantId, e.getMessage());
+                log.error("[ToolRegistry] Failed to build lead tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         if (Boolean.TRUE.equals(tenant.getForceShowAppointment())) {
             try {
-                specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(tenantId));
+                specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(effectiveTenantId));
             } catch (Exception e) {
-                log.error("[ToolRegistry] Failed to build appointment tool spec for tenant={}: {}", tenantId, e.getMessage());
+                log.error("[ToolRegistry] Failed to build appointment tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         if (Boolean.TRUE.equals(tenant.getForceShowBooking())) {
             try {
-                specs.add(voiceFormConfigAdapter.buildBookingToolSpec(tenantId));
+                specs.add(voiceFormConfigAdapter.buildBookingToolSpec(effectiveTenantId));
             } catch (Exception e) {
-                log.error("[ToolRegistry] Failed to build booking tool spec for tenant={}: {}", tenantId, e.getMessage());
+                log.error("[ToolRegistry] Failed to build booking tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         // Support tickets always available
         try {
-            specs.add(voiceFormConfigAdapter.buildSupportToolSpec(tenantId));
+            specs.add(voiceFormConfigAdapter.buildSupportToolSpec(effectiveTenantId));
         } catch (Exception e) {
-            log.error("[ToolRegistry] Failed to build support tool spec for tenant={}: {}", tenantId, e.getMessage());
+            log.error("[ToolRegistry] Failed to build support tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
         }
 
-        log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={}", specs.size(), tenantId);
+        log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={}", specs.size(), effectiveTenantId);
         return specs;
     }
 
     public boolean isToolEnabledForTenant(String toolName, UUID tenantId) {
-        Optional<Tenant> tenantOpt = tenantRepository.findById(tenantId);
-        if (tenantOpt.isEmpty()) {
+        Tenant tenant = resolveTenant(tenantId);
+        if (tenant == null) {
             return false;
         }
-        return isToolEnabled(toolName, tenantOpt.get());
+        return isToolEnabled(toolName, tenant);
+    }
+
+    private Tenant resolveTenant(UUID tenantId) {
+        if (tenantId == null) return tenantRepository.findAll().stream().findFirst().orElse(null);
+        Optional<Tenant> tenantOpt = tenantRepository.findById(tenantId);
+        if (tenantOpt.isPresent()) return tenantOpt.get();
+
+        Optional<User> userOpt = userRepository.findById(tenantId);
+        if (userOpt.isPresent() && userOpt.get().getTenant() != null) {
+            return userOpt.get().getTenant();
+        }
+
+        return tenantRepository.findAll().stream().findFirst().orElse(null);
     }
 
     private boolean isToolEnabled(String toolName, Tenant tenant) {
         switch (toolName) {
             case "create_lead":
-                return Boolean.TRUE.equals(tenant.getForceShowLeads());
+                return !Boolean.FALSE.equals(tenant.getForceShowLeads());
             case "book_appointment":
                 return Boolean.TRUE.equals(tenant.getForceShowAppointment());
             case "create_booking":

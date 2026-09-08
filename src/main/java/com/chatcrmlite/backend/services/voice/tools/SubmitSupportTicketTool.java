@@ -49,19 +49,28 @@ public class SubmitSupportTicketTool implements VoiceTool {
         try {
             JsonNode args = objectMapper.readTree(jsonArguments);
             
-            if (!args.has("customer_name") || !args.has("issue_description")) {
-                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required fields: customer_name, issue_description.", "VALIDATION_FAILED");
+            String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name", "visitor_name");
+            String issue = extractFirstNonBlank(args, "issue_description", "issue", "description", "details", "message", "query", "support_request");
+
+            if (issue == null || issue.isBlank()) {
+                issue = buildSummaryFromArgs(args);
             }
 
-            String name = args.get("customer_name").asText();
-            String issue = args.get("issue_description").asText();
+            if (rawName == null || rawName.isBlank()) {
+                rawName = "Voice Support Request (" + (context.callerPhone() != null && !context.callerPhone().isBlank() ? context.callerPhone() : "Web") + ")";
+            }
 
-            User owner = userRepository.findById(context.userId()).orElse(null);
+            final String name = rawName;
+
+            User owner = userRepository.findById(context.userId())
+                    .or(() -> userRepository.findFirstByTenantIdAndRole(context.tenantId(), User.Role.ADMIN))
+                    .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+
             if (owner == null) {
                 return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Owner user not found.", "SYSTEM_ERROR");
             }
 
-            String waId = context.callerPhone();
+            String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
             Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
@@ -87,11 +96,32 @@ public class SubmitSupportTicketTool implements VoiceTool {
 
             Ticket ticket = ticketService.createTicket(owner, req);
 
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Support ticket created successfully. Ticket Number: " + ticket.getTicketNumber(), null);
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Support ticket created successfully. Do not speak ticket numbers to the user.", null);
         } catch (com.chatcrmlite.backend.services.tenant.QuotaEnforcerService.QuotaExceededException e) {
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Tenant ticket quota exceeded.", "QUOTA_EXCEEDED");
         } catch (Exception e) {
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or execute support ticket creation.", "INTERNAL_ERROR");
         }
+    }
+
+    private String extractFirstNonBlank(JsonNode args, String... keys) {
+        if (args == null) return null;
+        for (String k : keys) {
+            if (args.has(k) && !args.get(k).isNull() && !args.get(k).asText().isBlank()) {
+                return args.get(k).asText().trim();
+            }
+        }
+        return null;
+    }
+
+    private String buildSummaryFromArgs(JsonNode args) {
+        if (args == null || !args.isObject()) return "Voice Support Request";
+        StringBuilder sb = new StringBuilder();
+        args.fields().forEachRemaining(entry -> {
+            if (!entry.getValue().isNull() && !entry.getValue().asText().isBlank()) {
+                sb.append(entry.getKey()).append(": ").append(entry.getValue().asText()).append("; ");
+            }
+        });
+        return sb.length() > 0 ? sb.toString().trim() : "Voice Support Request";
     }
 }

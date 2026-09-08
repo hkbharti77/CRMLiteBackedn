@@ -91,7 +91,16 @@ public class VoiceFormConfigAdapter {
      * and maps each enabled FlowStepDTO into a ToolSpecification parameter.
      */
     private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType) {
-        User owner = userRepository.findById(tenantId).orElse(null);
+        User owner = userRepository.findById(tenantId)
+                .or(() -> userRepository.findFirstByTenantIdAndRole(tenantId, User.Role.ADMIN))
+                .orElseGet(() -> {
+                    try {
+                        var users = userRepository.findUserIdsByTenantId(tenantId, org.springframework.data.domain.PageRequest.of(0, 1));
+                        return (users != null && !users.isEmpty()) ? userRepository.findById(users.get(0)).orElse(null) : null;
+                    } catch (Exception e) {
+                        return null;
+                    }
+                });
 
         ToolSpecification.Builder builder = ToolSpecification.builder()
                 .name(toolName)
@@ -118,6 +127,23 @@ public class VoiceFormConfigAdapter {
             List<FlowStepDTO> steps = flowConfig.getSteps();
             log.info("[VoiceFormAdapter] Building voice ToolSpec for tool={} with {} fields from DB for tenant={}",
                     toolName, steps.size(), tenantId);
+
+            StringBuilder desc = new StringBuilder();
+            if (flowConfig.getIntentDescription() != null && !flowConfig.getIntentDescription().isBlank()) {
+                desc.append(flowConfig.getIntentDescription()).append("\n\n");
+            } else {
+                desc.append(toolDescription).append("\n\n");
+            }
+            if (flowConfig.getTriggerExamples() != null && !flowConfig.getTriggerExamples().isEmpty()) {
+                desc.append("Trigger Examples:\n");
+                for (String ex : flowConfig.getTriggerExamples()) {
+                    if (ex != null && !ex.isBlank()) {
+                        desc.append("- ").append(ex.trim()).append("\n");
+                    }
+                }
+            }
+            desc.append("Use this tool when the user wants to submit details for this form flow.");
+            builder.description(desc.toString().trim());
 
             for (FlowStepDTO step : steps) {
                 if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;

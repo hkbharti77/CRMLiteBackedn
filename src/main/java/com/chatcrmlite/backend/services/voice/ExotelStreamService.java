@@ -6,14 +6,27 @@ import com.chatcrmlite.backend.services.RagRetrievalService;
 import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
 import com.chatcrmlite.backend.dto.memory.ConversationContext;
 import com.chatcrmlite.backend.services.voice.dto.*;
+import com.chatcrmlite.backend.models.Tenant;
+import com.chatcrmlite.backend.models.voice.VoiceTurn;
+import com.chatcrmlite.backend.repositories.TenantRepository;
+import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.repositories.voice.VoiceTurnRepository;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.data.message.ChatMessage;
+import dev.langchain4j.data.message.UserMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.chatcrmlite.backend.models.voice.VoiceAssistantConfig;
+import com.chatcrmlite.backend.repositories.voice.VoiceAssistantConfigRepository;
 
 @Slf4j
 @Service
@@ -29,6 +42,10 @@ public class ExotelStreamService {
     private final ConversationMemoryService conversationMemoryService;
     private final ConversationOrchestrator conversationOrchestrator;
     private final SpeechNormalizer speechNormalizer;
+    private final TenantRepository tenantRepository;
+    private final UserRepository userRepository;
+    private final VoiceTurnRepository voiceTurnRepository;
+    private final VoiceAssistantConfigRepository voiceConfigRepository;
 
     public ExotelCallSession createSession(String streamId, ExotelCallSession session) {
         // Close any pre-existing session under this key (e.g. ghost from 'connected' event)
@@ -52,10 +69,16 @@ public class ExotelStreamService {
     private void sendGreeting(ExotelCallSession session) {
         try {
             session.transitionTo(CallState.SPEAKING);
-            String greetingText = "Hello! This is Gyan Vani A I. How can I help you today?";
+            Tenant tenant = tenantRepository.findAll().stream().findFirst().orElse(null);
+            String greetingText = "Hello! How can I help you today?";
+            if (tenant != null) {
+                VoiceAssistantConfig config = voiceConfigRepository.findByTenantId(tenant.getId()).orElse(null);
+                if (config != null && config.getGreetingText() != null && !config.getGreetingText().isBlank()) {
+                    greetingText = config.getGreetingText();
+                }
+            }
             
             // Exotel strictly requires 8000Hz mu-law audio. Deepgram natively supports this.
-            // Sarvam outputs 22050Hz WAV which sounds like static if fed directly to Exotel.
             byte[] ttsAudio = deepgramVoiceService.synthesizeSpeech(greetingText, "aura-asteria-en");
             
             if (ttsAudio != null && ttsAudio.length > 0) {
@@ -188,21 +211,45 @@ public class ExotelStreamService {
                 if (cancelToken.get()) return;
                 session.setLlmFirstTokenMs(System.currentTimeMillis());
                 
-                // UUID placeholder - in reality fetched from Call metadata
-                UUID businessId = UUID.fromString("00000000-0000-0000-0000-000000000000"); 
-                
-                ConversationContext memContext = conversationMemoryService.getVoiceContext(UUID.randomUUID(), transcript);
-                
+                // Resolve active tenant ID
+                Tenant tenant = tenantRepository.findAll().stream().findFirst().orElse(null);
+                UUID businessId = tenant != null ? tenant.getId() : UUID.randomUUID();
+                String callerPhone = (session.getPhoneNumber() != null && !session.getPhoneNumber().isBlank())
+                        ? session.getPhoneNumber()
+                        : "+919999999999";
+
+                VoiceAssistantConfig voiceConfig = tenant != null ? voiceConfigRepository.findByTenantId(tenant.getId()).orElse(null) : null;
+                String personaPrompt = (voiceConfig != null && voiceConfig.getPersonaPrompt() != null && !voiceConfig.getPersonaPrompt().isBlank())
+                        ? voiceConfig.getPersonaPrompt()
+                        : "You are a helpful, professional AI voice assistant.";
+
+                List<ChatMessage> previousMessages = new ArrayList<>();
+                if (session.getStreamId() != null) {
+                    try {
+                        UUID sessionUuid = UUID.fromString(session.getStreamId());
+                        List<VoiceTurn> pastTurns = voiceTurnRepository.findTop50BySessionIdOrderByTurnNumberDesc(sessionUuid);
+                        Collections.reverse(pastTurns);
+                        for (VoiceTurn t : pastTurns) {
+                            if (t.getUserTranscript() != null && !t.getUserTranscript().isBlank()) {
+                                previousMessages.add(UserMessage.from(t.getUserTranscript()));
+                            }
+                            if (t.getBotResponseText() != null && !t.getBotResponseText().isBlank()) {
+                                previousMessages.add(AiMessage.from(t.getBotResponseText()));
+                            }
+                        }
+                    } catch (Exception ignored) {}
+                }
+
                 com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext toolContext = 
                     new com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext(
                         businessId, businessId, UUID.randomUUID(), session.getStreamId(), 
-                        session.getStreamId(), UUID.randomUUID().toString(), "+919999999999"
+                        session.getStreamId(), session.getStreamId(), callerPhone
                     );
 
                 String botResponseText = conversationOrchestrator.executeTurn(
-                        "You are Priya, a helpful voice assistant. You can help users book appointments and create leads. Answer concisely.", 
+                        personaPrompt, 
                         transcript, 
-                        List.of(), // TODO: use real ChatMessage history
+                        previousMessages, 
                         toolContext
                 );
                 

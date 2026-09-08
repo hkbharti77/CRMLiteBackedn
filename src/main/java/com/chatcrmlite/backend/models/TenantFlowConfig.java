@@ -34,6 +34,14 @@ public class TenantFlowConfig {
     @Column(name = "configuration_json", nullable = false, columnDefinition = "jsonb")
     private String configurationJson;
 
+    @Column(name = "intent_description", columnDefinition = "TEXT")
+    private String intentDescription;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "trigger_examples", columnDefinition = "jsonb")
+    @Builder.Default
+    private java.util.List<String> triggerExamples = new java.util.ArrayList<>();
+
     @Column(name = "template_version", nullable = false)
     @Builder.Default
     private Integer templateVersion = 1;

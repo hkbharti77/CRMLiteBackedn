@@ -190,6 +190,8 @@ public class FlowConfigService {
             return FlowConfigDTO.builder()
                     .flowType("SUPPORT")
                     .greetingMessage(configJson.getGreetingMessage())
+                    .intentDescription(row.getIntentDescription())
+                    .triggerExamples(row.getTriggerExamples())
                     .steps(steps)
                     .build();
         } catch (Exception e) {
@@ -240,6 +242,8 @@ public class FlowConfigService {
                     return FlowConfigDTO.builder()
                             .flowType(flowType.name())
                             .greetingMessage(greetingMessage)
+                            .intentDescription(dbConfig.getIntentDescription())
+                            .triggerExamples(dbConfig.getTriggerExamples())
                             .steps(steps)
                             .build();
                 }
@@ -314,9 +318,14 @@ public class FlowConfigService {
                 .map(this::fieldConfigToStep)
                 .collect(Collectors.toList());
 
+        String savedIntentDesc = dbConfigOpt.map(TenantFlowConfig::getIntentDescription).orElse(null);
+        List<String> savedTriggers = dbConfigOpt.map(TenantFlowConfig::getTriggerExamples).orElse(Collections.emptyList());
+
         return FlowConfigDTO.builder()
                 .flowType(flowType.name())
                 .greetingMessage(defaultGreeting)
+                .intentDescription(savedIntentDesc)
+                .triggerExamples(savedTriggers)
                 .steps(steps)
                 .build();
     }
@@ -634,6 +643,50 @@ public class FlowConfigService {
             log.error("Error saving configurable fields", e);
             throw new RuntimeException("Failed to save configuration", e);
         }
+    }
+
+    public Map<String, Object> getFlowIntent(User user, String explicitSuffix) {
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
+        Optional<TenantFlowConfig> dbConfigOpt = tenantFlowConfigRepository.findByTenantAndFlowType(user, flowTypeEnum);
+        if (dbConfigOpt.isEmpty() && flowTypeEnum != ConversationState.FlowType.APPOINTMENT
+                && flowTypeEnum != ConversationState.FlowType.BOOKING) {
+            dbConfigOpt = findDbConfigWithFallback(user, flowTypeEnum);
+        }
+        if (dbConfigOpt.isPresent()) {
+            TenantFlowConfig dbConfig = dbConfigOpt.get();
+            String desc = dbConfig.getIntentDescription() != null ? dbConfig.getIntentDescription() : "";
+            List<String> triggers = dbConfig.getTriggerExamples() != null ? dbConfig.getTriggerExamples() : Collections.emptyList();
+            return Map.of(
+                    "intentDescription", desc,
+                    "triggerExamples", triggers
+            );
+        }
+        return Map.of(
+                "intentDescription", "",
+                "triggerExamples", Collections.emptyList()
+        );
+    }
+
+    @Transactional
+    public void saveFlowIntent(User user, String explicitSuffix, String intentDescription, List<String> triggerExamples) {
+        ConversationState.FlowType flowTypeEnum = resolveFlowTypeEnum(user, explicitSuffix);
+        List<String> triggers = triggerExamples != null ? triggerExamples : new ArrayList<>();
+        int updated = tenantFlowConfigRepository.updateIntentConfig(user, flowTypeEnum, intentDescription, triggers);
+        if (updated == 0) {
+            TenantFlowConfig dbConfig = TenantFlowConfig.builder()
+                    .tenant(user)
+                    .flowType(flowTypeEnum)
+                    .configurationJson("{\"fields\":[]}")
+                    .intentDescription(intentDescription)
+                    .triggerExamples(triggers)
+                    .build();
+            try {
+                tenantFlowConfigRepository.save(dbConfig);
+            } catch (org.springframework.dao.DataIntegrityViolationException ex) {
+                tenantFlowConfigRepository.updateIntentConfig(user, flowTypeEnum, intentDescription, triggers);
+            }
+        }
+        log.info("[FlowConfigService] Saved intent config for user: {} flowType: {}", user.getEmail(), flowTypeEnum);
     }
 
     private void saveOrUpdateFieldsInternal(User user, ConversationState.FlowType flowTypeEnum, List<FlowFieldConfig> fields) throws Exception {

@@ -270,7 +270,7 @@ export function createUIController({
                                 </div>
                             </div>
                             <div class="voice-status-text" id="voice-status-text">Listening...</div>
-                            <div class="voice-status-sub" id="voice-status-sub">Ask anything. Priya is listening...</div>
+                            <div class="voice-status-sub" id="voice-status-sub">Ask anything. Assistant is listening...</div>
                             <div class="voice-lang-selector" id="voice-lang-selector" style="display: none;">
                                 <button type="button" class="voice-lang-btn active" data-lang="en-US" id="voice-lang-en">🌐 English</button>
                             </div>
