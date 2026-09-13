@@ -154,7 +154,7 @@ sequenceDiagram
         Caller->>Exotel: Dial Exophone Number
         Exotel->>BE: POST /api/v1/exotel/incoming (CallSid, From, To)
         BE-->>Exotel: Return ExoML XML (<Stream url="wss://.../ws/exotel/stream">)
-        Exotel<->>BE: Establish Bidirectional Audio WebSocket Stream
+        Exotel->>BE: Establish Bidirectional Audio WebSocket Stream
     end
 
     rect rgb(240, 250, 245)
