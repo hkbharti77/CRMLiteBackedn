@@ -1,10 +1,11 @@
 # 🚀 ChatCRM Lite Backend
 
-> A modern, scalable WhatsApp-integrated CRM backend built with Spring Boot, PostgreSQL, and real-time WebSocket support.
+> A modern, enterprise-grade WhatsApp & WebChat integrated CRM backend built with Spring Boot, PostgreSQL, Redis, and AI-powered RAG support.
 
 ![Java](https://img.shields.io/badge/Java-21-brightgreen?style=flat-square&logo=java)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.4.0-brightgreen?style=flat-square&logo=spring-boot)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-blue?style=flat-square&logo=postgresql)
+![Redis](https://img.shields.io/badge/Redis-Latest-red?style=flat-square&logo=redis)
 ![Status](https://img.shields.io/badge/Status-Active-success?style=flat-square)
 
 ---
@@ -17,41 +18,49 @@
 - [🔧 Tech Stack](#-tech-stack)
 - [⚙️ Installation](#-installation)
 - [🚀 Quick Start](#-quick-start)
-- [🛠️ Recent Updates](#-recent-updates)
+- [🛠️ Recent Updates & New Functionality](#-recent-updates--new-functionality)
 - [📊 API Endpoints](#-api-endpoints)
 - [🐛 Troubleshooting](#-troubleshooting)
+- [📁 Project Structure](#-project-structure)
+- [📚 Documentation](#-documentation)
+- [🔐 Security Features](#-security-features)
 - [📝 Contributing](#-contributing)
 
 ---
 
 ## 🌟 About The Project
 
-**CRMLite** is a full-stack, multi-tenant CRM application powered by Spring Boot and React Native, seamlessly integrated with the Meta WhatsApp API. It automates customer interactions through dynamic WhatsApp menus, captures leads in real-time, and provides business owners with a centralized mobile dashboard to manage chats, appointments, and support tickets, significantly boosting their operational efficiency.
+**CRMLite Backend** is a full-stack, multi-tenant CRM application engine powered by **Spring Boot 3.4** and **Java 21**, seamlessly integrated with Meta WhatsApp API, WebChat Widget, Voice/Telephony APIs, and AI-driven automation capabilities.
 
-### 💡 How it works:
-- **Customer Side:** Customers interact with a business directly through WhatsApp—no app download required. The backend automatically replies with dynamic, interactive WhatsApp menus (e.g., "Book Appointment", "Get Support").
-- **Business Side:** Business owners use the CRMLite mobile app to monitor live chats, manage auto-captured leads, and reply to customers in real-time using WebSockets. 
-- **Automation:** It offers 24/7 automation, ensuring that businesses never miss a potential lead, even outside working hours.
+It automates customer interactions across multiple channels (WhatsApp, Web Chat Widget, Voice/IVR, Email), captures and scores leads in real time, manages multi-tier organization subscriptions, and provides both Tenant Administrators and Platform Super Admins with comprehensive management portals.
 
 ---
 
 ## 🎯 Features
 
-### Core Functionality
-- ✅ **WhatsApp Integration** - Direct WhatsApp API integration for messaging
-- ✅ **Lead Management** - Create, track, and manage leads with full lifecycle
-- ✅ **Contact Management** - Organize contacts with tags and custom fields
-- ✅ **Real-time Chat** - WebSocket-based real-time messaging
-- ✅ **AI-Powered RAG** - Vector storage and retrieval-augmented generation
-- ✅ **Multi-tenant Support** - Full isolation between organizations
-- ✅ **Event System** - Event-driven architecture with webhooks
+### 🏢 Platform & Tenant Management
+- 👑 **Super Admin Portal (`/api/platform/*`)** - System-wide administration, tenant lifecycle management, feature flag overrides, quota adjustments, platform analytics, and global audit logging.
+- 💳 **Multi-tier Subscriptions & Quotas** - Support for FREE, MIN, PRO, and ENTERPRISE plans with dynamic quota enforcement on contacts, leads, emails, and WhatsApp messages.
+- 🏷️ **Custom Widget Branding (White-Labeling)** - Custom UI branding, colors, and logo URLs for PRO/ENTERPRISE tenants.
 
-### Technical Excellence
-- 🔐 **Enterprise Security** - JWT authentication, CORS, rate limiting
-- 📈 **Scalability** - Horizontal scaling ready with Redis caching
-- 🔄 **Resilience** - Circuit breakers, retry policies, graceful degradation
-- 📊 **Observability** - Distributed tracing, metrics, structured logging
-- 🧪 **Quality** - Comprehensive test coverage, code quality standards
+### 💬 Multi-Channel Messaging & Automation
+- ✅ **WhatsApp Meta API & Multi-Flow Menus** - Dynamic menu generation, button/list menu auto-scaling, stateful flow engine, and Meta Embedded Signup integration.
+- 📣 **WhatsApp Broadcast & Campaign Engine** - Bulk WhatsApp broadcast dispatching, scheduled campaigns, template management with dynamic variables, and delivery/read analytics.
+- 🌐 **Web Chat Widget API & WebSockets** - Embeddable website chat widget backend supporting guest visitor sessions, real-time STOMP WebSockets, and live agent takeover.
+- 📞 **Voice Bot & Telephony Integration** - Exotel cloud telephony & IVR integration, call tracking, voice agent configuration, and voice chat response processing.
+
+### 📧 Email Suite & Outreach
+- 📧 **Multi-Provider Email Engine** - Custom SMTP, SendGrid, and Amazon SES integration with dynamic HTML email template rendering.
+- 📊 **Email Tracking & Webhooks** - Open & click tracking pixels, bounce/delivery status webhook handlers, and test dispatches.
+
+### 📊 Lead & Sales Intelligence
+- 📥 **Lead Bulk Import Engine** - Asynchronous CSV/Excel bulk lead import with column mapping, validation, and duplicate detection.
+- 🎯 **Automated Lead Scoring** - Dynamic AI and rule-based lead scoring based on interaction history, contact metadata, and deal value.
+- 📅 **Appointments & Google Calendar Sync** - Full appointment booking system integrated with Google Calendar APIs.
+
+### 🧠 AI & RAG Engine
+- 🧠 **Vector RAG Engine & FAQ System** - Document ingestion (PDF, DOCX, TXT), vector embeddings, guardrail validation, and FAQ auto-resolution.
+- 🤖 **AI Agent Fallback** - Intelligent AI agent takeover when human agents are offline or unassigned.
 
 ---
 
@@ -61,80 +70,255 @@
 
 ```mermaid
 graph TD
-    subgraph External Clients
-        App[📱 CRMLite React Native App]
-        WhatsApp[💬 Meta WhatsApp API]
+    subgraph External Clients & Channels
+        App[📱 CRMLite App / Mobile]
+        WA[💬 Meta WhatsApp API]
+        WebWidget[🌐 Web Chat Widget]
+        Voice[📞 Exotel / Voice Bot]
     end
 
     subgraph API Gateway & Controllers
-        REST[🎮 REST Controllers]
-        WS[🔌 WebSocket Server]
-        Webhook[🔗 WhatsAppWebhookController]
+        REST[🎮 REST Controllers /api/v1/*]
+        PlatformAPI[👑 Platform Admin API /api/platform/*]
+        WS[🔌 STOMP WebSocket Server]
+        Webhook[🔗 Webhook Receiver]
     end
 
-    subgraph Core Services
-        WAService[⚙️ WhatsAppService]
-        FlowService[🔄 WhatsAppFlowService]
-        RAG[🧠 RagGuardrailService]
-        Auth[🔐 Authentication Service]
+    subgraph Core Business Services
+        FlowService[🔄 Flow Engine & Menu Builder]
+        CampaignEngine[📣 WhatsApp Broadcast Engine]
+        EmailEngine[📧 Multi-Provider Email Service]
+        VoiceService[📞 Voice Bot Service]
+        RAG[🧠 RAG & FAQ Service]
+        LeadEngine[📊 Lead Import & Scoring Engine]
+        SubEngine[💳 Tenant & Subscription Engine]
     end
 
-    subgraph Data & State
-        DB[(🗄️ PostgreSQL)]
-        Redis[(⚡ Redis Cache)]
+    subgraph Storage & Data
+        DB[(🗄️ PostgreSQL 17)]
+        Redis[(⚡ Redis Cache & Streams)]
         VectorDB[(🕸️ Vector Storage)]
     end
 
-    App <-->|REST| REST
-    App <-->|WebSockets| WS
-    WhatsApp -->|Incoming Webhooks| Webhook
-    
-    REST --> Auth
-    REST --> WAService
-    WS --> WAService
-    Webhook --> WAService
-    
-    WAService -->|Branch 1: Stateful Flow| FlowService
-    WAService -->|Branch 2: AI/RAG Fallback| RAG
-    WAService -->|Branch 3: Manual Chat| DB
-    
+    App <-->|REST & WS| REST
+    App <-->|Super Admin| PlatformAPI
+    WA <-->|Webhooks| Webhook
+    WebWidget <-->|REST & WS| REST
+    Voice <-->|Webhooks| Webhook
+
+    REST --> FlowService
+    REST --> CampaignEngine
+    REST --> EmailEngine
+    REST --> VoiceService
+    REST --> RAG
+    REST --> LeadEngine
+    PlatformAPI --> SubEngine
+
     FlowService <--> DB
+    CampaignEngine <--> Redis
+    EmailEngine <--> DB
     RAG <--> VectorDB
-    WAService <--> Redis
-    WAService <--> DB
+    LeadEngine <--> DB
+    SubEngine <--> DB
+```
+
+---
+
+## 🛠️ Recent Updates & New Functionality
+
+### 🆕 1. Super Admin & Platform Portal (`/api/platform/*`)
+- **Platform Control Center**: Full administrative suite for platform super-users to oversee all tenant accounts, subscription plans, platform search, and audit logs.
+- **Tenant Feature Overrides**: Granular ability to override specific tenant entitlements, bypass quota limits, or suspend/reactivate tenants.
+- **Platform Analytics**: Cross-tenant aggregated metrics on system usage, active users, messaging volumes, and revenue.
+
+### 🆕 2. Web Chat Widget Backend (`/api/public/webchat/*` & `/api/public/chat/*`)
+- **Public Visitor Chat**: APIs to power embeddable web chat widgets with anonymous session creation, chat history retrieval, and file attachment uploads.
+- **Live Agent Handover**: Real-time STOMP WebSocket notification bridge allowing agents to seamlessly take over guest website conversations.
+
+### 🆕 3. Voice Bot & Exotel Telephony Engine (`/api/v1/public/voice/*` & `/api/v1/exotel/*`)
+- **Exotel Cloud Telephony**: Inbound call processing via Exophone webhooks (`POST /api/v1/exotel/incoming`). Returns ExoML XML with bidirectional audio `<Stream>` WebSocket endpoints.
+- **Deepgram STT & TTS Pipeline**: Real-time Speech-to-Text (`nova-2`) and Text-to-Speech (`aura-stella-en`) conversion for web/mobile voice visitors.
+- **Voice AI Tools & Session Management**: Automated voice tool execution (`CreateLeadTool`, RAG knowledge retrieval) and rate-limiting per client IP.
+- **Voice Configuration**: Per-tenant voice agent persona, speed, pitch, speech normalization, and call route management (`VoiceConfigController`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Caller as Customer / Visitor
+    participant Exotel as Exotel Cloud Telephony
+    participant BE as Spring Boot Backend
+    participant AI as Deepgram STT/TTS Engine
+
+    rect rgb(245, 240, 255)
+        Note over Caller,BE: Option 1: Exotel Cloud Phone Call Flow
+        Caller->>Exotel: Dial Exophone Number
+        Exotel->>BE: POST /api/v1/exotel/incoming (CallSid, From, To)
+        BE-->>Exotel: Return ExoML XML (<Stream url="wss://.../ws/exotel/stream">)
+        Exotel<->>BE: Establish Bidirectional Audio WebSocket Stream
+    end
+
+    rect rgb(240, 250, 245)
+        Note over Caller,BE: Option 2: Public Web/Mobile Voice Chat AI
+        Caller->>BE: POST /api/v1/public/voice/{businessId} (Audio File)
+        BE->>AI: Deepgram STT (nova-2 model)
+        AI-->>BE: Transcribed Text
+        BE->>BE: Execute Voice AI Tools & Normalizer
+        BE->>AI: Deepgram TTS (aura-stella-en model)
+        AI-->>BE: Audio Binary / Base64
+        BE-->>Caller: AI Voice Response Audio
+    end
+```
+
+### 🆕 4. WhatsApp Coexistence & Embedded Signup (`/api/v1/integrations/meta/gateway/*`)
+- **WhatsApp Coexistence**: Connect existing WhatsApp Business App numbers directly to Meta Cloud API without deleting the app or losing chat history.
+- **Embedded Signup OAuth**: Automated Meta OAuth flow (`/session`, `/launch`, `/exchange`) exchanging authorization codes for long-lived system tokens.
+- **Single-Use Session Protection**: 10-minute TTL opaque `sessionId` binding onboarding sessions to the tenant ID to prevent replay attacks.
+- **Multi-Tier WABA Resolution**: Automated 4-tier fallback querying (`owned_whatsapp_business_accounts` -> `client_whatsapp_business_accounts` -> `/debug_token` target_ids -> `/me/whatsapp_business_accounts`) to reliably identify the WABA ID.
+- **Automatic Webhook Registration**: Instant subscription of the connected WABA to Meta App webhooks (`subscribed_apps`) with auto-generated verify tokens and isolated connection vs webhook status tracking (`/retry-webhook`).
+- **AES Token Encryption**: Access tokens are automatically AES-encrypted at rest in PostgreSQL (`WhatsAppConfig`).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Business Admin
+    participant FE as Frontend App
+    participant BE as MetaGatewayController
+    participant Meta as Meta Graph API v21.0
+    participant DB as PostgreSQL DB
+
+    User->>FE: Click "Connect WhatsApp"
+    FE->>BE: POST /api/v1/integrations/meta/gateway/session
+    BE-->>FE: Return single-use sessionId (10-min TTL)
     
-    WAService -->|Send Messages| WhatsApp
+    FE->>Meta: Launch Embedded Signup Modal
+    User->>Meta: Grant WABA permissions
+    Meta-->>FE: Return OAuth code
+
+    FE->>BE: POST /gateway/exchange (code + sessionId)
+    
+    rect rgb(240, 245, 255)
+        Note over BE,Meta: Non-Blocking Graph API Execution
+        BE->>Meta: 1. /oauth/access_token (Get Long-Lived Token)
+        BE->>Meta: 2. /debug_token (Inspect Business ID & Expiry)
+        BE->>Meta: 3. Resolve WABA ID (Multi-Tier Query)
+        BE->>Meta: 4. /{wabaId}/phone_numbers (Get Phone ID & Quality)
+        BE->>Meta: 5. /{wabaId}/subscribed_apps (Subscribe Webhook)
+    end
+
+    BE->>DB: Save WhatsAppConfig (AES Encrypted Access Token & Active WABA)
+    BE-->>FE: Return Connection Success & Webhook Status
 ```
 
-### Backend Architecture
+### 🆕 5. WhatsApp Broadcast & Campaign Engine (`/api/v1/whatsapp/campaigns/*`)
+- **Targeted Broadcasts**: Send bulk WhatsApp messages to contact segments with dynamic merge fields.
+- **Campaign Analytics**: Real-time tracking of sent, delivered, read, and failed message statuses.
+- **Template Management**: Create, sync, and submit WhatsApp message templates to Meta for approval.
 
+### 🆕 6. Advanced Email Engine & Webhooks (`/api/v1/emails/*` & `/api/v1/email-tracking/*`)
+- **Multi-Provider SMTP**: Configure tenant-specific SMTP servers, SendGrid, or Amazon SES credentials.
+- **Email Tracking**: Open rate tracking pixels and click-through redirect tracking.
+- **Delivery Webhooks**: Process bounce, spam report, and delivery confirmation webhooks.
+
+### 🆕 7. Lead Bulk Import & Intelligent Lead Scoring (`/api/v1/leads/bulk-upload` & `/api/v1/lead-scoring/*`)
+- **Async Bulk Upload**: Process large CSV/Excel spreadsheets of leads with field mapping and validation.
+- **Dynamic Lead Scoring**: Auto-compute lead engagement scores based on customer activity, interaction frequency, and pipeline stage.
+
+### 🆕 8. FAQ & RAG Knowledge Base (`/api/v1/knowledge-base/*` & `/api/v1/faqs/*`)
+- **Document Vectorization**: Upload PDF/DOCX files to generate vector embeddings for intelligent bot retrieval.
+- **FAQ Auto-Matching**: Search indexed FAQ knowledge bases to answer customer queries accurately before escalating to human agents.
+
+### 🆕 9. Multi-tier Subscriptions & White-Label Branding
+- **Tier Quota Enforcement**: FREE, MIN, PRO, and ENTERPRISE plans with automated lifecycle downgrades upon expiry.
+- **Custom Widget Branding**: Custom colors, logo URLs, and removal of default watermarks for PRO/ENTERPRISE tiers.
+
+---
+
+## 📊 API Endpoints
+
+### 👑 Super Admin / Platform Portal
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    API Gateway / Load Balancer               │
-└─────────────────────────────────────────────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-   ┌─────────┐         ┌─────────────┐       ┌──────────┐
-   │ REST    │         │ WebSocket   │       │ Webhooks │
-   │ API     │         │ Server      │       │ Receiver │
-   └─────────┘         └─────────────┘       └──────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-        ┌─────────────────────┼─────────────────────┐
-        │                     │                     │
-   ┌──────────────┐  ┌──────────────┐  ┌──────────────┐
-   │ Service      │  │ Repository   │  │ Cache Layer  │
-   │ Layer        │  │ (Data Access)│  │ (Redis)      │
-   └──────────────┘  └──────────────┘  └──────────────┘
-        │                     │                     │
-        └─────────────────────┼─────────────────────┘
-                              │
-                    ┌─────────────────────┐
-                    │  PostgreSQL Database │
-                    │  + Vector Storage   │
-                    └─────────────────────┘
+POST   /api/platform/auth/login             🔑 Platform admin login
+GET    /api/platform/tenants                🏢 List all tenants
+POST   /api/platform/tenants                ➕ Create tenant
+GET    /api/platform/tenants/{id}/overrides 🎛️  Tenant feature overrides
+POST   /api/platform/plans                  💳 Manage subscription plans
+GET    /api/platform/analytics              📊 Platform aggregated analytics
+GET    /api/platform/audit-logs             📜 System audit logs
+```
+
+### 🔐 Authentication & Onboarding
+```
+POST   /api/v1/auth/login                   🔑 User login
+POST   /api/v1/auth/register                📝 Register user & tenant
+POST   /api/v1/auth/refresh                 🔄 Refresh JWT token
+GET    /api/v1/onboarding/status            🚀 Onboarding setup status
+```
+
+### 📲 Meta WhatsApp Embedded Signup & Gateway
+```
+POST   /api/v1/integrations/meta/gateway/session        🔑 Create onboarding session ID
+GET    /api/v1/integrations/meta/gateway/launch         🚀 Server-rendered Meta launch modal
+POST   /api/v1/integrations/meta/gateway/exchange       ⚡ Exchange OAuth code & auto-provision WABA
+GET    /api/v1/integrations/meta/gateway/status         📊 Check connection & webhook status
+POST   /api/v1/integrations/meta/gateway/retry-webhook  🔄 Retry Webhook subscription
+```
+
+### 📋 Leads & Sales Pipeline
+```
+GET    /api/v1/leads                        📋 List leads
+POST   /api/v1/leads                        ✨ Create lead
+PATCH  /api/v1/leads/{id}/status            🔄 Update lead status
+POST   /api/v1/leads/bulk-upload            📥 Async CSV bulk lead import
+GET    /api/v1/lead-scoring/rules           🎯 Lead scoring rules
+```
+
+### 💬 Messaging & WebChat Widget
+```
+GET    /api/v1/messages/chats               💬 Active conversations
+GET    /api/v1/messages/{contactId}         📨 Chat history
+POST   /api/v1/messages/{contactId}         ✉️  Send agent message
+POST   /api/public/webchat/session          🌐 Init visitor webchat session
+GET    /api/public/webchat/history          📜 Webchat message history
+```
+
+### 📱 WhatsApp & Campaigns
+```
+GET    /api/v1/whatsapp/config              ⚙️ WhatsApp credentials & status
+POST   /api/v1/whatsapp/campaigns           📣 Create broadcast campaign
+POST   /api/v1/whatsapp/campaigns/{id}/send 🚀 Execute campaign dispatch
+GET    /api/v1/whatsapp/templates           📋 Message templates
+POST   /api/v1/whatsapp/webhook             🔗 Meta webhook callback
+```
+
+### 📞 Voice & Telephony
+```
+GET    /api/v1/voice-config                 ⚙️ Voice bot config
+POST   /api/public/voice/chat               📞 Voice bot interaction handler
+POST   /api/v1/exotel/webhook               🔗 Exotel call event webhook
+```
+
+### 📧 Email Engine & Tracking
+```
+POST   /api/v1/emails/send                  ✉️ Send custom email
+GET    /api/v1/email-templates              📄 List email templates
+GET    /api/v1/email-providers              ⚙️ Configured email providers
+GET    /api/v1/email-tracking/pixel/{id}   👁️ Email open tracking pixel
+```
+
+### 🧠 Knowledge Base & RAG
+```
+GET    /api/v1/knowledge-base               📚 List knowledge documents
+POST   /api/v1/knowledge-base/upload        📤 Upload PDF/DOCX for RAG
+GET    /api/v1/faqs                         ❓ List FAQ entries
+POST   /api/v1/rag/query                    🔍 RAG vector query
+```
+
+### 📅 Appointments & Support Tickets
+```
+GET    /api/v1/appointments                 📅 List appointments
+POST   /api/v1/appointments                 ➕ Book appointment
+GET    /api/v1/tickets                      🎫 Support tickets
+POST   /api/v1/support-forms/config         📝 Dynamic form configuration
 ```
 
 ---
@@ -145,13 +329,12 @@ graph TD
 |-------|-----------|---------|
 | **Runtime** | Java | 21 |
 | **Framework** | Spring Boot | 3.4.0 |
-| **Data** | PostgreSQL | 17.10 |
-| **Cache** | Redis | Latest |
-| **Messaging** | RabbitMQ | Optional |
-| **Container** | Docker | Latest |
-| **Orchestration** | Kubernetes | v1.28+ |
-| **Monitoring** | Prometheus + Grafana | Latest |
-| **Tracing** | Jaeger | Latest |
+| **Data** | PostgreSQL + pgvector | 17 |
+| **Cache & Bus** | Redis | Latest |
+| **Security** | Spring Security + JWT | 6.x |
+| **WebSockets** | Spring STOMP | 3.4.0 |
+| **Telephony** | Exotel Cloud API | REST |
+| **Container** | Docker & Docker Compose | Latest |
 
 ---
 
@@ -161,9 +344,9 @@ graph TD
 ```bash
 ✅ Java 21+
 ✅ Maven 3.8+
-✅ PostgreSQL 17+
+✅ PostgreSQL 17+ (with vector extension)
+✅ Redis
 ✅ Docker & Docker Compose (optional)
-✅ Git
 ```
 
 ### 1️⃣ Clone Repository
@@ -175,21 +358,13 @@ cd CRMLiteBackedn
 ### 2️⃣ Configure Environment
 ```bash
 cp .env.example .env
-# Edit .env with your settings
+# Edit .env with your credentials
 ```
 
-### 3️⃣ Build Project
+### 3️⃣ Build & Start
 ```bash
 mvn clean install -DskipTests
-```
-
-### 4️⃣ Start Database
-```bash
-docker-compose -f docker-compose.yml up -d postgres redis
-```
-
-### 5️⃣ Run Application
-```bash
+docker-compose up -d postgres redis
 mvn spring-boot:run
 ```
 
@@ -201,7 +376,6 @@ mvn spring-boot:run
 
 ### 🔐 API Authentication
 ```bash
-# 🔑 Get JWT Token
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{
@@ -210,22 +384,8 @@ curl -X POST http://localhost:8080/api/v1/auth/login \
   }'
 ```
 
-### 👥 Create a Lead
-```bash
-curl -X POST http://localhost:8080/api/v1/leads \
-  -H "Authorization: Bearer YOUR_JWT_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contactId": "contact-uuid",
-    "status": "NEW",
-    "dealValue": 5000,
-    "currency": "INR"
-  }'
-```
-
 ### ⚡ WebSocket Connection
 ```javascript
-// 🔗 Connect to real-time chat
 const ws = new WebSocket('ws://localhost:8080/ws/chat');
 
 ws.onmessage = (event) => {
@@ -241,92 +401,16 @@ ws.send(JSON.stringify({
 
 ---
 
-## 🛠️ Recent Updates
-
-### 🔥 WhatsApp Multi-Flow Dynamic Menus (Latest)
-
-#### Feature 📱
-Added full support for concurrently hosting multiple business modules (Leads, Appointments, Bookings) within the same WhatsApp interaction menu.
-
-#### Enhancements ✅
-- **Dynamic Module Aggregation**: Backend automatically determines the tenant's primary flow based on their business category and forcefully merges it with any additional modules toggled via the frontend.
-- **Smart Menu Scaling**: If the total number of menu options exceeds WhatsApp's limit of 3 buttons, the backend automatically converts the `interactive` message type from a Button Menu to a List Menu.
-- **Backwards Compatibility**: Custom JSON menus saved previously are automatically parsed, and single hardcoded `trigger_flow` buttons are dynamically expanded to include all active modules.
-
----
-
-## 📊 API Endpoints
-
-### 🔐 Authentication
-```
-POST   /api/v1/auth/login              🔑 User login
-POST   /api/v1/auth/register           📝 New registration
-POST   /api/v1/auth/logout             🚪 Logout
-POST   /api/v1/auth/refresh            🔄 Refresh token
-```
-
-### 📋 Leads
-```
-GET    /api/v1/leads                   📋 All leads
-GET    /api/v1/leads/paged             📄 Paginated leads
-POST   /api/v1/leads                   ✨ Create lead
-PATCH  /api/v1/leads/{id}/status       🔄 Update status
-PATCH  /api/v1/leads/{id}/deal         💰 Update deal
-```
-
-### 💬 Messages
-```
-GET    /api/v1/messages/chats          💬 Active chats
-GET    /api/v1/messages/{contactId}    📨 Chat history
-POST   /api/v1/messages/{contactId}    ✉️  Send message
-```
-
-### 👥 Contacts
-```
-GET    /api/v1/contacts                👥 All contacts
-POST   /api/v1/contacts                ➕ New contact
-PUT    /api/v1/contacts/{id}           ✏️  Update contact
-DELETE /api/v1/contacts/{id}           ❌ Delete contact
-```
-
----
-
 ## 🐛 Troubleshooting
 
-### ❌ LazyInitializationException
-```
-🚨 Error: failed to lazily initialize a collection
-```
-**✅ Solution:** Ensure all controller endpoints have `@Transactional(readOnly=true)`
-
 ### ❌ Database Connection Timeout
-```
-🚨 Error: Could not connect to PostgreSQL
-```
-**✅ Solution:**
 ```bash
-# 🔍 Check database is running
 docker-compose ps
-
-# ✓ Verify .env DATABASE_URL is correct
 cat .env | grep DATABASE_URL
 ```
 
 ### ❌ WebSocket Connection Failed
-```
-🚨 Error: Failed to establish WebSocket connection
-```
-**✅ Solution:** Check firewall, ensure port 8080 is open
-
-### ❌ Out of Memory
-```
-🚨 Error: Java heap space
-```
-**✅ Solution:**
-```bash
-export JAVA_OPTS="-Xmx2g -Xms1g"
-mvn spring-boot:run
-```
+Ensure port `8080` is open and CORS settings permit web socket upgrades.
 
 ---
 
@@ -334,117 +418,34 @@ mvn spring-boot:run
 
 ```
 CRMLiteBackedn/
-├── src/main/java/
-│   ├── controllers/          # 🎮 REST endpoints
-│   ├── services/             # ⚙️  Business logic
-│   ├── repositories/         # 🗄️  Data access
-│   ├── models/               # 📦 Entity classes
-│   ├── dto/                  # 📨 Data transfer objects
-│   ├── security/             # 🔐 Authentication
-│   └── events/               # 📡 Event system
+├── src/main/java/com/chatcrmlite/backend/
+│   ├── controllers/          # 🎮 REST endpoints (Tenant & Public)
+│   │   ├── admin/            # 🏢 Tenant admin endpoints
+│   │   ├── platform/         # 👑 Super Admin Platform endpoints
+│   │   └── dev/              # 🧪 Dev & Sandbox endpoints
+│   ├── services/             # ⚙️ Business logic & flows
+│   ├── repositories/         # 🗄️ JPA repositories
+│   ├── models/               # 📦 Entity models
+│   ├── dto/ & dtos/          # 📨 Data transfer objects
+│   ├── security/             # 🔐 JWT & Security filters
+│   └── websocket/            # 🔌 STOMP WebSockets
 ├── src/main/resources/
 │   ├── application.yml       # 🔧 Configuration
-│   ├── db/migration/         # 📝 Flyway migrations
-│   └── logback-spring.xml    # 📋 Logging config
-├── docs/
-│   ├── architecture/         # 🏗️  Architecture documentation
-│   ├── audit/                # 🔍 Audit reports
-│   ├── sre/                  # 🚨 SRE & Operations
-│   └── deep_systems_audit/   # 📊 Advanced analysis
-├── deployment/
-│   ├── k8s/                  # ☸️  Kubernetes configs
-│   ├── terraform/            # 🔧 Infrastructure as Code
-│   ├── argocd/               # 🔄 GitOps configuration
-│   └── edge-router/          # 🌐 Edge routing
-├── monitoring/
-│   ├── alert_rules.yml       # 🚨 Alert rules
-│   ├── prometheus.yml        # 📊 Prometheus config
-│   ├── grafana/              # 📈 Grafana dashboards
-│   └── tempo.yml             # 🔍 Distributed tracing
-├── docker-compose.yml        # 🐳 Docker services
-├── docker-compose-monitoring.yml  # 📊 Monitoring stack
-├── docker-compose.production.yml  # 🚀 Production setup
-├── pom.xml                   # 📦 Maven config
-└── README.md                 # 📖 This file
+│   └── db/migration/         # 📝 Database migrations
+├── docker-compose.yml        # 🐳 Dev services
+└── README.md                 # 📖 Documentation
 ```
-
----
-
-## 📚 Documentation
-
-### System & Architecture Documentation
-Comprehensive documentation of system architecture, deployment, and operational procedures:
-
-- **[ARCHITECTURE_AUDIT.md](./docs/audit/ARCHITECTURE_AUDIT.md)** - 🏗️ Complete system architecture analysis
-- **[TECH_STACK.md](./docs/audit/TECH_STACK.md)** - 📊 Technology stack overview and decisions
-- **[DISTRIBUTED_SYSTEMS_AUDIT.md](./docs/deep_systems_audit/DISTRIBUTED_SYSTEMS_AUDIT.md)** - 🌐 Distributed system considerations
-- **[PRODUCTION_READINESS_REPORT.md](./docs/audit/PRODUCTION_READINESS_REPORT.md)** - ✅ Production deployment checklist
-
-### Operational & SRE Documentation
-- **[SRE README](./docs/sre/README.md)** - 🚨 Site Reliability Engineering guide
-- **[Alert Rules](./docs/sre/alerts/critical_alerts.yml)** - 🔔 Critical alerting configuration
-- **[Runbooks](./docs/sre/runbooks/)** - 📋 Operational runbooks for common incidents
-  - [AI Outage Response](./docs/sre/runbooks/AIOutage.md) - ⚡ AI service recovery
-  - [Database Exhaustion](./docs/sre/runbooks/DBExhaustion.md) - 🗄️ DB recovery
-  - [Queue Overload](./docs/sre/runbooks/QueueOverload.md) - 📦 Queue management
-  - [Redis Failure](./docs/sre/runbooks/RedisFailure.md) - 💾 Cache recovery
-  - [Webhook Failure](./docs/sre/runbooks/WebhookFailure.md) - 🔗 Webhook recovery
-
-### Deployment & Infrastructure
-- **[Kubernetes Manifests](./deployment/k8s/)** - ☸️ K8s deployment configurations
-- **[Terraform Infrastructure](./deployment/terraform/)** - 🔧 Infrastructure as Code
-- **[Docker Compose](./docker-compose.yml)** - 🐳 Local development setup
-- **[Helm Charts](./blueprints/helm/)** - 📦 Helm chart values and configurations
-
----
-
-## 🔐 Security Features
-
-- ✅ JWT Authentication with refresh tokens
-- ✅ CORS protection with origin validation
-- ✅ Rate limiting (10 req/min per user)
-- ✅ SQL injection prevention (parameterized queries)
-- ✅ XSS protection with output encoding
-- ✅ CSRF tokens on state-changing operations
-- ✅ Password hashing with BCrypt
-- ✅ API key rotation mechanism
 
 ---
 
 ## 📝 Contributing
 
-### 🔄 Development Workflow
 ```bash
-# 1️⃣ Create feature branch
 git checkout -b feature/your-feature
-
-# 2️⃣ Make changes
-# 3️⃣ Run tests
 mvn clean test
-
-# 4️⃣ Commit with conventional messages
 git commit -m "feat: add new feature"
-
-# 5️⃣ Push and create PR
 git push origin feature/your-feature
 ```
-
-### ✅ Code Standards
-- ✅ Java 21+ features
-- ✅ Spring Boot best practices
-- ✅ Consistent naming conventions
-- ✅ Comprehensive javadoc
-- ✅ Unit test coverage >80%
-
----
-
-## 📞 Support
-
-| Channel | Link |
-|---------|------|
-| 🐛 Issues | [GitHub Issues](https://github.com/hkbharti77/CRMLiteBackedn/issues) |
-| 💬 Discussions | [GitHub Discussions](https://github.com/hkbharti77/CRMLiteBackedn/discussions) |
-| 📧 Email | hkbharti77@gmail.com |
 
 ---
 
@@ -454,32 +455,10 @@ git push origin feature/your-feature
 
 ---
 
-## 🙏 Acknowledgments
-
-- 🙌 Spring Boot community for excellent framework
-- 🙌 PostgreSQL for reliable database
-- 🙌 All contributors and users
-
----
-
 <div align="center">
 
 ### ❤️ Made with ❤️ by the ChatCRM Team
 
 ⭐ **Star us on GitHub** if this project helped you!
 
-[GitHub](https://github.com/hkbharti77/CRMLiteBackedn) · [Issues](https://github.com/hkbharti77/CRMLiteBackedn/issues) · [Discussions](https://github.com/hkbharti77/CRMLiteBackedn/discussions)
-
-**Questions?** Open an issue or start a discussion! 💬
-
-**Happy Coding!** 🚀
-
 </div>
-
-### Recent Updates & Features
-- **Multi-tier Subscription System**: Implemented FREE, MIN, PRO, and ENTERPRISE plans with dynamic quota enforcement (limits on emails, leads, bookings, and WhatsApp usage).
-- **Automated Plan Lifecycle**: Backend automatically downgrades expired subscriptions to the FREE tier, allowing users to smoothly renew or upgrade without getting locked out.
-- **Custom Widget Branding (White-labeling)**: PRO and ENTERPRISE plans unlock custom UI branding (custom colors, logo URL), while FREE/MIN plans display a default "Powered by CRMLite" watermark in the frontend widget.
-- **Google Calendar Integration**: Seamless sync for appointments and bookings with Google Calendar.
-- **Dynamic Multi-Flow WhatsApp Menus**: Support for interactive and dynamic routing based on custom fields, merging Leads, Appointments, and Support modules concurrently.
-- **AI Fallback & Dashboard Enhancements**: AI takes over when human agents are unavailable, configurable via the dashboard.
