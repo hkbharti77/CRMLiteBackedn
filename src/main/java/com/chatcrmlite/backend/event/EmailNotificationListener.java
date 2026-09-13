@@ -218,13 +218,13 @@ public class EmailNotificationListener {
             String businessName = lead.getOwner() != null ? displayName(lead.getOwner()) : "our team";
             log.info("[EmailListener] Sending lead enquiry email to {} for lead={}", toEmail, lead.getId());
 
-            Tenant tenant = lead.getTenant();
+            String ownerName = lead.getOwner() != null ? displayName(lead.getOwner()) : "our team";
             String custSubject = resolvePlaceholders(
                     tenant != null ? tenant.getLeadCustomerEmailSubject() : null,
-                    contactName, businessName, enquiryMessage, toEmail, null);
+                    contactName, businessName, enquiryMessage, toEmail, ownerName);
             String custBody = resolvePlaceholders(
                     tenant != null ? tenant.getLeadCustomerEmailBody() : null,
-                    contactName, businessName, enquiryMessage, toEmail, null);
+                    contactName, businessName, enquiryMessage, toEmail, ownerName);
 
             if (custSubject != null && custBody != null) {
                 // Use tenant-configured template wrapped in brand layout
