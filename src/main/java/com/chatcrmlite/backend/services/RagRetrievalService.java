@@ -207,7 +207,7 @@ public class RagRetrievalService {
         // 5. Build Dedicated Spoken-First Voice Prompt with Tenant Voice Persona
         String niche = user.getBusinessType();
         String tenantPersona = null;
-        String assistantName = "Priya";
+        String assistantName = "Assistant";
         if (user.getTenant() != null) {
             Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
             if (tenant != null) {

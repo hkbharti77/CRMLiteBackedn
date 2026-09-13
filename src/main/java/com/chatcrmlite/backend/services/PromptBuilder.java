@@ -119,7 +119,7 @@ public class PromptBuilder {
     }
 
     public String buildVoiceRagPrompt(ConversationContext memContext, List<String> chunks, String niche, String tenantPersona, String languageMode) {
-        return buildVoiceRagPrompt(memContext, chunks, niche, tenantPersona, "Priya", "en");
+        return buildVoiceRagPrompt(memContext, chunks, niche, tenantPersona, "Assistant", "en");
     }
     
     // Fallback wrapper for backwards compatibility
@@ -135,7 +135,7 @@ public class PromptBuilder {
     public String buildVoiceRagPrompt(ConversationContext memContext, List<String> chunks, String niche, String tenantPersona, String assistantName, String languageMode) {
         String sanitizedQuery = sanitize(memContext.getLatestQuery());
         String context = buildContext(chunks);
-        String name = (assistantName != null && !assistantName.isBlank()) ? assistantName.trim() : "Priya";
+        String name = (assistantName != null && !assistantName.isBlank()) ? assistantName.trim() : "Assistant";
         String basePersona = buildPersona(niche) + "\nYour name is " + name + ". You are speaking as the warm, polite voice receptionist of this business.";
         String tenantLayer = buildTenantPersonaLayer(tenantPersona);
         String history = memContext.getFormattedRecentTurns() != null ? memContext.getFormattedRecentTurns() : "(No recent history)";

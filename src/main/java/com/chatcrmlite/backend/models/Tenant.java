@@ -63,8 +63,8 @@ public class Tenant implements Serializable {
     @Column(name = "voice_persona_prompt", columnDefinition = "TEXT")
     private String voicePersonaPrompt;
 
-    @Column(name = "voice_assistant_name", length = 100)
-    private String voiceAssistantName = "Priya";
+    @Column(length = 50)
+    private String voiceAssistantName = "Assistant";
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
@@ -212,7 +212,7 @@ public class Tenant implements Serializable {
     public String getVoicePersonaPrompt() { return voicePersonaPrompt; }
     public void setVoicePersonaPrompt(String voicePersonaPrompt) { this.voicePersonaPrompt = voicePersonaPrompt; }
 
-    public String getVoiceAssistantName() { return voiceAssistantName != null ? voiceAssistantName : "Priya"; }
+    public String getVoiceAssistantName() { return voiceAssistantName != null ? voiceAssistantName : "Assistant"; }
     public void setVoiceAssistantName(String voiceAssistantName) { this.voiceAssistantName = voiceAssistantName; }
 
     public User.PlanType getPlanType() { return planType; }

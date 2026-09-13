@@ -53,9 +53,8 @@ public class VoiceConfigService {
             config.setPersonaPrompt(sanitize(dto.getPersonaPrompt()));
         }
         if (dto.getTtsVoiceId() != null && !dto.getTtsVoiceId().isBlank()) {
-            // Whitelist only known Deepgram Aura voice IDs for security
             String voiceId = sanitize(dto.getTtsVoiceId());
-            if (voiceId.matches("aura-[a-z]+-en")) {
+            if (voiceId.matches("^[a-zA-Z0-9-]+$")) {
                 config.setTtsVoiceId(voiceId);
             } else {
                 log.warn("[VoiceConfig] Rejected unknown ttsVoiceId='{}' for tenant={}", voiceId, tenant.getId());
@@ -80,7 +79,7 @@ public class VoiceConfigService {
         config.setAssistantName("Assistant");
         config.setGreetingText("Hello! How can I help you today?");
         config.setPersonaPrompt("You are a helpful, professional AI voice assistant.");
-        config.setTtsVoiceId("aura-asteria-en"); // default female voice
+        config.setTtsVoiceId("simran"); // default female voice
         config.setEnabled(true);
         config.setUpdatedBy(authenticatedUser);
 
@@ -102,7 +101,7 @@ public class VoiceConfigService {
                 .assistantName("Assistant")
                 .greetingText("Hello! How can I help you today?")
                 .personaPrompt("You are a helpful, professional AI voice assistant.")
-                .ttsVoiceId("aura-asteria-en")
+                .ttsVoiceId("simran")
                 .enabled(true)
                 .version(0L)
                 .updatedBy(createdBy)
@@ -122,7 +121,7 @@ public class VoiceConfigService {
                 .assistantName(config.getAssistantName())
                 .greetingText(config.getGreetingText())
                 .personaPrompt(config.getPersonaPrompt())
-                .ttsVoiceId(config.getTtsVoiceId() != null ? config.getTtsVoiceId() : "aura-asteria-en")
+                .ttsVoiceId(config.getTtsVoiceId() != null ? config.getTtsVoiceId() : "simran")
                 .enabled(config.getEnabled())
                 .version(config.getVersion())
                 .updatedAt(config.getUpdatedAt())

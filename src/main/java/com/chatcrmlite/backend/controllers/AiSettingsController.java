@@ -157,7 +157,7 @@ public class AiSettingsController {
         }
 
         String voicePrompt = body.getOrDefault("voicePersonaPrompt", "");
-        String assistantName = body.getOrDefault("voiceAssistantName", "Priya");
+        String assistantName = body.getOrDefault("voiceAssistantName", "Assistant");
 
         if (voicePrompt.length() > 4000) {
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
@@ -165,7 +165,7 @@ public class AiSettingsController {
         }
 
         tenant.setVoicePersonaPrompt(voicePrompt.isBlank() ? null : voicePrompt.trim());
-        tenant.setVoiceAssistantName(assistantName.isBlank() ? "Priya" : assistantName.trim());
+        tenant.setVoiceAssistantName(assistantName.isBlank() ? "Assistant" : assistantName.trim());
         tenantRepository.save(tenant);
 
         log.info("[AiSettings] Voice persona updated for tenant {} by user {}", tenant.getId(), user.getEmail());

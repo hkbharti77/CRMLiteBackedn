@@ -214,9 +214,15 @@ public class VoiceSessionService {
             com.chatcrmlite.backend.models.voice.VoiceAssistantConfig voiceConfig = (business.getTenant() != null)
                     ? voiceConfigRepository.findByTenantId(business.getTenant().getId()).orElse(null)
                     : null;
-            String systemPrompt = (voiceConfig != null && voiceConfig.getPersonaPrompt() != null && !voiceConfig.getPersonaPrompt().isBlank())
+            String basePrompt = (voiceConfig != null && voiceConfig.getPersonaPrompt() != null && !voiceConfig.getPersonaPrompt().isBlank())
                     ? voiceConfig.getPersonaPrompt()
                     : "You are a helpful, professional AI voice assistant for " + business.getDisplayName() + ". Keep answers short and conversational.";
+            
+            String assistantName = (voiceConfig != null && voiceConfig.getAssistantName() != null && !voiceConfig.getAssistantName().isBlank())
+                    ? voiceConfig.getAssistantName()
+                    : "Assistant";
+                    
+            String systemPrompt = "CRITICAL INSTRUCTION: Your true name is " + assistantName + ". Ignore any other names that might appear in the chat history.\n\n" + basePrompt;
 
             List<ChatMessage> previousMessages = new ArrayList<>();
             try {
@@ -266,11 +272,23 @@ public class VoiceSessionService {
 
         if ("sarvam".equalsIgnoreCase(ttsProvider)) {
             // Use Sarvam AI TTS (Map detected language to Sarvam code)
+            // Use the exact configured Sarvam speaker ID
             String targetLangCode = "en-IN";
             if ("hi".equals(languageMode) || "hinglish".equals(languageMode)) targetLangCode = "hi-IN";
             else if ("gu".equals(languageMode)) targetLangCode = "gu-IN";
+
+            String speakerId = session.getVoiceId();
+            if (speakerId == null || speakerId.isBlank() || speakerId.startsWith("aura-")) {
+                speakerId = "simran"; // Safe default if unset or old Deepgram ID is found
+            } else if (speakerId.equals("arvind")) {
+                speakerId = "rahul"; // Map old invalid arvind to rahul
+            } else if (speakerId.equals("amartya")) {
+                speakerId = "rohan"; // Map old invalid amartya to rohan
+            } else if (speakerId.equals("shikha") || speakerId.equals("aarti")) {
+                speakerId = "neha"; // Map old invalid females
+            }
             
-            speechAudio = sarvamVoiceService.synthesizeSpeech(speakableText, targetLangCode, null);
+            speechAudio = sarvamVoiceService.synthesizeSpeech(speakableText, targetLangCode, speakerId);
         } else if ("ttsfree".equalsIgnoreCase(ttsProvider)) {
             // Use TTSFree API
             String ttsFreeLang = "English";
