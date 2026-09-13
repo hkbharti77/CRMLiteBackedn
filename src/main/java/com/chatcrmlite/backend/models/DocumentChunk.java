@@ -19,7 +19,7 @@ public class DocumentChunk {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", referencedColumnName = "id", insertable = false, updatable = false)
-    private User tenant;
+    private Tenant tenant;
 
     @Column(name = "tenant_id", nullable = false)
     private UUID tenantId;
@@ -40,7 +40,7 @@ public class DocumentChunk {
 
     public DocumentChunk() {}
 
-    public DocumentChunk(UUID id, UUID documentId, User tenant, UUID tenantId, String content, String contentHash, String embedding, Map<String, Object> metadata) {
+    public DocumentChunk(UUID id, UUID documentId, Tenant tenant, UUID tenantId, String content, String contentHash, String embedding, Map<String, Object> metadata) {
         this.id = id;
         this.documentId = documentId;
         this.tenant = tenant;
@@ -55,8 +55,8 @@ public class DocumentChunk {
     public void setId(UUID id) { this.id = id; }
     public UUID getDocumentId() { return documentId; }
     public void setDocumentId(UUID documentId) { this.documentId = documentId; }
-    public User getTenant() { return tenant; }
-    public void setTenant(User tenant) { this.tenant = tenant; }
+    public Tenant getTenant() { return tenant; }
+    public void setTenant(Tenant tenant) { this.tenant = tenant; }
     public UUID getTenantId() { return tenantId; }
     public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
     public String getContent() { return content; }
@@ -75,7 +75,7 @@ public class DocumentChunk {
     public static class DocumentChunkBuilder {
         private UUID id;
         private UUID documentId;
-        private User tenant;
+        private Tenant tenant;
         private UUID tenantId;
         private String content;
         private String contentHash;
@@ -84,7 +84,7 @@ public class DocumentChunk {
 
         public DocumentChunkBuilder id(UUID id) { this.id = id; return this; }
         public DocumentChunkBuilder documentId(UUID documentId) { this.documentId = documentId; return this; }
-        public DocumentChunkBuilder tenant(User tenant) { this.tenant = tenant; return this; }
+        public DocumentChunkBuilder tenant(Tenant tenant) { this.tenant = tenant; return this; }
         public DocumentChunkBuilder tenantId(UUID tenantId) { this.tenantId = tenantId; return this; }
         public DocumentChunkBuilder content(String content) { this.content = content; return this; }
         public DocumentChunkBuilder contentHash(String contentHash) { this.contentHash = contentHash; return this; }
