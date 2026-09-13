@@ -804,5 +804,20 @@ public class EmailService {
 
         sendTemplate(toEmail, "[" + BRAND + "] Subscription Receipt: " + planName, "plan-purchase-invoice", ctx);
     }
+
+    /**
+     * Send receipt email for Contact Us submissions
+     */
+    public void sendContactUsReceiptEmail(String toEmail, String userName, String businessName) {
+        Context ctx = new Context();
+        ctx.setVariable("heading", "We received your request");
+        ctx.setVariable("greeting", "Hi " + (userName != null && !userName.isEmpty() ? userName : "there") + ",");
+        ctx.setVariable("intro", "Thank you for reaching out to " + (businessName != null ? businessName : platformBrandName) + ". We have received your inquiry and our team will get back to you shortly.");
+        ctx.setVariable("footerNote", "This is an automated receipt confirming we have your request.");
+        ctx.setVariable("ctaLabel", "Visit our Website");
+        ctx.setVariable("ctaUrl", platformBrandUrl);
+        
+        sendTemplate(toEmail, "We received your inquiry", "lead-enquiry-received", ctx);
+    }
 }
 
