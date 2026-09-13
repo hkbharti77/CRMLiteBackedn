@@ -176,4 +176,66 @@ public class AiSettingsController {
         response.put("voiceAssistantName", tenant.getVoiceAssistantName());
         return ResponseEntity.ok(response);
     }
+
+    // ─── GET  /api/v1/settings/ai/lead-emails ─────────────────────────────────
+    /**
+     * Returns this tenant's lead notification email templates.
+     * Null values mean the system will use the built-in hardcoded defaults.
+     */
+    @GetMapping("/lead-emails")
+    public ResponseEntity<Map<String, Object>> getLeadEmails(@AuthenticationPrincipal String email) {
+        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Tenant tenant = user.getTenant();
+        if (tenant == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("leadCustomerEmailSubject", tenant.getLeadCustomerEmailSubject());
+        response.put("leadCustomerEmailBody",    tenant.getLeadCustomerEmailBody());
+        response.put("availablePlaceholders",    java.util.List.of(
+            "{{contactName}}", "{{businessName}}", "{{enquiryMessage}}", "{{contactEmail}}", "{{ownerName}}"
+        ));
+        return ResponseEntity.ok(response);
+    }
+
+    // ─── PUT  /api/v1/settings/ai/lead-emails ─────────────────────────────────
+    /**
+     * Allows OWNER or ADMIN to customise the lead customer notification email for their tenant.
+     * Send null or blank to revert a field back to the system default.
+     */
+    @PutMapping("/lead-emails")
+    public ResponseEntity<Map<String, Object>> updateLeadEmails(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> body) {
+
+        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (user.getRole() != User.Role.OWNER && user.getRole() != User.Role.ADMIN && user.getRole() != User.Role.SUPER_ADMIN) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of("error", "Only owners or admins can modify lead email settings."));
+        }
+
+        Tenant tenant = user.getTenant();
+        if (tenant == null) return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
+        String custSubject = body.get("leadCustomerEmailSubject");
+        String custBody    = body.get("leadCustomerEmailBody");
+
+        tenant.setLeadCustomerEmailSubject(custSubject == null || custSubject.isBlank() ? null : custSubject.trim());
+        tenant.setLeadCustomerEmailBody(   custBody    == null || custBody.isBlank()    ? null : custBody.trim());
+
+        tenantRepository.save(tenant);
+        log.info("[AiSettings] Customer lead email template updated for tenant {} by user {}", tenant.getId(), user.getEmail());
+
+        Map<String, Object> response = new HashMap<>();
+        response.put("message", "Lead customer email template updated successfully.");
+        response.put("leadCustomerEmailSubject", tenant.getLeadCustomerEmailSubject());
+        response.put("leadCustomerEmailBody",    tenant.getLeadCustomerEmailBody());
+        return ResponseEntity.ok(response);
+    }
 }

@@ -180,10 +180,10 @@
               Hi there,
             </p>
 
-            <!-- Intro text -->
-            <p class="text-muted" th:if="${intro != null and !#strings.isEmpty(intro)}" th:text="${intro}" style="color:#475569;margin:0 0 16px;font-size:14px;line-height:1.6;">
+            <!-- Intro text (Supports HTML & inline CSS) -->
+            <div class="text-muted" th:if="${intro != null and !#strings.isEmpty(intro)}" th:utext="${intro}" style="color:#475569;margin:0 0 16px;font-size:14px;line-height:1.6;">
               Introductory text explaining the event or notification.
-            </p>
+            </div>
 
           </td>
         </tr>

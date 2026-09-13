@@ -249,7 +249,6 @@ public class EmailService {
         MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
         // SECURITY: 'from' is injected from env — defaults to no-reply@gyanvaniai.online
         helper.setFrom(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
-        helper.setReplyTo(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
         
         if (to.contains(",")) {
             String[] emails = java.util.Arrays.stream(to.split(","))
@@ -461,6 +460,51 @@ public class EmailService {
         sendTemplate(ownerEmail, "[" + BRAND + "] New Enquiry from " + contactName,
                 "ticket-created-owner", ctx);   // reuses the owner notification layout
     }
+
+    /**
+     * Sends a CUSTOMER RECEIPT email using the tenant's own subject and body.
+     * The body is treated as plain text wrapped in the standard brand template.
+     */
+    public void sendLeadCreatedToContactDynamic(String toEmail, String contactName,
+            String businessName, String subject, String body, Tenant tenant) {
+        Context ctx = new Context();
+        injectBrandVariables(ctx, tenant);
+        ctx.setVariable("heading",        "Thank you for reaching out");
+        ctx.setVariable("greeting",       "Hi " + (contactName != null ? contactName : "there") + ",");
+        ctx.setVariable("intro",          body);
+        ctx.setVariable("footerNote",     "");
+        ctx.setVariable("ctaLabel",       null);
+        ctx.setVariable("ctaUrl",         null);
+        ctx.setVariable("contactName",    contactName);
+        ctx.setVariable("businessName",   businessName);
+        sendTemplate(toEmail, subject, "lead-enquiry-received", ctx);
+    }
+
+    /**
+     * Sends an OWNER ALERT email using the tenant's own subject and body.
+     * The body is treated as plain text wrapped in the standard brand template.
+     */
+    public void sendNewLeadToOwnerDynamic(String ownerEmail, String ownerName,
+            String contactName, String contactEmail,
+            String subject, String body, Tenant tenant) {
+        Context ctx = new Context();
+        injectBrandVariables(ctx, tenant);
+        ctx.setVariable("heading",       "New Lead Received");
+        ctx.setVariable("greeting",      "Hi " + ownerName + ",");
+        ctx.setVariable("intro",         body);
+        ctx.setVariable("footerNote",    "Log in to your CRM to follow up.");
+        ctx.setVariable("ctaLabel",      "Open CRM");
+        ctx.setVariable("ctaUrl",        "#");
+        ctx.setVariable("ownerName",     ownerName);
+        ctx.setVariable("contactName",   contactName);
+        ctx.setVariable("customerEmail", contactEmail);
+        ctx.setVariable("description",   body);
+        ctx.setVariable("ticketNumber",  "");
+        ctx.setVariable("subject",       subject);
+        ctx.setVariable("priority",      "MEDIUM");
+        sendTemplate(ownerEmail, subject, "ticket-created-owner", ctx);
+    }
+
 
     public void sendLeadClosedWon(String toEmail, String contactName,
             String ownerBusinessName, String dealLabel) {
@@ -739,7 +783,6 @@ public class EmailService {
             MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, true, "UTF-8");
             
             helper.setFrom(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
-            helper.setReplyTo(new jakarta.mail.internet.InternetAddress(from, BRAND, "UTF-8"));
             helper.setTo(toEmail);
             helper.setSubject("Payment Request - " + BRAND);
             

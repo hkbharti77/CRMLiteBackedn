@@ -52,6 +52,21 @@ public class Tenant implements Serializable {
     @Column(name = "email_footer_text", columnDefinition = "TEXT")
     private String emailFooterText;
 
+    // ── Per-tenant Lead Notification Email Templates ──────────────────────────
+    // Supports placeholders: {{contactName}}, {{businessName}}, {{enquiryMessage}}, {{contactEmail}}, {{ownerName}}
+
+    @Column(name = "lead_customer_email_subject", columnDefinition = "TEXT")
+    private String leadCustomerEmailSubject;
+
+    @Column(name = "lead_customer_email_body", columnDefinition = "TEXT")
+    private String leadCustomerEmailBody;
+
+    @Column(name = "lead_owner_email_subject", columnDefinition = "TEXT")
+    private String leadOwnerEmailSubject;
+
+    @Column(name = "lead_owner_email_body", columnDefinition = "TEXT")
+    private String leadOwnerEmailBody;
+
     @Size(max = 4000)
     @Column(name = "ai_persona_prompt", columnDefinition = "TEXT")
     private String aiPersonaPrompt;
@@ -205,6 +220,18 @@ public class Tenant implements Serializable {
 
     public String getEmailFooterText() { return emailFooterText; }
     public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+
+    public String getLeadCustomerEmailSubject() { return leadCustomerEmailSubject; }
+    public void setLeadCustomerEmailSubject(String s) { this.leadCustomerEmailSubject = s; }
+
+    public String getLeadCustomerEmailBody() { return leadCustomerEmailBody; }
+    public void setLeadCustomerEmailBody(String s) { this.leadCustomerEmailBody = s; }
+
+    public String getLeadOwnerEmailSubject() { return leadOwnerEmailSubject; }
+    public void setLeadOwnerEmailSubject(String s) { this.leadOwnerEmailSubject = s; }
+
+    public String getLeadOwnerEmailBody() { return leadOwnerEmailBody; }
+    public void setLeadOwnerEmailBody(String s) { this.leadOwnerEmailBody = s; }
 
     public String getAiPersonaPrompt() { return aiPersonaPrompt; }
     public void setAiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; }

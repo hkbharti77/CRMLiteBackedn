@@ -217,15 +217,31 @@ public class EmailNotificationListener {
         if (toEmail != null && !toEmail.isBlank()) {
             String businessName = lead.getOwner() != null ? displayName(lead.getOwner()) : "our team";
             log.info("[EmailListener] Sending lead enquiry email to {} for lead={}", toEmail, lead.getId());
-            emailService.sendLeadCreatedToContact(toEmail, contactName, businessName, enquiryMessage);
+
+            Tenant tenant = lead.getTenant();
+            String custSubject = resolvePlaceholders(
+                    tenant != null ? tenant.getLeadCustomerEmailSubject() : null,
+                    contactName, businessName, enquiryMessage, toEmail, null);
+            String custBody = resolvePlaceholders(
+                    tenant != null ? tenant.getLeadCustomerEmailBody() : null,
+                    contactName, businessName, enquiryMessage, toEmail, null);
+
+            if (custSubject != null && custBody != null) {
+                // Use tenant-configured template wrapped in brand layout
+                emailService.sendLeadCreatedToContactDynamic(toEmail, contactName, businessName, custSubject, custBody, tenant);
+            } else {
+                // Fallback to system default
+                emailService.sendLeadCreatedToContact(toEmail, contactName, businessName, enquiryMessage);
+            }
         }
 
-        // Always notify the owner
+        // Always notify the owner (using standard system template)
         if (lead.getOwner() != null && lead.getOwner().getEmail() != null) {
             String ownerEmail = lead.getOwner().getEmail();
-            String ownerName = displayName(lead.getOwner());
+            String ownerName  = displayName(lead.getOwner());
             String contactEmail = toEmail != null ? toEmail : "";
             log.info("[EmailListener] Sending new lead notification to owner {}", ownerEmail);
+
             emailService.sendNewLeadToOwner(ownerEmail, ownerName, contactName, contactEmail,
                     enquiryMessage, event.getSource());
         }
@@ -391,6 +407,23 @@ public class EmailNotificationListener {
         return user.getDisplayName() != null && !user.getDisplayName().isBlank()
                 ? user.getDisplayName()
                 : user.getEmail();
+    }
+
+    /**
+     * Replaces {{placeholders}} in tenant-configured email templates.
+     * Returns null if the template string is null or blank (signals caller to use system default).
+     */
+    private String resolvePlaceholders(String template,
+                                       String contactName, String businessName,
+                                       String enquiryMessage, String contactEmail,
+                                       String ownerName) {
+        if (template == null || template.isBlank()) return null;
+        return template
+                .replace("{{contactName}}",    contactName   != null ? contactName   : "")
+                .replace("{{businessName}}",   businessName  != null ? businessName  : "")
+                .replace("{{enquiryMessage}}", enquiryMessage != null ? enquiryMessage : "")
+                .replace("{{contactEmail}}",   contactEmail  != null ? contactEmail  : "")
+                .replace("{{ownerName}}",      ownerName     != null ? ownerName     : "");
     }
 
     private String resolveEmail(Contact contact, String collectedDataJson) {
