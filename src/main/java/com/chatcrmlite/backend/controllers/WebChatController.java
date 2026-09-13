@@ -10,9 +10,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/api/v1/webchat")
@@ -31,9 +30,31 @@ public class WebChatController {
     }
 
     @GetMapping("/sessions")
-    public ResponseEntity<List<WebChatSession>> getAllSessions() {
+    public ResponseEntity<List<Map<String, Object>>> getAllSessions() {
         User owner = getAuthenticatedUser();
-        return ResponseEntity.ok(webChatService.getAllSessions(owner));
+        List<WebChatSession> sessions = webChatService.getAllSessions(owner);
+
+        List<Map<String, Object>> result = sessions.stream().map(s -> {
+            Map<String, Object> map = new HashMap<>();
+            map.put("id", s.getId().toString());
+            map.put("sessionId", s.getSessionId());
+            map.put("createdAt", s.getCreatedAt());
+            map.put("updatedAt", s.getUpdatedAt());
+            map.put("status", s.getStatus());
+
+            Optional<WebChatMessage> lastMsgOpt = webChatService.getLastMessage(s);
+            if (lastMsgOpt.isPresent()) {
+                WebChatMessage lastMsg = lastMsgOpt.get();
+                map.put("lastMessage", lastMsg.getContent());
+                map.put("lastMessageSender", lastMsg.getSender().name());
+            } else {
+                map.put("lastMessage", "No messages yet");
+                map.put("lastMessageSender", "BOT");
+            }
+            return map;
+        }).collect(Collectors.toList());
+
+        return ResponseEntity.ok(result);
     }
 
     @GetMapping("/sessions/{id}")

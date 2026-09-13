@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import java.time.LocalDateTime;
 import com.chatcrmlite.backend.models.SessionStatus;
@@ -68,17 +69,14 @@ public class WebChatService {
             for (WebChatSession session : pendingSessions) {
                 // Send the interactive timeout message
                 String timeoutPrompt = "Would you like to connect with our team or ask another question?";
-                // Here we save a system message to the session so the web client displays the buttons
                 WebChatMessage msg = new WebChatMessage(session, WebChatMessage.Sender.BOT, timeoutPrompt);
-                // Note: The actual structured buttons payload would be handled by the frontend or 
-                // a structured message type if supported. Assuming text for now.
                 messageRepository.save(msg);
             }
         }
         
         // 2. Close hard timeouts (15 mins after pending timeout)
         LocalDateTime hardCloseCutoff = now.minusMinutes(15);
-        int closed = sessionRepository.closeHardTimeouts(hardCloseCutoff, now);
+        sessionRepository.closeHardTimeouts(hardCloseCutoff, now);
     }
 
     @Transactional(readOnly = true)
@@ -87,6 +85,11 @@ public class WebChatService {
             return sessionRepository.findByOwner_TenantOrderByUpdatedAtDesc(owner.getTenant());
         }
         return sessionRepository.findByOwnerOrderByUpdatedAtDesc(owner);
+    }
+
+    @Transactional(readOnly = true)
+    public Optional<WebChatMessage> getLastMessage(WebChatSession session) {
+        return messageRepository.findFirstBySessionOrderByCreatedAtDesc(session);
     }
 
     @Transactional(readOnly = true)
