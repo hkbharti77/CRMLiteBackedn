@@ -105,8 +105,8 @@ public class SpeechNormalizer {
         // 10. Strip emojis
         cleaned = EMOJI_PATTERN.matcher(cleaned).replaceAll("");
 
-        // 11. Remove dangling formatting symbols
-        cleaned = DANGLING_SYMBOLS.matcher(cleaned).replaceAll(" ");
+        // 11. Remove special symbols (like !, #, *, etc.) that TTS might mispronounce, keeping only letters, numbers, spaces, and basic punctuation
+        cleaned = cleaned.replaceAll("[^\\p{L}\\p{N}\\s.,?'-]", " ");
 
         // 12. Normalize newlines to sentence pauses (. )
         cleaned = MULTI_NEWLINE_PATTERN.matcher(cleaned).replaceAll(". ");

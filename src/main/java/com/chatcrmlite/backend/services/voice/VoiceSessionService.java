@@ -222,7 +222,9 @@ public class VoiceSessionService {
                     ? voiceConfig.getAssistantName()
                     : "Assistant";
                     
-            String systemPrompt = "CRITICAL INSTRUCTION: Your true name is " + assistantName + ". Ignore any other names that might appear in the chat history.\n\n" + basePrompt;
+            String systemPrompt = "CRITICAL INSTRUCTION: Your true name is " + assistantName + ". Ignore any other names that might appear in the chat history.\n"
+                    + "CRITICAL INSTRUCTION: Do NOT use exclamation marks (!) or complex formatting symbols. Keep the text clean for text-to-speech synthesis.\n\n"
+                    + basePrompt;
 
             List<ChatMessage> previousMessages = new ArrayList<>();
             try {

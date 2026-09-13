@@ -111,6 +111,7 @@ public class UserController {
                 if (request.getLongitude() != null) tenant.setLongitude(request.getLongitude());
                 if (request.getLogoUrl() != null) tenant.setLogoUrl(request.getLogoUrl());
                 if (request.getWidgetIconUrl() != null) tenant.setWidgetIconUrl(request.getWidgetIconUrl());
+                if (request.getWidgetBaseUrl() != null) tenant.setWidgetBaseUrl(request.getWidgetBaseUrl());
                 if (request.getPrimaryColor() != null) tenant.setPrimaryColor(request.getPrimaryColor());
                 if (request.getSecondaryColor() != null) tenant.setSecondaryColor(request.getSecondaryColor());
                 if (request.getCountry() != null) tenant.setCountry(request.getCountry());
@@ -747,6 +748,7 @@ public class UserController {
         private Double longitude;
         private String logoUrl;
         private String widgetIconUrl;
+        private String widgetBaseUrl;
         private String primaryColor;
         private String secondaryColor;
         private String country;
@@ -783,6 +785,8 @@ public class UserController {
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
         public String getWidgetIconUrl() { return widgetIconUrl; }
         public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
+        public String getWidgetBaseUrl() { return widgetBaseUrl; }
+        public void setWidgetBaseUrl(String widgetBaseUrl) { this.widgetBaseUrl = widgetBaseUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
@@ -826,6 +830,7 @@ public class UserController {
         private Double longitude;
         private String logoUrl;
         private String widgetIconUrl;
+        private String widgetBaseUrl;
         private String primaryColor;
         private String secondaryColor;
         private String country;
@@ -870,6 +875,8 @@ public class UserController {
         public void setLogoUrl(String logoUrl) { this.logoUrl = logoUrl; }
         public String getWidgetIconUrl() { return widgetIconUrl; }
         public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
+        public String getWidgetBaseUrl() { return widgetBaseUrl; }
+        public void setWidgetBaseUrl(String widgetBaseUrl) { this.widgetBaseUrl = widgetBaseUrl; }
         public String getPrimaryColor() { return primaryColor; }
         public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
         public String getSecondaryColor() { return secondaryColor; }
@@ -923,6 +930,7 @@ public class UserController {
             dto.setLongitude(user.getLongitude());
             dto.setLogoUrl(user.getLogoUrl());
             dto.setWidgetIconUrl(user.getWidgetIconUrl());
+            dto.setWidgetBaseUrl(user.getTenant() != null ? user.getTenant().getWidgetBaseUrl() : null);
             dto.setPrimaryColor(user.getTenant() != null ? user.getTenant().getPrimaryColor() : null);
             dto.setSecondaryColor(user.getTenant() != null ? user.getTenant().getSecondaryColor() : null);
             dto.setCountry(user.getTenant() != null ? user.getTenant().getCountry() : "IN");

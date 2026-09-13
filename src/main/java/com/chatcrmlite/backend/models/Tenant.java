@@ -37,6 +37,9 @@ public class Tenant implements Serializable {
     @Column(name = "widget_icon_url", columnDefinition = "TEXT")
     private String widgetIconUrl;
 
+    @Column(name = "widget_base_url")
+    private String widgetBaseUrl;
+
     @Column(name = "primary_color", length = 20)
     private String primaryColor;
 
@@ -187,6 +190,9 @@ public class Tenant implements Serializable {
 
     public String getWidgetIconUrl() { return widgetIconUrl; }
     public void setWidgetIconUrl(String widgetIconUrl) { this.widgetIconUrl = widgetIconUrl; }
+
+    public String getWidgetBaseUrl() { return widgetBaseUrl; }
+    public void setWidgetBaseUrl(String widgetBaseUrl) { this.widgetBaseUrl = widgetBaseUrl; }
 
     public String getPrimaryColor() { return primaryColor; }
     public void setPrimaryColor(String primaryColor) { this.primaryColor = primaryColor; }
