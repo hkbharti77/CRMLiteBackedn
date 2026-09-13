@@ -390,12 +390,27 @@ public class VoiceSessionService {
             }
         }
 
+        // Resolve the admin-configured TTS voice for this tenant
+        String resolvedVoiceId = defaultTtsModel;
+        if (business.getTenant() != null) {
+            try {
+                resolvedVoiceId = voiceConfigRepository.findByTenantId(business.getTenant().getId())
+                        .map(cfg -> (cfg.getTtsVoiceId() != null && !cfg.getTtsVoiceId().isBlank())
+                                ? cfg.getTtsVoiceId()
+                                : defaultTtsModel)
+                        .orElse(defaultTtsModel);
+            } catch (Exception e) {
+                log.warn("[VoiceSessionService] Could not resolve ttsVoiceId for tenant={}, using default: {}",
+                        business.getTenant().getId(), e.getMessage());
+            }
+        }
+
         VoiceSession session = new VoiceSession();
         session.setBusiness(business);
         session.setTenant(business.getTenant());
         session.setVisitorId(visitorId != null ? visitorId : "web_" + UUID.randomUUID());
         session.setStatus(VoiceSession.VoiceSessionStatus.ACTIVE);
-        session.setVoiceId(defaultTtsModel != null && !defaultTtsModel.isBlank() ? defaultTtsModel : "deepgram/flux-tts:free");
+        session.setVoiceId(resolvedVoiceId);
         session.setStartedAt(LocalDateTime.now());
         return sessionRepository.save(session);
     }

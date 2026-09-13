@@ -27,6 +27,9 @@ public class VoiceAssistantConfigDTO implements Serializable {
     @Size(max = 5000, message = "Persona prompt must be at most 5000 characters")
     private String personaPrompt;
 
+    @Size(max = 100, message = "TTS voice ID must be at most 100 characters")
+    private String ttsVoiceId; // e.g. "aura-asteria-en" (female) or "aura-arcas-en" (male)
+
     private Boolean enabled;
     private Long version;
     private LocalDateTime updatedAt;

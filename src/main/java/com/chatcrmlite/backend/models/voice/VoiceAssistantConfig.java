@@ -43,6 +43,15 @@ public class VoiceAssistantConfig implements Serializable {
     @Column(name = "persona_prompt", nullable = false, columnDefinition = "TEXT")
     private String personaPrompt = "You are a helpful, professional AI voice assistant.";
 
+    /**
+     * Deepgram Aura voice model ID selected by the admin.
+     * Examples: "aura-asteria-en" (female), "aura-arcas-en" (male).
+     * Defaults to Asteria (female) if not set.
+     */
+    @Builder.Default
+    @Column(name = "tts_voice_id", length = 100)
+    private String ttsVoiceId = "aura-asteria-en";
+
     @Builder.Default
     @Column(nullable = false)
     private Boolean enabled = true;
@@ -69,6 +78,7 @@ public class VoiceAssistantConfig implements Serializable {
         if (assistantName == null || assistantName.isBlank()) assistantName = "Assistant";
         if (greetingText == null || greetingText.isBlank()) greetingText = "Hello! How can I help you today?";
         if (personaPrompt == null || personaPrompt.isBlank()) personaPrompt = "You are a helpful, professional AI voice assistant.";
+        if (ttsVoiceId == null || ttsVoiceId.isBlank()) ttsVoiceId = "aura-asteria-en";
         if (enabled == null) enabled = true;
         if (version == null) version = 0L;
     }

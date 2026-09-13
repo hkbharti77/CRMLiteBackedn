@@ -52,6 +52,15 @@ public class VoiceConfigService {
         if (dto.getPersonaPrompt() != null) {
             config.setPersonaPrompt(sanitize(dto.getPersonaPrompt()));
         }
+        if (dto.getTtsVoiceId() != null && !dto.getTtsVoiceId().isBlank()) {
+            // Whitelist only known Deepgram Aura voice IDs for security
+            String voiceId = sanitize(dto.getTtsVoiceId());
+            if (voiceId.matches("aura-[a-z]+-en")) {
+                config.setTtsVoiceId(voiceId);
+            } else {
+                log.warn("[VoiceConfig] Rejected unknown ttsVoiceId='{}' for tenant={}", voiceId, tenant.getId());
+            }
+        }
         if (dto.getEnabled() != null) {
             config.setEnabled(dto.getEnabled());
         }
@@ -71,6 +80,7 @@ public class VoiceConfigService {
         config.setAssistantName("Assistant");
         config.setGreetingText("Hello! How can I help you today?");
         config.setPersonaPrompt("You are a helpful, professional AI voice assistant.");
+        config.setTtsVoiceId("aura-asteria-en"); // default female voice
         config.setEnabled(true);
         config.setUpdatedBy(authenticatedUser);
 
@@ -92,6 +102,7 @@ public class VoiceConfigService {
                 .assistantName("Assistant")
                 .greetingText("Hello! How can I help you today?")
                 .personaPrompt("You are a helpful, professional AI voice assistant.")
+                .ttsVoiceId("aura-asteria-en")
                 .enabled(true)
                 .version(0L)
                 .updatedBy(createdBy)
@@ -111,6 +122,7 @@ public class VoiceConfigService {
                 .assistantName(config.getAssistantName())
                 .greetingText(config.getGreetingText())
                 .personaPrompt(config.getPersonaPrompt())
+                .ttsVoiceId(config.getTtsVoiceId() != null ? config.getTtsVoiceId() : "aura-asteria-en")
                 .enabled(config.getEnabled())
                 .version(config.getVersion())
                 .updatedAt(config.getUpdatedAt())

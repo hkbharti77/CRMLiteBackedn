@@ -51,13 +51,20 @@ public class ConversationOrchestrator {
         }
 
         if (tools != null && !tools.isEmpty()) {
-            fullSystemPrompt.append("--- INSTRUCTIONS FOR DYNAMIC VOICE FORMS & INTENT ROUTING ---\n")
-                    .append("1. INTENT MATCHING: Identify if the user wants to enquire/leave details (lead), book an appointment, make a reservation, or file a support ticket.\n")
-                    .append("2. CONVERSATIONAL SLOT FILLING: Look at the required parameters for the corresponding tool specification.\n")
-                    .append("   - If any required field is missing in conversation memory, ask the caller for it conversationally (ask 1-2 questions at a time).\n")
-                    .append("   - Keep asking naturally until all required parameters are collected.\n")
-                    .append("3. AUTOMATIC TOOL EXECUTION: Once all required fields are collected, call the matching tool immediately and summarize the outcome to the caller verbally.\n")
-                    .append("4. IMPORTANT VOICE RULE: Never say or read out lead numbers, ticket IDs, or internal reference numbers to the caller. Simply tell them that their enquiry, demo request, or ticket has been submitted successfully.\n");
+            fullSystemPrompt.append("--- INSTRUCTIONS FOR TOOL USE & INTENT ROUTING ---\n")
+                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details (name, email, etc.) unless the user has clearly and explicitly expressed one of the specific intents below.\n\n")
+                    .append("TOOL TRIGGER — only activate a tool flow when the user EXPLICITLY:\n")
+                    .append("  - Wants to leave their details / request a callback / submit an enquiry → use create_lead\n")
+                    .append("  - Wants to book an appointment → use book_appointment\n")
+                    .append("  - Wants to make a reservation or booking → use create_booking\n")
+                    .append("  - Has a problem, complaint, or needs support → use submit_support_ticket\n\n")
+                    .append("WHEN a tool IS triggered:\n")
+                    .append("  - Look at that tool's required parameters and collect them conversationally (1-2 fields at a time).\n")
+                    .append("  - Once ALL required fields are collected, call the tool immediately.\n")
+                    .append("  - Confirm success to the caller in plain language; never read out IDs or reference numbers.\n\n")
+                    .append("WHEN no tool intent is detected:\n")
+                    .append("  - Simply answer the user's question conversationally. Do not ask for their name, email, or any personal details.\n")
+                    .append("  - Keep replies short and voice-friendly.\n");
         }
 
         List<ChatMessage> messages = new ArrayList<>();
