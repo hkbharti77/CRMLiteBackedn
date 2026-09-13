@@ -218,6 +218,7 @@ public class EmailNotificationListener {
             String businessName = lead.getOwner() != null ? displayName(lead.getOwner()) : "our team";
             log.info("[EmailListener] Sending lead enquiry email to {} for lead={}", toEmail, lead.getId());
 
+            Tenant tenant = lead.getTenant();
             String ownerName = lead.getOwner() != null ? displayName(lead.getOwner()) : "our team";
             String custSubject = resolvePlaceholders(
                     tenant != null ? tenant.getLeadCustomerEmailSubject() : null,
