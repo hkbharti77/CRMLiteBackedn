@@ -373,8 +373,8 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.chatcrmlite.backend.ChatCrmBackendApplication</mainClass>
-          <!-- Java 25+: silence Tomcat native-access + OpenTelemetry Unsafe warnings -->
-          <jvmArguments>--enable-native-access=ALL-UNNAMED --sun-misc-unsafe-memory-access=allow</jvmArguments>
+          <!-- Java 21+ silence Tomcat native-access warnings -->
+          <jvmArguments>--enable-native-access=ALL-UNNAMED</jvmArguments>
           <excludes>
             <exclude>
               <groupId>org.projectlombok</groupId>

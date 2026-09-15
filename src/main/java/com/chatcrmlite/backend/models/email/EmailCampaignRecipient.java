@@ -61,6 +61,19 @@ public class EmailCampaignRecipient extends BaseTenantEntity {
     @Column(name = "bounce_type")
     private BounceType bounceType;
 
+    @Column(name = "reply_token", unique = true, nullable = false)
+    private String replyToken;
+
+    @Column(name = "last_message_id")
+    private String lastMessageId;
+
+    @Column(name = "replied_at")
+    private java.time.Instant repliedAt;
+
+    @Builder.Default
+    @Column(name = "reply_count", nullable = false)
+    private int replyCount = 0;
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
@@ -73,6 +86,11 @@ public class EmailCampaignRecipient extends BaseTenantEntity {
         }
         if (this.trackingToken == null || this.trackingToken.isBlank()) {
             this.trackingToken = UUID.randomUUID().toString();
+        }
+        if (this.replyToken == null || this.replyToken.isBlank()) {
+            byte[] randomBytes = new byte[24];
+            new java.security.SecureRandom().nextBytes(randomBytes);
+            this.replyToken = java.util.Base64.getUrlEncoder().withoutPadding().encodeToString(randomBytes);
         }
     }
 

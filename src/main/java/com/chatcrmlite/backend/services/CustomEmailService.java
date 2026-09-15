@@ -646,6 +646,14 @@ public class CustomEmailService {
                             recipient.setTrackingToken(trackingToken);
                         }
 
+                        if (recipient.getReplyToken() == null || recipient.getReplyToken().isBlank()) {
+                            recipient.setReplyToken(trackingService.generateTrackingToken());
+                        }
+
+                        if (recipient.getLastMessageId() == null || recipient.getLastMessageId().isBlank()) {
+                            recipient.setLastMessageId(UUID.randomUUID().toString() + "@gyanvaniai.online");
+                        }
+
                         Optional<Contact> cOpt = contactRepository.findFirstByEmailAndTenant_Id(recipient.getEmail(), tenantId);
                         String name = cOpt.map(Contact::getName).filter(n -> n != null && !n.isBlank())
                                 .orElseGet(() -> extractNameFromEmail(recipient.getEmail()));
@@ -657,7 +665,7 @@ public class CustomEmailService {
 
                         sendOne(recipient.getEmail(), subject, body,
                                 campaign.getCtaLabel(), campaign.getCtaUrl(), businessName,
-                                trackingToken, tenantId, campaignId);
+                                trackingToken, tenantId, campaignId, recipient.getReplyToken(), recipient.getLastMessageId());
 
                         recipient.setDeliveryStatus(DeliveryStatus.SENT);
                         recipient.setSentAt(LocalDateTime.now());
@@ -744,6 +752,13 @@ public class CustomEmailService {
     private void sendOne(String to, String subject, String body,
                          String ctaLabel, String ctaUrl, String businessName,
                          String trackingToken, UUID tenantId, UUID campaignId) throws Exception {
+        sendOne(to, subject, body, ctaLabel, ctaUrl, businessName, trackingToken, tenantId, campaignId, null, null);
+    }
+
+    private void sendOne(String to, String subject, String body,
+                         String ctaLabel, String ctaUrl, String businessName,
+                         String trackingToken, UUID tenantId, UUID campaignId,
+                         String replyToken, String lastMessageId) throws Exception {
         
         com.chatcrmlite.backend.models.Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
         String html;
@@ -756,10 +771,8 @@ public class CustomEmailService {
                 || trimmedBody.startsWith("<head") 
                 || trimmedBody.startsWith("<body");
 
-        // If the body is a raw HTML template from the Enterprise Builder, bypass Thymeleaf
         if (isRawHtml) {
             html = body;
-            // Inject CTA button if defined but missing from raw HTML
             if (ctaUrl != null && !ctaUrl.isBlank() && !html.contains(ctaUrl)) {
                 String btnText = (ctaLabel != null && !ctaLabel.isBlank()) ? ctaLabel : "View Offer";
                 String btnColor = (tenant != null && tenant.getPrimaryColor() != null && !tenant.getPrimaryColor().isBlank())
@@ -775,7 +788,6 @@ public class CustomEmailService {
                 }
             }
         } else {
-            // Use the marketing-specific custom-email template and inject brand variables
             Context ctx = new Context();
             ctx.setVariable("subject",      subject);
             ctx.setVariable("body",         body);
@@ -813,7 +825,18 @@ public class CustomEmailService {
             MimeMessage mime = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(mime, "UTF-8");
             helper.setFrom(new jakarta.mail.internet.InternetAddress(fromAddress, "GyanVaniAi", "UTF-8"));
-            helper.setReplyTo(new jakarta.mail.internet.InternetAddress(fromAddress, "GyanVaniAi", "UTF-8"));
+            
+            if (replyToken != null && !replyToken.isBlank()) {
+                String replyToAddress = "reply+" + replyToken + "@reply.gyanvaniai.online";
+                helper.setReplyTo(new jakarta.mail.internet.InternetAddress(replyToAddress, "GyanVaniAi", "UTF-8"));
+            } else {
+                helper.setReplyTo(new jakarta.mail.internet.InternetAddress(fromAddress, "GyanVaniAi", "UTF-8"));
+            }
+
+            if (lastMessageId != null && !lastMessageId.isBlank()) {
+                mime.addHeader("Message-ID", "<" + lastMessageId + ">");
+            }
+
             helper.setTo(to);
             helper.setSubject(subject);
             helper.setText(html, true);
@@ -838,7 +861,6 @@ public class CustomEmailService {
                 || trimmed.startsWith("<head") 
                 || trimmed.startsWith("<body");
 
-        // Strip dangerous script/iframe tags while preserving valid HTML & CSS
         String clean = raw
                 .replace("<script", "&lt;script")
                 .replace("</script", "&lt;/script")
@@ -846,7 +868,6 @@ public class CustomEmailService {
                 .replace("</iframe", "&lt;/iframe")
                 .replace("javascript:", "");
 
-        // Only convert newlines to <br> for plain-text / markdown inputs, NEVER for HTML documents!
         if (!isHtmlDocument) {
             clean = clean.replace("\r\n", "<br>").replace("\n", "<br>");
         }
@@ -905,28 +926,41 @@ public class CustomEmailService {
         return sb.toString().trim();
     }
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.email.EmailInboundMessageRepository inboundMessageRepository;
+
     public CustomEmailDTO toDTO(CustomEmail e) {
         long sentCount = 0;
         long uniqueOpens = 0;
         long uniqueClicks = 0;
         long bounces = 0;
         long unsubscribes = 0;
+        long uniqueReplied = 0;
+        long totalReplyMessages = 0;
         
         double openRate = 0;
         double clickRate = 0;
         double clickToOpenRate = 0;
         double bounceRate = 0;
         double unsubscribeRate = 0;
+        double replyRate = 0;
 
         if (e.getId() != null) {
             sentCount = recipientRepository.countByCampaignIdAndDeliveryStatusIn(
                 e.getId(), 
                 Arrays.asList(DeliveryStatus.SENT, DeliveryStatus.DELIVERED, DeliveryStatus.BOUNCED)
             );
+            long deliveredCount = recipientRepository.countByCampaignIdAndDeliveryStatus(e.getId(), DeliveryStatus.DELIVERED);
+            long effectiveDelivered = deliveredCount > 0 ? deliveredCount : sentCount;
+
             uniqueOpens = recipientRepository.countByCampaignIdAndFirstOpenedAtIsNotNull(e.getId());
             uniqueClicks = recipientRepository.countByCampaignIdAndFirstClickedAtIsNotNull(e.getId());
             bounces = recipientRepository.countByCampaignIdAndDeliveryStatus(e.getId(), DeliveryStatus.BOUNCED);
             unsubscribes = recipientRepository.countByCampaignIdAndUnsubscribedAtIsNotNull(e.getId());
+            uniqueReplied = recipientRepository.countByCampaignIdAndRepliedAtIsNotNull(e.getId());
+            if (inboundMessageRepository != null) {
+                totalReplyMessages = inboundMessageRepository.countByCampaignId(e.getId());
+            }
 
             if (sentCount > 0) {
                 openRate = (double) uniqueOpens / sentCount * 100.0;
@@ -937,6 +971,9 @@ public class CustomEmailService {
                 if (sentOrDelivered > 0) {
                     unsubscribeRate = (double) unsubscribes / sentOrDelivered * 100.0;
                 }
+            }
+            if (effectiveDelivered > 0) {
+                replyRate = (double) uniqueReplied / effectiveDelivered * 100.0;
             }
             if (uniqueOpens > 0) {
                 clickToOpenRate = (double) uniqueClicks / uniqueOpens * 100.0;
@@ -967,11 +1004,14 @@ public class CustomEmailService {
                 .uniqueClicks(uniqueClicks)
                 .bounces(bounces)
                 .unsubscribes(unsubscribes)
+                .uniqueRepliedCount(uniqueReplied)
+                .totalReplyMessagesCount(totalReplyMessages)
                 .openRate(Math.round(openRate * 100.0) / 100.0)
                 .clickRate(Math.round(clickRate * 100.0) / 100.0)
                 .clickToOpenRate(Math.round(clickToOpenRate * 100.0) / 100.0)
                 .bounceRate(Math.round(bounceRate * 100.0) / 100.0)
                 .unsubscribeRate(Math.round(unsubscribeRate * 100.0) / 100.0)
+                .replyRatePercentage(Math.round(replyRate * 100.0) / 100.0)
                 .createdAt(e.getCreatedAt())
                 .build();
     }

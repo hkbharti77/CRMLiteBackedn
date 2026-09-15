@@ -34,11 +34,14 @@ public class CustomEmailDTO {
     private long uniqueClicks;
     private long bounces;
     private long unsubscribes;
+    private long uniqueRepliedCount;
+    private long totalReplyMessagesCount;
     private double openRate;
     private double clickRate;
     private double clickToOpenRate;
     private double bounceRate;
     private double unsubscribeRate;
+    private double replyRatePercentage;
 
     private LocalDateTime createdAt;
 
@@ -132,6 +135,10 @@ public class CustomEmailDTO {
     public void setBounces(long bounces) { this.bounces = bounces; }
     public long getUnsubscribes() { return unsubscribes; }
     public void setUnsubscribes(long unsubscribes) { this.unsubscribes = unsubscribes; }
+    public long getUniqueRepliedCount() { return uniqueRepliedCount; }
+    public void setUniqueRepliedCount(long uniqueRepliedCount) { this.uniqueRepliedCount = uniqueRepliedCount; }
+    public long getTotalReplyMessagesCount() { return totalReplyMessagesCount; }
+    public void setTotalReplyMessagesCount(long totalReplyMessagesCount) { this.totalReplyMessagesCount = totalReplyMessagesCount; }
     public double getOpenRate() { return openRate; }
     public void setOpenRate(double openRate) { this.openRate = openRate; }
     public double getClickRate() { return clickRate; }
@@ -142,6 +149,8 @@ public class CustomEmailDTO {
     public void setBounceRate(double bounceRate) { this.bounceRate = bounceRate; }
     public double getUnsubscribeRate() { return unsubscribeRate; }
     public void setUnsubscribeRate(double unsubscribeRate) { this.unsubscribeRate = unsubscribeRate; }
+    public double getReplyRatePercentage() { return replyRatePercentage; }
+    public void setReplyRatePercentage(double replyRatePercentage) { this.replyRatePercentage = replyRatePercentage; }
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
@@ -174,11 +183,14 @@ public class CustomEmailDTO {
         private long uniqueClicks;
         private long bounces;
         private long unsubscribes;
+        private long uniqueRepliedCount;
+        private long totalReplyMessagesCount;
         private double openRate;
         private double clickRate;
         private double clickToOpenRate;
         private double bounceRate;
         private double unsubscribeRate;
+        private double replyRatePercentage;
         private LocalDateTime createdAt;
 
         public CustomEmailDTOBuilder id(UUID id) { this.id = id; return this; }
@@ -204,17 +216,51 @@ public class CustomEmailDTO {
         public CustomEmailDTOBuilder uniqueClicks(long uniqueClicks) { this.uniqueClicks = uniqueClicks; return this; }
         public CustomEmailDTOBuilder bounces(long bounces) { this.bounces = bounces; return this; }
         public CustomEmailDTOBuilder unsubscribes(long unsubscribes) { this.unsubscribes = unsubscribes; return this; }
+        public CustomEmailDTOBuilder uniqueRepliedCount(long uniqueRepliedCount) { this.uniqueRepliedCount = uniqueRepliedCount; return this; }
+        public CustomEmailDTOBuilder totalReplyMessagesCount(long totalReplyMessagesCount) { this.totalReplyMessagesCount = totalReplyMessagesCount; return this; }
         public CustomEmailDTOBuilder openRate(double openRate) { this.openRate = openRate; return this; }
         public CustomEmailDTOBuilder clickRate(double clickRate) { this.clickRate = clickRate; return this; }
         public CustomEmailDTOBuilder clickToOpenRate(double clickToOpenRate) { this.clickToOpenRate = clickToOpenRate; return this; }
         public CustomEmailDTOBuilder bounceRate(double bounceRate) { this.bounceRate = bounceRate; return this; }
         public CustomEmailDTOBuilder unsubscribeRate(double unsubscribeRate) { this.unsubscribeRate = unsubscribeRate; return this; }
+        public CustomEmailDTOBuilder replyRatePercentage(double replyRatePercentage) { this.replyRatePercentage = replyRatePercentage; return this; }
         public CustomEmailDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public CustomEmailDTO build() {
-            return new CustomEmailDTO(id, name, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
-                                      sentAt, scheduledAt, startedAt, completedAt, pausedAt, cancelledAt, totalRecipients, processedRecipients,
-                                      totalSent, totalFailed, uniqueOpens, uniqueClicks, bounces, unsubscribes, openRate, clickRate, clickToOpenRate, bounceRate, unsubscribeRate, createdAt);
+            CustomEmailDTO dto = new CustomEmailDTO();
+            dto.id = id;
+            dto.name = name;
+            dto.subject = subject;
+            dto.body = body;
+            dto.ctaLabel = ctaLabel;
+            dto.ctaUrl = ctaUrl;
+            dto.recipientMode = recipientMode;
+            dto.tagsFilter = tagsFilter;
+            dto.status = status;
+            dto.sentAt = sentAt;
+            dto.scheduledAt = scheduledAt;
+            dto.startedAt = startedAt;
+            dto.completedAt = completedAt;
+            dto.pausedAt = pausedAt;
+            dto.cancelledAt = cancelledAt;
+            dto.totalRecipients = totalRecipients;
+            dto.processedRecipients = processedRecipients;
+            dto.totalSent = totalSent;
+            dto.totalFailed = totalFailed;
+            dto.uniqueOpens = uniqueOpens;
+            dto.uniqueClicks = uniqueClicks;
+            dto.bounces = bounces;
+            dto.unsubscribes = unsubscribes;
+            dto.uniqueRepliedCount = uniqueRepliedCount;
+            dto.totalReplyMessagesCount = totalReplyMessagesCount;
+            dto.openRate = openRate;
+            dto.clickRate = clickRate;
+            dto.clickToOpenRate = clickToOpenRate;
+            dto.bounceRate = bounceRate;
+            dto.unsubscribeRate = unsubscribeRate;
+            dto.replyRatePercentage = replyRatePercentage;
+            dto.createdAt = createdAt;
+            return dto;
         }
     }
 }
