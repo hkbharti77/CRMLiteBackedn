@@ -27,7 +27,7 @@ public class FaqItem {
     @Column(columnDefinition = "TEXT")
     private String keywords;
 
-    @Column(name = "embedding", columnDefinition = "vector")
+    @Column(name = "embedding", columnDefinition = "vector(384)")
     @org.hibernate.annotations.ColumnTransformer(write = "?::vector", read = "embedding::text")
     private String embedding;
 
