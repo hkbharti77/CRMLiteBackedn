@@ -171,6 +171,8 @@ public class RagRetrievalService {
             return null;
         }
 
+        response = ChatResponseFormatter.forChatWidget(response);
+
         if (aiResponse.getTokensUsed() > 0) {
             int totalTokens = aiResponse.getTokensUsed();
             tokenBudgetService.recordTokenUsage(ownerUserId, totalTokens, 0);

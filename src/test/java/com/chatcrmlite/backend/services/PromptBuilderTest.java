@@ -62,6 +62,8 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("HAS_FEATURE"));
         assertTrue(prompt.contains("<SOURCES>"));
         assertTrue(prompt.contains("Do NOT invent entities"));
+        assertTrue(prompt.contains("NEVER use Markdown tables")
+                || prompt.contains("NEVER use Markdown tables (no | column |"));
     }
 
     @Test

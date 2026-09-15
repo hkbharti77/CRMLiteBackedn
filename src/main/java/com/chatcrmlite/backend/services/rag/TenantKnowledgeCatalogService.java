@@ -204,6 +204,7 @@ public class TenantKnowledgeCatalogService {
     }
 
     /** @deprecated Prefer {@link #matchCatalog}; kept for callers that want a flat hit list. */
+    @Deprecated
     public List<String> matchQueryTerms(String normalizedQuery, CatalogSnapshot catalog) {
         CatalogMatches m = matchCatalog(normalizedQuery, catalog);
         LinkedHashSet<String> hits = new LinkedHashSet<>();

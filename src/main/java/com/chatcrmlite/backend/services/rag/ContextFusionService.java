@@ -33,8 +33,8 @@ public class ContextFusionService {
     @Value("${rag.hybrid.graph-weight:0.4}")
     private double graphWeight;
 
-    private static final int MAX_VECTOR_LINES = 8;
-    private static final int MAX_GRAPH_LINES = 40;
+    private static final int MAX_VECTOR_LINES = 12;
+    private static final int MAX_GRAPH_LINES = 30;
     private static final int MAX_CONTEXT_CHARS = 10000;
 
     public FusedContext fuse(HybridRetrievalResult retrieval) {
@@ -98,23 +98,32 @@ public class ContextFusionService {
         Set<String> sources = new LinkedHashSet<>();
         int chars = 0;
 
+        // Prefer document/vector rows first so product sheets are not crowded out by graph noise
+        List<RetrievalResult> vectorFirst = new ArrayList<>();
+        List<RetrievalResult> graphRest = new ArrayList<>();
         for (RetrievalResult r : ranked) {
-            if (chars >= MAX_CONTEXT_CHARS) break;
-            String line;
             if (r.getSourceType() == RetrievalSource.GRAPH) {
-                if (graphLines.size() >= MAX_GRAPH_LINES) continue;
-                line = r.getContent();
-                graphLines.add(line);
+                graphRest.add(r);
             } else {
-                if (vectorLines.size() >= MAX_VECTOR_LINES) continue;
-                line = r.getContent();
-                vectorLines.add(line);
+                vectorFirst.add(r);
             }
+        }
+
+        for (RetrievalResult r : vectorFirst) {
+            if (chars >= MAX_CONTEXT_CHARS || vectorLines.size() >= MAX_VECTOR_LINES) break;
+            String line = r.getContent();
+            if (line == null || line.isBlank()) continue;
+            vectorLines.add(line);
             chars += line.length();
-            if (r.getSourceType() != null && r.getSourceId() != null) {
-                sources.add(r.getSourceType().name() + ":" + r.getSourceId()
-                        + (r.getSourceLabel() != null ? " (" + r.getSourceLabel() + ")" : ""));
-            }
+            addSource(sources, r);
+        }
+        for (RetrievalResult r : graphRest) {
+            if (chars >= MAX_CONTEXT_CHARS || graphLines.size() >= MAX_GRAPH_LINES) break;
+            String line = r.getContent();
+            if (line == null || line.isBlank()) continue;
+            graphLines.add(line);
+            chars += line.length();
+            addSource(sources, r);
         }
 
         long fusionMs = System.currentTimeMillis() - start;
@@ -131,6 +140,13 @@ public class ContextFusionService {
                 .fusionLatencyMs(fusionMs)
                 .contextCharCount(chars)
                 .build();
+    }
+
+    private static void addSource(Set<String> sources, RetrievalResult r) {
+        if (r.getSourceType() != null && r.getSourceId() != null) {
+            sources.add(r.getSourceType().name() + ":" + r.getSourceId()
+                    + (r.getSourceLabel() != null ? " (" + r.getSourceLabel() + ")" : ""));
+        }
     }
 
     private static double normalize(double score) {
