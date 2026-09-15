@@ -35,7 +35,9 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class LeadScoringService {
 
-    private final AiOrchestrator aiOrchestrator;
+    @Autowired(required = false)
+    private AiOrchestrator aiOrchestrator;
+    
     private final EmailService emailService;
     private final EmailTemplateService emailTemplateService;
     private final ReminderService reminderService;
@@ -208,6 +210,11 @@ public class LeadScoringService {
                 .complexity(AiRequest.TaskComplexity.LOW)
                 .tenantId(lead.getOwner().getTenant().getId())
                 .build();
+
+        if (aiOrchestrator == null) {
+            log.warn("[LeadScoring] AI scoring unavailable: AiOrchestrator is not configured. Using default category.");
+            return new AiEvaluation(0, "General", true);
+        }
 
         try {
             AiResponse response = aiOrchestrator.execute(request);

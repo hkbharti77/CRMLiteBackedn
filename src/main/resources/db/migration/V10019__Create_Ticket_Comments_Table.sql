@@ -1,7 +1,7 @@
 -- Create missing ticket_comments table
 -- This table was referenced in the code but missing from the original migration
 
-CREATE TABLE ticket_comments (
+CREATE TABLE IF NOT EXISTS ticket_comments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     author_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
@@ -17,7 +17,7 @@ CREATE TABLE ticket_comments (
 );
 
 -- Create indexes for better performance
-CREATE INDEX idx_ticket_comments_ticket_id ON ticket_comments(ticket_id);
-CREATE INDEX idx_ticket_comments_author_id ON ticket_comments(author_id);
-CREATE INDEX idx_ticket_comments_created_at ON ticket_comments(created_at);
-CREATE INDEX idx_ticket_comments_deleted ON ticket_comments(deleted);
+CREATE INDEX IF NOT EXISTS idx_ticket_comments_ticket_id ON ticket_comments(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_comments_author_id ON ticket_comments(author_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_comments_created_at ON ticket_comments(created_at);
+CREATE INDEX IF NOT EXISTS idx_ticket_comments_deleted ON ticket_comments(deleted);

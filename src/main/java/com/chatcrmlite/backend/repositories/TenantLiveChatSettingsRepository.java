@@ -11,5 +11,6 @@ import java.util.UUID;
 @Repository
 public interface TenantLiveChatSettingsRepository extends JpaRepository<TenantLiveChatSettings, UUID> {
     Optional<TenantLiveChatSettings> findByTenant(Tenant tenant);
-    Optional<TenantLiveChatSettings> findByTenantId(UUID tenantId);
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM TenantLiveChatSettings s WHERE s.tenant.id = :tenantId")
+    Optional<TenantLiveChatSettings> findByTenantId(@org.springframework.data.repository.query.Param("tenantId") UUID tenantId);
 }

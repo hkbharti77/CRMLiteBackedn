@@ -2,7 +2,7 @@
 DROP TABLE IF EXISTS menu_media;
 
 -- Recreate with correct type (BYTEA) matching the JPA entity
-CREATE TABLE menu_media (
+CREATE TABLE IF NOT EXISTS menu_media (
     id UUID PRIMARY KEY,
     owner_id UUID NOT NULL,
     image_data BYTEA,

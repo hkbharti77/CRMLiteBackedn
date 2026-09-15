@@ -88,7 +88,7 @@ public class RedisStreamPendingMessageRecovererTest {
 
         int count = recoverer.recoverStream(streamKey, webhookWorker);
         assertEquals(1, count);
-        verify(webhookWorker).onMessage(any(ObjectRecord.class));
+        verify(webhookWorker).onMessage(any(MapRecord.class));
         verify(dlqHandler, never()).moveToDlq(any(), any());
     }
 
@@ -141,7 +141,7 @@ public class RedisStreamPendingMessageRecovererTest {
 
         int count = recoverer.recoverStream(streamKey, webhookWorker);
         assertEquals(1, count);
-        verify(dlqHandler).moveToDlq(any(ObjectRecord.class), any(RuntimeException.class));
+        verify(dlqHandler).moveToDlq(any(MapRecord.class), any(RuntimeException.class));
         verify(streamOperations).acknowledge(eq(groupName), eq(streamKey), eq(recordId.getValue()));
         verify(webhookWorker, never()).onMessage(any());
     }

@@ -10,5 +10,6 @@ import java.util.UUID;
 @Repository
 public interface EmailCampaignSnapshotRepository extends JpaRepository<EmailCampaignSnapshot, UUID> {
     Optional<EmailCampaignSnapshot> findByCampaignId(UUID campaignId);
-    Optional<EmailCampaignSnapshot> findByTenantIdAndCampaignId(UUID tenantId, UUID campaignId);
+    @org.springframework.data.jpa.repository.Query("SELECT s FROM EmailCampaignSnapshot s WHERE s.tenant.id = :tenantId AND s.campaignId = :campaignId")
+    Optional<EmailCampaignSnapshot> findByTenantIdAndCampaignId(@org.springframework.data.repository.query.Param("tenantId") UUID tenantId, @org.springframework.data.repository.query.Param("campaignId") UUID campaignId);
 }

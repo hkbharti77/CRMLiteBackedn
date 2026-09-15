@@ -65,17 +65,32 @@ ALTER TABLE tickets
 CREATE INDEX IF NOT EXISTS idx_tickets_search_vector
     ON tickets USING GIN (search_vector);
 
+-- ── Helper function for safe JSONB casting ─────────────────────────────
+CREATE OR REPLACE FUNCTION safe_to_jsonb(val text)
+RETURNS jsonb AS $$
+BEGIN
+    IF val IS NULL OR TRIM(val) = '' THEN
+        RETURN NULL;
+    END IF;
+    RETURN val::jsonb;
+EXCEPTION WHEN OTHERS THEN
+    RETURN to_jsonb(val);
+END;
+$$ LANGUAGE plpgsql IMMUTABLE;
+
 -- ── AP-9: Convert TEXT → JSONB for queryable JSON columns ────────────────
 
 -- conversation_states.collected_data: was TEXT, now JSONB for JSON path queries
 ALTER TABLE conversation_states ALTER COLUMN collected_data DROP DEFAULT;
 
-ALTER TABLE conversation_states
-    ALTER COLUMN collected_data TYPE JSONB
-    USING CASE
-        WHEN collected_data IS NULL OR collected_data = '' THEN '{}'::jsonb
-        ELSE collected_data::jsonb
-    END;
+DO $$ 
+BEGIN 
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='conversation_states' AND column_name='collected_data') = 'text' THEN
+        ALTER TABLE conversation_states
+            ALTER COLUMN collected_data TYPE JSONB
+            USING COALESCE(safe_to_jsonb(collected_data), '{}'::jsonb);
+    END IF;
+END $$;
 
 ALTER TABLE conversation_states
     ALTER COLUMN collected_data SET DEFAULT '{}';
@@ -87,12 +102,14 @@ CREATE INDEX IF NOT EXISTS idx_conv_collected_data
 -- appointments.collected_data: also TEXT, convert to JSONB
 ALTER TABLE appointments ALTER COLUMN collected_data DROP DEFAULT;
 
-ALTER TABLE appointments
-    ALTER COLUMN collected_data TYPE JSONB
-    USING CASE
-        WHEN collected_data IS NULL OR collected_data = '' THEN '{}'::jsonb
-        ELSE collected_data::jsonb
-    END;
+DO $$ 
+BEGIN 
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='appointments' AND column_name='collected_data') = 'text' THEN
+        ALTER TABLE appointments
+            ALTER COLUMN collected_data TYPE JSONB
+            USING COALESCE(safe_to_jsonb(collected_data), '{}'::jsonb);
+    END IF;
+END $$;
 
 ALTER TABLE appointments
     ALTER COLUMN collected_data SET DEFAULT '{}';
@@ -103,26 +120,24 @@ ALTER TABLE whatsapp_configs ALTER COLUMN interactive_menu_json DROP DEFAULT;
 ALTER TABLE whatsapp_configs ALTER COLUMN custom_sub_menus_json DROP DEFAULT;
 ALTER TABLE whatsapp_configs ALTER COLUMN custom_messages_json DROP DEFAULT;
 
-ALTER TABLE whatsapp_configs
-    ALTER COLUMN interactive_menu_json TYPE JSONB
-    USING CASE
-        WHEN interactive_menu_json IS NULL OR interactive_menu_json = '' THEN NULL
-        ELSE interactive_menu_json::jsonb
-    END;
-
-ALTER TABLE whatsapp_configs
-    ALTER COLUMN custom_sub_menus_json TYPE JSONB
-    USING CASE
-        WHEN custom_sub_menus_json IS NULL OR custom_sub_menus_json = '' THEN NULL
-        ELSE custom_sub_menus_json::jsonb
-    END;
-
-ALTER TABLE whatsapp_configs
-    ALTER COLUMN custom_messages_json TYPE JSONB
-    USING CASE
-        WHEN custom_messages_json IS NULL OR custom_messages_json = '' THEN NULL
-        ELSE custom_messages_json::jsonb
-    END;
+DO $$ 
+BEGIN 
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='whatsapp_configs' AND column_name='interactive_menu_json') = 'text' THEN
+        ALTER TABLE whatsapp_configs
+            ALTER COLUMN interactive_menu_json TYPE JSONB
+            USING safe_to_jsonb(interactive_menu_json);
+    END IF;
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='whatsapp_configs' AND column_name='custom_sub_menus_json') = 'text' THEN
+        ALTER TABLE whatsapp_configs
+            ALTER COLUMN custom_sub_menus_json TYPE JSONB
+            USING safe_to_jsonb(custom_sub_menus_json);
+    END IF;
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='whatsapp_configs' AND column_name='custom_messages_json') = 'text' THEN
+        ALTER TABLE whatsapp_configs
+            ALTER COLUMN custom_messages_json TYPE JSONB
+            USING safe_to_jsonb(custom_messages_json);
+    END IF;
+END $$;
 
 -- GIN index on interactive menu (most frequently queried JSON blob)
 CREATE INDEX IF NOT EXISTS idx_wa_interactive_menu

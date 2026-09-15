@@ -7,7 +7,7 @@ import lombok.Builder;
 
 @Entity
 @Table(name = "custom_emails")
-public class CustomEmail {
+public class CustomEmail extends BaseTenantEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -59,8 +59,17 @@ public class CustomEmail {
     private LocalDateTime createdAt = LocalDateTime.now();
     private LocalDateTime updatedAt;
 
+    @PrePersist
+    protected void onPrePersist() {
+        super.populateTenant();
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
+    }
+
     @PreUpdate
     protected void onUpdate() {
+        super.populateTenant();
         updatedAt = LocalDateTime.now();
     }
 

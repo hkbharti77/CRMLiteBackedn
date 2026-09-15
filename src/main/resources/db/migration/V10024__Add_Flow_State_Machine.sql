@@ -2,7 +2,7 @@
 -- Description: Creates the flow_definitions table and updates conversation_states to support the state machine engine.
 
 -- 1. Create flow_definitions table
-CREATE TABLE flow_definitions (
+CREATE TABLE IF NOT EXISTS flow_definitions (
     id UUID PRIMARY KEY,
     tenant_id UUID REFERENCES app_users(id) ON DELETE CASCADE,
     name VARCHAR(255) NOT NULL,
@@ -20,6 +20,6 @@ CREATE TABLE flow_definitions (
 ALTER TABLE conversation_states DROP COLUMN IF EXISTS current_step;
 
 -- Add new state machine columns
-ALTER TABLE conversation_states ADD COLUMN current_state VARCHAR(255) NOT NULL DEFAULT 'START';
-ALTER TABLE conversation_states ADD COLUMN flow_definition_id UUID REFERENCES flow_definitions(id) ON DELETE SET NULL;
-ALTER TABLE conversation_states ADD COLUMN state_history JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE conversation_states ADD COLUMN IF NOT EXISTS current_state VARCHAR(255) NOT NULL DEFAULT 'START';
+ALTER TABLE conversation_states ADD COLUMN IF NOT EXISTS flow_definition_id UUID REFERENCES flow_definitions(id) ON DELETE SET NULL;
+ALTER TABLE conversation_states ADD COLUMN IF NOT EXISTS state_history JSONB NOT NULL DEFAULT '[]'::jsonb;

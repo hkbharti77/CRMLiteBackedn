@@ -2,7 +2,7 @@
 -- This column is used to store the display name of the user who performed the activity
 
 ALTER TABLE ticket_activities 
-ADD COLUMN user_name VARCHAR(255);
+ADD COLUMN IF NOT EXISTS user_name VARCHAR(255);
 
 -- Update existing records to populate user_name from the user table
 UPDATE ticket_activities 

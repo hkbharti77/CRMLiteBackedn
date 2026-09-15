@@ -9,6 +9,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Slf4j
@@ -39,94 +40,57 @@ public class FaqMatchingService {
 
     /**
      * High-Performance FAQ Matching Engine:
-     * 1. Exact / Normalized String match (Score = 1.0)
-     * 2. Cosine Vector Similarity against active FAQs (Score >= threshold, e.g. 0.85)
+     * 1. Exact / Normalized String match via SQL
+     * 2. Approximate nearest-neighbor search via HNSW pgvector
      */
     public MatchResult findBestMatch(UUID tenantId, String rawQuery, float[] queryEmbedding) {
         if (rawQuery == null || rawQuery.trim().isEmpty()) {
             return new MatchResult(null, 0.0f, false);
         }
 
-        List<FaqItem> activeFaqs = faqItemRepository.findByTenantIdAndIsActiveTrue(tenantId);
-        if (activeFaqs.isEmpty()) {
+        // 1. Exact match via Database
+        Optional<FaqItem> exactMatch = faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, rawQuery);
+        if (exactMatch.isPresent()) {
+            FaqItem item = exactMatch.get();
+            log.info("[FAQ-Engine] Exact question match hit! FAQ ID: {}", item.getId());
+            faqItemRepository.incrementHitCount(item.getId());
+            return new MatchResult(item, 1.0f, true);
+        }
+
+        // 2. Approximate nearest-neighbor search using HNSW
+        if (queryEmbedding == null) {
             return new MatchResult(null, 0.0f, false);
         }
 
-        String normalizedQuery = normalizeText(rawQuery);
+        String embeddingLiteral = Arrays.toString(queryEmbedding);
+        Optional<com.chatcrmlite.backend.repositories.FaqVectorMatch> nearest = faqItemRepository.findNearestByEmbedding(tenantId, embeddingLiteral);
 
-        FaqItem bestItem = null;
-        float maxScore = 0.0f;
+        if (nearest.isPresent()) {
+            com.chatcrmlite.backend.repositories.FaqVectorMatch match = nearest.get();
+            double distance = match.getDistance() != null ? match.getDistance() : 1.0;
+            float similarity = (float) (1.0 - distance);
 
-        for (FaqItem item : activeFaqs) {
-            // 1. Exact question match check
-            String normalizedFaqQ = normalizeText(item.getQuestion());
-            if (normalizedQuery.equalsIgnoreCase(normalizedFaqQ)) {
-                log.info("[FAQ-Engine] Exact question match hit! FAQ ID: {}, Question: '{}'", item.getId(), item.getQuestion());
-                faqItemRepository.incrementHitCount(item.getId());
-                return new MatchResult(item, 1.0f, true);
-            }
+            log.info("[FAQ-Engine] pgvector nearest distance: {} (similarity: {}, threshold: {}) | Query: '{}'",
+                    String.format("%.4f", distance), String.format("%.4f", similarity),
+                    matchingThreshold, rawQuery);
 
-            // 2. Cosine similarity via embeddings
-            if (item.getEmbedding() != null && queryEmbedding != null) {
-                float[] itemEmbedding = parseEmbedding(item.getEmbedding());
-                if (itemEmbedding != null && itemEmbedding.length == queryEmbedding.length) {
-                    float sim = cosineSimilarity(queryEmbedding, itemEmbedding);
-                    if (sim > maxScore) {
-                        maxScore = sim;
-                        bestItem = item;
-                    }
+            if (similarity >= matchingThreshold) {
+                // Fetch the fully managed entity safely
+                Optional<FaqItem> itemOpt = faqItemRepository.findById(match.getId());
+                if (itemOpt.isPresent()) {
+                    log.info("[FAQ-Engine] High-confidence pgvector match! Score: {} >= {}", 
+                            String.format("%.4f", similarity), matchingThreshold);
+                    faqItemRepository.incrementHitCount(itemOpt.get().getId());
+                    return new MatchResult(itemOpt.get(), similarity, true);
                 }
             }
         }
 
-        log.info("[FAQ-Engine] Top FAQ similarity score: {} (Threshold: {}) | Query: '{}'", 
-                String.format("%.4f", maxScore), matchingThreshold, rawQuery);
-
-        if (bestItem != null && maxScore >= matchingThreshold) {
-            log.info("[FAQ-Engine] High-confidence match found! Score: {} >= {} | Question: '{}'", 
-                    String.format("%.4f", maxScore), matchingThreshold, bestItem.getQuestion());
-            faqItemRepository.incrementHitCount(bestItem.getId());
-            return new MatchResult(bestItem, maxScore, true);
-        }
-
-        return new MatchResult(bestItem, maxScore, false);
+        return new MatchResult(null, 0.0f, false);
     }
 
     private String normalizeText(String input) {
         if (input == null) return "";
-        return input.trim()
-                .toLowerCase()
-                .replaceAll("[^a-zA-Z0-9\\s]", "")
-                .replaceAll("\\s+", " ");
-    }
-
-    private float cosineSimilarity(float[] vectorA, float[] vectorB) {
-        double dotProduct = 0.0;
-        double normA = 0.0;
-        double normB = 0.0;
-        for (int i = 0; i < vectorA.length; i++) {
-            dotProduct += vectorA[i] * vectorB[i];
-            normA += vectorA[i] * vectorA[i];
-            normB += vectorB[i] * vectorB[i];
-        }
-        if (normA == 0.0 || normB == 0.0) return 0.0f;
-        return (float) (dotProduct / (Math.sqrt(normA) * Math.sqrt(normB)));
-    }
-
-    public float[] parseEmbedding(String raw) {
-        if (raw == null || raw.trim().isEmpty()) return null;
-        try {
-            String cleaned = raw.replace("[", "").replace("]", "").trim();
-            if (cleaned.isEmpty()) return null;
-            String[] parts = cleaned.split(",");
-            float[] result = new float[parts.length];
-            for (int i = 0; i < parts.length; i++) {
-                result[i] = Float.parseFloat(parts[i].trim());
-            }
-            return result;
-        } catch (Exception e) {
-            log.error("[FAQ-Engine] Error parsing embedding string: {}", e.getMessage());
-            return null;
-        }
+        return input.trim().toLowerCase();
     }
 }

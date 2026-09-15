@@ -19,10 +19,12 @@ public interface WhatsAppCampaignRepository extends JpaRepository<WhatsAppCampai
     Page<WhatsAppCampaign> findByOwner(User owner, Pageable pageable);
 
     @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
-    Page<WhatsAppCampaign> findByTenantId(UUID tenantId, Pageable pageable);
+    @org.springframework.data.jpa.repository.Query("SELECT c FROM WhatsAppCampaign c WHERE c.tenant.id = :tenantId")
+    Page<WhatsAppCampaign> findByTenantId(@org.springframework.data.repository.query.Param("tenantId") UUID tenantId, Pageable pageable);
 
     @EntityGraph(attributePaths = {"templateSnapshot", "owner"})
-    Optional<WhatsAppCampaign> findByIdAndTenantId(UUID id, UUID tenantId);
+    @org.springframework.data.jpa.repository.Query("SELECT c FROM WhatsAppCampaign c WHERE c.id = :id AND c.tenant.id = :tenantId")
+    Optional<WhatsAppCampaign> findByIdAndTenantId(@org.springframework.data.repository.query.Param("id") UUID id, @org.springframework.data.repository.query.Param("tenantId") UUID tenantId);
 
     @Override
     @EntityGraph(attributePaths = {"templateSnapshot", "owner"})

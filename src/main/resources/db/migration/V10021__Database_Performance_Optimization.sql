@@ -10,10 +10,10 @@ ALTER COLUMN payload TYPE JSONB USING payload::JSONB;
 
 -- 2. Create Compound Indexes for performant filtering by tenant
 -- (owner_id, created_at) covers most dashboard and timeline queries
-CREATE INDEX idx_activity_owner_created ON activity_logs (owner_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_owner_created ON activity_logs (owner_id, created_at DESC);
 
 -- (owner_id, contact_id) covers contact-specific history
-CREATE INDEX idx_activity_owner_contact ON activity_logs (owner_id, contact_id);
+CREATE INDEX IF NOT EXISTS idx_activity_owner_contact ON activity_logs (owner_id, contact_id);
 
 -- 3. Optimization for chat_messages
 -- Add owner_id to chat_messages if it's missing (it currently relies on contact -> owner)
@@ -21,7 +21,7 @@ CREATE INDEX idx_activity_owner_contact ON activity_logs (owner_id, contact_id);
 -- Let's first check if owner_id exists in chat_messages. 
 -- Based on the model it doesn't. We should add it to support tenant-level scaling.
 
-ALTER TABLE chat_messages ADD COLUMN owner_id UUID REFERENCES app_users(id);
+ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS owner_id UUID REFERENCES app_users(id);
 
 -- Fill existing owner_id from contact association
 UPDATE chat_messages m
@@ -32,14 +32,14 @@ WHERE m.contact_id = c.id;
 ALTER TABLE chat_messages ALTER COLUMN owner_id SET NOT NULL;
 
 -- Compound index for fast chat retrieval
-CREATE INDEX idx_chat_owner_timestamp ON chat_messages (owner_id, timestamp DESC);
+CREATE INDEX IF NOT EXISTS idx_chat_owner_timestamp ON chat_messages (owner_id, timestamp DESC);
 
 -- 4. Create Archive Tables for Cold Storage Strategy
 -- This prevents the main tables from growing unbounded while keeping history available.
 
-CREATE TABLE activity_logs_archive (LIKE activity_logs INCLUDING ALL);
-CREATE TABLE chat_messages_archive (LIKE chat_messages INCLUDING ALL);
-CREATE TABLE processed_messages_archive (LIKE processed_messages INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS activity_logs_archive (LIKE activity_logs INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS chat_messages_archive (LIKE chat_messages INCLUDING ALL);
+CREATE TABLE IF NOT EXISTS processed_messages_archive (LIKE processed_messages INCLUDING ALL);
 
 -- 5. Partitioning Strategy (Conceptual for now, as PostgreSQL requires 
 -- defining partitions at table creation or using specific migration patterns)

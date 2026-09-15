@@ -21,7 +21,8 @@ public interface LeadRepository extends JpaRepository<Lead, UUID> {
     
     Optional<Lead> findByLeadNumber(String leadNumber);
 
-    Optional<Lead> findByIdAndTenantId(UUID id, UUID tenantId);
+    @Query("SELECT l FROM Lead l WHERE l.id = :id AND l.tenant.id = :tenantId")
+    Optional<Lead> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
     List<Lead> findByOwnerAndStatusIn(User owner, List<Lead.LeadStatus> statuses);
 

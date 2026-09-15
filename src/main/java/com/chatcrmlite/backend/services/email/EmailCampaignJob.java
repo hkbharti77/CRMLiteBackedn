@@ -44,7 +44,12 @@ public class EmailCampaignJob extends QuartzJobBean {
         }
         
         if (campaign.getStatus() == CustomEmail.EmailStatus.SCHEDULED) {
+            UUID tenantId = campaign.getOwner() != null && campaign.getOwner().getTenant() != null
+                    ? campaign.getOwner().getTenant().getId() : null;
             try {
+                if (tenantId != null) {
+                    com.chatcrmlite.backend.security.TenantContext.setTenantId(tenantId);
+                }
                 log.info("[EmailCampaignJob] Starting scheduled campaign {}", campaignId);
                 stateService.transitionState(campaign, CustomEmail.EmailStatus.SENDING, null);
                 
@@ -57,6 +62,8 @@ public class EmailCampaignJob extends QuartzJobBean {
                 } catch (Exception ex) {
                     log.error("[EmailCampaignJob] Failed to set campaign {} to FAILED state", campaignId, ex);
                 }
+            } finally {
+                com.chatcrmlite.backend.security.TenantContext.clear();
             }
         } else {
             log.info("[EmailCampaignJob] Campaign {} is in state {}, skipping execution", campaignId, campaign.getStatus());

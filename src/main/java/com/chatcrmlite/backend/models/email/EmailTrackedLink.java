@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.models.email;
 
+import com.chatcrmlite.backend.models.BaseTenantEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
@@ -9,16 +10,13 @@ import java.util.UUID;
 @Table(name = "email_tracked_link")
 @Getter
 @Setter
-@Builder
+@lombok.experimental.SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EmailTrackedLink {
+public class EmailTrackedLink extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "tenant_id", nullable = false)
-    private UUID tenantId;
 
     @Column(name = "campaign_id", nullable = false)
     private UUID campaignId;
@@ -32,4 +30,12 @@ public class EmailTrackedLink {
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();
+
+    @PrePersist
+    public void prePersist() {
+        super.populateTenant();
+        if (this.createdAt == null) {
+            this.createdAt = LocalDateTime.now();
+        }
+    }
 }

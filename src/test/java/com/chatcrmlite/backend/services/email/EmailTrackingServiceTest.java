@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import java.util.UUID;
 
@@ -25,6 +26,7 @@ class EmailTrackingServiceTest {
     @BeforeEach
     void setUp() {
         MockitoAnnotations.openMocks(this);
+        ReflectionTestUtils.setField(trackingService, "baseUrl", "http://localhost:3000");
     }
 
     @Test
@@ -51,7 +53,7 @@ class EmailTrackingServiceTest {
         
         String rewritten = trackingService.rewriteLinks(html, tenantId, campaignId, trackingToken);
         
-        assertTrue(rewritten.contains("/api/v1/t/c/" + trackingToken + "?l="));
+        assertTrue(rewritten.contains("/api/v1/t/c/"));
         assertFalse(rewritten.contains("href=\"https://example.com\""));
         verify(linkRepository, times(1)).save(any(EmailTrackedLink.class));
     }

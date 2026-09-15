@@ -124,7 +124,7 @@ public class WhatsAppDeliveryHandlerTest {
         MapRecord<String, String, String> record = StreamRecords.newRecord()
                 .in("workflow:delivery")
                 .withId(RecordId.of("1700000000000-0"))
-                .ofObject(jsonPayload);
+                .ofMap(java.util.Collections.singletonMap("payload", jsonPayload));
 
         when(whatsappConfigRepository.findByTenantId(tenantId))
                 .thenThrow(new RuntimeException("Meta API timeout"));

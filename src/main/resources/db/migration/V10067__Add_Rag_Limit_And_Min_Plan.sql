@@ -1,7 +1,7 @@
 -- V10059: Add Rag Limit And Min Plan
 
 -- 1. Add has_rag_llm column to subscription_plans
-ALTER TABLE subscription_plans ADD COLUMN has_rag_llm BOOLEAN DEFAULT TRUE NOT NULL;
+ALTER TABLE subscription_plans ADD COLUMN IF NOT EXISTS has_rag_llm BOOLEAN DEFAULT TRUE NOT NULL;
 
 -- 2. Add MIN Plan (RAG LLM disabled, Menu only)
 INSERT INTO subscription_plans (id, name, price_monthly, price_yearly, employee_limit, primary_resource_limit, secondary_resource_limit, ticket_limit, email_limit, has_whatsapp, has_custom_widget, has_rag_llm)

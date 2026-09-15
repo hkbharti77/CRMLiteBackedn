@@ -1,2 +1,2 @@
 ALTER TABLE tenants
-ADD COLUMN force_show_appointment BOOLEAN;
+ADD COLUMN IF NOT EXISTS force_show_appointment BOOLEAN;

@@ -1,1 +1,1 @@
-ALTER TABLE contacts ADD COLUMN display_id VARCHAR(255);
+ALTER TABLE contacts ADD COLUMN IF NOT EXISTS display_id VARCHAR(255);

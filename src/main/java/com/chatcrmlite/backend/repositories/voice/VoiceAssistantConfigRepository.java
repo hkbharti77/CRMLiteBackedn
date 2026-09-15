@@ -9,5 +9,6 @@ import java.util.UUID;
 
 @Repository
 public interface VoiceAssistantConfigRepository extends JpaRepository<VoiceAssistantConfig, UUID> {
-    Optional<VoiceAssistantConfig> findByTenantId(UUID tenantId);
+    @org.springframework.data.jpa.repository.Query("SELECT v FROM VoiceAssistantConfig v WHERE v.tenant.id = :tenantId")
+    Optional<VoiceAssistantConfig> findByTenantId(@org.springframework.data.repository.query.Param("tenantId") UUID tenantId);
 }

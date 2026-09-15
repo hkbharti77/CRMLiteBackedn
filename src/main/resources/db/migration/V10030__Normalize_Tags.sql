@@ -80,23 +80,25 @@ CREATE INDEX IF NOT EXISTS idx_mt_tag_id ON message_tags (tag_id);
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'contact_tags_old') THEN
-        -- Insert into canonical tags table first (avoiding duplicates)
-        INSERT INTO tags (owner_id, entity_type, name)
-        SELECT DISTINCT c.owner_id, 'CONTACT', ct.tags
-        FROM contact_tags_old ct
-        JOIN contacts c ON c.id = ct.contact_id
-        WHERE ct.tags IS NOT NULL AND ct.tags <> ''
-        ON CONFLICT (owner_id, entity_type, name) DO NOTHING;
+        BEGIN
+            EXECUTE 'INSERT INTO tags (owner_id, entity_type, name)
+                    SELECT DISTINCT c.owner_id, ''CONTACT'', ct.tag
+                    FROM contact_tags_old ct
+                    JOIN contacts c ON c.id = ct.contact_id
+                    WHERE ct.tag IS NOT NULL AND ct.tag <> ''''
+                    ON CONFLICT (owner_id, entity_type, name) DO NOTHING';
 
-        -- Then insert join rows
-        INSERT INTO contact_tags (contact_id, tag_id)
-        SELECT ct.contact_id, t.id
-        FROM contact_tags_old ct
-        JOIN contacts c ON c.id = ct.contact_id
-        JOIN tags t ON t.owner_id = c.owner_id
-                   AND t.entity_type = 'CONTACT'
-                   AND t.name = ct.tags
-        ON CONFLICT DO NOTHING;
+            EXECUTE 'INSERT INTO contact_tags (contact_id, tag_id)
+                    SELECT ct.contact_id, t.id
+                    FROM contact_tags_old ct
+                    JOIN contacts c ON c.id = ct.contact_id
+                    JOIN tags t ON t.owner_id = c.owner_id
+                               AND t.entity_type = ''CONTACT''
+                               AND t.name = ct.tag
+                    ON CONFLICT DO NOTHING';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Could not backfill contact_tags_old: %', SQLERRM;
+        END;
     END IF;
 END $$;
 
@@ -104,21 +106,25 @@ END $$;
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'lead_tags_old') THEN
-        INSERT INTO tags (owner_id, entity_type, name)
-        SELECT DISTINCT l.owner_id, 'LEAD', lt.tags
-        FROM lead_tags_old lt
-        JOIN leads l ON l.id = lt.lead_id
-        WHERE lt.tags IS NOT NULL AND lt.tags <> ''
-        ON CONFLICT (owner_id, entity_type, name) DO NOTHING;
+        BEGIN
+            EXECUTE 'INSERT INTO tags (owner_id, entity_type, name)
+                    SELECT DISTINCT l.owner_id, ''LEAD'', lt.tag
+                    FROM lead_tags_old lt
+                    JOIN leads l ON l.id = lt.lead_id
+                    WHERE lt.tag IS NOT NULL AND lt.tag <> ''''
+                    ON CONFLICT (owner_id, entity_type, name) DO NOTHING';
 
-        INSERT INTO lead_tags (lead_id, tag_id)
-        SELECT lt.lead_id, t.id
-        FROM lead_tags_old lt
-        JOIN leads l ON l.id = lt.lead_id
-        JOIN tags t ON t.owner_id = l.owner_id
-                   AND t.entity_type = 'LEAD'
-                   AND t.name = lt.tags
-        ON CONFLICT DO NOTHING;
+            EXECUTE 'INSERT INTO lead_tags (lead_id, tag_id)
+                    SELECT lt.lead_id, t.id
+                    FROM lead_tags_old lt
+                    JOIN leads l ON l.id = lt.lead_id
+                    JOIN tags t ON t.owner_id = l.owner_id
+                               AND t.entity_type = ''LEAD''
+                               AND t.name = lt.tag
+                    ON CONFLICT DO NOTHING';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Could not backfill lead_tags_old: %', SQLERRM;
+        END;
     END IF;
 END $$;
 
@@ -126,20 +132,24 @@ END $$;
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'message_tags_old') THEN
-        INSERT INTO tags (owner_id, entity_type, name)
-        SELECT DISTINCT m.owner_id, 'MESSAGE', mt.tags
-        FROM message_tags_old mt
-        JOIN chat_messages m ON m.id = mt.message_id
-        WHERE mt.tags IS NOT NULL AND mt.tags <> ''
-        ON CONFLICT (owner_id, entity_type, name) DO NOTHING;
+        BEGIN
+            EXECUTE 'INSERT INTO tags (owner_id, entity_type, name)
+                    SELECT DISTINCT m.owner_id, ''MESSAGE'', mt.tag
+                    FROM message_tags_old mt
+                    JOIN chat_messages m ON m.id = mt.message_id
+                    WHERE mt.tag IS NOT NULL AND mt.tag <> ''''
+                    ON CONFLICT (owner_id, entity_type, name) DO NOTHING';
 
-        INSERT INTO message_tags (message_id, tag_id)
-        SELECT mt.message_id, t.id
-        FROM message_tags_old mt
-        JOIN chat_messages m ON m.id = mt.message_id
-        JOIN tags t ON t.owner_id = m.owner_id
-                   AND t.entity_type = 'MESSAGE'
-                   AND t.name = mt.tags
-        ON CONFLICT DO NOTHING;
+            EXECUTE 'INSERT INTO message_tags (message_id, tag_id)
+                    SELECT mt.message_id, t.id
+                    FROM message_tags_old mt
+                    JOIN chat_messages m ON m.id = mt.message_id
+                    JOIN tags t ON t.owner_id = m.owner_id
+                               AND t.entity_type = ''MESSAGE''
+                               AND t.name = mt.tag
+                    ON CONFLICT DO NOTHING';
+        EXCEPTION WHEN OTHERS THEN
+            RAISE NOTICE 'Could not backfill message_tags_old: %', SQLERRM;
+        END;
     END IF;
 END $$;

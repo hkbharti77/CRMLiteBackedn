@@ -29,6 +29,7 @@ import org.mockito.Answers;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.ObjectRecord;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
@@ -229,9 +230,10 @@ class WhatsAppReliabilityTest {
         when(resourceManager.canConsume(eq(tenantId), eq(TenantResourceManager.ResourceType.MESSAGES_PER_SECOND), eq(1)))
                 .thenReturn(false);
 
-        MapRecord<String, String, String> record = ObjectRecord
-                .create("whatsapp:ingress:stream", messagePayload)
-                .withId(RecordId.of("1779381961261-0"));
+        MapRecord<String, String, String> record = StreamRecords.newRecord()
+                .in("whatsapp:ingress:stream")
+                .withId(RecordId.of("1779381961261-0"))
+                .ofMap(Collections.singletonMap("payload", messagePayload));
 
         worker.onMessage(record);
 

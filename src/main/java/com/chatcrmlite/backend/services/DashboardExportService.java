@@ -31,7 +31,10 @@ import java.util.stream.Collectors;
 public class DashboardExportService {
 
     private final DashboardAggregateService dashboardAggregateService;
-    private final AiOrchestrator aiOrchestrator;
+    
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AiOrchestrator aiOrchestrator;
+    
     private final NicheThemeService themeService;
 
     public byte[] exportReport(User user, String format) {
@@ -46,6 +49,11 @@ public class DashboardExportService {
     }
 
     private String generateAiSummary(User user, DashboardAggregateResponse data) {
+        if (aiOrchestrator == null) {
+            log.warn("[DashboardExport] AI summary unavailable: AiOrchestrator is not configured.");
+            return "AI Summary generation is currently unavailable. Please configure your AI provider API keys.";
+        }
+
         try {
             String prompt = String.format(
                 "Analyze the following CRM dashboard metrics and provide a brief executive summary:\n" +

@@ -75,6 +75,8 @@ class CustomEmailServiceTest {
     private CostTracker costTracker;
     @Mock
     private ObjectMapper objectMapper;
+    @Mock
+    private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
 
     @InjectMocks
     private CustomEmailService customEmailService;
@@ -111,6 +113,8 @@ class CustomEmailServiceTest {
         tenantBUser.setEmail("owner@tenantb.com");
 
         campaignAId = UUID.randomUUID();
+        lenient().when(tenantTierService.getTier(any())).thenReturn(com.chatcrmlite.backend.models.User.PlanType.ENTERPRISE);
+        customEmailService.setTenantTierService(tenantTierService);
         campaignA = new CustomEmail();
         campaignA.setId(campaignAId);
         campaignA.setOwner(tenantAUser);

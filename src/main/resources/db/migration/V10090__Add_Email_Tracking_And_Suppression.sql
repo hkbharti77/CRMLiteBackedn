@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS email_campaign_recipient (
     CONSTRAINT uq_tenant_campaign_email UNIQUE (tenant_id, campaign_id, email)
 );
 
-CREATE INDEX idx_email_campaign_recipient_campaign_id_status ON email_campaign_recipient (campaign_id, delivery_status);
+CREATE INDEX IF NOT EXISTS idx_email_campaign_recipient_campaign_id_status ON email_campaign_recipient (campaign_id, delivery_status);
 
 CREATE TABLE IF NOT EXISTS email_recipient_event (
     id UUID PRIMARY KEY,
@@ -31,8 +31,8 @@ CREATE TABLE IF NOT EXISTS email_recipient_event (
     metadata JSONB
 );
 
-CREATE INDEX idx_email_recipient_event_recipient_event ON email_recipient_event (recipient_id, event_type);
-CREATE INDEX idx_email_recipient_event_campaign_event ON email_recipient_event (campaign_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_email_recipient_event_recipient_event ON email_recipient_event (recipient_id, event_type);
+CREATE INDEX IF NOT EXISTS idx_email_recipient_event_campaign_event ON email_recipient_event (campaign_id, event_type);
 
 CREATE TABLE IF NOT EXISTS email_tracked_link (
     id UUID PRIMARY KEY,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS email_tracked_link (
     created_at TIMESTAMP NOT NULL
 );
 
-CREATE INDEX idx_email_tracked_link_tenant_campaign ON email_tracked_link (tenant_id, campaign_id);
+CREATE INDEX IF NOT EXISTS idx_email_tracked_link_tenant_campaign ON email_tracked_link (tenant_id, campaign_id);
 
 CREATE TABLE IF NOT EXISTS email_suppression_list (
     id UUID PRIMARY KEY,

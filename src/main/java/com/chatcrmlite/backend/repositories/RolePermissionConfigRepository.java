@@ -10,5 +10,6 @@ import java.util.UUID;
 
 @Repository
 public interface RolePermissionConfigRepository extends JpaRepository<RolePermissionConfig, UUID> {
-    Optional<RolePermissionConfig> findByTenantIdAndRole(UUID tenantId, User.Role role);
+    @org.springframework.data.jpa.repository.Query("SELECT r FROM RolePermissionConfig r WHERE r.tenant.id = :tenantId AND r.role = :role")
+    Optional<RolePermissionConfig> findByTenantIdAndRole(@org.springframework.data.repository.query.Param("tenantId") UUID tenantId, @org.springframework.data.repository.query.Param("role") User.Role role);
 }

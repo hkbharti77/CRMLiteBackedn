@@ -1,6 +1,5 @@
 package com.chatcrmlite.backend.services.email;
 
-import com.chatcrmlite.backend.models.email.EmailCampaignRecipient;
 import com.chatcrmlite.backend.models.email.EmailTrackedLink;
 import com.chatcrmlite.backend.repositories.email.EmailCampaignRecipientRepository;
 import com.chatcrmlite.backend.repositories.email.EmailTrackedLinkRepository;
@@ -10,6 +9,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -22,28 +23,45 @@ public class EmailTrackingService {
     private final EmailCampaignRecipientRepository recipientRepository;
 
     @Value("${app.frontend.url:http://localhost:3000}")
-    private String baseUrl; // This should ideally be the backend tracking domain like track.gyanvaniai.online, but we use api domain
+    private String baseUrl;
 
     public String generateTrackingToken() {
         return EmailTrackingUtils.generateToken();
+    }
+
+    public String sanitizeHtml(String htmlBody) {
+        if (htmlBody == null) return null;
+        
+        // Strip <script> and <iframe> elements and javascript: URIs
+        String cleaned = htmlBody.replaceAll("(?i)<script[\\s\\S]*?>[\\s\\S]*?</script>", "")
+                                 .replaceAll("(?i)<iframe[\\s\\S]*?>[\\s\\S]*?</iframe>", "")
+                                 .replaceAll("(?i)href\\s*=\\s*\"javascript:[^\"]*\"", "href=\"#\"")
+                                 .replaceAll("(?i)href\\s*=\\s*'javascript:[^']*'", "href=\"#\"");
+        return cleaned;
     }
 
     @Transactional
     public String rewriteLinks(String htmlBody, UUID tenantId, UUID campaignId, String trackingToken) {
         if (htmlBody == null) return null;
 
-        // Simple regex to find href="..."
-        String hrefRegex = "href\\s*=\\s*\"([^\"]+)\"";
+        String sanitized = sanitizeHtml(htmlBody);
+
+        // Regex matching href="..." or href='...'
+        String hrefRegex = "href\\s*=\\s*([\"'])([^\"']+)\\1";
         Pattern pattern = Pattern.compile(hrefRegex, Pattern.CASE_INSENSITIVE);
-        Matcher matcher = pattern.matcher(htmlBody);
+        Matcher matcher = pattern.matcher(sanitized);
         StringBuffer sb = new StringBuffer();
 
         while (matcher.find()) {
-            String originalUrl = matcher.group(1);
+            String quote = matcher.group(1);
+            String originalUrl = matcher.group(2);
             
-            // Skip mailto:, tel:, and already tracked links
-            if (originalUrl.startsWith("mailto:") || originalUrl.startsWith("tel:") || originalUrl.startsWith("#")) {
-                matcher.appendReplacement(sb, Matcher.quoteReplacement("href=\"" + originalUrl + "\""));
+            String lowerUrl = originalUrl.toLowerCase();
+            // Skip mailto:, tel:, fragment links, javascript:, or existing tracking/unsubscribe links
+            if (lowerUrl.startsWith("mailto:") || lowerUrl.startsWith("tel:") || 
+                lowerUrl.startsWith("#") || lowerUrl.startsWith("javascript:") ||
+                lowerUrl.contains("/api/v1/u/")) {
+                matcher.appendReplacement(sb, Matcher.quoteReplacement("href=" + quote + originalUrl + quote));
                 continue;
             }
 
@@ -57,14 +75,10 @@ public class EmailTrackingService {
                     .build();
             trackedLinkRepository.save(trackedLink);
 
-            // Replace with tracking URL
-            // e.g. /t/c/{trackingToken}?l={linkToken}
-            // Ideally we prepend the public API URL
-            // String trackingUrl = baseUrl + "/api/v1/t/c/" + trackingToken + "?l=" + linkToken;
-            // For now, let's just make it relative to the API domain that serves the frontend/backend
-            String trackingUrl = baseUrl + "/api/v1/t/c/" + trackingToken + "?l=" + linkToken;
+            // Single-token tracking URL
+            String trackingUrl = baseUrl + "/api/v1/t/c/" + linkToken;
 
-            matcher.appendReplacement(sb, Matcher.quoteReplacement("href=\"" + trackingUrl + "\""));
+            matcher.appendReplacement(sb, Matcher.quoteReplacement("href=" + quote + trackingUrl + quote));
         }
         matcher.appendTail(sb);
 
@@ -76,7 +90,6 @@ public class EmailTrackingService {
         String pixelUrl = baseUrl + "/api/v1/t/o/" + trackingToken + ".png";
         String pixelImg = "<img src=\"" + pixelUrl + "\" width=\"1\" height=\"1\" alt=\"\" style=\"display:none;\" />";
 
-        // Insert just before </body> if present, else append
         if (htmlBody.toLowerCase().contains("</body>")) {
             return htmlBody.replaceAll("(?i)</body>", pixelImg + "</body>");
         } else {
@@ -101,5 +114,13 @@ public class EmailTrackingService {
         } else {
             return htmlBody + footer;
         }
+    }
+
+    public Map<String, String> getUnsubscribeHeaders(String trackingToken) {
+        Map<String, String> headers = new HashMap<>();
+        String unsubUrl = getUnsubscribeUrl(trackingToken);
+        headers.put("List-Unsubscribe", "<" + unsubUrl + ">");
+        headers.put("List-Unsubscribe-Post", "List-Unsubscribe=One-Click");
+        return headers;
     }
 }

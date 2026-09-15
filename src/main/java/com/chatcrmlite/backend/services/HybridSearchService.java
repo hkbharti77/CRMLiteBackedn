@@ -77,6 +77,85 @@ public class HybridSearchService {
         return fetchContentByIds(topIds, tenantId);
     }
 
+    /**
+     * Hybrid search returning content with chunk ids, document ids, and RRF scores
+     * for Hybrid Graph RAG fusion / source attribution.
+     */
+    public List<ScoredChunk> hybridSearchDetailed(UUID tenantId, float[] queryEmbedding, String queryText, int topK) {
+        String embeddingLiteral = Arrays.toString(queryEmbedding);
+        int candidateCount = topK * 4;
+
+        List<Map.Entry<UUID, Double>> vectorResults = fetchVectorResults(
+                tenantId, embeddingLiteral, candidateCount);
+        List<Map.Entry<UUID, Double>> bm25Results = fetchTrigamResults(
+                tenantId, queryText, candidateCount);
+
+        Map<UUID, Double> fusedScores = new LinkedHashMap<>();
+        applyRRF(vectorResults, fusedScores, VECTOR_WEIGHT);
+        applyRRF(bm25Results, fusedScores, BM25_WEIGHT);
+
+        List<Map.Entry<UUID, Double>> ranked = fusedScores.entrySet().stream()
+                .sorted(Map.Entry.<UUID, Double>comparingByValue().reversed())
+                .limit(topK)
+                .collect(Collectors.toList());
+
+        List<UUID> topIds = ranked.stream().map(Map.Entry::getKey).collect(Collectors.toList());
+        Map<UUID, ChunkMeta> meta = fetchChunkMetaByIds(topIds, tenantId);
+
+        List<ScoredChunk> out = new ArrayList<>();
+        for (Map.Entry<UUID, Double> e : ranked) {
+            ChunkMeta m = meta.get(e.getKey());
+            if (m == null) continue;
+            out.add(new ScoredChunk(e.getKey(), m.documentId(), m.content(), e.getValue(), m.source()));
+        }
+        return out;
+    }
+
+    public record ScoredChunk(UUID chunkId, UUID documentId, String content, double score, String source) {}
+
+    private record ChunkMeta(UUID documentId, String content, String source) {}
+
+    private Map<UUID, ChunkMeta> fetchChunkMetaByIds(List<UUID> ids, UUID tenantId) {
+        if (ids.isEmpty()) return Map.of();
+
+        String placeholders = ids.stream().map(id -> "?").collect(Collectors.joining(", "));
+        String sql = "SELECT id, document_id, content, metadata FROM document_chunks WHERE id IN ("
+                + placeholders + ") AND tenant_id = ?";
+
+        Object[] params = new Object[ids.size() + 1];
+        for (int i = 0; i < ids.size(); i++) params[i] = ids.get(i);
+        params[ids.size()] = tenantId;
+
+        Map<UUID, ChunkMeta> map = new HashMap<>();
+        try {
+            jdbcTemplate.query(sql, params, rs -> {
+                UUID id = UUID.fromString(rs.getString("id"));
+                UUID documentId = rs.getObject("document_id") != null
+                        ? UUID.fromString(rs.getString("document_id")) : null;
+                String content = rs.getString("content");
+                String source = "document";
+                try {
+                    String metadata = rs.getString("metadata");
+                    if (metadata != null && metadata.contains("source")) {
+                        int idx = metadata.indexOf("\"source\"");
+                        if (idx >= 0) {
+                            int colon = metadata.indexOf(':', idx);
+                            int q1 = metadata.indexOf('"', colon + 1);
+                            int q2 = metadata.indexOf('"', q1 + 1);
+                            if (q1 >= 0 && q2 > q1) {
+                                source = metadata.substring(q1 + 1, q2);
+                            }
+                        }
+                    }
+                } catch (Exception ignored) {}
+                map.put(id, new ChunkMeta(documentId, content, source));
+            });
+        } catch (Exception e) {
+            log.warn("[HybridSearch] Chunk meta fetch failed: {}", e.getMessage());
+        }
+        return map;
+    }
+
     private List<Map.Entry<UUID, Double>> fetchVectorResults(UUID tenantId, String embeddingLiteral, int limit) {
         String sql = """
                 SELECT id, (embedding <=> ?::vector) AS distance

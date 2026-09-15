@@ -1,5 +1,6 @@
 package com.chatcrmlite.backend.models.email;
 
+import com.chatcrmlite.backend.models.BaseTenantEntity;
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
@@ -13,16 +14,13 @@ import java.util.Map;
 @Table(name = "email_recipient_event")
 @Getter
 @Setter
-@Builder
+@lombok.experimental.SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-public class EmailRecipientEvent {
+public class EmailRecipientEvent extends BaseTenantEntity {
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "tenant_id", nullable = false)
-    private UUID tenantId;
 
     @Column(name = "campaign_id", nullable = false)
     private UUID campaignId;
@@ -44,6 +42,14 @@ public class EmailRecipientEvent {
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb")
     private Map<String, Object> metadata;
+
+    @PrePersist
+    public void prePersist() {
+        super.populateTenant();
+        if (this.occurredAt == null) {
+            this.occurredAt = LocalDateTime.now();
+        }
+    }
 
     public enum EventType {
         SENT, DELIVERED, OPENED, CLICKED, BOUNCED, COMPLAINT, UNSUBSCRIBED

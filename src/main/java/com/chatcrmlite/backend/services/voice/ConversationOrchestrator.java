@@ -24,12 +24,13 @@ import java.util.List;
 @Service
 public class ConversationOrchestrator {
 
-    private final AiOrchestrator aiOrchestrator;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private AiOrchestrator aiOrchestrator;
+    
     private final ToolRegistry toolRegistry;
     private final ToolRouter toolRouter;
 
-    public ConversationOrchestrator(AiOrchestrator aiOrchestrator, ToolRegistry toolRegistry, ToolRouter toolRouter) {
-        this.aiOrchestrator = aiOrchestrator;
+    public ConversationOrchestrator(ToolRegistry toolRegistry, ToolRouter toolRouter) {
         this.toolRegistry = toolRegistry;
         this.toolRouter = toolRouter;
     }
@@ -40,6 +41,10 @@ public class ConversationOrchestrator {
      * the same source used by the WhatsApp and chat bots.
      */
     public String executeTurn(String systemPrompt, String userTranscript, List<ChatMessage> previousMessages, ToolExecutionContext context) {
+        if (aiOrchestrator == null) {
+            log.warn("[ConversationOrchestrator] AI unavailable: AiOrchestrator is not configured. Returning fallback.");
+            return "I'm sorry, the AI assistant is not available right now. Please try again later.";
+        }
         
         // ── Dynamic specs from FlowConfigService (same as WhatsApp/chat bots) ──
         List<ToolSpecification> tools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId());

@@ -6,13 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.jsontype.impl.LaissezFaireSubTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
-import org.springframework.cache.annotation.CachingConfigurer;
-import org.springframework.cache.interceptor.CacheErrorHandler;
-import org.springframework.cache.interceptor.SimpleCacheErrorHandler;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
@@ -32,8 +26,6 @@ import java.time.Duration;
 @Configuration
 @Profile("!test")
 public class RedisConfig {
-
-    private static final Logger log = LoggerFactory.getLogger(RedisConfig.class);
 
     // Bump this version prefix whenever the serialization format changes.
     // All keys stored under a different prefix are simply cache-misses (ignored).
@@ -89,31 +81,6 @@ public class RedisConfig {
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
                 .build();
-    }
-
-    /**
-     * Expose CachingConfigurer as a standalone @Bean rather than implementing it on @Configuration directly.
-     * This prevents early initialization of RedisConfig and its dependencies during BeanPostProcessor setup.
-     */
-    @Bean
-    public CachingConfigurer cachingConfigurer() {
-        return new CachingConfigurer() {
-            @Override
-            public CacheErrorHandler errorHandler() {
-                return new SimpleCacheErrorHandler() {
-                    @Override
-                    public void handleCacheGetError(RuntimeException e, Cache cache, Object key) {
-                        log.warn("[Redis-Cache] GET error on cache='{}' key='{}' — evicting corrupt entry and falling back to DB. Cause: {}",
-                                cache.getName(), key, e.getMessage());
-                        try {
-                            cache.evict(key);
-                        } catch (Exception evictEx) {
-                            log.warn("[Redis-Cache] Failed to evict key '{}' from cache '{}': {}", key, cache.getName(), evictEx.getMessage());
-                        }
-                    }
-                };
-            }
-        };
     }
 
     @Bean

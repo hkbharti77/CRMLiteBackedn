@@ -1,27 +1,27 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.DocumentChunk;
+import com.chatcrmlite.backend.services.ingestion.DocumentExtractionErrorCode;
+import com.chatcrmlite.backend.services.ingestion.DocumentExtractionException;
+import com.chatcrmlite.backend.services.ingestion.DocumentTextExtractor;
+import com.chatcrmlite.backend.services.rag.GraphIngestionService;
 import dev.langchain4j.model.embedding.EmbeddingModel;
-import org.apache.pdfbox.Loader;
-import org.apache.pdfbox.io.RandomAccessReadBuffer;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.text.PDFTextStripper;
-import org.apache.poi.xwpf.usermodel.XWPFDocument;
-import org.apache.poi.xwpf.usermodel.XWPFParagraph;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
 
 @Service
 public class RagIngestionService {
@@ -36,17 +36,31 @@ public class RagIngestionService {
     @Autowired
     private SemanticChunker semanticChunker;
 
+    @Autowired
+    private DocumentTextExtractor documentTextExtractor;
+
+    @Autowired(required = false)
+    private GraphIngestionService graphIngestionService;
+
     @Async
     @Transactional
     public CompletableFuture<Map<String, Object>> ingestDocument(byte[] fileBytes, String filename, UUID tenantId, UUID documentId) {
+        Map<String, Object> status = new HashMap<>();
+        status.put("documentId", documentId);
         try {
-            String text = extractText(fileBytes, filename);
+            String text = documentTextExtractor.extract(fileBytes, filename);
             return ingestText(text, tenantId, filename, documentId);
-        } catch (Exception e) {
-            log.error("Ingestion failed for tenant {}: {}", tenantId, e.getMessage());
-            Map<String, Object> status = new HashMap<>();
+        } catch (DocumentExtractionException e) {
+            log.error("Ingestion extraction failed for tenant {}: [{}] {}", tenantId, e.getCode(), e.getMessage());
             status.put("status", "FAILED");
             status.put("error", e.getMessage());
+            status.put("errorCode", e.getCode().name());
+            return CompletableFuture.completedFuture(status);
+        } catch (Exception e) {
+            log.error("Ingestion failed for tenant {}: {}", tenantId, e.getMessage());
+            status.put("status", "FAILED");
+            status.put("error", e.getMessage());
+            status.put("errorCode", DocumentExtractionErrorCode.PARSER_FAILURE.name());
             return CompletableFuture.completedFuture(status);
         }
     }
@@ -66,18 +80,19 @@ public class RagIngestionService {
 
         try {
             if (text == null || text.isBlank()) {
-                throw new RuntimeException("Empty content");
+                status.put("status", "FAILED");
+                status.put("error", "Empty content");
+                status.put("errorCode", DocumentExtractionErrorCode.EMPTY_DOCUMENT.name());
+                return CompletableFuture.completedFuture(status);
             }
 
-            // Use the new SemanticChunker for better context preservation
             List<String> chunks = semanticChunker.chunk(text);
             List<DocumentChunk> docChunks = new ArrayList<>();
 
             for (int i = 0; i < chunks.size(); i++) {
                 String chunk = chunks.get(i);
-                
+
                 String hash = hashContent(chunk);
-                // Convert vector to String for the ColumnTransformer
                 float[] vector = embeddingModel.embed(chunk).content().vector();
                 String embeddingString = Arrays.toString(vector);
 
@@ -95,6 +110,14 @@ public class RagIngestionService {
 
             int savedCount = persistenceService.saveChunks(tenantId, docChunks);
 
+            try {
+                if (graphIngestionService != null && graphIngestionService.isAvailable()) {
+                    graphIngestionService.ingestDocument(tenantId, documentId, source, text, docChunks);
+                }
+            } catch (Exception ge) {
+                log.warn("Graph ingestion skipped after document save: {}", ge.getMessage());
+            }
+
             log.info("Text ingestion completed for tenant {}. Chunks: {}", tenantId, savedCount);
             status.put("status", "COMPLETED");
             status.put("chunksCount", savedCount);
@@ -104,26 +127,8 @@ public class RagIngestionService {
             log.error("Text ingestion failed for tenant {}: {}", tenantId, e.getMessage());
             status.put("status", "FAILED");
             status.put("error", e.getMessage());
+            status.put("errorCode", DocumentExtractionErrorCode.PARSER_FAILURE.name());
             return CompletableFuture.completedFuture(status);
-        }
-    }
-
-    private String extractText(byte[] fileBytes, String filename) throws Exception {
-        if (filename == null) return null;
-
-        if (filename.endsWith(".pdf")) {
-            try (PDDocument doc = Loader.loadPDF(new RandomAccessReadBuffer(fileBytes))) {
-                return new PDFTextStripper().getText(doc);
-            }
-        } else if (filename.endsWith(".docx")) {
-            try (InputStream is = new java.io.ByteArrayInputStream(fileBytes);
-                 XWPFDocument doc = new XWPFDocument(is)) {
-                return doc.getParagraphs().stream()
-                        .map(XWPFParagraph::getText)
-                        .collect(Collectors.joining("\n"));
-            }
-        } else {
-            return new String(fileBytes, StandardCharsets.UTF_8);
         }
     }
 

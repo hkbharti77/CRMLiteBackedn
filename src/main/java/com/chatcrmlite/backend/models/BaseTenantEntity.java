@@ -20,8 +20,22 @@ import java.util.UUID;
 @MappedSuperclass
 @FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = UUID.class))
 @Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
+@lombok.experimental.SuperBuilder
+@lombok.NoArgsConstructor
+@lombok.AllArgsConstructor
 public abstract class BaseTenantEntity implements Serializable {
     private static final long serialVersionUID = 1L;
+
+    public abstract static class BaseTenantEntityBuilder<C extends BaseTenantEntity, B extends BaseTenantEntityBuilder<C, B>> {
+        public B tenantId(UUID tenantId) {
+            if (tenantId != null) {
+                Tenant t = new Tenant();
+                t.setId(tenantId);
+                this.tenant(t);
+            }
+            return self();
+        }
+    }
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "tenant_id", nullable = false)
@@ -31,6 +45,21 @@ public abstract class BaseTenantEntity implements Serializable {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public UUID getTenantId() {
+        return tenant != null ? tenant.getId() : null;
+    }
+
+    public void setTenantId(UUID tenantId) {
+        if (tenantId != null) {
+            Tenant t = new Tenant();
+            t.setId(tenantId);
+            this.tenant = t;
+        } else {
+            this.tenant = null;
+        }
+    }
 
     @PrePersist
     @PreUpdate

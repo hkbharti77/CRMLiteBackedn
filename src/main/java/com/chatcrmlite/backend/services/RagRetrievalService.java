@@ -1,34 +1,31 @@
 package com.chatcrmlite.backend.services;
 
-import com.chatcrmlite.backend.models.DocumentChunk;
-import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
-import dev.langchain4j.model.embedding.EmbeddingModel;
-import dev.langchain4j.model.embedding.onnx.allminilml6v2q.AllMiniLmL6V2QuantizedEmbeddingModel;
+import com.chatcrmlite.backend.dto.memory.ConversationContext;
+import com.chatcrmlite.backend.dto.rag.FusedContext;
+import com.chatcrmlite.backend.dto.rag.HybridRetrievalResult;
+import com.chatcrmlite.backend.models.Tenant;
+import com.chatcrmlite.backend.models.User;
+import com.chatcrmlite.backend.repositories.TenantRepository;
+import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.ai.AiOrchestrator;
 import com.chatcrmlite.backend.services.ai.AiRequest;
 import com.chatcrmlite.backend.services.ai.AiResponse;
+import com.chatcrmlite.backend.services.rag.ContextFusionService;
+import com.chatcrmlite.backend.services.rag.HybridRetrievalService;
+import com.chatcrmlite.backend.services.rag.RagMode;
+import dev.langchain4j.model.embedding.EmbeddingModel;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
-
-import com.chatcrmlite.backend.models.User;
-import com.chatcrmlite.backend.repositories.UserRepository;
-
-import com.chatcrmlite.backend.models.Tenant;
-import com.chatcrmlite.backend.repositories.TenantRepository;
 
 import java.util.List;
 import java.util.UUID;
-import java.util.stream.Collectors;
-import com.chatcrmlite.backend.dto.memory.ConversationContext;
 
 @Slf4j
 @Service
 public class RagRetrievalService {
-
-    @Autowired
-    private HybridSearchService hybridSearchService;
 
     @Autowired
     private PromptBuilder promptBuilder;
@@ -63,29 +60,39 @@ public class RagRetrievalService {
     @Autowired
     private FaqMatchingService faqMatchingService;
 
+    @Autowired
+    private HybridRetrievalService hybridRetrievalService;
+
+    @Autowired
+    private ContextFusionService contextFusionService;
+
+    @Value("${rag.mode:VECTOR}")
+    private String ragModeProperty;
+
+    @Value("${rag.graph.index-version:1}")
+    private String graphIndexVersion;
+
     /**
-     * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker, 
+     * Optimized Hybrid Retrieval + LLM Generation with Circuit Breaker,
      * Prompt Injection Defense, and Hallucination detection.
+     * Extended with optional Graph RAG via rag.mode (VECTOR|GRAPH|HYBRID).
      */
     @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackResponse")
     public String getAiResponse(ConversationContext context, UUID tenantId) {
         if (aiOrchestrator == null) {
             return "AI feature is currently being configured. Please check back later.";
         }
-        
+
         String query = context.getLatestQuery();
-
         long start = System.currentTimeMillis();
+        RagMode mode = RagMode.from(ragModeProperty);
 
-        // 1. Quota Check
         User user = userRepository.findById(tenantId).orElseThrow(() -> new RuntimeException("Tenant not found"));
         quotaService.checkAndEnforceQuota(tenantId, user.getPlanType());
 
-        // 2. Generate Query Embedding
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
-        // 2b. FAQ High-Confidence Fast Path (Direct Answer if score >= 85%)
         FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
         if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
             log.info("[FAQ-FastPath] High-confidence match (Score: {}) for tenant {} | Direct FAQ response returned.",
@@ -93,35 +100,37 @@ public class RagRetrievalService {
             return faqMatch.getFaqItem().getAnswer();
         }
 
-        // 3. Semantic Cache Check (Exact string match < 1ms, Semantic HNSW vector lookup < 5ms)
-        String cachedResponse = semanticCacheService.getCachedResponse(query, queryEmbedding, tenantId);
+        String cacheQuery = cacheKey(query, mode);
+        String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, tenantId);
         if (cachedResponse != null) {
             return cachedResponse;
         }
 
-        // 4. Hybrid Retrieval (Vector + BM25) if RAG is required
-        List<String> chunks = null;
-        if (context.isRequiresRag()) {
-            int topK = 8;
-            chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
+        HybridRetrievalResult retrieval = hybridRetrievalService.retrieve(
+                query, tenantId, queryEmbedding, context.isRequiresRag(), 8);
+        FusedContext fused = contextFusionService.fuse(retrieval);
+        List<String> chunks = fused.asFlatChunks();
 
-            if (chunks == null || chunks.isEmpty()) {
-                log.info("[RAG] No document chunks found for tenant {} and query '{}'. Falling back to persona-based LLM generation.", tenantId, query);
-            }
-        } else {
-            log.info("[RAG-Router] RAG skipped for tenant {} and query '{}'. Reason: Router determined NO_RAG.", tenantId, query);
+        if ((chunks == null || chunks.isEmpty() || fused.getContextCharCount() == 0)
+                && context.isRequiresRag()) {
+            log.info("[RAG] No evidence for tenant {} mode={} — persona fallback.", tenantId, mode);
         }
 
-        // 5. Build Structured Prompt (Injection Resistant + Layered Persona)
         String niche = user.getBusinessType();
         String tenantPersona = null;
         Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
         if (tenant != null) {
             tenantPersona = tenant.getAiPersonaPrompt();
         }
-        String prompt = promptBuilder.buildRagPrompt(context, chunks, niche, tenantPersona);
 
-        // 6. Generate Response via AiOrchestrator (Provider Routing & Fallback)
+        long promptStart = System.currentTimeMillis();
+        String prompt = (mode == RagMode.VECTOR && !retrieval.isGraphDegraded()
+                && (retrieval.getGraphResults() == null || retrieval.getGraphResults().isEmpty()))
+                ? promptBuilder.buildRagPrompt(context, chunks, niche, tenantPersona)
+                : promptBuilder.buildHybridRagPrompt(context, fused, niche, tenantPersona);
+        long promptMs = System.currentTimeMillis() - promptStart;
+
+        long llmStart = System.currentTimeMillis();
         AiRequest aiRequest = AiRequest.builder()
                 .prompt(prompt)
                 .tenantId(tenantId)
@@ -129,12 +138,12 @@ public class RagRetrievalService {
                 .build();
 
         AiResponse aiResponse = aiOrchestrator.execute(aiRequest);
+        long llmMs = System.currentTimeMillis() - llmStart;
         if (aiResponse == null || aiResponse.getContent() == null) {
             return null;
         }
         String response = aiResponse.getContent();
-        
-        // 7. Post-generation Hallucination Guard
+
         String contextString = String.join("\n", chunks != null ? chunks : List.of());
         HallucinationCheckResult guardResult = hallucinationDetector.check(response, contextString, tenantId);
         if (guardResult != HallucinationCheckResult.GROUNDED && guardResult != HallucinationCheckResult.GROUNDED_REFUSAL) {
@@ -142,7 +151,6 @@ public class RagRetrievalService {
             return null;
         }
 
-        // 8. Track Usage & Costs
         if (aiResponse.getTokensUsed() > 0) {
             int totalTokens = aiResponse.getTokensUsed();
             tokenBudgetService.recordTokenUsage(tenantId, totalTokens, 0);
@@ -150,38 +158,37 @@ public class RagRetrievalService {
         }
 
         long latency = System.currentTimeMillis() - start;
-        log.info("[RAG] Success | Tenant: {} | Latency: {}ms | Provider: {}", tenantId, latency, aiResponse.getProvider());
+        log.info("[RAG] Success | Tenant: {} | Mode: {} | Latency: {}ms | Provider: {} | "
+                        + "analysisMs={} vectorMs={} graphMs={} fusionMs={} promptMs={} llmMs={} "
+                        + "contextChars={} vectorHits={} graphHits={} vectorDegraded={} graphDegraded={}",
+                tenantId, mode, latency, aiResponse.getProvider(),
+                retrieval.getAnalysisLatencyMs(), retrieval.getVectorLatencyMs(), retrieval.getGraphLatencyMs(),
+                fused.getFusionLatencyMs(), promptMs, llmMs,
+                fused.getContextCharCount(),
+                retrieval.getVectorResults() != null ? retrieval.getVectorResults().size() : 0,
+                retrieval.getGraphResults() != null ? retrieval.getGraphResults().size() : 0,
+                retrieval.isVectorDegraded(), retrieval.isGraphDegraded());
 
-        // 9. Cache successful result
-        semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);
-
+        semanticCacheService.putCachedResponse(cacheQuery, queryEmbedding, response, tenantId);
         return response;
     }
 
-    /**
-     * Dedicated High-Speed Voice RAG Gate.
-     * Uses human spoken prompt, limits token output to max 85 tokens (1-2 sentences),
-     * and delivers conversational responses with sub-second LLM latency.
-     */
     @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackVoiceResponse")
     public String getVoiceAiResponse(ConversationContext context, UUID tenantId, String languageMode) {
         if (aiOrchestrator == null) {
             return "Hello! Connecting to assistant, please hold on.";
         }
-        
+
         String query = context.getLatestQuery();
-
         long start = System.currentTimeMillis();
+        RagMode mode = RagMode.from(ragModeProperty);
 
-        // 1. Quota Check
         User user = userRepository.findById(tenantId).orElseThrow(() -> new RuntimeException("Tenant not found"));
         quotaService.checkAndEnforceQuota(tenantId, user.getPlanType());
 
-        // 2. Generate Query Embedding
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
-        // 2b. FAQ High-Confidence Fast Path
         FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
         if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
             log.info("[Voice-FAQ] High-confidence match (Score: {}) for tenant {}",
@@ -189,22 +196,17 @@ public class RagRetrievalService {
             return faqMatch.getFaqItem().getAnswer();
         }
 
-        // 3. Semantic Cache Check
-        String cachedResponse = semanticCacheService.getCachedResponse(query, queryEmbedding, tenantId);
+        String cacheQuery = cacheKey(query, mode);
+        String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, tenantId);
         if (cachedResponse != null) {
             return cachedResponse;
         }
 
-        // 4. Fast Retrieval if RAG is required
-        List<String> chunks = null;
-        if (context.isRequiresRag()) {
-            int topK = 4;
-            chunks = hybridSearchService.hybridSearch(tenantId, queryEmbedding, query, topK);
-        } else {
-            log.info("[Voice-RAG-Router] RAG skipped for tenant {} and query '{}'", tenantId, query);
-        }
+        HybridRetrievalResult retrieval = hybridRetrievalService.retrieve(
+                query, tenantId, queryEmbedding, context.isRequiresRag(), 4);
+        FusedContext fused = contextFusionService.fuse(retrieval);
+        List<String> chunks = fused.asFlatChunks();
 
-        // 5. Build Dedicated Spoken-First Voice Prompt with Tenant Voice Persona
         String niche = user.getBusinessType();
         String tenantPersona = null;
         String assistantName = "Assistant";
@@ -219,9 +221,11 @@ public class RagRetrievalService {
                 }
             }
         }
-        String prompt = promptBuilder.buildVoiceRagPrompt(context, chunks, niche, tenantPersona, assistantName, languageMode);
 
-        // 6. Fast LLM Routing with max 85 tokens (< 800ms)
+        String prompt = (mode == RagMode.VECTOR)
+                ? promptBuilder.buildVoiceRagPrompt(context, chunks, niche, tenantPersona, assistantName, languageMode)
+                : promptBuilder.buildHybridVoiceRagPrompt(context, fused, niche, tenantPersona, assistantName, languageMode);
+
         AiRequest aiRequest = AiRequest.builder()
                 .prompt(prompt)
                 .tenantId(tenantId)
@@ -236,7 +240,6 @@ public class RagRetrievalService {
         }
         String response = aiResponse.getContent();
 
-        // 7. Track Usage
         if (aiResponse.getTokensUsed() > 0) {
             int totalTokens = aiResponse.getTokensUsed();
             tokenBudgetService.recordTokenUsage(tenantId, totalTokens, 0);
@@ -244,12 +247,21 @@ public class RagRetrievalService {
         }
 
         long latency = System.currentTimeMillis() - start;
-        log.info("[Voice-RAG] Success in {}ms | Provider: {} | Tenant: {}", latency, aiResponse.getProvider(), tenantId);
+        log.info("[Voice-RAG] Success in {}ms | Mode: {} | Provider: {} | Tenant: {} | "
+                        + "vectorMs={} graphMs={} fusionMs={}",
+                latency, mode, aiResponse.getProvider(), tenantId,
+                retrieval.getVectorLatencyMs(), retrieval.getGraphLatencyMs(), fused.getFusionLatencyMs());
 
-        // 8. Cache response
-        semanticCacheService.putCachedResponse(query, queryEmbedding, response, tenantId);
-
+        semanticCacheService.putCachedResponse(cacheQuery, queryEmbedding, response, tenantId);
         return response;
+    }
+
+    private String cacheKey(String query, RagMode mode) {
+        if (mode == RagMode.VECTOR) {
+            return query;
+        }
+        // Include mode + graph index version so hybrid/graph cache never leaks across graph rebuilds
+        return mode.name() + ":v" + graphIndexVersion + ":" + query;
     }
 
     public String fallbackResponse(ConversationContext context, UUID tenantId, Throwable t) {

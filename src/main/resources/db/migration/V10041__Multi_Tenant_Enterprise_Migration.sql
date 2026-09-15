@@ -37,7 +37,7 @@ BEGIN
         FROM information_schema.columns 
         WHERE table_name='app_users' AND column_name='tenant_id'
     ) THEN
-        ALTER TABLE app_users ADD COLUMN tenant_id UUID;
+        ALTER TABLE app_users ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE app_users SET tenant_id = id WHERE tenant_id IS NULL;
         ALTER TABLE app_users ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -67,7 +67,7 @@ BEGIN
     
     -- LEADS
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='leads' AND column_name='tenant_id') THEN
-        ALTER TABLE leads ADD COLUMN tenant_id UUID;
+        ALTER TABLE leads ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE leads SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE leads ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -77,7 +77,7 @@ BEGIN
 
     -- CONTACTS
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='contacts' AND column_name='tenant_id') THEN
-        ALTER TABLE contacts ADD COLUMN tenant_id UUID;
+        ALTER TABLE contacts ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE contacts SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE contacts ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -87,7 +87,7 @@ BEGIN
 
     -- APPOINTMENTS
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='appointments' AND column_name='tenant_id') THEN
-        ALTER TABLE appointments ADD COLUMN tenant_id UUID;
+        ALTER TABLE appointments ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE appointments SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE appointments ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -97,7 +97,7 @@ BEGIN
 
     -- CHAT_MESSAGES (renamed messages -> chat_messages)
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='chat_messages' AND column_name='tenant_id') THEN
-        ALTER TABLE chat_messages ADD COLUMN tenant_id UUID;
+        ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE chat_messages SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE chat_messages ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -107,7 +107,7 @@ BEGIN
 
     -- TICKETS
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='tickets' AND column_name='tenant_id') THEN
-        ALTER TABLE tickets ADD COLUMN tenant_id UUID;
+        ALTER TABLE tickets ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE tickets SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE tickets ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -117,7 +117,7 @@ BEGIN
 
     -- BUSINESS_SERVICES
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='business_services' AND column_name='tenant_id') THEN
-        ALTER TABLE business_services ADD COLUMN tenant_id UUID;
+        ALTER TABLE business_services ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE business_services SET tenant_id = owner_id WHERE tenant_id IS NULL;
         ALTER TABLE business_services ALTER COLUMN tenant_id SET NOT NULL;
     END IF;
@@ -127,7 +127,7 @@ BEGIN
 
     -- 6. Decouple whatsapp_configs from users and link to tenants
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='whatsapp_configs' AND column_name='tenant_id') THEN
-        ALTER TABLE whatsapp_configs ADD COLUMN tenant_id UUID;
+        ALTER TABLE whatsapp_configs ADD COLUMN IF NOT EXISTS tenant_id UUID;
         UPDATE whatsapp_configs SET tenant_id = user_id WHERE tenant_id IS NULL;
         ALTER TABLE whatsapp_configs ALTER COLUMN tenant_id SET NOT NULL;
     END IF;

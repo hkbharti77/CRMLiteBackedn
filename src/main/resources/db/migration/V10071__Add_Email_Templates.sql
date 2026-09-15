@@ -1,4 +1,4 @@
-CREATE TABLE email_templates (
+CREATE TABLE IF NOT EXISTS email_templates (
     id UUID PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     subject VARCHAR(255) NOT NULL,

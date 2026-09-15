@@ -3,7 +3,7 @@
 -- Part of the Modular Architecture Refactor (PRD Section 8)
 -- ============================================================
 
-CREATE TABLE activity_logs (
+CREATE TABLE IF NOT EXISTS activity_logs (
     id           UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id     UUID         NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     contact_id   UUID         NOT NULL REFERENCES contacts(id) ON DELETE CASCADE,
@@ -22,8 +22,8 @@ CREATE TABLE activity_logs (
 );
 
 -- Indexes for performant timeline queries
-CREATE INDEX idx_activity_contact_id  ON activity_logs (contact_id);
-CREATE INDEX idx_activity_owner_id    ON activity_logs (owner_id);
-CREATE INDEX idx_activity_entity      ON activity_logs (entity_type, entity_id);
-CREATE INDEX idx_activity_created_at  ON activity_logs (created_at DESC);
-CREATE INDEX idx_activity_type        ON activity_logs (activity_type);
+CREATE INDEX IF NOT EXISTS idx_activity_contact_id  ON activity_logs (contact_id);
+CREATE INDEX IF NOT EXISTS idx_activity_owner_id    ON activity_logs (owner_id);
+CREATE INDEX IF NOT EXISTS idx_activity_entity      ON activity_logs (entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_activity_created_at  ON activity_logs (created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_activity_type        ON activity_logs (activity_type);

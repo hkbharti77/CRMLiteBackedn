@@ -29,6 +29,9 @@ public class FaqController {
     @Autowired
     private EmbeddingModel embeddingModel;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.rag.GraphIngestionService graphIngestionService;
+
     @GetMapping
     public ResponseEntity<List<FaqItem>> getAllFaqs(@AuthenticationPrincipal String email) {
         User user = userRepository.findByEmail(email)
@@ -50,6 +53,13 @@ public class FaqController {
 
         FaqItem saved = faqItemRepository.save(dto);
         log.info("[FAQ-API] Created FAQ Item ID: {} for tenant: {}", saved.getId(), user.getId());
+        if (graphIngestionService != null) {
+            try {
+                graphIngestionService.ingestFaq(saved);
+            } catch (Exception e) {
+                log.warn("[FAQ-API] Graph ingest skipped: {}", e.getMessage());
+            }
+        }
         return ResponseEntity.ok(saved);
     }
 
@@ -76,6 +86,13 @@ public class FaqController {
 
         FaqItem updated = faqItemRepository.save(existing);
         log.info("[FAQ-API] Updated FAQ Item ID: {} for tenant: {}", updated.getId(), user.getId());
+        if (graphIngestionService != null) {
+            try {
+                graphIngestionService.ingestFaq(updated);
+            } catch (Exception e) {
+                log.warn("[FAQ-API] Graph ingest skipped: {}", e.getMessage());
+            }
+        }
         return ResponseEntity.ok(updated);
     }
 
@@ -183,6 +200,15 @@ public class FaqController {
 
         List<FaqItem> saved = faqItemRepository.saveAll(items);
         log.info("[FAQ-API] Batch imported {} FAQ Items for tenant: {}", saved.size(), user.getId());
+        if (graphIngestionService != null) {
+            for (FaqItem item : saved) {
+                try {
+                    graphIngestionService.ingestFaq(item);
+                } catch (Exception e) {
+                    log.warn("[FAQ-API] Graph ingest skipped for FAQ {}: {}", item.getId(), e.getMessage());
+                }
+            }
+        }
         return ResponseEntity.ok(saved);
     }
 }

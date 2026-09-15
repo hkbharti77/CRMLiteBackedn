@@ -19,6 +19,8 @@ BEGIN
 END $$;
 
 -- Add the foreign key back with ON DELETE SET NULL and a predictable name
+ALTER TABLE whatsapp_campaign_recipients DROP CONSTRAINT IF EXISTS fk_wa_camp_recip_contact;
 ALTER TABLE whatsapp_campaign_recipients 
 ADD CONSTRAINT fk_wa_camp_recip_contact 
 FOREIGN KEY (contact_id) REFERENCES contacts(id) ON DELETE SET NULL;
+

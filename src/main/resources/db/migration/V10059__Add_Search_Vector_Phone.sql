@@ -8,7 +8,7 @@ ALTER TABLE tickets DROP COLUMN IF EXISTS search_vector;
 
 -- 3. Re-create search_vector column including submitter_phone
 ALTER TABLE tickets
-    ADD COLUMN search_vector TSVECTOR
+    ADD COLUMN IF NOT EXISTS search_vector TSVECTOR
     GENERATED ALWAYS AS (
         to_tsvector('english',
             COALESCE(subject,         '') || ' ' ||

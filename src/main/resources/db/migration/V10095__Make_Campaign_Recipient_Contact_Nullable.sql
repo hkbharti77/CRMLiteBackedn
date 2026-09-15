@@ -4,4 +4,6 @@ ALTER TABLE whatsapp_campaign_recipients ALTER COLUMN contact_id DROP NOT NULL;
 ALTER TABLE whatsapp_campaign_recipients DROP CONSTRAINT IF EXISTS uk_camp_contact;
 
 -- Add a new unique constraint on (campaign_id, phone_number) to enforce no duplicate deliveries per campaign.
+ALTER TABLE whatsapp_campaign_recipients DROP CONSTRAINT IF EXISTS uk_camp_phone;
 ALTER TABLE whatsapp_campaign_recipients ADD CONSTRAINT uk_camp_phone UNIQUE (campaign_id, phone_number);
+

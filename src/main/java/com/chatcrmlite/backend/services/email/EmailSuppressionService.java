@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -42,9 +43,21 @@ public class EmailSuppressionService {
                 .createdBy(createdBy)
                 .build();
             suppressionListRepository.save(suppression);
-        } else {
-            // Already suppressed, possibly update reason if it's more severe (e.g. soft bounce -> hard bounce)?
-            // For now, idempotent - do nothing.
         }
+    }
+
+    @Transactional(readOnly = true)
+    public List<EmailSuppressionList> getSuppressions(UUID tenantId) {
+        return suppressionListRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
+    }
+
+    @Transactional
+    public boolean deleteSuppression(UUID tenantId, UUID id) {
+        Optional<EmailSuppressionList> suppression = suppressionListRepository.findById(id);
+        if (suppression.isPresent() && tenantId.equals(suppression.get().getTenantId())) {
+            suppressionListRepository.delete(suppression.get());
+            return true;
+        }
+        return false;
     }
 }

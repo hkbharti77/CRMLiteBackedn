@@ -4,7 +4,10 @@ package com.chatcrmlite.backend.controllers;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.DocumentChunkRepository;
 import com.chatcrmlite.backend.services.RagIngestionService;
+import com.chatcrmlite.backend.services.ingestion.DocumentExtractionErrorCode;
+import com.chatcrmlite.backend.services.ingestion.DocumentTextExtractor;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -30,6 +33,11 @@ public class RagController {
     @Autowired
     private DocumentChunkRepository repository;
 
+    @Autowired
+    private DocumentTextExtractor documentTextExtractor;
+
+    @Value("${rag.ingestion.max-upload-bytes:20971520}")
+    private long maxUploadBytes;
 
     private record IngestionTask(UUID tenantId, CompletableFuture<Map<String, Object>> future) {}
 
@@ -52,6 +60,21 @@ public class RagController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
+        String filename = file.getOriginalFilename();
+        if (!documentTextExtractor.isSupported(filename)) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "Unsupported format. Allowed: " + documentTextExtractor.getSupportedExtensions());
+            err.put("errorCode", DocumentExtractionErrorCode.UNSUPPORTED_FORMAT.name());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        if (file.getSize() > maxUploadBytes) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "File exceeds max upload size of " + maxUploadBytes + " bytes");
+            err.put("errorCode", DocumentExtractionErrorCode.UPLOAD_TOO_LARGE.name());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
+        }
+
         UUID docId = UUID.randomUUID();
         byte[] fileBytes;
         try {
@@ -59,13 +82,21 @@ public class RagController {
         } catch (java.io.IOException e) {
             Map<String, Object> err = new HashMap<>();
             err.put("error", "Failed to read file: " + e.getMessage());
+            err.put("errorCode", DocumentExtractionErrorCode.PARSER_FAILURE.name());
+            return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
+        }
+
+        if (fileBytes.length > maxUploadBytes) {
+            Map<String, Object> err = new HashMap<>();
+            err.put("error", "File exceeds max upload size of " + maxUploadBytes + " bytes");
+            err.put("errorCode", DocumentExtractionErrorCode.UPLOAD_TOO_LARGE.name());
             return ResponseEntity.status(org.springframework.http.HttpStatus.BAD_REQUEST).body(err);
         }
 
         UUID tenantId = (user.getTenant() != null && user.getTenant().getId() != null) ? user.getTenant().getId() : user.getId();
 
         CompletableFuture<Map<String, Object>> task = ingestionService.ingestDocument(
-                fileBytes, file.getOriginalFilename(), tenantId, docId);
+                fileBytes, filename, tenantId, docId);
 
         activeTasks.put(docId, new IngestionTask(tenantId, task));
 

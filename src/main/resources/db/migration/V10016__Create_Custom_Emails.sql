@@ -1,7 +1,7 @@
 -- V10016: Custom Email Campaigns
 -- Tenants compose and send custom emails to their own contacts/clients.
 
-CREATE TABLE custom_emails (
+CREATE TABLE IF NOT EXISTS custom_emails (
     id            UUID         PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id      UUID         NOT NULL REFERENCES app_users(id),
 
@@ -25,5 +25,5 @@ CREATE TABLE custom_emails (
     updated_at    TIMESTAMP
 );
 
-CREATE INDEX idx_custom_emails_owner ON custom_emails(owner_id);
-CREATE INDEX idx_custom_emails_status ON custom_emails(status);
+CREATE INDEX IF NOT EXISTS idx_custom_emails_owner ON custom_emails(owner_id);
+CREATE INDEX IF NOT EXISTS idx_custom_emails_status ON custom_emails(status);

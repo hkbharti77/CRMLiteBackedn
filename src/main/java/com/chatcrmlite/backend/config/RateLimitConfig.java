@@ -36,7 +36,8 @@ public class RateLimitConfig {
         WEBHOOK(30),
         API(60),
         PUBLIC(5),
-        AI(10);
+        AI(10),
+        GLOBAL_AI(30);
 
         final int requestsPerMinute;
         Tier(int rpm) { this.requestsPerMinute = rpm; }

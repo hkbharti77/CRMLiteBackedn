@@ -127,6 +127,9 @@ public class SecurityConfig {
                     "/ws/**",
                     "/uploads/**",
                     "/public/**",
+                    "/api/v1/t/o/**",
+                    "/api/v1/t/c/**",
+                    "/api/v1/u/**",
                     "/error"
                 ).permitAll()
                 // Swagger — gated: only allowed if the request comes from localhost

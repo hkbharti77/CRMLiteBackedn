@@ -44,4 +44,29 @@ public interface FaqItemRepository extends JpaRepository<FaqItem, UUID> {
     @Transactional
     @Query("UPDATE FaqItem f SET f.hitCount = f.hitCount + 1 WHERE f.id = :id")
     void incrementHitCount(@Param("id") UUID id);
+
+    @Query(value = """
+        SELECT * FROM faq_items
+        WHERE tenant_id = :tenantId
+          AND is_active = true
+          AND lower(trim(question)) = lower(trim(:question))
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<FaqItem> findFirstByTenantAndExactQuestion(
+        @Param("tenantId") UUID tenantId, 
+        @Param("question") String question
+    );
+
+    @Query(value = """
+        SELECT f.id AS id, (f.embedding <=> CAST(:embedding AS vector)) AS distance
+        FROM faq_items f
+        WHERE f.tenant_id = :tenantId
+          AND f.is_active = true
+        ORDER BY distance ASC
+        LIMIT 1
+        """, nativeQuery = true)
+    Optional<FaqVectorMatch> findNearestByEmbedding(
+        @Param("tenantId") UUID tenantId,
+        @Param("embedding") String embedding
+    );
 }

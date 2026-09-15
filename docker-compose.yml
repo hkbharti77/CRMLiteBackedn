@@ -25,6 +25,30 @@ services:
     networks:
       - crmlite-network
 
+  # ── Neo4j (optional Graph RAG; not required for VECTOR mode) ──
+  neo4j:
+    image: neo4j:5.26-community
+    container_name: chatcrm_neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: ${NEO4J_USERNAME:-neo4j}/${NEO4J_PASSWORD:-password}
+      NEO4J_server_memory_heap_initial__size: 128m
+      NEO4J_server_memory_heap_max__size: 256m
+    volumes:
+      - neo4j_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+    networks:
+      - crmlite-network
+    profiles:
+      - graph
+
   # ── Redis Cache & PubSub (Max ~45MB) ──
   redis:
     image: redis:7-alpine
@@ -64,6 +88,11 @@ services:
       DB_PASSWORD: ${DB_PASSWORD:-root}
       REDIS_HOST: redis
       REDIS_PORT: 6379
+      NEO4J_URI: ${NEO4J_URI:-}
+      NEO4J_USERNAME: ${NEO4J_USERNAME:-}
+      NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
+      NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
+      RAG_MODE: ${RAG_MODE:-VECTOR}
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +104,7 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  neo4j_data:
 
 networks:
   crmlite-network:

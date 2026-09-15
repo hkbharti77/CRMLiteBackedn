@@ -8,6 +8,8 @@ import com.chatcrmlite.backend.services.RagRetrievalService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import jakarta.servlet.http.HttpServletRequest;
+import com.chatcrmlite.backend.config.RateLimitConfig;
 
 import java.util.Map;
 import java.util.UUID;
@@ -51,6 +53,9 @@ public class PublicChatController {
 
     @Autowired
     private ConversationMemoryService conversationMemoryService;
+
+    @Autowired
+    private RateLimitConfig rateLimitConfig;
 
     @PostMapping("/livechat/request/{businessId}")
     public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
@@ -109,7 +114,35 @@ public class PublicChatController {
     @PostMapping("/chat/{businessId}")
     public ResponseEntity<Map<String, Object>> handlePublicChat(
             @PathVariable UUID businessId,
-            @RequestBody Map<String, String> request) {
+            @RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest) {
+        
+        String clientIp = httpRequest.getRemoteAddr();
+        
+        // 1. Consume Global IP bucket
+        if (!rateLimitConfig.tryConsume("global:" + clientIp, RateLimitConfig.Tier.GLOBAL_AI)) {
+            org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                .warn("[PublicChat] GLOBAL_AI Rate limit exceeded for IP={}", clientIp);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                    .header("Retry-After", "60")
+                    .body(Map.of(
+                        "error", "Too many requests. Please wait a moment before sending another message.",
+                        "retryAfterSeconds", 60
+                    ));
+        }
+
+        // 2. Consume Business IP bucket
+        String businessKey = clientIp + ":" + businessId;
+        if (!rateLimitConfig.tryConsume(businessKey, RateLimitConfig.Tier.AI)) {
+            org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                .warn("[PublicChat] AI Rate limit exceeded for IP={} businessId={}", clientIp, businessId);
+            return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                    .header("Retry-After", "60")
+                    .body(Map.of(
+                        "error", "Too many requests. Please wait a moment before sending another message.",
+                        "retryAfterSeconds", 60
+                    ));
+        }
         
         String message = request.get("message");
         if (message == null || message.isBlank()) {

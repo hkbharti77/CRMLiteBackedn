@@ -21,6 +21,10 @@ CREATE TABLE IF NOT EXISTS ticket_categories (
 
 CREATE INDEX IF NOT EXISTS idx_tc_owner_id ON ticket_categories (owner_id);
 
+ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;
+ALTER TABLE ticket_categories ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT now();
+
 -- 2. Backfill categories from each tenant's comma-separated string
 DO $$
 DECLARE
@@ -38,8 +42,8 @@ BEGIN
         LOOP
             cat := TRIM(cat);
             IF cat <> '' THEN
-                INSERT INTO ticket_categories (owner_id, name, display_order)
-                VALUES (rec.owner_id, cat, ord)
+                INSERT INTO ticket_categories (id, owner_id, name, display_order, is_active, created_at)
+                VALUES (gen_random_uuid(), rec.owner_id, cat, ord, true, now())
                 ON CONFLICT (owner_id, name) DO NOTHING;
                 ord := ord + 1;
             END IF;

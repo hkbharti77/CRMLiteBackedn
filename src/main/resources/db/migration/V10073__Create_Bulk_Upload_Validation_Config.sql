@@ -1,4 +1,4 @@
-CREATE TABLE bulk_upload_validation_configs (
+CREATE TABLE IF NOT EXISTS bulk_upload_validation_configs (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   tenant_id   UUID NOT NULL UNIQUE REFERENCES tenants(id),
   extra_fields TEXT NOT NULL DEFAULT '',

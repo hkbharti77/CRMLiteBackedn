@@ -131,6 +131,10 @@ public class CustomEmailService {
     @Autowired
     private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
 
+    public void setTenantTierService(com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService) {
+        this.tenantTierService = tenantTierService;
+    }
+
     @Autowired
     private ObjectMapper objectMapper;
 
@@ -547,7 +551,7 @@ public class CustomEmailService {
             EmailCampaignRecipient recipient = EmailCampaignRecipient.builder()
                     .campaignId(campaign.getId())
                     .email(normalizedEmail)
-                    .trackingToken(UUID.randomUUID().toString())
+                    .trackingToken(trackingService.generateTrackingToken())
                     .deliveryStatus(DeliveryStatus.PENDING)
                     .build();
             recipient.setTenantId(campaign.getOwner().getTenant().getId());
@@ -621,8 +625,26 @@ public class CustomEmailService {
 
                 for (EmailCampaignRecipient recipient : pendingBatch) {
                     try {
-                        String trackingToken = trackingService.generateTrackingToken();
-                        recipient.setTrackingToken(trackingToken);
+                        int claimed = recipientRepository.claimRecipientForSending(recipient.getId());
+                        if (claimed == 0) {
+                            log.debug("[CustomEmail] Recipient {} already claimed by another worker, skipping", recipient.getId());
+                            continue;
+                        }
+
+                        String normEmail = suppressionService.normalizeEmail(recipient.getEmail());
+                        if (suppressionService.isSuppressed(tenantId, normEmail)) {
+                            log.info("[CustomEmail] Skipping suppressed recipient {}", normEmail);
+                            recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+                            recipient.setFailureMessage("Recipient Suppressed");
+                            recipientRepository.save(recipient);
+                            continue;
+                        }
+
+                        String trackingToken = recipient.getTrackingToken();
+                        if (trackingToken == null || trackingToken.isBlank()) {
+                            trackingToken = trackingService.generateTrackingToken();
+                            recipient.setTrackingToken(trackingToken);
+                        }
 
                         Optional<Contact> cOpt = contactRepository.findFirstByEmailAndTenant_Id(recipient.getEmail(), tenantId);
                         String name = cOpt.map(Contact::getName).filter(n -> n != null && !n.isBlank())

@@ -9,7 +9,7 @@ ADD COLUMN IF NOT EXISTS permission_version INT NOT NULL DEFAULT 1;
 -- Initialize default permissions for existing AGENT role users
 UPDATE app_users 
 SET permissions = '["MODULE_INBOX", "MODULE_LEADS", "MODULE_SETTINGS", "SETTINGS_PROFILE"]'::jsonb
-WHERE role = 'AGENT' AND (permissions IS NULL OR permissions = '[]'::jsonb);
+WHERE role = 'AGENT' AND (permissions IS NULL OR permissions::text = '[]');
 
 -- Create append-only user permission audit log table
 CREATE TABLE IF NOT EXISTS user_permission_audit_logs (

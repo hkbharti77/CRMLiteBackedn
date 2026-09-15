@@ -5,22 +5,26 @@ CREATE EXTENSION IF NOT EXISTS vector;
 ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS embedding_vector vector(384);
 
 -- Migrate existing JSONB embeddings to the new vector column
--- The old format is a JSON array of floats
-UPDATE document_chunks
-SET embedding_vector = (
-    SELECT array_agg(value::text::real)
-    FROM jsonb_array_elements(embedding)
-)::vector
-WHERE embedding IS NOT NULL AND embedding_vector IS NULL;
+DO $$ 
+BEGIN 
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='document_chunks' AND column_name='embedding' AND data_type='jsonb'
+    ) THEN
+        EXECUTE 'UPDATE document_chunks SET embedding_vector = (SELECT array_agg(value::text::real) FROM jsonb_array_elements(embedding))::vector WHERE embedding IS NOT NULL AND embedding_vector IS NULL';
+    END IF;
+END $$;
 
--- Drop the old jsonb column (only if it's still a jsonb type)
-ALTER TABLE document_chunks DROP COLUMN IF EXISTS embedding;
-
--- Rename the new vector column to embedding
-ALTER TABLE document_chunks RENAME COLUMN embedding_vector TO embedding;
-
--- Enforce NOT NULL on the new embedding column
-ALTER TABLE document_chunks ALTER COLUMN embedding SET NOT NULL;
+DO $$ 
+BEGIN 
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns 
+        WHERE table_name='document_chunks' AND column_name='embedding_vector'
+    ) THEN
+        ALTER TABLE document_chunks DROP COLUMN IF EXISTS embedding;
+        ALTER TABLE document_chunks RENAME COLUMN embedding_vector TO embedding;
+    END IF;
+END $$;
 
 -- Create an HNSW index for fast Approximate Nearest Neighbor (ANN) search
 -- Using vector_cosine_ops since cosine similarity is typically used for embeddings

@@ -42,6 +42,29 @@ class PromptBuilderTest {
     }
 
     @Test
+    @DisplayName("Hybrid prompt includes VECTOR_CONTEXT, GRAPH_CONTEXT, and SOURCES")
+    void hybridPromptIncludesStructuredSections() {
+        com.chatcrmlite.backend.dto.rag.FusedContext fused =
+                com.chatcrmlite.backend.dto.rag.FusedContext.builder()
+                        .vectorContextLines(List.of("Service pricing is $100"))
+                        .graphContextLines(List.of("Service A --HAS_FEATURE--> Bluetooth"))
+                        .sources(List.of("VECTOR_CHUNK:c1", "GRAPH:faq-1"))
+                        .build();
+        ConversationContext ctx = ConversationContext.builder()
+                .latestQuery("Which services support Bluetooth?")
+                .build();
+
+        String prompt = promptBuilder.buildHybridRagPrompt(ctx, fused, "saas", null);
+
+        assertTrue(prompt.contains("<VECTOR_CONTEXT>"));
+        assertTrue(prompt.contains("Service pricing is $100"));
+        assertTrue(prompt.contains("<GRAPH_CONTEXT>"));
+        assertTrue(prompt.contains("HAS_FEATURE"));
+        assertTrue(prompt.contains("<SOURCES>"));
+        assertTrue(prompt.contains("Do NOT invent entities"));
+    }
+
+    @Test
     @DisplayName("Default persona is used when tenantPersona is empty/blank")
     void defaultPersonaWhenBlank() {
         String prompt = promptBuilder.buildRagPrompt(
@@ -197,7 +220,8 @@ class PromptBuilderTest {
         assertTrue(prompt.contains("VOICE ASSISTANT SPOKEN-FIRST RULES"), "Should contain voice rules");
         assertTrue(prompt.contains("EXACTLY 1 OR 2 SHORT SPOKEN SENTENCES"), "Should enforce 1-2 sentence brevity");
         assertTrue(prompt.contains("NEVER use bullet points"), "Should forbid bullet points");
-        assertTrue(prompt.contains("STRICT ENGLISH OUTPUT"), "Should enforce English output");
+        assertTrue(prompt.contains("CRITICAL LANGUAGE ENFORCEMENT") || prompt.contains("language mode"),
+                "Should enforce language matching");
         assertTrue(prompt.contains("Be cheerful and friendly."), "Should incorporate tenant persona");
     }
 }

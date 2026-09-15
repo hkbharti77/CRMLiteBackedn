@@ -2,7 +2,7 @@
 -- This migration creates the complete ticketing system including tickets, activities, and SLA configurations
 
 -- Create tickets table
-CREATE TABLE tickets (
+CREATE TABLE IF NOT EXISTS tickets (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_number VARCHAR(50) UNIQUE NOT NULL,
     owner_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
@@ -30,7 +30,7 @@ CREATE TABLE tickets (
 );
 
 -- Create ticket activities table for tracking all actions on tickets
-CREATE TABLE ticket_activities (
+CREATE TABLE IF NOT EXISTS ticket_activities (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     ticket_id UUID NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
     user_id UUID REFERENCES app_users(id) ON DELETE SET NULL,
@@ -42,7 +42,7 @@ CREATE TABLE ticket_activities (
 );
 
 -- Create SLA configurations table
-CREATE TABLE sla_configurations (
+CREATE TABLE IF NOT EXISTS sla_configurations (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     priority VARCHAR(50) NOT NULL,
@@ -55,7 +55,7 @@ CREATE TABLE sla_configurations (
 );
 
 -- Create support form configurations table
-CREATE TABLE support_form_configs (
+CREATE TABLE IF NOT EXISTS support_form_configs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     owner_id UUID NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
     form_title VARCHAR(255) NOT NULL DEFAULT 'Get Support',
@@ -71,27 +71,33 @@ CREATE TABLE support_form_configs (
     UNIQUE(owner_id)
 );
 
+ALTER TABLE support_form_configs ADD COLUMN IF NOT EXISTS collect_phone BOOLEAN DEFAULT TRUE;
+ALTER TABLE support_form_configs ADD COLUMN IF NOT EXISTS require_phone BOOLEAN DEFAULT FALSE;
+ALTER TABLE support_form_configs ADD COLUMN IF NOT EXISTS enabled BOOLEAN DEFAULT TRUE;
+
+
 -- Create indexes for better performance
-CREATE INDEX idx_tickets_owner_id ON tickets(owner_id);
-CREATE INDEX idx_tickets_contact_id ON tickets(contact_id);
-CREATE INDEX idx_tickets_assigned_to_id ON tickets(assigned_to_id);
-CREATE INDEX idx_tickets_status ON tickets(status);
-CREATE INDEX idx_tickets_priority ON tickets(priority);
-CREATE INDEX idx_tickets_created_at ON tickets(created_at);
-CREATE INDEX idx_tickets_ticket_number ON tickets(ticket_number);
-CREATE INDEX idx_tickets_submitter_email ON tickets(submitter_email);
-CREATE INDEX idx_tickets_deleted ON tickets(deleted);
+CREATE INDEX IF NOT EXISTS idx_tickets_owner_id ON tickets(owner_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_contact_id ON tickets(contact_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_assigned_to_id ON tickets(assigned_to_id);
+CREATE INDEX IF NOT EXISTS idx_tickets_status ON tickets(status);
+CREATE INDEX IF NOT EXISTS idx_tickets_priority ON tickets(priority);
+CREATE INDEX IF NOT EXISTS idx_tickets_created_at ON tickets(created_at);
+CREATE INDEX IF NOT EXISTS idx_tickets_ticket_number ON tickets(ticket_number);
+CREATE INDEX IF NOT EXISTS idx_tickets_submitter_email ON tickets(submitter_email);
+CREATE INDEX IF NOT EXISTS idx_tickets_deleted ON tickets(deleted);
 
-CREATE INDEX idx_ticket_activities_ticket_id ON ticket_activities(ticket_id);
-CREATE INDEX idx_ticket_activities_user_id ON ticket_activities(user_id);
-CREATE INDEX idx_ticket_activities_created_at ON ticket_activities(created_at);
+CREATE INDEX IF NOT EXISTS idx_ticket_activities_ticket_id ON ticket_activities(ticket_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_activities_user_id ON ticket_activities(user_id);
+CREATE INDEX IF NOT EXISTS idx_ticket_activities_created_at ON ticket_activities(created_at);
 
-CREATE INDEX idx_sla_configurations_owner_id ON sla_configurations(owner_id);
-CREATE INDEX idx_support_form_configs_owner_id ON support_form_configs(owner_id);
+CREATE INDEX IF NOT EXISTS idx_sla_configurations_owner_id ON sla_configurations(owner_id);
+CREATE INDEX IF NOT EXISTS idx_support_form_configs_owner_id ON support_form_configs(owner_id);
 
 -- Insert default SLA configurations for all existing users
-INSERT INTO sla_configurations (owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
+INSERT INTO sla_configurations (id, owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
 SELECT 
+    gen_random_uuid(),
     u.id,
     'LOW',
     48,
@@ -103,8 +109,9 @@ WHERE NOT EXISTS (
     WHERE s.owner_id = u.id AND s.priority = 'LOW'
 );
 
-INSERT INTO sla_configurations (owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
+INSERT INTO sla_configurations (id, owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
 SELECT 
+    gen_random_uuid(),
     u.id,
     'MEDIUM',
     24,
@@ -116,8 +123,9 @@ WHERE NOT EXISTS (
     WHERE s.owner_id = u.id AND s.priority = 'MEDIUM'
 );
 
-INSERT INTO sla_configurations (owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
+INSERT INTO sla_configurations (id, owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
 SELECT 
+    gen_random_uuid(),
     u.id,
     'HIGH',
     8,
@@ -129,8 +137,9 @@ WHERE NOT EXISTS (
     WHERE s.owner_id = u.id AND s.priority = 'HIGH'
 );
 
-INSERT INTO sla_configurations (owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
+INSERT INTO sla_configurations (id, owner_id, priority, first_response_hours, resolution_hours, business_hours_only)
 SELECT 
+    gen_random_uuid(),
     u.id,
     'URGENT',
     2,
@@ -143,13 +152,17 @@ WHERE NOT EXISTS (
 );
 
 -- Insert default support form configurations for all existing users
-INSERT INTO support_form_configs (owner_id, form_title, form_description, success_message, categories)
+INSERT INTO support_form_configs (id, owner_id, form_title, form_description, success_message, categories, collect_phone, require_phone, enabled)
 SELECT 
+    gen_random_uuid(),
     u.id,
     'Get Support',
     'Need help? Fill out this form and our team will get back to you shortly.',
     'Thank you for contacting us! Your support request has been received and we will get back to you soon.',
-    '["General", "Technical", "Billing", "Other"]'
+    '["General", "Technical", "Billing", "Other"]',
+    true,
+    false,
+    true
 FROM app_users u
 WHERE NOT EXISTS (
     SELECT 1 FROM support_form_configs s 

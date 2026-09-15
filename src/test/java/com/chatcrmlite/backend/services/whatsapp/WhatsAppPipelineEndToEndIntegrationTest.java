@@ -33,6 +33,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.redis.connection.stream.MapRecord;
+import org.springframework.data.redis.connection.stream.ObjectRecord;
 import org.springframework.data.redis.connection.stream.StreamRecords;
 import java.util.Collections;
 import org.springframework.data.redis.connection.stream.RecordId;
@@ -246,9 +247,10 @@ class WhatsAppPipelineEndToEndIntegrationTest {
                 }
                 """.formatted(phoneNumberId, waId, waId, waMessageId);
 
-        MapRecord<String, String, String> ingressRecord = ObjectRecord
-                .create("whatsapp:ingress:stream", webhookJson)
-                .withId(RecordId.of("1779381961001-0"));
+        MapRecord<String, String, String> ingressRecord = StreamRecords.newRecord()
+                .in("whatsapp:ingress:stream")
+                .withId(RecordId.of("1779381961001-0"))
+                .ofMap(Collections.singletonMap("payload", webhookJson));
 
         when(whatsappConfigRepository.findTenantIdByPhoneNumberId(phoneNumberId)).thenReturn(Optional.of(tenantId));
         when(resourceManager.canConsume(eq(tenantId), eq(TenantResourceManager.ResourceType.MESSAGES_PER_SECOND), eq(1))).thenReturn(true);
@@ -270,9 +272,10 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         context.getMetadata().put("text", "What are your business hours?");
 
         String aiRecordValue = objectMapper.writeValueAsString(context);
-        MapRecord<String, String, String> aiRecord = ObjectRecord
-                .create("workflow:ai", aiRecordValue)
-                .withId(RecordId.of("1779381961002-0"));
+        MapRecord<String, String, String> aiRecord = StreamRecords.newRecord()
+                .in("workflow:ai")
+                .withId(RecordId.of("1779381961002-0"))
+                .ofMap(Collections.singletonMap("payload", aiRecordValue));
 
         when(resourceManager.canConsume(eq(tenantId), eq(TenantResourceManager.ResourceType.AI_TOKENS), eq(1))).thenReturn(true);
         when(whatsappConfigRepository.findByTenantId(tenantId)).thenReturn(Optional.of(config));
@@ -306,9 +309,10 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         // Stage 3: Delivery Worker Stage
         aiCompletedContext.setCurrentStage(ProcessingContext.WorkflowStage.DELIVERY);
         String deliveryRecordValue = objectMapper.writeValueAsString(aiCompletedContext);
-        MapRecord<String, String, String> deliveryRecord = ObjectRecord
-                .create("workflow:delivery", deliveryRecordValue)
-                .withId(RecordId.of("1779381961003-0"));
+        MapRecord<String, String, String> deliveryRecord = StreamRecords.newRecord()
+                .in("workflow:delivery")
+                .withId(RecordId.of("1779381961003-0"))
+                .ofMap(Collections.singletonMap("payload", deliveryRecordValue));
 
         when(redisTemplate.opsForStream().acknowledge("whatsapp-workers", deliveryRecord)).thenReturn(1L);
 
@@ -341,9 +345,10 @@ class WhatsAppPipelineEndToEndIntegrationTest {
         context.getMetadata().put("text", "Hello");
 
         String aiRecordValue = objectMapper.writeValueAsString(context);
-        MapRecord<String, String, String> aiRecord = ObjectRecord
-                .create("workflow:ai", aiRecordValue)
-                .withId(RecordId.of("1779381961004-0"));
+        MapRecord<String, String, String> aiRecord = StreamRecords.newRecord()
+                .in("workflow:ai")
+                .withId(RecordId.of("1779381961004-0"))
+                .ofMap(Collections.singletonMap("payload", aiRecordValue));
 
         when(resourceManager.canConsume(eq(tenantId), eq(TenantResourceManager.ResourceType.AI_TOKENS), eq(1))).thenReturn(true);
         when(whatsappConfigRepository.findByTenantId(tenantId)).thenReturn(Optional.of(configNoUser));

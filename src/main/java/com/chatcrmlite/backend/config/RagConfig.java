@@ -18,6 +18,11 @@ import dev.langchain4j.data.message.UserMessage;
 import dev.langchain4j.model.output.Response;
 import java.util.List;
 
+import com.chatcrmlite.backend.services.ai.AiOrchestrator;
+import java.util.stream.Collectors;
+import org.springframework.context.annotation.Conditional;
+import org.springframework.beans.factory.ObjectProvider;
+
 @Configuration
 public class RagConfig {
 
@@ -126,6 +131,7 @@ public class RagConfig {
     }
 
     @Bean
+    @Conditional(AiEnabledCondition.class)
     public AiProvider chatLanguageModelAiProvider(
             @org.springframework.context.annotation.Lazy ChatLanguageModel chatLanguageModel,
             ModelHealthMonitor healthMonitor) {
@@ -137,6 +143,18 @@ public class RagConfig {
                 openAiModelName,
                 openRouterModelName
         );
+    }
+
+    @Bean
+    @Conditional(AiEnabledCondition.class)
+    public AiOrchestrator aiOrchestrator(
+            ObjectProvider<AiProvider> providerSource,
+            ModelHealthMonitor healthMonitor) {
+        
+        List<AiProvider> providers = providerSource.orderedStream().collect(Collectors.toList());
+        org.slf4j.LoggerFactory.getLogger(RagConfig.class)
+            .info("[AI-Config] AiOrchestrator initialized with {} provider(s)", providers.size());
+        return new AiOrchestrator(providers, healthMonitor);
     }
 
     public static class ChatLanguageModelAiProvider implements AiProvider {

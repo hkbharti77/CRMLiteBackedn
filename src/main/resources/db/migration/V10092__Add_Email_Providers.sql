@@ -11,6 +11,6 @@ CREATE TABLE IF NOT EXISTS email_providers (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_email_providers_business ON email_providers(business_id);
+CREATE INDEX IF NOT EXISTS idx_email_providers_business ON email_providers(business_id);
 
 -- Table custom_email_campaigns doesn't exist, skipping ALTER TABLE
