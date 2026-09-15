@@ -159,7 +159,7 @@ class RagRetrievalServiceTest {
         when(faqMatchingService.findBestMatch(eq(ownerUserId), eq(query), any())).thenReturn(
                 new FaqMatchingService.MatchResult(null, 0.2f, false)
         );
-        when(semanticCacheService.getCachedResponse(eq(query), any(), eq(knowledgeTenantId))).thenReturn(null);
+        when(semanticCacheService.getCachedResponse(contains(query), any(), eq(knowledgeTenantId))).thenReturn(null);
         stubHybridVector("Property pricing starts at $200k.");
 
         when(promptBuilder.buildRagPrompt(any(ConversationContext.class), anyList(), any(), any()))
@@ -180,7 +180,7 @@ class RagRetrievalServiceTest {
         verify(aiOrchestrator, times(1)).execute(any(AiRequest.class));
         verify(faqMatchingService).findBestMatch(eq(ownerUserId), eq(query), any());
         verify(hybridRetrievalService).retrieve(eq(query), eq(knowledgeTenantId), any(), eq(true), eq(8));
-        verify(semanticCacheService).putCachedResponse(eq(query), any(), eq("Our properties start at $200,000."), eq(knowledgeTenantId));
+        verify(semanticCacheService).putCachedResponse(contains(query), any(), eq("Our properties start at $200,000."), eq(knowledgeTenantId));
     }
 
     @Test
@@ -191,7 +191,7 @@ class RagRetrievalServiceTest {
         when(faqMatchingService.findBestMatch(eq(ownerUserId), eq(query), any())).thenReturn(
                 new FaqMatchingService.MatchResult(null, 0.1f, false)
         );
-        when(semanticCacheService.getCachedResponse(eq(query), any(), eq(knowledgeTenantId))).thenReturn(null);
+        when(semanticCacheService.getCachedResponse(contains(query), any(), eq(knowledgeTenantId))).thenReturn(null);
         stubHybridVector("Viewings can be booked online.");
         when(promptBuilder.buildRagPrompt(any(ConversationContext.class), anyList(), any(), any()))
                 .thenReturn("Structured prompt");
@@ -221,7 +221,7 @@ class RagRetrievalServiceTest {
         when(faqMatchingService.findBestMatch(eq(ownerUserId), eq(query), any())).thenReturn(
                 new FaqMatchingService.MatchResult(null, 0.0f, false)
         );
-        when(semanticCacheService.getCachedResponse(eq(query), any(), eq(knowledgeTenantId))).thenReturn(null);
+        when(semanticCacheService.getCachedResponse(contains(query), any(), eq(knowledgeTenantId))).thenReturn(null);
         stubHybridVector("Office is in NY.");
         when(promptBuilder.buildRagPrompt(any(ConversationContext.class), any(), any(), any())).thenReturn("Prompt");
 
@@ -248,7 +248,8 @@ class RagRetrievalServiceTest {
         String fallback = ragRetrievalService.fallbackResponse(ctx, ownerUserId, new RuntimeException("All providers down"));
 
         assertNotNull(fallback);
-        assertTrue(fallback.contains("trouble connecting to my knowledge base"));
+        assertTrue(fallback.toLowerCase().contains("trouble"));
+        assertFalse(fallback.toLowerCase().contains("knowledge base"));
     }
 
     @Test
@@ -282,7 +283,7 @@ class RagRetrievalServiceTest {
         when(faqMatchingService.findBestMatch(eq(ownerUserId), eq(query), any())).thenReturn(
                 new FaqMatchingService.MatchResult(null, 0.1f, false)
         );
-        when(semanticCacheService.getCachedResponse(eq(query), any(), eq(knowledgeTenantId)))
+        when(semanticCacheService.getCachedResponse(contains(query), any(), eq(knowledgeTenantId)))
                 .thenReturn("Yes, free parking is available on-site.");
 
         ConversationContext ctx = ConversationContext.builder().latestQuery(query).build();

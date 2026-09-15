@@ -47,7 +47,22 @@ class ChatResponseFormatterTest {
         assertFalse(out.toLowerCase().contains("knowledge base"));
         assertFalse(out.toLowerCase().contains("here's what i found"));
         assertFalse(out.toLowerCase().contains("field tracking"));
-        assertTrue(out.toLowerCase().contains("don't have that detail")
-                || out.toLowerCase().contains("i don't have that detail"));
+        assertTrue(out.toLowerCase().contains("don't have that detail"));
+    }
+
+    @Test
+    void convertsRawRowDumpToBullet() {
+        String raw = "Row: Product_Name: AI CRM Pro | Category: AI CRM | Price_INR: 9999";
+        String out = ChatResponseFormatter.forChatWidget(raw);
+        assertTrue(out.startsWith("• "));
+        assertFalse(out.contains("Row:"));
+        assertTrue(out.contains("AI CRM Pro"));
+        assertTrue(out.contains("9999"));
+    }
+
+    @Test
+    void looksRoboticDetectsKnowledgeBase() {
+        assertTrue(ChatResponseFormatter.looksRobotic("Based on my knowledge base, here are products."));
+        assertFalse(ChatResponseFormatter.looksRobotic("• AI CRM Pro — ₹9,999"));
     }
 }

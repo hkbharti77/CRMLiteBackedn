@@ -112,14 +112,18 @@ public class RagRetrievalService {
         if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
             log.info("[FAQ-FastPath] High-confidence match (Score: {}) for ownerUserId={} knowledgeTenantId={} | Direct FAQ response returned.",
                     String.format("%.4f", faqMatch.getScore()), ownerUserId, knowledgeTenantId);
-            return faqMatch.getFaqItem().getAnswer();
+            return ChatResponseFormatter.forChatWidget(faqMatch.getFaqItem().getAnswer());
         }
 
         String cacheQuery = cacheKey(query, mode);
         // Cache keyed by knowledge tenant so it aligns with document/graph corpus
         String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, knowledgeTenantId);
         if (cachedResponse != null) {
-            return cachedResponse;
+            if (ChatResponseFormatter.looksRobotic(cachedResponse)) {
+                log.info("[RAG] Skipping robotic cache hit — regenerating for query: {}", query);
+            } else {
+                return ChatResponseFormatter.forChatWidget(cachedResponse);
+            }
         }
 
         // Document chunks + Neo4j graph use real tenant id (RagController upload path)
@@ -224,7 +228,7 @@ public class RagRetrievalService {
 
         String cacheQuery = cacheKey(query, mode);
         String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, knowledgeTenantId);
-        if (cachedResponse != null) {
+        if (cachedResponse != null && !ChatResponseFormatter.looksRobotic(cachedResponse)) {
             return cachedResponse;
         }
 
@@ -313,17 +317,21 @@ public class RagRetrievalService {
         throw new RuntimeException("Tenant/owner not found: " + businessOrOwnerId);
     }
 
+    /** Bump when chat UX / formatting rules change so exact-cache misses old robotic replies. */
+    private static final String CHAT_UX_CACHE_VERSION = "ux3";
+
     private String cacheKey(String query, RagMode mode) {
+        String q = CHAT_UX_CACHE_VERSION + ":" + query;
         if (mode == RagMode.VECTOR) {
-            return query;
+            return q;
         }
         // Include mode + graph index version so hybrid/graph cache never leaks across graph rebuilds
-        return mode.name() + ":v" + graphIndexVersion + ":" + query;
+        return mode.name() + ":v" + graphIndexVersion + ":" + q;
     }
 
     public String fallbackResponse(ConversationContext context, UUID tenantId, Throwable t) {
         log.error("[RAG-Fallback] Circuit breaker triggered for query: {}. Error: {}", context.getLatestQuery(), t.getMessage());
-        return "I'm having trouble connecting to my knowledge base right now. Please try again later.";
+        return "I'm having a little trouble right now. Please try again in a moment.";
     }
 
     public String fallbackVoiceResponse(ConversationContext context, UUID tenantId, String languageMode, Throwable t) {

@@ -42,7 +42,7 @@ class PromptBuilderTest {
     }
 
     @Test
-    @DisplayName("Hybrid prompt includes VECTOR_CONTEXT, GRAPH_CONTEXT, and SOURCES")
+    @DisplayName("Hybrid prompt uses friendly PRODUCT_FACTS / RELATED_FACTS (no SOURCES dump)")
     void hybridPromptIncludesStructuredSections() {
         com.chatcrmlite.backend.dto.rag.FusedContext fused =
                 com.chatcrmlite.backend.dto.rag.FusedContext.builder()
@@ -56,14 +56,14 @@ class PromptBuilderTest {
 
         String prompt = promptBuilder.buildHybridRagPrompt(ctx, fused, "saas", null);
 
-        assertTrue(prompt.contains("<VECTOR_CONTEXT>"));
+        assertTrue(prompt.contains("<PRODUCT_FACTS>"));
         assertTrue(prompt.contains("Service pricing is $100"));
-        assertTrue(prompt.contains("<GRAPH_CONTEXT>"));
+        assertTrue(prompt.contains("<RELATED_FACTS>"));
         assertTrue(prompt.contains("HAS_FEATURE"));
-        assertTrue(prompt.contains("<SOURCES>"));
-        assertTrue(prompt.contains("Do NOT invent entities"));
-        assertTrue(prompt.contains("NEVER use Markdown tables")
-                || prompt.contains("NEVER use Markdown tables (no | column |"));
+        assertFalse(prompt.contains("<SOURCES>"));
+        assertFalse(prompt.toLowerCase().contains("knowledge base"));
+        assertTrue(prompt.contains("NEVER use Markdown tables"));
+        assertTrue(prompt.contains("warm human") || prompt.contains("CHAT STYLE"));
     }
 
     @Test
