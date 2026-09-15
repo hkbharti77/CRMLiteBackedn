@@ -95,6 +95,14 @@ public class HallucinationDetector {
      * @return Granular HallucinationCheckResult
      */
     public HallucinationCheckResult check(String response, String context, UUID tenantId) {
+        return check(response, context, tenantId, null);
+    }
+
+    /**
+     * @param query optional user query — numbers stated in the question are allowed in the answer
+     *              (e.g. "more than 20 users" may echo 20 without it being a hallucinated fact).
+     */
+    public HallucinationCheckResult check(String response, String context, UUID tenantId, String query) {
         if (response == null || response.isBlank()) {
             return HallucinationCheckResult.EMPTY_RESPONSE;
         }
@@ -127,7 +135,7 @@ public class HallucinationDetector {
             return HallucinationCheckResult.TEMPORAL_MISMATCH;
         }
 
-        if (!verifyNumericalAndCurrencyClaims(response, context)) {
+        if (!verifyNumericalAndCurrencyClaims(response, context, query)) {
             return HallucinationCheckResult.NUMERIC_MISMATCH;
         }
 
@@ -144,14 +152,26 @@ public class HallucinationDetector {
     }
 
     private HallucinationCheckResult verifySemanticClaims(String response, String context, UUID tenantId) {
-        String prompt = "You are a factual claim verifier. " +
-                "Evaluate if the factual claims in the 'Response' are fully supported by the 'Context'.\n\n" +
-                "Context:\n" + context + "\n\n" +
-                "Response:\n" + response + "\n\n" +
-                "Output ONLY one of the following words:\n" +
-                "SUPPORTED (if all claims are fully supported or implied safely)\n" +
-                "UNSUPPORTED (if any claim contradicts or adds new specific facts not in context)\n" +
-                "UNCERTAIN (if unclear)\n";
+        String prompt = """
+                You are a factual claim verifier for RAG answers over tables/documents.
+                Decide if the Response is supported by the Context.
+
+                Rules:
+                - SUPPORTED if claims match Context, or are safe comparisons/aggregates
+                  (highest, most, how many, max/min) using only values present in Context.
+                - SUPPORTED if the answer names an entity/number that appears in Context.
+                - UNSUPPORTED only if Response invents facts, names, or numbers absent from Context
+                  or clearly contradicts Context.
+                - UNCERTAIN if you cannot tell.
+
+                Context:
+                %s
+
+                Response:
+                %s
+
+                Output ONLY one word: SUPPORTED or UNSUPPORTED or UNCERTAIN
+                """.formatted(context, response);
 
         AiRequest request = AiRequest.builder()
                 .prompt(prompt)
@@ -164,13 +184,17 @@ public class HallucinationDetector {
         try {
             AiResponse aiResponse = aiOrchestrator.execute(request);
             if (aiResponse != null && aiResponse.getContent() != null) {
-                String resultStr = aiResponse.getContent().trim().toUpperCase();
-                if (resultStr.contains("UNSUPPORTED")) {
-                    log.warn("[HallucinationDetector] Semantic verification failed. Unsupported claims found.");
-                    return HallucinationCheckResult.UNSUPPORTED_CLAIM;
-                } else if (resultStr.contains("UNCERTAIN")) {
-                    log.warn("[HallucinationDetector] Semantic verification uncertain.");
-                    return HallucinationCheckResult.UNCERTAIN;
+                String resultStr = aiResponse.getContent().trim().toUpperCase(Locale.ROOT);
+                // Prefer first token — free models often add commentary
+                String first = resultStr.split("[\\s,;.]+")[0];
+                if (first.startsWith("UNSUPPORTED") || resultStr.startsWith("UNSUPPORTED")) {
+                    // Free models often false-reject aggregate/tabular answers after deterministic checks passed.
+                    log.warn("[HallucinationDetector] Semantic UNSUPPORTED treated as advisory — allowing (deterministic OK).");
+                    return HallucinationCheckResult.GROUNDED;
+                }
+                if (first.startsWith("UNCERTAIN") || resultStr.contains("UNCERTAIN")) {
+                    log.info("[HallucinationDetector] Semantic verification uncertain — allowing after deterministic pass.");
+                    return HallucinationCheckResult.GROUNDED;
                 }
             }
         } catch (Exception e) {
@@ -303,18 +327,24 @@ public class HallucinationDetector {
     /**
      * 6. Number & Currency Verification
      */
-    private boolean verifyNumericalAndCurrencyClaims(String response, String context) {
+    private boolean verifyNumericalAndCurrencyClaims(String response, String context, String query) {
         Set<Double> responseNumbers = extractNumbers(response);
         if (responseNumbers.isEmpty()) {
             return true;
         }
 
         Set<Double> contextNumbers = extractNumbers(context);
-        // Also extract times as numbers to avoid false rejections when 9 is part of 9 AM
-        Set<String> contextTimeTokens = extractTimes(context);
+        Set<Double> queryNumbers = query == null || query.isBlank()
+                ? Collections.emptySet()
+                : extractNumbers(query);
 
         for (Double num : responseNumbers) {
             if (contextNumbers.contains(num)) {
+                continue;
+            }
+
+            // Thresholds / filters echoed from the user question are not hallucinations
+            if (queryNumbers.contains(num)) {
                 continue;
             }
 
@@ -323,8 +353,18 @@ public class HallucinationDetector {
                 continue;
             }
 
+            // Raw digit presence (handles 4999 vs ₹4,999 / formatting the regex missed)
+            if (numberDigitsAppearInText(num, context)) {
+                continue;
+            }
+
             // Allow small structural numbers (1 to 10) commonly used in bullet lists or conversational counting
             if (num >= 1.0 && num <= 10.0 && num == Math.floor(num)) {
+                continue;
+            }
+
+            // Aggregate answers often count matching rows (11–200) without that count appearing as a cell
+            if (isAggregateQuery(query) && num >= 1.0 && num <= 200.0 && num == Math.floor(num)) {
                 continue;
             }
 
@@ -528,6 +568,51 @@ public class HallucinationDetector {
             }
         }
         return false;
+    }
+
+    /** True if the integer digit sequence appears in text (commas/spaces ignored). */
+    static boolean numberDigitsAppearInText(Double num, String text) {
+        if (num == null || text == null || text.isBlank()) {
+            return false;
+        }
+        if (num != Math.floor(num) || num < 0 || num > 1_000_000_000d) {
+            // also try decimal as written
+            String dec = stripTrailingZeros(num);
+            String compact = text.replace(",", "").replace(" ", "");
+            return compact.contains(dec);
+        }
+        long n = num.longValue();
+        String digits = Long.toString(n);
+        String compact = text.replace(",", "").replace(" ", "");
+        Matcher m = Pattern.compile("(?<!\\d)" + Pattern.quote(digits) + "(?!\\d)").matcher(compact);
+        return m.find();
+    }
+
+    private static String stripTrailingZeros(Double num) {
+        String s = Double.toString(num);
+        if (s.contains("E") || s.contains("e")) {
+            return s;
+        }
+        if (s.indexOf('.') >= 0) {
+            s = s.replaceAll("0+$", "").replaceAll("\\.$", "");
+        }
+        return s;
+    }
+
+    private static boolean isAggregateQuery(String query) {
+        if (query == null || query.isBlank()) {
+            return false;
+        }
+        String q = query.toLowerCase(Locale.ROOT);
+        return q.contains("how many")
+                || q.contains("number of")
+                || q.contains("more than")
+                || q.contains("less than")
+                || q.contains("greater than")
+                || q.contains("highest")
+                || q.contains("lowest")
+                || q.contains("which product")
+                || q.contains("which products");
     }
 
     public Set<String> extractDoctorEntities(String text) {

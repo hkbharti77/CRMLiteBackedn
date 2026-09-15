@@ -46,10 +46,23 @@ class DocumentTextExtractorTest {
         byte[] csv = "Name,Email,Status\nJohn,john@example.com,Lead\nSarah,sarah@example.com,Customer\n"
                 .getBytes(StandardCharsets.UTF_8);
         String text = extractor.extract(csv, "leads.csv");
+        assertTrue(text.contains("Columns: Name | Email | Status") || text.contains("Columns:"));
         assertTrue(text.contains("Name: John"));
         assertTrue(text.contains("Email: john@example.com"));
         assertTrue(text.contains("Status: Lead"));
         assertTrue(text.contains("Name: Sarah"));
+        assertTrue(text.contains("Row "));
+    }
+
+    @Test
+    void csvArbitraryHeadersWorkWithoutDomainAssumptions() throws Exception {
+        byte[] csv = "Doctor,Specialty,Patients\nAda,Cardio,40\n"
+                .getBytes(StandardCharsets.UTF_8);
+        String text = extractor.extract(csv, "clinic.csv");
+        assertTrue(text.contains("Columns: Doctor | Specialty | Patients"));
+        assertTrue(text.contains("Doctor: Ada"));
+        assertTrue(text.contains("Specialty: Cardio"));
+        assertTrue(text.contains("Patients: 40"));
     }
 
     @Test

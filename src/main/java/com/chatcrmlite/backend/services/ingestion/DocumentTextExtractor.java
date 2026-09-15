@@ -267,6 +267,7 @@ public class DocumentTextExtractor {
             List<String> headers = new ArrayList<>(headerMap.keySet());
 
             StringBuilder out = new StringBuilder();
+            out.append("Columns: ").append(String.join(" | ", headers)).append("\n");
             int rows = 0;
             for (CSVRecord record : parser) {
                 rows++;
@@ -280,7 +281,8 @@ public class DocumentTextExtractor {
                     String value = record.isMapped(header) ? record.get(header) : "";
                     parts.add(header + ": " + (value != null ? value : ""));
                 }
-                out.append(String.join(" | ", parts)).append("\n");
+                out.append("Row ").append(rows + 1).append(": ")
+                        .append(String.join(" | ", parts)).append("\n");
             }
             return out.toString().trim();
         } catch (DocumentExtractionException e) {
@@ -305,11 +307,19 @@ public class DocumentTextExtractor {
                             DocumentExtractionErrorCode.EXTRACTION_LIMIT_EXCEEDED,
                             "CSV exceeds max-rows=" + csvMaxRows);
                 }
+                if (rows == 1) {
+                    List<String> synthetic = new ArrayList<>();
+                    for (int i = 0; i < record.size(); i++) {
+                        synthetic.add("Column" + (i + 1));
+                    }
+                    out.append("Columns: ").append(String.join(" | ", synthetic)).append("\n");
+                }
                 List<String> parts = new ArrayList<>();
                 for (int i = 0; i < record.size(); i++) {
                     parts.add("Column" + (i + 1) + ": " + record.get(i));
                 }
-                out.append(String.join(" | ", parts)).append("\n");
+                out.append("Row ").append(rows).append(": ")
+                        .append(String.join(" | ", parts)).append("\n");
             }
             return out.toString().trim();
         } catch (DocumentExtractionException e) {

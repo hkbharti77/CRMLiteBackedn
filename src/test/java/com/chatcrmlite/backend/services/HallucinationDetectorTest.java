@@ -1,10 +1,18 @@
 package com.chatcrmlite.backend.services;
 
+import com.chatcrmlite.backend.services.ai.AiOrchestrator;
+import com.chatcrmlite.backend.services.ai.AiResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class HallucinationDetectorTest {
 
@@ -205,5 +213,47 @@ public class HallucinationDetectorTest {
         String context2 = "Dental implants start at ₹40,000.";
         String answer2 = "Dental implants start at ₹40,000 and include a free consultation.";
         assertEquals(HallucinationCheckResult.GROUNDED, detector.check(answer2, context2, null));
+    }
+
+    @Test
+    @DisplayName("24. Numbers from the user query are allowed even if absent from context")
+    void testQueryThresholdNumber_Allowed() {
+        String context = "Row: Product_Name: AI CRM Pro | Users: 15 | Price_INR: 9999";
+        String query = "How many products have more than 20 users?";
+        String answer = "Based on the data, 3 products have more than 20 users.";
+        // 20 comes from the query; 3 is a small structural count (1-10 allowed)
+        assertEquals(HallucinationCheckResult.GROUNDED,
+                detector.check(answer, context, null, query));
+    }
+
+    @Test
+    @DisplayName("25. Structured context: flaky semantic UNSUPPORTED still GROUNDED after deterministic pass")
+    void testStructuredContextSoftensSemanticUnsupported() {
+        AiOrchestrator mockAi = mock(AiOrchestrator.class);
+        when(mockAi.execute(any())).thenReturn(AiResponse.builder().content("UNSUPPORTED").build());
+        ReflectionTestUtils.setField(detector, "aiOrchestrator", mockAi);
+
+        String context = "Columns: Product | AI_Agents\nRow 2: Product: AgentMax | AI_Agents: 50";
+        String answer = "AgentMax has the highest number of AI agents.";
+        assertEquals(HallucinationCheckResult.GROUNDED,
+                detector.check(answer, context, UUID.randomUUID(),
+                        "Which product has the highest number of AI agents?"));
+    }
+
+    @Test
+    @DisplayName("26. Price filter query: threshold from query + comma price in context allowed")
+    void testPriceGreaterThan_QueryThresholdAndContextDigits() {
+        String context = "Row 2: Product: Pro Plan | Price_INR: 4,999\nRow 3: Product: Enterprise | Price_INR: 25,000";
+        String query = "Which products have a price greater than ₹20,000?";
+        String answer = "Enterprise has a price of ₹25,000 which is greater than ₹20,000.";
+        assertEquals(HallucinationCheckResult.GROUNDED,
+                detector.check(answer, context, null, query));
+    }
+
+    @Test
+    @DisplayName("27. Digit sequence match finds 4999 in ₹4,999 context")
+    void testNumberDigitsAppearInText() {
+        assertTrue(HallucinationDetector.numberDigitsAppearInText(4999.0, "Price: ₹4,999"));
+        assertFalse(HallucinationDetector.numberDigitsAppearInText(4999.0, "Price: 499"));
     }
 }

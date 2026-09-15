@@ -19,6 +19,9 @@ public class QueryAnalysis {
     private String intent;
     @Builder.Default
     private List<String> entities = new ArrayList<>();
+    /** Column names from tenant KnowledgeCatalog that appear in the query (routing only, not Neo4j seeds). */
+    @Builder.Default
+    private List<String> matchedColumns = new ArrayList<>();
     @Builder.Default
     private List<String> entityTypes = new ArrayList<>();
     @Builder.Default

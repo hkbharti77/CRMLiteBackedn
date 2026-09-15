@@ -18,6 +18,8 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
     
     long countByTenantId(UUID tenantId);
 
+    boolean existsByTenantIdAndContentHash(UUID tenantId, String contentHash);
+
     List<DocumentChunk> findByDocumentIdAndTenantId(UUID documentId, UUID tenantId);
 
     void deleteByDocumentIdAndTenantId(UUID documentId, UUID tenantId);

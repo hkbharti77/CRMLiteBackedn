@@ -30,4 +30,38 @@ class GraphRetrievalServiceTest {
                 .requiresGraph(false)
                 .build()).isEmpty());
     }
+
+    @Test
+    void needsStructuredSeedFallbackForAggregateOrMatchedColumns() {
+        assertTrue(GraphRetrievalService.needsStructuredSeedFallback(QueryAnalysis.builder()
+                .intent("AGGREGATE_LOOKUP")
+                .entities(List.of())
+                .matchedColumns(List.of())
+                .build()));
+        assertTrue(GraphRetrievalService.needsStructuredSeedFallback(QueryAnalysis.builder()
+                .intent("STRUCTURED_FACTUAL")
+                .build()));
+        assertTrue(GraphRetrievalService.needsStructuredSeedFallback(QueryAnalysis.builder()
+                .intent("GENERAL_FACTUAL")
+                .matchedColumns(List.of("Users"))
+                .build()));
+        assertFalse(GraphRetrievalService.needsStructuredSeedFallback(QueryAnalysis.builder()
+                .intent("GENERAL_FACTUAL")
+                .matchedColumns(List.of())
+                .entities(List.of())
+                .build()));
+    }
+
+    @Test
+    void aggregateWithoutEntitiesStillSafeWhenNeo4jMissing() {
+        GraphRetrievalService service = new GraphRetrievalService(null);
+        assertTrue(service.retrieve(QueryAnalysis.builder()
+                .tenantId(UUID.randomUUID())
+                .requiresGraph(true)
+                .intent("AGGREGATE_LOOKUP")
+                .matchedColumns(List.of("Users"))
+                .entities(List.of())
+                .originalQuery("How many products have more than 20 users?")
+                .build()).isEmpty());
+    }
 }

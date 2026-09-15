@@ -1,10 +1,6 @@
 package com.chatcrmlite.backend.services.rag;
 
 import com.chatcrmlite.backend.dto.rag.QueryAnalysis;
-import com.chatcrmlite.backend.models.BusinessService;
-import com.chatcrmlite.backend.models.User;
-import com.chatcrmlite.backend.repositories.BusinessServiceRepository;
-import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.memory.RagRouterService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,32 +13,39 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Extends existing RagRouterService with entity/intent hints for Hybrid Graph RAG.
- * tenantId always comes from the caller — never from the LLM.
+ * Routes Hybrid Graph RAG using <b>tenant-uploaded catalog</b> + language patterns.
+ * No niche/product hardcoding — new Excel/CSV schemas work without code changes.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class QueryAnalyzerService {
 
-    private static final List<String> GRAPH_KEYWORDS = List.of(
-            "compatible", "compatibility", "related", "feature", "features", "supports",
-            "category", "categories", "relationship", "belongs", "mentions", "about",
-            "which products", "which services", "compare", "vs", "versus"
+    /** Language-level patterns only (not business vocabulary). */
+    private static final List<String> AGGREGATE_PATTERNS = List.of(
+            "how many", "number of", "count of", "total ",
+            "more than", "less than", "at least", "at most",
+            "highest", "lowest", "most ", "least ",
+            "compare", " vs ", "versus", "which has", "which have"
+    );
+
+    private static final List<String> RELATION_PATTERNS = List.of(
+            "compatible", "compatibility", "related to", "works with",
+            "belongs", "relationship", "connected"
     );
 
     private static final List<String> RELATIONSHIP_HINT_KEYWORDS = List.of(
             "COMPATIBLE_WITH", "HAS_FEATURE", "RELATED_TO", "ABOUT", "IN_CATEGORY", "MENTIONS"
     );
 
-    private static final Pattern WORD = Pattern.compile("[a-z0-9]{3,}");
+    private static final Pattern QUOTED = Pattern.compile("\"([^\"]{2,80})\"|'([^']{2,80})'");
 
     private final RagRouterService ragRouterService;
-    private final BusinessServiceRepository businessServiceRepository;
-    private final UserRepository userRepository;
+    private final TenantKnowledgeCatalogService knowledgeCatalogService;
 
     @Value("${rag.mode:VECTOR}")
     private String ragModeProperty;
@@ -56,26 +59,35 @@ public class QueryAnalyzerService {
         RagMode mode = RagMode.from(ragModeProperty);
 
         String normalized = query == null ? "" : query.toLowerCase(Locale.ROOT).trim();
-        List<String> entities = extractEntities(normalized, tenantId);
+        TenantKnowledgeCatalogService.CatalogSnapshot catalog = knowledgeCatalogService.load(tenantId);
+        TenantKnowledgeCatalogService.CatalogMatches matches =
+                knowledgeCatalogService.matchCatalog(normalized, catalog);
+
+        List<String> matchedColumns = dedupePreserveOrder(matches.columns());
+        List<String> entities = new ArrayList<>();
+        entities.addAll(extractQuotedPhrases(query != null ? query : ""));
+        entities.addAll(matches.entities());
+        entities = dedupePreserveOrder(entities);
+        // Never treat dictionary column labels as Neo4j seed entity names
+        entities = excludeColumnLabels(entities, matchedColumns);
+
         List<String> entityTypes = new ArrayList<>();
         if (!entities.isEmpty()) {
-            entityTypes.add("BusinessService");
-        }
-        if (containsAny(normalized, List.of("feature", "features", "supports", "bluetooth", "wifi"))) {
             entityTypes.add("Feature");
-        }
-        if (containsAny(normalized, List.of("category", "categories"))) {
             entityTypes.add("Category");
+            entityTypes.add("Tag");
         }
 
-        String intent = detectIntent(normalized, entities);
-        List<String> relationshipHints = detectRelationshipHints(normalized, intent);
+        String intent = detectIntent(normalized, entities, matchedColumns, catalog);
+        List<String> relationshipHints = detectRelationshipHints(intent);
 
-        boolean graphLikely = !entities.isEmpty()
-                || containsAny(normalized, GRAPH_KEYWORDS)
-                || intent.contains("COMPATIBILITY")
-                || intent.contains("FEATURE")
-                || intent.contains("CATEGORY");
+        boolean catalogHit = !entities.isEmpty() || !matchedColumns.isEmpty()
+                || columnMentioned(normalized, catalog);
+        boolean aggregate = containsAny(normalized, AGGREGATE_PATTERNS);
+        boolean relational = containsAny(normalized, RELATION_PATTERNS);
+
+        boolean graphLikely = catalogHit || aggregate || relational
+                || (catalog.hasStructuredData() && requiresRag && mode == RagMode.HYBRID && looksStructuredQuestion(normalized));
 
         boolean requiresVector;
         boolean requiresGraph;
@@ -86,7 +98,7 @@ public class QueryAnalyzerService {
             }
             case HYBRID -> {
                 requiresVector = requiresRag;
-                requiresGraph = requiresRag && graphLikely;
+                requiresGraph = requiresRag && (graphLikely || catalog.hasStructuredData());
             }
             default -> {
                 requiresVector = requiresRag;
@@ -99,6 +111,7 @@ public class QueryAnalyzerService {
                 .tenantId(tenantId)
                 .intent(intent)
                 .entities(entities)
+                .matchedColumns(matchedColumns)
                 .entityTypes(entityTypes)
                 .relationshipHints(relationshipHints)
                 .requiresGraph(requiresGraph)
@@ -107,82 +120,107 @@ public class QueryAnalyzerService {
                 .requiresRag(requiresRag)
                 .build();
 
-        log.info("[QueryAnalyzer] tenant={} mode={} intent={} requiresVector={} requiresGraph={} entities={} latencyMs={}",
-                tenantId, mode, intent, requiresVector, requiresGraph, entities.size(),
+        log.info("[QueryAnalyzer] tenant={} mode={} intent={} requiresVector={} requiresGraph={} entities={} matchedCols={} catalogCols={} structured={} latencyMs={}",
+                tenantId, mode, intent, requiresVector, requiresGraph, entities.size(), matchedColumns.size(),
+                catalog.columns().size(), catalog.hasStructuredData(),
                 System.currentTimeMillis() - start);
         return analysis;
     }
 
-    private List<String> extractEntities(String normalizedQuery, UUID tenantId) {
-        Set<String> found = new LinkedHashSet<>();
-        try {
-            User owner = userRepository.findById(tenantId).orElse(null);
-            if (owner != null) {
-                List<BusinessService> services = businessServiceRepository.findByOwner(owner);
-                for (BusinessService service : services) {
-                    if (service.getName() == null || service.getName().isBlank()) continue;
-                    String name = service.getName().toLowerCase(Locale.ROOT).trim();
-                    if (name.length() >= 3 && normalizedQuery.contains(name)) {
-                        found.add(service.getName().trim());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.debug("[QueryAnalyzer] BusinessService lookup skipped: {}", e.getMessage());
+    private String detectIntent(String normalized, List<String> entities, List<String> matchedColumns,
+                                TenantKnowledgeCatalogService.CatalogSnapshot catalog) {
+        boolean columnHit = !matchedColumns.isEmpty() || columnMentioned(normalized, catalog);
+        if (containsAny(normalized, AGGREGATE_PATTERNS)
+                || (columnHit && containsAny(normalized, List.of("how", "which", "most", "more", "less")))) {
+            return "AGGREGATE_LOOKUP";
         }
-
-        // Capitalized multi-word phrases as soft entity hints (no LLM)
-        String[] tokens = normalizedQuery.split("\\s+");
-        for (String token : tokens) {
-            if (WORD.matcher(token).matches() && token.length() >= 4
-                    && List.of("bluetooth", "wifi", "pricing", "refund", "warranty").contains(token)) {
-                found.add(Character.toUpperCase(token.charAt(0)) + token.substring(1));
-            }
-        }
-        return new ArrayList<>(found);
-    }
-
-    private String detectIntent(String normalized, List<String> entities) {
-        if (containsAny(normalized, List.of("compatible", "compatibility", "works with", "related to"))) {
+        if (containsAny(normalized, RELATION_PATTERNS)) {
             return "SERVICE_COMPATIBILITY";
-        }
-        if (containsAny(normalized, List.of("feature", "features", "supports", "support"))) {
-            return "FEATURE_LOOKUP";
-        }
-        if (containsAny(normalized, List.of("category", "categories"))) {
-            return "CATEGORY_LOOKUP";
-        }
-        if (containsAny(normalized, List.of("faq", "question", "how do", "how to", "what is", "what are"))) {
-            return "FAQ_FACTUAL";
         }
         if (!entities.isEmpty()) {
             return "ENTITY_AWARE";
         }
+        if (catalog.hasStructuredData()) {
+            return "STRUCTURED_FACTUAL";
+        }
         return "GENERAL_FACTUAL";
     }
 
-    private List<String> detectRelationshipHints(String normalized, String intent) {
-        List<String> hints = new ArrayList<>();
-        if (intent.equals("SERVICE_COMPATIBILITY") || containsAny(normalized, List.of("compatible", "related"))) {
-            hints.add("RELATED_TO");
+    private List<String> detectRelationshipHints(String intent) {
+        if ("SERVICE_COMPATIBILITY".equals(intent)) {
+            return List.of("RELATED_TO", "HAS_FEATURE");
         }
-        if (intent.equals("FEATURE_LOOKUP") || containsAny(normalized, List.of("feature", "supports"))) {
-            hints.add("HAS_FEATURE");
+        if ("AGGREGATE_LOOKUP".equals(intent) || "STRUCTURED_FACTUAL".equals(intent) || "ENTITY_AWARE".equals(intent)) {
+            return List.of("IN_CATEGORY", "RELATED_TO", "HAS_FEATURE", "MENTIONS");
         }
-        if (intent.equals("CATEGORY_LOOKUP") || containsAny(normalized, List.of("category"))) {
-            hints.add("IN_CATEGORY");
-        }
-        if (containsAny(normalized, List.of("about", "mentions"))) {
-            hints.add("ABOUT");
-            hints.add("MENTIONS");
-        }
-        if (hints.isEmpty()) {
-            hints.addAll(List.of("HAS_FEATURE", "ABOUT", "MENTIONS", "RELATED_TO"));
-        }
-        return hints.stream().filter(RELATIONSHIP_HINT_KEYWORDS::contains).distinct().toList();
+        return List.copyOf(RELATIONSHIP_HINT_KEYWORDS);
     }
 
-    private boolean containsAny(String text, List<String> needles) {
+    private static boolean looksStructuredQuestion(String normalized) {
+        return normalized.contains("?")
+                || containsAny(normalized, List.of("how many", "which", "what", "list", "show"));
+    }
+
+    private static boolean columnMentioned(String normalized, TenantKnowledgeCatalogService.CatalogSnapshot catalog) {
+        if (catalog == null) return false;
+        for (String col : catalog.columns()) {
+            if (col == null || col.length() < 2) continue;
+            String c = col.toLowerCase(Locale.ROOT).replace('_', ' ');
+            if (normalized.contains(c) || normalized.contains(c.replace(" ", ""))) {
+                return true;
+            }
+            for (String part : c.split("\\s+")) {
+                if (part.length() >= 4 && normalized.contains(part)) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static List<String> excludeColumnLabels(List<String> entities, List<String> columns) {
+        if (entities.isEmpty() || columns == null || columns.isEmpty()) {
+            return entities;
+        }
+        Set<String> colKeys = new LinkedHashSet<>();
+        for (String c : columns) {
+            if (c != null) colKeys.add(c.toLowerCase(Locale.ROOT));
+        }
+        List<String> out = new ArrayList<>();
+        for (String e : entities) {
+            if (e != null && !colKeys.contains(e.toLowerCase(Locale.ROOT))) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    private static List<String> extractQuotedPhrases(String raw) {
+        List<String> out = new ArrayList<>();
+        Matcher m = QUOTED.matcher(raw);
+        while (m.find()) {
+            String q = m.group(1) != null ? m.group(1) : m.group(2);
+            if (q != null && !q.isBlank()) {
+                out.add(q.trim());
+            }
+        }
+        return out;
+    }
+
+    private static List<String> dedupePreserveOrder(List<String> in) {
+        Set<String> seen = new LinkedHashSet<>();
+        List<String> out = new ArrayList<>();
+        for (String s : in) {
+            if (s == null || s.isBlank()) continue;
+            String key = s.toLowerCase(Locale.ROOT);
+            if (seen.add(key)) {
+                out.add(s.trim());
+            }
+        }
+        return out;
+    }
+
+    private static boolean containsAny(String text, List<String> needles) {
         for (String n : needles) {
             if (text.contains(n.toLowerCase(Locale.ROOT))) {
                 return true;

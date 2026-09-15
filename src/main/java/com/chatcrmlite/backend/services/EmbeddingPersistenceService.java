@@ -6,6 +6,7 @@ import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,9 @@ public class EmbeddingPersistenceService {
         this.meterRegistry = meterRegistry;
     }
 
+    /**
+     * Idempotent persist: same (tenantId, contentHash) is skipped — re-uploads do not error.
+     */
     @Transactional
     public int saveChunks(UUID tenantId, List<DocumentChunk> chunks) {
         if (chunks == null || chunks.isEmpty()) {
@@ -39,18 +43,28 @@ public class EmbeddingPersistenceService {
 
         Timer.Sample sample = Timer.start(meterRegistry);
         int savedCount = 0;
+        int skippedDuplicates = 0;
         for (DocumentChunk chunk : chunks) {
+            if (chunk.getContentHash() != null
+                    && repository.existsByTenantIdAndContentHash(tenantId, chunk.getContentHash())) {
+                skippedDuplicates++;
+                continue;
+            }
             try {
-                repository.save(chunk);
+                repository.saveAndFlush(chunk);
                 savedCount++;
+            } catch (DataIntegrityViolationException e) {
+                // Race: another request inserted the same hash
+                skippedDuplicates++;
+                log.info("Skipped duplicate chunk for tenant {} hash={}", tenantId, chunk.getContentHash());
             } catch (Exception e) {
-                log.warn("Duplicate or invalid chunk for tenant {}: {}", tenantId, chunk.getContentHash());
+                log.warn("Invalid chunk for tenant {}: {}", tenantId, e.getMessage());
             }
         }
         sample.stop(meterRegistry.timer("vector.ingestion.latency", "tenant", tenantId.toString()));
         meterRegistry.counter("vector.ingestion.count", "tenant", tenantId.toString()).increment(savedCount);
-        
-        log.info("Persisted {} chunks for tenant {}", savedCount, tenantId);
+
+        log.info("Persisted {} chunks for tenant {} (skippedDuplicates={})", savedCount, tenantId, skippedDuplicates);
         return savedCount;
     }
 }

@@ -69,6 +69,9 @@ public class GraphRetrievalService {
             if (seedIds.isEmpty() && analysis.getOriginalQuery() != null) {
                 seedIds = resolveSeedNodesByQueryText(tenantStr, analysis.getOriginalQuery());
             }
+            if (seedIds.isEmpty() && needsStructuredSeedFallback(analysis)) {
+                seedIds = resolveStructuredFallbackSeeds(tenantStr);
+            }
             if (seedIds.isEmpty()) {
                 log.info("[GraphRetrieval] No seed nodes tenant={} latencyMs={}",
                         tenantId, System.currentTimeMillis() - start);
@@ -88,6 +91,44 @@ public class GraphRetrievalService {
             }
             return List.of();
         }
+    }
+
+    /**
+     * Aggregate / catalog-column queries often have no named entity seeds.
+     * Fall back to tenant Feature/Document nodes so graph path is not a no-op.
+     */
+    static boolean needsStructuredSeedFallback(QueryAnalysis analysis) {
+        if (analysis == null) {
+            return false;
+        }
+        String intent = analysis.getIntent();
+        if ("AGGREGATE_LOOKUP".equals(intent) || "STRUCTURED_FACTUAL".equals(intent)) {
+            return true;
+        }
+        List<String> cols = analysis.getMatchedColumns();
+        return cols != null && !cols.isEmpty();
+    }
+
+    private List<String> resolveStructuredFallbackSeeds(String tenantId) {
+        String cypher = """
+                MATCH (n)
+                WHERE n.tenantId = $tenantId
+                  AND (n:Feature OR n:Document OR n:Category OR n:Tag OR n:Chunk)
+                  AND n.graphId IS NOT NULL
+                RETURN n.graphId AS graphId
+                LIMIT 15
+                """;
+        List<String> ids = new ArrayList<>();
+        try (Session session = openSession()) {
+            Result result = session.run(cypher, Values.parameters("tenantId", tenantId));
+            while (result.hasNext()) {
+                String id = result.next().get("graphId").asString(null);
+                if (id != null) {
+                    ids.add(id);
+                }
+            }
+        }
+        return ids.stream().distinct().toList();
     }
 
     private List<String> resolveSeedNodes(String tenantId, List<String> entities) {
