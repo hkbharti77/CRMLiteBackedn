@@ -1016,6 +1016,7 @@ public class CustomEmailService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
     public List<com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO> getCampaignInboundReplies(UUID campaignId, User user) {
         CustomEmail campaign = findOwnedCampaign(campaignId, user);
 
