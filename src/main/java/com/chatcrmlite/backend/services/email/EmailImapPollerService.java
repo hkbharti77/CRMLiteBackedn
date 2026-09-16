@@ -125,7 +125,7 @@ public class EmailImapPollerService {
 
                 for (Message msg : unread) {
                     try {
-                        String fromEmail = "";
+                        String fromEmail = "unknown@domain.com";
                         if (msg.getFrom() != null && msg.getFrom().length > 0) {
                             Address addr = msg.getFrom()[0];
                             if (addr instanceof InternetAddress) {
@@ -135,9 +135,22 @@ public class EmailImapPollerService {
                             }
                         }
 
+                        String toEmail = username;
+                        Address[] recipients = msg.getRecipients(Message.RecipientType.TO);
+                        if (recipients != null && recipients.length > 0) {
+                            if (recipients[0] instanceof InternetAddress) {
+                                toEmail = ((InternetAddress) recipients[0]).getAddress();
+                            } else {
+                                toEmail = recipients[0].toString();
+                            }
+                        }
+
                         String subject = msg.getSubject();
                         String textBody = getTextFromPart(msg);
                         String messageId = getHeaderValue(msg, "Message-ID");
+                        if (messageId == null || messageId.isBlank()) {
+                            messageId = "imap-msg-" + msg.getMessageNumber() + "-" + (msg.getReceivedDate() != null ? msg.getReceivedDate().getTime() : System.currentTimeMillis());
+                        }
                         String inReplyTo = getHeaderValue(msg, "In-Reply-To");
                         String references = getHeaderValue(msg, "References");
 
@@ -145,6 +158,7 @@ public class EmailImapPollerService {
                                 .provider("IMAP")
                                 .providerMessageId(messageId)
                                 .fromEmail(fromEmail)
+                                .toEmail(toEmail)
                                 .subject(subject)
                                 .textBody(textBody)
                                 .inReplyTo(inReplyTo)

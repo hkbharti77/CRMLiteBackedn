@@ -84,13 +84,13 @@ public class EmailInboundReplyService {
             }
         }
 
-        // 3. Prepare Inbound Message Entity
+        // 3. Prepare Inbound Message Entity with safe non-null fallbacks
         EmailInboundMessage message = new EmailInboundMessage();
-        message.setProvider(dto.getProvider());
-        message.setProviderMessageId(dto.getProviderMessageId());
-        message.setFromEmail(dto.getFromEmail());
-        message.setToEmail(dto.getToEmail());
-        message.setSubject(dto.getSubject());
+        message.setProvider(dto.getProvider() != null && !dto.getProvider().isBlank() ? dto.getProvider() : "IMAP");
+        message.setProviderMessageId(dto.getProviderMessageId() != null && !dto.getProviderMessageId().isBlank() ? dto.getProviderMessageId() : UUID.randomUUID().toString());
+        message.setFromEmail(dto.getFromEmail() != null && !dto.getFromEmail().isBlank() ? dto.getFromEmail() : "unknown@domain.com");
+        message.setToEmail(dto.getToEmail() != null && !dto.getToEmail().isBlank() ? dto.getToEmail() : "inbound@domain.com");
+        message.setSubject(dto.getSubject() != null ? dto.getSubject() : "(No Subject)");
         message.setInReplyTo(dto.getInReplyTo());
         message.setReferencesHeader(dto.getReferences());
         message.setReplyToken(tokenToSearch);
