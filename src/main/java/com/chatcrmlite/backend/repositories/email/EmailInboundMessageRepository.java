@@ -17,6 +17,12 @@ public interface EmailInboundMessageRepository extends JpaRepository<EmailInboun
 
     long countByCampaignId(UUID campaignId);
 
+    @Query("SELECT m FROM EmailInboundMessage m WHERE m.campaignId = :campaignId ORDER BY m.receivedAt DESC")
+    List<EmailInboundMessage> findByCampaignIdOrderByReceivedAtDesc(@Param("campaignId") UUID campaignId);
+
+    @Query("SELECT m FROM EmailInboundMessage m WHERE m.tenant.id = :tenantId AND m.campaignId = :campaignId ORDER BY m.receivedAt DESC")
+    List<EmailInboundMessage> findByTenantIdAndCampaignIdOrderByReceivedAtDesc(@Param("tenantId") UUID tenantId, @Param("campaignId") UUID campaignId);
+
     @Query("SELECT m FROM EmailInboundMessage m WHERE m.tenant.id = :tenantId AND m.campaignRecipientId = :campaignRecipientId ORDER BY m.receivedAt DESC")
     List<EmailInboundMessage> findByTenantIdAndCampaignRecipientIdOrderByReceivedAtDesc(@Param("tenantId") UUID tenantId, @Param("campaignRecipientId") UUID campaignRecipientId);
 

@@ -138,6 +138,9 @@ public class CustomEmailService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired
+    private com.chatcrmlite.backend.repositories.email.EmailInboundMessageRepository inboundMessageRepository;
+
     private User.PlanType resolvePlan(User user) {
         if (user.getRole() == User.Role.SUPER_ADMIN) {
             return User.PlanType.ENTERPRISE;
@@ -926,9 +929,6 @@ public class CustomEmailService {
         return sb.toString().trim();
     }
 
-    @Autowired(required = false)
-    private com.chatcrmlite.backend.repositories.email.EmailInboundMessageRepository inboundMessageRepository;
-
     public CustomEmailDTO toDTO(CustomEmail e) {
         long sentCount = 0;
         long uniqueOpens = 0;
@@ -1014,5 +1014,35 @@ public class CustomEmailService {
                 .replyRatePercentage(Math.round(replyRate * 100.0) / 100.0)
                 .createdAt(e.getCreatedAt())
                 .build();
+    }
+
+    public List<com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO> getCampaignInboundReplies(UUID campaignId, User user) {
+        CustomEmail campaign = findOwnedCampaign(campaignId, user);
+
+        List<com.chatcrmlite.backend.models.email.EmailInboundMessage> messages =
+                inboundMessageRepository.findByCampaignIdOrderByReceivedAtDesc(campaign.getId());
+
+        return messages.stream().map(m -> {
+            com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO dto = new com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO();
+            dto.setId(m.getId());
+            dto.setCampaignId(m.getCampaignId());
+            dto.setRecipientId(m.getRecipientId());
+            dto.setCampaignRecipientId(m.getCampaignRecipientId());
+            dto.setReplyToken(m.getReplyToken());
+            dto.setProvider(m.getProvider());
+            dto.setProviderMessageId(m.getProviderMessageId());
+            dto.setMessageId(m.getMessageId());
+            dto.setInReplyTo(m.getInReplyTo());
+            dto.setFromEmail(m.getFromEmail());
+            dto.setToEmail(m.getToEmail());
+            dto.setSubject(m.getSubject());
+            dto.setTextBody(m.getTextBody());
+            dto.setHtmlBody(m.getHtmlBody());
+            dto.setReplySnippet(m.getReplySnippet());
+            dto.setAttributionStatus(m.getAttributionStatus() != null ? m.getAttributionStatus().name() : null);
+            dto.setReceivedAt(m.getReceivedAt());
+            dto.setCreatedAt(m.getCreatedAt());
+            return dto;
+        }).collect(Collectors.toList());
     }
 }

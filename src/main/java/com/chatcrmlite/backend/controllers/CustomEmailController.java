@@ -131,4 +131,9 @@ public class CustomEmailController {
         req.setTagsFilter(existing.getTagsFilter());
         return ResponseEntity.ok(customEmailService.scheduleOrExecuteCampaign(null, req, me()));
     }
+
+    @GetMapping("/{id}/replies")
+    public ResponseEntity<java.util.List<com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO>> getCampaignReplies(@PathVariable UUID id) {
+        return ResponseEntity.ok(customEmailService.getCampaignInboundReplies(id, me()));
+    }
 }
