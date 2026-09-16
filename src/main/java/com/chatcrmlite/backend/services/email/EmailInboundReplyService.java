@@ -80,7 +80,7 @@ public class EmailInboundReplyService {
         if (optRecipient.isEmpty() && dto.getFromEmail() != null && !dto.getFromEmail().isBlank()) {
             String cleanFromEmail = extractCleanEmail(dto.getFromEmail());
             if (!cleanFromEmail.isBlank()) {
-                optRecipient = recipientRepository.findFirstByEmailOrderByCreatedAtDesc(cleanFromEmail.toLowerCase());
+                optRecipient = recipientRepository.findFirstByEmailIgnoreCaseOrderByCreatedAtDesc(cleanFromEmail.trim());
             }
         }
 
@@ -170,7 +170,15 @@ public class EmailInboundReplyService {
         if (start != -1 && end != -1 && end > start) {
             return trimmed.substring(start + 1, end).trim();
         }
-        return trimmed;
+        if (trimmed.contains(" ")) {
+            String[] parts = trimmed.split("\\s+");
+            for (String p : parts) {
+                if (p.contains("@")) {
+                    return p.replaceAll("[<>(),;\"]", "").trim();
+                }
+            }
+        }
+        return trimmed.replaceAll("[<>(),;\"]", "").trim();
     }
 
     private String sanitizeHeaderMessageId(String headerValue) {
