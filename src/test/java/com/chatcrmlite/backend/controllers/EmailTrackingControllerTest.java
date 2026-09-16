@@ -113,11 +113,14 @@ class EmailTrackingControllerTest {
     @Test
     void handleUnsubscribeGet_shouldReturnHtmlConfirmationWithoutSuppressing() {
         String token = "unsub-token";
+        UUID tenantId = UUID.randomUUID();
         EmailCampaignRecipient recipient = EmailCampaignRecipient.builder()
+                .tenantId(tenantId)
                 .email("unsub@example.com")
                 .build();
 
         when(recipientRepository.findByTrackingToken(token)).thenReturn(Optional.of(recipient));
+        when(suppressionService.isSuppressed(tenantId, "unsub@example.com")).thenReturn(false);
 
         ResponseEntity<String> response = trackingController.handleUnsubscribeGet(token, mockRequest);
 
@@ -125,6 +128,25 @@ class EmailTrackingControllerTest {
         assertTrue(response.getBody().contains("Unsubscribe Request"));
         assertTrue(response.getBody().contains("unsub@example.com"));
         verify(suppressionService, never()).addSuppression(any(), any(), any(), any(), any());
+    }
+
+    @Test
+    void handleUnsubscribeGet_whenAlreadySuppressed_shouldShowUnsubscribedState() {
+        String token = "unsub-token";
+        UUID tenantId = UUID.randomUUID();
+        EmailCampaignRecipient recipient = EmailCampaignRecipient.builder()
+                .tenantId(tenantId)
+                .email("unsub@example.com")
+                .build();
+
+        when(recipientRepository.findByTrackingToken(token)).thenReturn(Optional.of(recipient));
+        when(suppressionService.isSuppressed(tenantId, "unsub@example.com")).thenReturn(true);
+
+        ResponseEntity<String> response = trackingController.handleUnsubscribeGet(token, mockRequest);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        assertTrue(response.getBody().contains("You Are Unsubscribed"));
+        assertTrue(response.getBody().contains("Resubscribe to Emails"));
     }
 
     @Test
@@ -145,5 +167,22 @@ class EmailTrackingControllerTest {
 
         assertEquals(HttpStatus.OK, response.getStatusCode());
         verify(suppressionService, times(1)).addSuppression(eq(tenantId), eq("unsub@example.com"), any(), eq(campaignId), any());
+    }
+
+    @Test
+    void handleResubscribePost_shouldRemoveSuppression() {
+        String token = "unsub-token";
+        UUID tenantId = UUID.randomUUID();
+        EmailCampaignRecipient recipient = EmailCampaignRecipient.builder()
+                .tenantId(tenantId)
+                .email("unsub@example.com")
+                .build();
+
+        when(recipientRepository.findByTrackingToken(token)).thenReturn(Optional.of(recipient));
+
+        ResponseEntity<Void> response = trackingController.handleResubscribePost(token, mockRequest);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(suppressionService, times(1)).removeSuppressionByEmail(eq(tenantId), eq("unsub@example.com"));
     }
 }

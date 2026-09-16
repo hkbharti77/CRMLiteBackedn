@@ -60,4 +60,16 @@ public class EmailSuppressionService {
         }
         return false;
     }
+
+    @Transactional
+    public boolean removeSuppressionByEmail(UUID tenantId, String email) {
+        if (email == null) return false;
+        String normalizedEmail = normalizeEmail(email);
+        Optional<EmailSuppressionList> existing = suppressionListRepository.findByTenantIdAndEmail(tenantId, normalizedEmail);
+        if (existing.isPresent()) {
+            suppressionListRepository.delete(existing.get());
+            return true;
+        }
+        return false;
+    }
 }
