@@ -36,7 +36,7 @@ public class IntegrationController {
     
     private final SecureRandom secureRandom = new SecureRandom();
 
-    @Value("${FRONTEND_URL:http://localhost:3000}")
+    @Value("${FRONTEND_URL:${APP_FRONTEND_URL:http://localhost:5174}}")
     private String frontendUrl;
 
     private User getAuthenticatedUser() {
