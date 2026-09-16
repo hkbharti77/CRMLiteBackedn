@@ -6,7 +6,6 @@ import jakarta.validation.constraints.Size;
 
 public class CustomEmailRequest {
 
-    @NotBlank(message = "Campaign Name is required")
     @Size(max = 255)
     private String name;
 
