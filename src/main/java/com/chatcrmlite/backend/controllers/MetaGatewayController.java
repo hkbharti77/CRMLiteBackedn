@@ -57,7 +57,7 @@ public class MetaGatewayController {
     @Value("${app.public.url:http://localhost:8080}")
     private String publicAppUrl;
 
-    @Value("${FRONTEND_URL:${app.frontend.url:https://gyanvaniaiconnect.qivantaai.in}}")
+    @Value("${app.frontend.url:https://gyanvaniaiconnect.qivantaai.in}")
     private String frontendUrl;
 
     private User resolveUser(String tokenParam) {
