@@ -77,6 +77,13 @@ public class EmailInboundReplyService {
             }
         }
 
+        if (optRecipient.isEmpty() && dto.getFromEmail() != null && !dto.getFromEmail().isBlank()) {
+            String cleanFromEmail = extractCleanEmail(dto.getFromEmail());
+            if (!cleanFromEmail.isBlank()) {
+                optRecipient = recipientRepository.findFirstByEmailOrderByCreatedAtDesc(cleanFromEmail.toLowerCase());
+            }
+        }
+
         // 3. Prepare Inbound Message Entity
         EmailInboundMessage message = new EmailInboundMessage();
         message.setProvider(dto.getProvider());
@@ -153,6 +160,17 @@ public class EmailInboundReplyService {
             }
         }
         return null;
+    }
+
+    private String extractCleanEmail(String rawEmail) {
+        if (rawEmail == null || rawEmail.isBlank()) return "";
+        String trimmed = rawEmail.trim();
+        int start = trimmed.indexOf('<');
+        int end = trimmed.indexOf('>');
+        if (start != -1 && end != -1 && end > start) {
+            return trimmed.substring(start + 1, end).trim();
+        }
+        return trimmed;
     }
 
     private String sanitizeHeaderMessageId(String headerValue) {

@@ -15,6 +15,7 @@ public interface EmailCampaignRecipientRepository extends JpaRepository<EmailCam
 
     Optional<EmailCampaignRecipient> findByReplyToken(String replyToken);
     Optional<EmailCampaignRecipient> findByLastMessageId(String lastMessageId);
+    Optional<EmailCampaignRecipient> findFirstByEmailOrderByCreatedAtDesc(String email);
 
     long countByCampaignId(UUID campaignId);
     long countByCampaignIdAndDeliveryStatusIn(UUID campaignId, java.util.Collection<EmailCampaignRecipient.DeliveryStatus> statuses);

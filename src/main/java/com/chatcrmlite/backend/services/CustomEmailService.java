@@ -359,7 +359,7 @@ public class CustomEmailService {
      * Ownership verification helper ensuring the requested campaign belongs
      * to the authenticated actor's tenant. Prevents IDOR vulnerabilities.
      */
-    private CustomEmail findOwnedCampaign(UUID campaignId, User actor) {
+    public CustomEmail findOwnedCampaign(UUID campaignId, User actor) {
         if (campaignId == null) {
             throw new IllegalArgumentException("Campaign not found or access denied");
         }

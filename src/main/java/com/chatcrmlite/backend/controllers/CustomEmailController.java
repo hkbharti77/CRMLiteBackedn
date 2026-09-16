@@ -25,11 +25,13 @@ public class CustomEmailController {
 
     private final CustomEmailService customEmailService;
     private final UserRepository     userRepository;
+    private final com.chatcrmlite.backend.services.email.EmailInboundReplyService inboundReplyService;
 
     @Autowired
-    public CustomEmailController(CustomEmailService customEmailService, UserRepository userRepository) {
+    public CustomEmailController(CustomEmailService customEmailService, UserRepository userRepository, com.chatcrmlite.backend.services.email.EmailInboundReplyService inboundReplyService) {
         this.customEmailService = customEmailService;
         this.userRepository = userRepository;
+        this.inboundReplyService = inboundReplyService;
     }
 
     private User me() {
@@ -135,5 +137,41 @@ public class CustomEmailController {
     @GetMapping("/{id}/replies")
     public ResponseEntity<java.util.List<com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO>> getCampaignReplies(@PathVariable UUID id) {
         return ResponseEntity.ok(customEmailService.getCampaignInboundReplies(id, me()));
+    }
+
+    @PostMapping("/{id}/simulate-reply")
+    public ResponseEntity<com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO> simulateReply(
+            @PathVariable UUID id,
+            @RequestBody Map<String, String> payload) {
+        com.chatcrmlite.backend.models.CustomEmail campaign = customEmailService.findOwnedCampaign(id, me());
+        String fromEmail = payload.get("fromEmail");
+        String textBody = payload.get("textBody");
+        String subject = payload.getOrDefault("subject", "Re: " + campaign.getSubject());
+        if (fromEmail == null || fromEmail.isBlank()) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        com.chatcrmlite.backend.dto.email.InboundEmailDTO dto = com.chatcrmlite.backend.dto.email.InboundEmailDTO.builder()
+                .provider("simulated")
+                .providerMessageId("sim-" + UUID.randomUUID())
+                .fromEmail(fromEmail.trim())
+                .toEmail("campaign-reply@yourcrm.com")
+                .subject(subject)
+                .textBody(textBody != null ? textBody : "Simulated test reply from email dashboard")
+                .receivedAt(java.time.Instant.now())
+                .build();
+
+        com.chatcrmlite.backend.models.email.EmailInboundMessage message = inboundReplyService.processInboundReply(dto);
+
+        com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO resultDto = new com.chatcrmlite.backend.dto.email.EmailInboundMessageDTO();
+        resultDto.setId(message.getId());
+        resultDto.setCampaignId(message.getCampaignId());
+        resultDto.setFromEmail(message.getFromEmail());
+        resultDto.setSubject(message.getSubject());
+        resultDto.setTextBody(message.getTextBody());
+        resultDto.setReplySnippet(message.getReplySnippet());
+        resultDto.setAttributionStatus(message.getAttributionStatus() != null ? message.getAttributionStatus().name() : null);
+        resultDto.setReceivedAt(message.getReceivedAt());
+        return ResponseEntity.ok(resultDto);
     }
 }

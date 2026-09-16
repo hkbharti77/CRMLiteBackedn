@@ -122,6 +122,7 @@ public class SecurityConfig {
                     "/api/v1/integrations/meta/data-deletion", // Meta Compliance Data Deletion (HMAC verified)
                     "/api/v1/business-categories/**",
                     "/api/v1/categories/**",
+                    "/api/v1/webhooks/**",
                     "/webhook/**",
                     "/whatsapp/**",
                     "/ws/**",
