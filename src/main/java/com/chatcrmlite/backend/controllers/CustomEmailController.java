@@ -170,6 +170,7 @@ public class CustomEmailController {
         resultDto.setSubject(message.getSubject());
         resultDto.setTextBody(message.getTextBody());
         resultDto.setReplySnippet(message.getReplySnippet());
+        resultDto.setSentiment(message.getSentiment());
         resultDto.setAttributionStatus(message.getAttributionStatus() != null ? message.getAttributionStatus().name() : null);
         resultDto.setReceivedAt(message.getReceivedAt());
         return ResponseEntity.ok(resultDto);

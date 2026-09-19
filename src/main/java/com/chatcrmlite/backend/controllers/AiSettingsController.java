@@ -55,6 +55,7 @@ public class AiSettingsController {
 
         Map<String, Object> response = new HashMap<>();
         response.put("aiPersonaPrompt", tenant.getAiPersonaPrompt());
+        response.put("aiEmailSentimentPrompt", tenant.getAiEmailSentimentPrompt());
         response.put("updatedAt", tenant.getAiPersonaUpdatedAt());
         response.put("updatedBy", tenant.getAiPersonaUpdatedBy());
         return ResponseEntity.ok(response);
@@ -86,16 +87,18 @@ public class AiSettingsController {
         }
 
         String prompt = body.getOrDefault("aiPersonaPrompt", "");
+        String sentimentPrompt = body.getOrDefault("aiEmailSentimentPrompt", "");
 
         // Validation: max 4000 characters
-        if (prompt.length() > 4000) {
+        if (prompt.length() > 4000 || sentimentPrompt.length() > 4000) {
             Map<String, Object> err = new HashMap<>();
-            err.put("error", "AI persona prompt must not exceed 4000 characters.");
+            err.put("error", "Prompts must not exceed 4000 characters.");
             return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(err);
         }
 
         // Persist
         tenant.setAiPersonaPrompt(prompt.isBlank() ? null : prompt.trim());
+        tenant.setAiEmailSentimentPrompt(sentimentPrompt.isBlank() ? null : sentimentPrompt.trim());
         tenant.setAiPersonaUpdatedAt(LocalDateTime.now());
         tenant.setAiPersonaUpdatedBy(user.getId());
         tenantRepository.save(tenant);
@@ -106,6 +109,7 @@ public class AiSettingsController {
         Map<String, Object> response = new HashMap<>();
         response.put("message", "AI persona updated successfully.");
         response.put("aiPersonaPrompt", tenant.getAiPersonaPrompt());
+        response.put("aiEmailSentimentPrompt", tenant.getAiEmailSentimentPrompt());
         response.put("updatedAt", tenant.getAiPersonaUpdatedAt());
         response.put("updatedBy", tenant.getAiPersonaUpdatedBy());
         return ResponseEntity.ok(response);

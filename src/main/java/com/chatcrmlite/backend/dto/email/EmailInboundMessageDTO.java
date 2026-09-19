@@ -28,6 +28,7 @@ public class EmailInboundMessageDTO {
     private String textBody;
     private String htmlBody;
     private String replySnippet;
+    private String sentiment;
     private String attributionStatus;
     private Instant receivedAt;
     private Instant createdAt;

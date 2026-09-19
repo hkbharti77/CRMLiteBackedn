@@ -26,6 +26,10 @@ public class EmailInboundReplyService {
 
     private final EmailCampaignRecipientRepository recipientRepository;
     private final EmailInboundMessageRepository inboundMessageRepository;
+    private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+    
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.services.ai.AiOrchestrator aiOrchestrator;
 
     private static final Pattern REPLY_TOKEN_PATTERN = Pattern.compile("reply\\+([A-Za-z0-9_-]+)@", Pattern.CASE_INSENSITIVE);
     private static final Pattern SCRIPT_PATTERN = Pattern.compile("<script[^>]*>.*?</script>", Pattern.CASE_INSENSITIVE | Pattern.DOTALL);
@@ -101,7 +105,7 @@ public class EmailInboundReplyService {
         message.setTextBody(dto.getTextBody());
         message.setReplySnippet(snippet);
         message.setReceivedAt(dto.getReceivedAt() != null ? dto.getReceivedAt() : Instant.now());
-
+        
         EmailCampaignRecipient attributedRecipient = optRecipient.orElse(null);
 
         if (attributedRecipient != null) {
@@ -115,6 +119,36 @@ public class EmailInboundReplyService {
             message.setCampaignRecipientId(null);
             log.info("[InboundReply] Inbound email from {} could not be attributed to recipient", dto.getFromEmail());
         }
+
+        // --- AI Sentiment Analysis ---
+        try {
+            if (aiOrchestrator != null && snippet != null && !snippet.isBlank()) {
+                String prompt = "Analyze the sentiment of the following customer email reply and classify it strictly as one of the following: GOOD, NEUTRAL, POOR. Only return the exact word. Reply content: " + snippet;
+                
+                if (message.getTenantId() != null) {
+                    com.chatcrmlite.backend.models.Tenant tenant = tenantRepository.findById(message.getTenantId()).orElse(null);
+                    if (tenant != null && tenant.getAiEmailSentimentPrompt() != null && !tenant.getAiEmailSentimentPrompt().isBlank()) {
+                        prompt = tenant.getAiEmailSentimentPrompt() + "\n\nReply content: " + snippet;
+                    }
+                }
+                
+                com.chatcrmlite.backend.services.ai.AiResponse aiResp = aiOrchestrator.execute(com.chatcrmlite.backend.services.ai.AiRequest.builder().prompt(prompt).build());
+                if (aiResp != null && aiResp.getContent() != null) {
+                    String s = aiResp.getContent().trim().toUpperCase();
+                    if (s.contains("GOOD")) message.setSentiment("GOOD");
+                    else if (s.contains("POOR") || s.contains("BAD") || s.contains("NEGATIVE")) message.setSentiment("POOR");
+                    else message.setSentiment("NEUTRAL");
+                } else {
+                    message.setSentiment("NEUTRAL");
+                }
+            } else {
+                message.setSentiment("NEUTRAL");
+            }
+        } catch (Exception ex) {
+            log.warn("Failed to generate AI sentiment for inbound email reply: {}", ex.getMessage());
+            message.setSentiment("NEUTRAL");
+        }
+        // -----------------------------
 
         // 4. Save to Database (Catch DB constraint violation for concurrent duplicate delivery)
         EmailInboundMessage savedMessage;

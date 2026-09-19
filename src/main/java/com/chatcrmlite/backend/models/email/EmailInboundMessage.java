@@ -67,6 +67,9 @@ public class EmailInboundMessage extends BaseTenantEntity {
     @Column(name = "reply_snippet", length = 500)
     private String replySnippet;
 
+    @Column(name = "sentiment", length = 20)
+    private String sentiment;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "attribution_status", nullable = false)
     @Builder.Default

@@ -1040,6 +1040,7 @@ public class CustomEmailService {
             dto.setTextBody(m.getTextBody());
             dto.setHtmlBody(m.getHtmlBody());
             dto.setReplySnippet(m.getReplySnippet());
+            dto.setSentiment(m.getSentiment());
             dto.setAttributionStatus(m.getAttributionStatus() != null ? m.getAttributionStatus().name() : null);
             dto.setReceivedAt(m.getReceivedAt());
             dto.setCreatedAt(m.getCreatedAt());

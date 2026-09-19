@@ -71,6 +71,10 @@ public class Tenant implements Serializable {
     @Column(name = "ai_persona_prompt", columnDefinition = "TEXT")
     private String aiPersonaPrompt;
 
+    @Size(max = 4000)
+    @Column(name = "ai_email_sentiment_prompt", columnDefinition = "TEXT")
+    private String aiEmailSentimentPrompt;
+
     @Column(name = "ai_persona_updated_at")
     private LocalDateTime aiPersonaUpdatedAt;
 
@@ -235,6 +239,9 @@ public class Tenant implements Serializable {
 
     public String getAiPersonaPrompt() { return aiPersonaPrompt; }
     public void setAiPersonaPrompt(String aiPersonaPrompt) { this.aiPersonaPrompt = aiPersonaPrompt; }
+
+    public String getAiEmailSentimentPrompt() { return aiEmailSentimentPrompt; }
+    public void setAiEmailSentimentPrompt(String aiEmailSentimentPrompt) { this.aiEmailSentimentPrompt = aiEmailSentimentPrompt; }
 
     public LocalDateTime getAiPersonaUpdatedAt() { return aiPersonaUpdatedAt; }
     public void setAiPersonaUpdatedAt(LocalDateTime aiPersonaUpdatedAt) { this.aiPersonaUpdatedAt = aiPersonaUpdatedAt; }
