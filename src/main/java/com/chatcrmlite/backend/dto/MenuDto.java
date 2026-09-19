@@ -25,6 +25,9 @@ public class MenuDto {
     
     private String title;
     private String headerImageUrl;
+    private String headerVideoUrl;
+    private String headerDocumentUrl;
+    private String headerDocumentFilename;
     private String button;
     
     // FIX #10: Sections must not be empty
@@ -46,6 +49,9 @@ public class MenuDto {
     public String getBodyText() { return bodyText; }
     public String getTitle() { return title; }
     public String getHeaderImageUrl() { return headerImageUrl; }
+    public String getHeaderVideoUrl() { return headerVideoUrl; }
+    public String getHeaderDocumentUrl() { return headerDocumentUrl; }
+    public String getHeaderDocumentFilename() { return headerDocumentFilename; }
     public String getButton() { return button; }
     
     // FIX #20: Return unmodifiable list to prevent external modification
@@ -57,6 +63,9 @@ public class MenuDto {
     public void setBodyText(String bodyText) { this.bodyText = bodyText; }
     public void setTitle(String title) { this.title = title; }
     public void setHeaderImageUrl(String headerImageUrl) { this.headerImageUrl = headerImageUrl; }
+    public void setHeaderVideoUrl(String headerVideoUrl) { this.headerVideoUrl = headerVideoUrl; }
+    public void setHeaderDocumentUrl(String headerDocumentUrl) { this.headerDocumentUrl = headerDocumentUrl; }
+    public void setHeaderDocumentFilename(String headerDocumentFilename) { this.headerDocumentFilename = headerDocumentFilename; }
     public void setButton(String button) { this.button = button; }
     public void setSections(List<MenuSectionDto> sections) { this.sections = sections; }
 
@@ -67,6 +76,9 @@ public class MenuDto {
         private String bodyText;
         private String title;
         private String headerImageUrl;
+        private String headerVideoUrl;
+        private String headerDocumentUrl;
+        private String headerDocumentFilename;
         private String button;
         private List<MenuSectionDto> sections;
 
@@ -74,11 +86,18 @@ public class MenuDto {
         public MenuDtoBuilder bodyText(String bodyText) { this.bodyText = bodyText; return this; }
         public MenuDtoBuilder title(String title) { this.title = title; return this; }
         public MenuDtoBuilder headerImageUrl(String headerImageUrl) { this.headerImageUrl = headerImageUrl; return this; }
+        public MenuDtoBuilder headerVideoUrl(String headerVideoUrl) { this.headerVideoUrl = headerVideoUrl; return this; }
+        public MenuDtoBuilder headerDocumentUrl(String headerDocumentUrl) { this.headerDocumentUrl = headerDocumentUrl; return this; }
+        public MenuDtoBuilder headerDocumentFilename(String headerDocumentFilename) { this.headerDocumentFilename = headerDocumentFilename; return this; }
         public MenuDtoBuilder button(String button) { this.button = button; return this; }
         public MenuDtoBuilder sections(List<MenuSectionDto> sections) { this.sections = sections; return this; }
 
         public MenuDto build() {
-            return new MenuDto(type, bodyText, title, headerImageUrl, button, sections);
+            MenuDto dto = new MenuDto(type, bodyText, title, headerImageUrl, button, sections);
+            dto.setHeaderVideoUrl(headerVideoUrl);
+            dto.setHeaderDocumentUrl(headerDocumentUrl);
+            dto.setHeaderDocumentFilename(headerDocumentFilename);
+            return dto;
         }
     }
 

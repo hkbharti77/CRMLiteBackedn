@@ -11,8 +11,13 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.InputStream;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
+import com.chatcrmlite.backend.models.TenantAiCatalog;
 
 @Slf4j
 @Service
@@ -348,6 +353,161 @@ public class CloudinaryStorageService {
             }
         }
         return "https://res.cloudinary.com/" + getCloudName() + "/image/upload/f_auto,q_auto/" + keyOrUrl;
+    }
+
+    public record UploadedAsset(
+            String secureUrl,
+            String publicId,
+            String resourceType,
+            String assetId
+    ) {}
+
+    public UploadedAsset uploadCatalogAsset(java.util.UUID tenantId, MultipartFile file, String mimeType) throws Exception {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cloudinary client is not configured.");
+        }
+
+        boolean isPdf = (mimeType != null && mimeType.toLowerCase().contains("pdf")) ||
+                (file.getOriginalFilename() != null && file.getOriginalFilename().toLowerCase().endsWith(".pdf"));
+
+        String originalFilename = (file.getOriginalFilename() != null ? file.getOriginalFilename() : "catalog");
+        String folder = "tenants/" + tenantId + "/catalogs";
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("folder", folder);
+        // Cloudinary handles PDFs as 'image' or 'auto' natively, enabling inline viewing and preview transformations
+        params.put("resource_type", "auto");
+        params.put("use_filename", true);
+        params.put("unique_filename", true);
+        params.put("access_mode", "public");
+
+        if (isPdf) {
+            params.put("format", "pdf");
+        }
+
+        Map<?, ?> uploadResult = cloudinary.uploader().upload(file.getBytes(), params);
+        String secureUrl = (String) uploadResult.get("secure_url");
+        if (secureUrl == null) {
+            secureUrl = (String) uploadResult.get("url");
+        }
+        String publicId = (String) uploadResult.get("public_id");
+        String resType = (String) uploadResult.get("resource_type");
+        String assetId = (String) uploadResult.get("asset_id");
+        String format = (String) uploadResult.get("format");
+
+        // Ensure PDF URL has .pdf extension so browsers and WhatsApp recognize it as a PDF document
+        if (isPdf && secureUrl != null && !secureUrl.toLowerCase().endsWith(".pdf")) {
+            secureUrl = secureUrl + ".pdf";
+        }
+
+        log.info("Uploaded catalog asset to Cloudinary: publicId={}, resourceType={}, format={}, secureUrl={}",
+                publicId, resType, format, secureUrl);
+        return new UploadedAsset(secureUrl, publicId, resType, assetId);
+    }
+
+    /**
+     * Generates a signed Cloudinary delivery URL with signature to bypass Cloudinary's strict PDF restrictions.
+     */
+    public String getSignedDeliveryUrl(String publicId, String resourceType, String format, boolean attachment, String filename) {
+        if (!isConfigured() || publicId == null || publicId.isBlank()) return "";
+        try {
+            Transformation transformation = new Transformation();
+            if (attachment) {
+                transformation.flags(filename != null && !filename.isBlank() ? "attachment:" + filename : "attachment");
+            } else {
+                transformation.flags("inline");
+            }
+            return cloudinary.url()
+                    .secure(true)
+                    .signed(true)
+                    .resourceType(resourceType != null && !resourceType.isBlank() ? resourceType : "auto")
+                    .format(format != null && !format.isBlank() ? format : null)
+                    .transformation(transformation)
+                    .generate(publicId);
+        } catch (Exception e) {
+            log.warn("Failed to generate signed URL for {}: {}", publicId, e.getMessage());
+            return "";
+        }
+    }
+
+    /**
+     * Fetches raw bytes of a catalog document from Cloudinary (using signed URL or direct URL).
+     */
+    public byte[] fetchCatalogBytes(TenantAiCatalog catalog) throws Exception {
+        if (catalog == null) {
+            throw new IllegalArgumentException("Catalog cannot be null.");
+        }
+
+        // 1. Try generating a signed Cloudinary URL first to bypass PDF delivery restrictions
+        String signedUrl = null;
+        if (isConfigured() && catalog.getCloudinaryPublicId() != null) {
+            try {
+                signedUrl = getSignedDeliveryUrl(
+                        catalog.getCloudinaryPublicId(),
+                        catalog.getCloudinaryResourceType(),
+                        catalog.getMimeType() != null && catalog.getMimeType().contains("pdf") ? "pdf" : null,
+                        false,
+                        catalog.getFileName()
+                );
+            } catch (Exception e) {
+                log.warn("Could not generate signed URL for catalog {}: {}", catalog.getId(), e.getMessage());
+            }
+        }
+
+        // 2. Fetch using signed URL if available, else direct URL
+        String urlToFetch = (signedUrl != null && !signedUrl.isBlank()) ? signedUrl : catalog.getCloudinaryUrl();
+        if (urlToFetch == null || urlToFetch.isBlank()) {
+            throw new IllegalStateException("No valid download URL available for catalog " + catalog.getId());
+        }
+
+        HttpClient httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .followRedirects(HttpClient.Redirect.NORMAL)
+                .build();
+
+        HttpRequest req = HttpRequest.newBuilder()
+                .uri(URI.create(urlToFetch))
+                .header("User-Agent", "ChatCRMLite-Backend/1.0")
+                .timeout(Duration.ofSeconds(30))
+                .GET()
+                .build();
+
+        HttpResponse<byte[]> res = httpClient.send(req, HttpResponse.BodyHandlers.ofByteArray());
+        if (res.statusCode() >= 200 && res.statusCode() < 300) {
+            return res.body();
+        }
+
+        // 3. Fallback: If signed URL failed and direct Cloudinary URL is different, try direct URL
+        if (catalog.getCloudinaryUrl() != null && !catalog.getCloudinaryUrl().equals(urlToFetch)) {
+            HttpRequest fallbackReq = HttpRequest.newBuilder()
+                    .uri(URI.create(catalog.getCloudinaryUrl()))
+                    .header("User-Agent", "ChatCRMLite-Backend/1.0")
+                    .timeout(Duration.ofSeconds(30))
+                    .GET()
+                    .build();
+            HttpResponse<byte[]> fbRes = httpClient.send(fallbackReq, HttpResponse.BodyHandlers.ofByteArray());
+            if (fbRes.statusCode() >= 200 && fbRes.statusCode() < 300) {
+                return fbRes.body();
+            }
+        }
+
+        throw new IllegalStateException("Failed to download catalog file from Cloudinary (HTTP status: " + res.statusCode() + ")");
+    }
+
+    public boolean deleteAsset(String publicId, String resourceType) {
+        if (!isConfigured() || publicId == null || publicId.isBlank()) return false;
+        try {
+            Map<String, Object> params = new HashMap<>();
+            if (resourceType != null && !resourceType.isBlank()) {
+                params.put("resource_type", resourceType);
+            }
+            Map<?, ?> result = cloudinary.uploader().destroy(publicId, params);
+            log.info("Deleted asset from Cloudinary: {} (type: {}, result: {})", publicId, resourceType, result);
+            return true;
+        } catch (Exception e) {
+            log.error("Failed to delete Cloudinary asset {}: {}", publicId, e.getMessage());
+            return false;
+        }
     }
 
     public String getCloudName() {

@@ -30,6 +30,9 @@ public class WhatsAppCampaignService {
     private final CampaignAnalyticsService analyticsService;
     private final CampaignAuditService auditService;
     private final WhatsAppCampaignRecipientRepository recipientRepository;
+    private final WhatsAppCampaignExecutionRepository executionRepository;
+    private final WhatsAppCampaignAnalyticsRepository analyticsRepository;
+    private final WhatsAppCampaignAuditLogRepository auditLogRepository;
     private final PersonalizationEngine personalizationEngine;
     private final DistributedSchedulerService distributedSchedulerService;
     private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
@@ -321,5 +324,38 @@ public class WhatsAppCampaignService {
     public Page<WhatsAppCampaignRecipient> getRecipients(UUID campaignId, User actor, Pageable pageable) {
         WhatsAppCampaign campaign = getCampaign(campaignId, actor);
         return recipientRepository.findByCampaign(campaign, pageable);
+    }
+
+    @Transactional
+    public void deleteCampaign(UUID id, User user) {
+        WhatsAppCampaign campaign = getCampaign(id, user);
+        recipientRepository.deleteByCampaign(campaign);
+        executionRepository.deleteByCampaign(campaign);
+        analyticsRepository.deleteByCampaign(campaign);
+        auditLogRepository.deleteByCampaign(campaign);
+        campaignRepository.delete(campaign);
+        log.info("[WhatsAppCampaign] Deleted campaign {} ({})", campaign.getId(), campaign.getName());
+    }
+
+    @Transactional
+    public int deleteAllCampaigns(User user) {
+        UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : null;
+        List<WhatsAppCampaign> list;
+        if (tenantId != null) {
+            list = campaignRepository.findByTenantId(tenantId, Pageable.unpaged()).getContent();
+        } else {
+            list = campaignRepository.findByOwner(user, Pageable.unpaged()).getContent();
+        }
+
+        int count = list.size();
+        for (WhatsAppCampaign c : list) {
+            recipientRepository.deleteByCampaign(c);
+            executionRepository.deleteByCampaign(c);
+            analyticsRepository.deleteByCampaign(c);
+            auditLogRepository.deleteByCampaign(c);
+            campaignRepository.delete(c);
+        }
+        log.info("[WhatsAppCampaign] Deleted all {} campaigns for user/tenant {}", count, tenantId != null ? tenantId : user.getId());
+        return count;
     }
 }

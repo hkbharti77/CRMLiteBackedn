@@ -52,6 +52,9 @@ public class WhatsAppConfigController {
     @Autowired
     private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.WhatsAppTemplateService whatsappTemplateService;
+
     @Value("${app.public.url:}")
     private String publicAppUrl;
 
@@ -220,6 +223,16 @@ public class WhatsAppConfigController {
         }
 
         WhatsAppConfig saved = whatsappConfigRepository.save(config);
+
+        if (whatsappTemplateService != null && saved.getWabaId() != null && !saved.getWabaId().isBlank() 
+                && saved.getAccessToken() != null && !saved.getAccessToken().isBlank()) {
+            try {
+                whatsappTemplateService.syncTemplatesFromMeta(user);
+            } catch (Exception e) {
+                // Log and don't block saving config
+            }
+        }
+
         return ResponseEntity.ok(Map.of("message", "Configuration saved successfully", "config", saved));
     }
 

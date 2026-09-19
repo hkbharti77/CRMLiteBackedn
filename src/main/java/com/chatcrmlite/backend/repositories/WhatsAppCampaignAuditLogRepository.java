@@ -11,4 +11,8 @@ import java.util.UUID;
 @Repository
 public interface WhatsAppCampaignAuditLogRepository extends JpaRepository<WhatsAppCampaignAuditLog, UUID> {
     List<WhatsAppCampaignAuditLog> findByCampaignOrderByCreatedAtDesc(WhatsAppCampaign campaign);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("DELETE FROM WhatsAppCampaignAuditLog l WHERE l.campaign = :campaign")
+    void deleteByCampaign(@org.springframework.data.repository.query.Param("campaign") WhatsAppCampaign campaign);
 }

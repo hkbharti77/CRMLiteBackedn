@@ -108,8 +108,10 @@ public class EmailImapPollerService {
             props.put("mail.imaps.host", host);
             props.put("mail.imaps.port", String.valueOf(port));
             props.put("mail.imaps.ssl.enable", "true");
-            props.put("mail.imaps.timeout", "10000");
-            props.put("mail.imaps.connectiontimeout", "10000");
+            props.put("mail.imaps.timeout", "30000");
+            props.put("mail.imaps.connectiontimeout", "15000");
+            props.put("mail.imaps.writetimeout", "15000");
+            props.put("mail.imaps.peek", "true");
 
             Session session = Session.getInstance(props);
             store = session.getStore("imaps");
@@ -123,53 +125,82 @@ public class EmailImapPollerService {
                 Message[] unread = inbox.search(new FlagTerm(new Flags(Flags.Flag.SEEN), false));
                 log.info("[IMAPPoller] Found {} unread messages in inbox for {}", unread.length, username);
 
-                for (Message msg : unread) {
-                    try {
-                        String fromEmail = "unknown@domain.com";
-                        if (msg.getFrom() != null && msg.getFrom().length > 0) {
-                            Address addr = msg.getFrom()[0];
-                            if (addr instanceof InternetAddress) {
-                                fromEmail = ((InternetAddress) addr).getAddress();
-                            } else {
-                                fromEmail = addr.toString();
+                if (unread != null && unread.length > 0) {
+                    // Pre-fetch envelope, flags, and headers in bulk to avoid round-trip socket drops during iteration
+                    FetchProfile fp = new FetchProfile();
+                    fp.add(FetchProfile.Item.ENVELOPE);
+                    fp.add(FetchProfile.Item.FLAGS);
+                    fp.add(FetchProfile.Item.CONTENT_INFO);
+                    fp.add("Message-ID");
+                    fp.add("In-Reply-To");
+                    fp.add("References");
+                    inbox.fetch(unread, fp);
+
+                    // Cap batch size to max 30 per cycle to prevent holding the connection open too long
+                    int maxBatch = Math.min(unread.length, 30);
+                    for (int i = 0; i < maxBatch; i++) {
+                        Message msg = unread[i];
+                        if (!inbox.isOpen()) {
+                            log.warn("[IMAPPoller] INBOX was closed before processing message {} of {}. Aborting batch.", i + 1, maxBatch);
+                            break;
+                        }
+
+                        try {
+                            String fromEmail = "unknown@domain.com";
+                            if (msg.getFrom() != null && msg.getFrom().length > 0) {
+                                Address addr = msg.getFrom()[0];
+                                if (addr instanceof InternetAddress) {
+                                    fromEmail = ((InternetAddress) addr).getAddress();
+                                } else {
+                                    fromEmail = addr.toString();
+                                }
                             }
-                        }
 
-                        String toEmail = username;
-                        Address[] recipients = msg.getRecipients(Message.RecipientType.TO);
-                        if (recipients != null && recipients.length > 0) {
-                            if (recipients[0] instanceof InternetAddress) {
-                                toEmail = ((InternetAddress) recipients[0]).getAddress();
-                            } else {
-                                toEmail = recipients[0].toString();
+                            String toEmail = username;
+                            Address[] recipients = msg.getRecipients(Message.RecipientType.TO);
+                            if (recipients != null && recipients.length > 0) {
+                                if (recipients[0] instanceof InternetAddress) {
+                                    toEmail = ((InternetAddress) recipients[0]).getAddress();
+                                } else {
+                                    toEmail = recipients[0].toString();
+                                }
                             }
+
+                            String subject = msg.getSubject();
+                            String textBody = getTextFromPart(msg);
+                            String messageId = getHeaderValue(msg, "Message-ID");
+                            if (messageId == null || messageId.isBlank()) {
+                                messageId = "imap-msg-" + msg.getMessageNumber() + "-" + (msg.getReceivedDate() != null ? msg.getReceivedDate().getTime() : System.currentTimeMillis());
+                            }
+                            String inReplyTo = getHeaderValue(msg, "In-Reply-To");
+                            String references = getHeaderValue(msg, "References");
+
+                            InboundEmailDTO dto = InboundEmailDTO.builder()
+                                    .provider("IMAP")
+                                    .providerMessageId(messageId)
+                                    .fromEmail(fromEmail)
+                                    .toEmail(toEmail)
+                                    .subject(subject)
+                                    .textBody(textBody)
+                                    .inReplyTo(inReplyTo)
+                                    .references(references)
+                                    .receivedAt(msg.getReceivedDate() != null ? msg.getReceivedDate().toInstant() : Instant.now())
+                                    .build();
+
+                            inboundReplyService.processInboundReply(dto);
+                            if (inbox.isOpen()) {
+                                msg.setFlag(Flags.Flag.SEEN, true);
+                            }
+                        } catch (FolderClosedException | StoreClosedException fce) {
+                            log.warn("[IMAPPoller] IMAP folder/store closed by server for account {} at message {}: {}. Aborting batch, will resume next poll cycle.", username, i + 1, fce.getMessage());
+                            break;
+                        } catch (Exception ex) {
+                            if (ex instanceof FolderClosedException || (ex.getCause() instanceof FolderClosedException)) {
+                                log.warn("[IMAPPoller] IMAP folder closed unexpectedly for account {} at message {}. Aborting batch.", username, i + 1);
+                                break;
+                            }
+                            log.error("[IMAPPoller] Error processing message {} from {}: {}", i + 1, username, ex.getMessage());
                         }
-
-                        String subject = msg.getSubject();
-                        String textBody = getTextFromPart(msg);
-                        String messageId = getHeaderValue(msg, "Message-ID");
-                        if (messageId == null || messageId.isBlank()) {
-                            messageId = "imap-msg-" + msg.getMessageNumber() + "-" + (msg.getReceivedDate() != null ? msg.getReceivedDate().getTime() : System.currentTimeMillis());
-                        }
-                        String inReplyTo = getHeaderValue(msg, "In-Reply-To");
-                        String references = getHeaderValue(msg, "References");
-
-                        InboundEmailDTO dto = InboundEmailDTO.builder()
-                                .provider("IMAP")
-                                .providerMessageId(messageId)
-                                .fromEmail(fromEmail)
-                                .toEmail(toEmail)
-                                .subject(subject)
-                                .textBody(textBody)
-                                .inReplyTo(inReplyTo)
-                                .references(references)
-                                .receivedAt(msg.getReceivedDate() != null ? msg.getReceivedDate().toInstant() : Instant.now())
-                                .build();
-
-                        inboundReplyService.processInboundReply(dto);
-                        msg.setFlag(Flags.Flag.SEEN, true);
-                    } catch (Exception ex) {
-                        log.error("[IMAPPoller] Error processing message from {}", username, ex);
                     }
                 }
             }

@@ -31,6 +31,9 @@ public class WhatsAppOutboundService {
     private final MessageRepository messageRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
 
+    @org.springframework.beans.factory.annotation.Value("${app.public.url:}")
+    private String appPublicUrl;
+
     public String convertToWhatsAppMarkdown(String text) {
         if (text == null) return null;
         return text
@@ -98,7 +101,10 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
-            return recordOutgoing(contact, owner, crmContent, metaMessageId, "INTERACTIVE");
+            String mediaUrl = menu.getHeaderDocumentUrl() != null && !menu.getHeaderDocumentUrl().isBlank()
+                    ? menu.getHeaderDocumentUrl()
+                    : menu.getHeaderImageUrl();
+            return recordOutgoing(contact, owner, crmContent, metaMessageId, "INTERACTIVE", mediaUrl);
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send INTERACTIVE reply to contact={} owner={}: {}",
                     contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
@@ -136,6 +142,37 @@ public class WhatsAppOutboundService {
             return recordOutgoing(contact, owner, caption != null ? caption : "", metaMessageId, "IMAGE", imageUrl);
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send IMAGE reply to contact={} owner={}: {}",
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    public String resolveCatalogDocumentUrl(com.chatcrmlite.backend.models.TenantAiCatalog catalog) {
+        if (catalog == null) return null;
+        String documentUrl = catalog.getCloudinaryUrl();
+        if (appPublicUrl != null && !appPublicUrl.isBlank()) {
+            documentUrl = appPublicUrl.replaceAll("/+$", "") + "/api/v1/public/catalogs/" + catalog.getId() + "/file";
+        }
+        return documentUrl;
+    }
+
+    @Transactional
+    public Message sendCatalogDocument(Contact contact, com.chatcrmlite.backend.models.TenantAiCatalog catalog,
+                                       String caption, WhatsAppConfig config, User owner) {
+        try {
+            String documentUrl = resolveCatalogDocumentUrl(catalog);
+
+            String metaMessageId = whatsappClient.sendDocument(
+                    contact.getWaId(),
+                    documentUrl,
+                    catalog.getFileName(),
+                    caption,
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, caption != null ? caption : catalog.getTitle(), metaMessageId, "DOCUMENT", documentUrl);
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send CATALOG DOCUMENT reply to contact={} owner={}: {}",
                     contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
             throw e;
         }

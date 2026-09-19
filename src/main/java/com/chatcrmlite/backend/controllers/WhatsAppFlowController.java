@@ -92,6 +92,12 @@ public class WhatsAppFlowController {
         return ResponseEntity.ok(flowService.listTenantFlows(user));
     }
 
+    @GetMapping("/published")
+    public ResponseEntity<List<WhatsAppFlow>> getPublishedFlows(@AuthenticationPrincipal Object principal) {
+        User user = resolveAuthenticatedUser(principal);
+        return ResponseEntity.ok(flowService.getPublishedFlows(user));
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<Map<String, Object>> getFlow(@PathVariable("id") UUID id, @AuthenticationPrincipal Object principal) {
         User user = resolveAuthenticatedUser(principal);

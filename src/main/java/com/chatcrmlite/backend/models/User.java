@@ -130,7 +130,7 @@ public class User implements Serializable {
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
 
     private boolean isTenantInitialized() {
-        return tenant != null;
+        return tenant != null && org.hibernate.Hibernate.isInitialized(tenant);
     }
 
     // ── Backward Compatibility Delegation Getters ──

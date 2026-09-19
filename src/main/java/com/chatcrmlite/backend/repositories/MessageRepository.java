@@ -34,4 +34,13 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
            "WHERE c = :contact " +
            "ORDER BY m.timestamp ASC")
     List<Message> findAllByContactAsDTO(@Param("contact") Contact contact);
+
+    @Query("SELECT MAX(m.timestamp) FROM Message m " +
+           "WHERE m.contact.tenant.id = :tenantId " +
+           "AND m.contact.waId = :customerWaId " +
+           "AND m.direction = com.chatcrmlite.backend.models.Message.Direction.INCOMING")
+    Optional<java.time.LocalDateTime> findLatestInboundTimestamp(
+        @Param("tenantId") UUID tenantId,
+        @Param("customerWaId") String customerWaId
+    );
 }

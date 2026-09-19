@@ -1,0 +1,10 @@
+package com.chatcrmlite.backend.models.enums;
+
+public enum PaymentOutboxEventType {
+    PAYMENT_PROVIDER_CREATE,
+    WHATSAPP_PAYMENT_MESSAGE_SEND,
+    WHATSAPP_PAYMENT_TEMPLATE_SEND,
+    WHATSAPP_ORDER_STATUS_SEND,
+    PAYMENT_RECEIPT_SEND,
+    PAYMENT_REFUND_DISPATCH
+}

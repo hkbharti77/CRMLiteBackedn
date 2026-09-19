@@ -57,6 +57,18 @@ public class PublicChatController {
     @Autowired
     private RateLimitConfig rateLimitConfig;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.catalog.CatalogCandidateService catalogCandidateService;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.catalog.AiCatalogDecisionService aiCatalogDecisionService;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.TenantAiCatalogRepository tenantAiCatalogRepository;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsAppConfigRepository;
+
     @PostMapping("/livechat/request/{businessId}")
     public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
             @PathVariable UUID businessId,
@@ -231,6 +243,52 @@ public class PublicChatController {
                 }
             } catch (Exception e) {
                 // Ignore guardrail errors and fallback to RAG
+            }
+        }
+
+        // Check if tenant has AI Catalogs enabled and matches query
+        if (owner != null && owner.getTenant() != null && whatsAppConfigRepository != null && catalogCandidateService != null && aiCatalogDecisionService != null && tenantAiCatalogRepository != null) {
+            try {
+                var waConfig = whatsAppConfigRepository.findByTenantId(owner.getTenant().getId()).orElse(null);
+                if (waConfig != null && Boolean.TRUE.equals(waConfig.getEnableAiCatalogs())) {
+                    double threshold = (waConfig.getCatalogRelevanceThreshold() != null) ? waConfig.getCatalogRelevanceThreshold() : 0.65;
+                    var candidates = catalogCandidateService.findCandidates(owner.getTenant().getId(), message, threshold);
+                    var catalogAction = aiCatalogDecisionService.decideFromCandidates(candidates, message, com.chatcrmlite.backend.dto.ai.action.AiAction.DecisionSource.NATIVE_TOOL);
+
+                    if (catalogAction.type() == com.chatcrmlite.backend.dto.ai.action.AiAction.AiActionType.CLARIFY) {
+                        Map<String, Object> responseMap = new java.util.HashMap<>();
+                        responseMap.put("response", catalogAction.caption());
+                        if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, catalogAction.caption());
+                        return ResponseEntity.ok(responseMap);
+                    } else if (catalogAction.type() == com.chatcrmlite.backend.dto.ai.action.AiAction.AiActionType.SEND_CATALOG && catalogAction.catalogId() != null) {
+                        var catalogOpt = tenantAiCatalogRepository.findByIdAndTenantId(catalogAction.catalogId(), owner.getTenant().getId());
+                        if (catalogOpt.isPresent() && catalogOpt.get().getStatus() == com.chatcrmlite.backend.models.CatalogStatus.ACTIVE) {
+                            var cat = catalogOpt.get();
+                            String botMsg = "Here is our " + cat.getTitle() + " you requested:";
+                            Map<String, Object> responseMap = new java.util.HashMap<>();
+                            responseMap.put("response", botMsg);
+
+                            Map<String, Object> catalogMeta = new java.util.HashMap<>();
+                            catalogMeta.put("id", cat.getId().toString());
+                            catalogMeta.put("title", cat.getTitle());
+                            catalogMeta.put("description", cat.getDescription());
+                            catalogMeta.put("url", "/api/v1/public/catalogs/" + cat.getId() + "/file");
+                            catalogMeta.put("downloadUrl", "/api/v1/public/catalogs/" + cat.getId() + "/file?download=true");
+                            catalogMeta.put("directCloudinaryUrl", cat.getCloudinaryUrl());
+                            catalogMeta.put("fileName", cat.getFileName());
+                            catalogMeta.put("mediaType", cat.getMediaType());
+                            catalogMeta.put("fileSizeBytes", cat.getFileSizeBytes());
+                            responseMap.put("catalog", catalogMeta);
+
+                            if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+                            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, botMsg + " [Document: " + cat.getFileName() + "]");
+                            return ResponseEntity.ok(responseMap);
+                        }
+                    }
+                }
+            } catch (Exception catEx) {
+                // Ignore catalog errors and proceed with normal RAG
             }
         }
 

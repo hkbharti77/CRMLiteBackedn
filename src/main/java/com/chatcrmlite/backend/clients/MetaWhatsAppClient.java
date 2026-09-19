@@ -34,6 +34,52 @@ public class MetaWhatsAppClient implements WhatsAppClient {
     @Autowired
     private RetryRegistry retryRegistry;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.validation.WhatsAppTemplateVariableParser variableParser;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.validation.DynamicUrlValidator dynamicUrlValidator;
+
+    @org.springframework.beans.factory.annotation.Value("${meta.api-base-url:https://graph.facebook.com}")
+    private String apiBaseUrl;
+
+    @org.springframework.beans.factory.annotation.Value("${meta.graph-api-version:v21.0}")
+    private String apiVersion;
+
+    private String getGraphBaseUrl() {
+        String base = (apiBaseUrl != null && !apiBaseUrl.isBlank()) ? apiBaseUrl.replaceAll("/+$", "") : "https://graph.facebook.com";
+        String ver = (apiVersion != null && !apiVersion.isBlank()) ? apiVersion.trim() : "v21.0";
+        if (!ver.startsWith("v")) ver = "v" + ver;
+        return base + "/" + ver;
+    }
+
+    public Map<String, Object> buildHeaderExample(String headerText, List<String> headerSamples) {
+        if (variableParser == null || headerText == null) return null;
+        List<String> samples = variableParser.resolveAndValidateSamples("Header", headerText, headerSamples);
+        if (samples.isEmpty()) return null;
+        Map<String, Object> example = new HashMap<>();
+        example.put("header_text", samples);
+        return example;
+    }
+
+    public Map<String, Object> buildBodyExample(String bodyText, List<String> bodySamples) {
+        if (variableParser == null || bodyText == null) return null;
+        List<String> samples = variableParser.resolveAndValidateSamples("Body", bodyText, bodySamples);
+        if (samples.isEmpty()) return null;
+        Map<String, Object> example = new HashMap<>();
+        example.put("body_text", List.of(samples));
+        return example;
+    }
+
+    public List<String> buildButtonExample(com.chatcrmlite.backend.dto.WhatsAppTemplateDto.TemplateButtonDto btn) {
+        if (btn == null || !"URL".equalsIgnoreCase(btn.getType()) || btn.getUrl() == null) return null;
+        if (dynamicUrlValidator != null && dynamicUrlValidator.isDynamicUrl(btn.getUrl())) {
+            dynamicUrlValidator.validateUrl(btn.getUrl(), btn.getUrlSample());
+            return List.of(btn.getUrlSample().trim());
+        }
+        return null;
+    }
+
     private static final String META_URL = "https://graph.facebook.com/v18.0/%s/messages";
 
     @Override
@@ -79,6 +125,47 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         return executeApiCallWithRetry(url, headers, body);
     }
 
+    @Override
+    public String sendDocument(String to, String documentUrl, String fileName, String caption, String accessToken, String phoneNumberId) {
+        String url = String.format(META_URL, phoneNumberId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("to", to);
+        body.put("type", "document");
+
+        Map<String, String> documentBody = new HashMap<>();
+        documentBody.put("link", documentUrl);
+        if (fileName != null && !fileName.isBlank()) {
+            documentBody.put("filename", fileName);
+        }
+        if (caption != null && !caption.isBlank()) {
+            documentBody.put("caption", caption);
+        }
+        body.put("document", documentBody);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
+    public String sendInteractiveObject(String phoneNumberId, String accessToken, Object payload) {
+        String url = getGraphBaseUrl() + "/" + phoneNumberId + "/messages";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = (payload instanceof Map)
+            ? (Map<String, Object>) payload
+            : objectMapper.convertValue(payload, Map.class);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
     public String sendInteractiveMenu(String to, MenuDto menu, String accessToken, String phoneNumberId) {
         String url = String.format(META_URL, phoneNumberId);
 
@@ -97,8 +184,25 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         Map<String, Object> interactive = new HashMap<>();
         interactive.put("type", isButton ? "button" : "list");
 
-        // Header and Body text
-        if (menu.getHeaderImageUrl() != null && !menu.getHeaderImageUrl().isBlank()) {
+        // Header and Body text (Document, Video, Image, or Text)
+        if (menu.getHeaderDocumentUrl() != null && !menu.getHeaderDocumentUrl().isBlank()) {
+            Map<String, Object> headerObj = new HashMap<>();
+            headerObj.put("type", "document");
+            Map<String, String> docObj = new HashMap<>();
+            docObj.put("link", menu.getHeaderDocumentUrl());
+            if (menu.getHeaderDocumentFilename() != null && !menu.getHeaderDocumentFilename().isBlank()) {
+                docObj.put("filename", menu.getHeaderDocumentFilename());
+            }
+            headerObj.put("document", docObj);
+            interactive.put("header", headerObj);
+        } else if (menu.getHeaderVideoUrl() != null && !menu.getHeaderVideoUrl().isBlank()) {
+            Map<String, Object> headerObj = new HashMap<>();
+            headerObj.put("type", "video");
+            Map<String, String> vidObj = new HashMap<>();
+            vidObj.put("link", menu.getHeaderVideoUrl());
+            headerObj.put("video", vidObj);
+            interactive.put("header", headerObj);
+        } else if (menu.getHeaderImageUrl() != null && !menu.getHeaderImageUrl().isBlank()) {
             Map<String, Object> headerObj = new HashMap<>();
             headerObj.put("type", "image");
             Map<String, String> imgObj = new HashMap<>();
@@ -327,7 +431,7 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         if (wabaId == null || wabaId.isBlank() || accessToken == null || accessToken.isBlank()) {
             throw new IllegalArgumentException("WABA ID and Access Token must not be null or blank");
         }
-        String url = String.format("https://graph.facebook.com/v18.0/%s/message_templates?limit=100", wabaId);
+        String url = String.format("%s/%s/message_templates?limit=100", getGraphBaseUrl(), wabaId);
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessToken);
 
@@ -346,13 +450,13 @@ public class MetaWhatsAppClient implements WhatsAppClient {
 
     /**
      * Create and submit a new HSM Message Template to Meta Graph API for review.
-     * POST https://graph.facebook.com/v18.0/{wabaId}/message_templates
+     * POST {graphBaseUrl}/{wabaId}/message_templates
      */
     public JsonNode createMessageTemplate(String wabaId, com.chatcrmlite.backend.dto.WhatsAppTemplateDto dto, String accessToken) {
         if (wabaId == null || wabaId.isBlank() || accessToken == null || accessToken.isBlank()) {
             throw new IllegalArgumentException("WABA ID and Access Token must not be null or blank");
         }
-        String url = String.format("https://graph.facebook.com/v18.0/%s/message_templates", wabaId);
+        String url = String.format("%s/%s/message_templates", getGraphBaseUrl(), wabaId);
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(accessToken);
@@ -361,77 +465,7 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         payload.put("name", dto.getName().toLowerCase().replaceAll("[^a-z0-9_]", "_"));
         payload.put("language", dto.getLanguage() != null ? dto.getLanguage() : "en_US");
         payload.put("category", dto.getCategory() != null ? dto.getCategory() : "MARKETING");
-
-        List<Map<String, Object>> components = new ArrayList<>();
-
-        // 1. Header Component
-        if (dto.getHeaderType() != null && !"NONE".equalsIgnoreCase(dto.getHeaderType())) {
-            Map<String, Object> header = new HashMap<>();
-            header.put("type", "HEADER");
-            header.put("format", dto.getHeaderType().toUpperCase());
-            if ("TEXT".equalsIgnoreCase(dto.getHeaderType()) && dto.getHeaderContent() != null) {
-                header.put("text", dto.getHeaderContent());
-            }
-            components.add(header);
-        }
-
-        // 2. Body Component
-        Map<String, Object> bodyComponent = new HashMap<>();
-        bodyComponent.put("type", "BODY");
-        bodyComponent.put("text", dto.getBodyText());
-
-        // Extract variables {{1}}, {{2}}, ... and supply required example.body_text for Meta API
-        if (dto.getBodyText() != null) {
-            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("\\{\\{(\\d+)\\}\\}").matcher(dto.getBodyText());
-            java.util.Set<Integer> varIndices = new java.util.TreeSet<>();
-            while (matcher.find()) {
-                try {
-                    varIndices.add(Integer.parseInt(matcher.group(1)));
-                } catch (NumberFormatException ignored) {}
-            }
-            if (!varIndices.isEmpty()) {
-                int maxIndex = varIndices.stream().max(Integer::compareTo).get();
-                List<String> sampleValues = new ArrayList<>();
-                for (int i = 1; i <= maxIndex; i++) {
-                    sampleValues.add("SampleValue" + i);
-                }
-                Map<String, Object> exampleObj = new HashMap<>();
-                exampleObj.put("body_text", List.of(sampleValues));
-                bodyComponent.put("example", exampleObj);
-                log.info("[MetaAPI] Added variable example.body_text for {} max variables: {}", maxIndex, sampleValues);
-            }
-        }
-        components.add(bodyComponent);
-
-        // 3. Footer Component
-        if (dto.getFooterText() != null && !dto.getFooterText().isBlank()) {
-            Map<String, Object> footer = new HashMap<>();
-            footer.put("type", "FOOTER");
-            footer.put("text", dto.getFooterText());
-            components.add(footer);
-        }
-
-        // 4. Buttons Component
-        if (dto.getButtons() != null && !dto.getButtons().isEmpty()) {
-            Map<String, Object> buttonsComponent = new HashMap<>();
-            buttonsComponent.put("type", "BUTTONS");
-            List<Map<String, Object>> buttonsList = new ArrayList<>();
-            for (com.chatcrmlite.backend.dto.WhatsAppTemplateDto.TemplateButtonDto btn : dto.getButtons()) {
-                Map<String, Object> btnMap = new HashMap<>();
-                btnMap.put("type", btn.getType());
-                btnMap.put("text", btn.getText());
-                if ("URL".equalsIgnoreCase(btn.getType()) && btn.getUrl() != null) {
-                    btnMap.put("url", btn.getUrl());
-                } else if ("PHONE_NUMBER".equalsIgnoreCase(btn.getType()) && btn.getPhoneNumber() != null) {
-                    btnMap.put("phone_number", btn.getPhoneNumber());
-                }
-                buttonsList.add(btnMap);
-            }
-            buttonsComponent.put("buttons", buttonsList);
-            components.add(buttonsComponent);
-        }
-
-        payload.put("components", components);
+        payload.put("components", buildComponentsList(dto));
 
         try {
             HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
@@ -451,11 +485,126 @@ public class MetaWhatsAppClient implements WhatsAppClient {
     }
 
     /**
+     * Update an existing HSM Message Template on Meta Graph API.
+     * POST {graphBaseUrl}/{metaTemplateId}
+     */
+    public JsonNode updateMessageTemplate(String metaTemplateId, com.chatcrmlite.backend.dto.WhatsAppTemplateDto dto, String accessToken) {
+        if (metaTemplateId == null || metaTemplateId.isBlank() || accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("Meta Template ID and Access Token must not be null or blank");
+        }
+        String url = String.format("%s/%s", getGraphBaseUrl(), metaTemplateId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> payload = new HashMap<>();
+        if (dto.getCategory() != null && !dto.getCategory().isBlank()) {
+            payload.put("category", dto.getCategory());
+        }
+        payload.put("components", buildComponentsList(dto));
+
+        try {
+            HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
+            Map<String, Object> response = restTemplate.postForObject(url, request, Map.class);
+            log.info("[MetaAPI] Successfully updated message template '{}' (metaId={})", dto.getName(), metaTemplateId);
+            return objectMapper.valueToTree(response != null ? response : Map.of("success", true));
+        } catch (HttpStatusCodeException e) {
+            log.error("[MetaAPI] Failed to update message template {} (metaId={}): {}", dto.getName(), metaTemplateId, e.getResponseBodyAsString());
+            String metaError = parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString());
+            if (e.getStatusCode().is4xxClientError()) {
+                throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Meta API Error: " + metaError);
+            }
+            throw new RuntimeException("Meta API Error: " + metaError);
+        } catch (Exception e) {
+            log.error("[MetaAPI] Error updating template {}: {}", dto.getName(), e.getMessage());
+            throw new RuntimeException("Failed to update message template on Meta Graph API: " + e.getMessage());
+        }
+    }
+
+    private List<Map<String, Object>> buildComponentsList(com.chatcrmlite.backend.dto.WhatsAppTemplateDto dto) {
+        List<Map<String, Object>> components = new ArrayList<>();
+
+        // 1. Header Component
+        if (dto.getHeaderType() != null && !"NONE".equalsIgnoreCase(dto.getHeaderType())) {
+            Map<String, Object> header = new HashMap<>();
+            header.put("type", "HEADER");
+            header.put("format", dto.getHeaderType().toUpperCase());
+            if ("TEXT".equalsIgnoreCase(dto.getHeaderType()) && dto.getHeaderContent() != null) {
+                header.put("text", dto.getHeaderContent());
+                Map<String, Object> headerExample = buildHeaderExample(dto.getHeaderContent(), dto.getHeaderSampleValues());
+                if (headerExample != null) {
+                    header.put("example", headerExample);
+                    log.info("[MetaAPI] Attached header example for template '{}'", dto.getName());
+                }
+            }
+            components.add(header);
+        }
+
+        // 2. Body Component
+        Map<String, Object> bodyComponent = new HashMap<>();
+        bodyComponent.put("type", "BODY");
+        bodyComponent.put("text", dto.getBodyText());
+
+        Map<String, Object> bodyExample = buildBodyExample(dto.getBodyText(), dto.getBodySampleValues());
+        if (bodyExample != null) {
+            bodyComponent.put("example", bodyExample);
+            log.info("[MetaAPI] Attached body example for template '{}'", dto.getName());
+        }
+        components.add(bodyComponent);
+
+        // 3. Footer Component
+        if (dto.getFooterText() != null && !dto.getFooterText().isBlank()) {
+            Map<String, Object> footer = new HashMap<>();
+            footer.put("type", "FOOTER");
+            footer.put("text", dto.getFooterText());
+            components.add(footer);
+        }
+
+        // 4. Buttons Component
+        if (dto.getButtons() != null && !dto.getButtons().isEmpty()) {
+            Map<String, Object> buttonsComponent = new HashMap<>();
+            buttonsComponent.put("type", "BUTTONS");
+            List<Map<String, Object>> buttonsList = new ArrayList<>();
+            for (com.chatcrmlite.backend.dto.WhatsAppTemplateDto.TemplateButtonDto btn : dto.getButtons()) {
+                if (btn == null || btn.getText() == null || btn.getText().isBlank()) continue;
+                Map<String, Object> btnMap = new HashMap<>();
+                btnMap.put("type", btn.getType());
+                btnMap.put("text", btn.getText().trim());
+                if ("URL".equalsIgnoreCase(btn.getType())) {
+                    String urlVal = (btn.getUrl() != null && !btn.getUrl().isBlank()) ? btn.getUrl().trim() : "https://example.com";
+                    btnMap.put("url", urlVal);
+                    List<String> buttonExample = buildButtonExample(btn);
+                    if (buttonExample != null && !buttonExample.isEmpty()) {
+                        btnMap.put("example", buttonExample);
+                        log.info("[MetaAPI] Attached dynamic URL example for button '{}'", btn.getText());
+                    }
+                } else if ("PHONE_NUMBER".equalsIgnoreCase(btn.getType())) {
+                    String phoneVal = (btn.getPhoneNumber() != null && !btn.getPhoneNumber().isBlank()) ? btn.getPhoneNumber().trim() : "+919876543210";
+                    btnMap.put("phone_number", phoneVal);
+                } else if ("FLOW".equalsIgnoreCase(btn.getType())) {
+                    btnMap.put("flow_id", btn.getFlowId());
+                    btnMap.put("flow_action", (btn.getFlowAction() != null && !btn.getFlowAction().isBlank()) ? btn.getFlowAction().toLowerCase() : "navigate");
+                    if (btn.getNavigateScreen() != null && !btn.getNavigateScreen().isBlank()) {
+                        btnMap.put("navigate_screen", btn.getNavigateScreen().trim());
+                    }
+                }
+                buttonsList.add(btnMap);
+            }
+            if (!buttonsList.isEmpty()) {
+                buttonsComponent.put("buttons", buttonsList);
+                components.add(buttonsComponent);
+            }
+        }
+
+        return components;
+    }
+
+    /**
      * Delete an HSM Message Template from Meta Graph API.
-     * DELETE https://graph.facebook.com/v18.0/{wabaId}/message_templates?name={templateName}
+     * DELETE {graphBaseUrl}/{wabaId}/message_templates?name={templateName}
      */
     public void deleteMessageTemplate(String wabaId, String templateName, String accessToken) {
-        String url = String.format("https://graph.facebook.com/v18.0/%s/message_templates?name=%s", wabaId, templateName);
+        String url = String.format("%s/%s/message_templates?name=%s", getGraphBaseUrl(), wabaId, templateName);
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(accessToken);
 

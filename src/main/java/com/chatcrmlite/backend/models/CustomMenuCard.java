@@ -70,6 +70,7 @@ public class CustomMenuCard {
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
 

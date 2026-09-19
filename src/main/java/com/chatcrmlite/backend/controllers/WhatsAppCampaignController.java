@@ -137,6 +137,23 @@ public class WhatsAppCampaignController {
         return ResponseEntity.ok(campaignService.cancelCampaign(id, user));
     }
 
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Map<String, Object>> deleteCampaign(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        campaignService.deleteCampaign(id, user);
+        return ResponseEntity.ok(Map.of("success", true, "message", "Campaign deleted successfully"));
+    }
+
+    @DeleteMapping
+    public ResponseEntity<Map<String, Object>> deleteAllCampaigns(
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        int deleted = campaignService.deleteAllCampaigns(user);
+        return ResponseEntity.ok(Map.of("success", true, "count", deleted, "message", "All campaigns deleted successfully"));
+    }
+
     @GetMapping("/{id}/analytics")
     public ResponseEntity<WhatsAppCampaignAnalytics> getAnalytics(
             @PathVariable UUID id,

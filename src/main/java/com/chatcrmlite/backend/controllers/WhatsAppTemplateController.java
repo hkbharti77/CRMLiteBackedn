@@ -43,6 +43,15 @@ public class WhatsAppTemplateController {
         return ResponseEntity.ok(templateService.createAndSubmitTemplate(dto, user));
     }
 
+    @PutMapping("/{name}")
+    public ResponseEntity<WhatsAppTemplateDto> updateTemplate(
+            @PathVariable String name,
+            @RequestBody WhatsAppTemplateDto dto,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(templateService.updateTemplate(name, dto, user));
+    }
+
     @DeleteMapping("/{name}")
     public ResponseEntity<Void> deleteTemplate(
             @PathVariable String name,

@@ -65,6 +65,16 @@ public class WhatsAppFlowService {
     }
 
     @Transactional(readOnly = true)
+    public List<WhatsAppFlow> getPublishedFlows(User user) {
+        UUID tenantId = getTenantId(user);
+        return flowRepository.findAllByTenantIdAndStatus(tenantId, FlowLifecycleStatus.PUBLISHED)
+                .stream()
+                .filter(f -> f.getMetaFlowId() != null && !f.getMetaFlowId().isBlank())
+                .toList();
+    }
+
+
+    @Transactional(readOnly = true)
     public WhatsAppFlow getFlow(UUID flowId, User user) {
         UUID tenantId = getTenantId(user);
         return flowRepository.findByIdAndTenantId(flowId, tenantId)

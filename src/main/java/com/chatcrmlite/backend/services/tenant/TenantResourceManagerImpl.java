@@ -72,22 +72,24 @@ public class TenantResourceManagerImpl implements TenantResourceManager {
     }
 
     private long getLimitForTier(UUID tenantId, ResourceType type) {
+        if (type == null) return 1000;
         var tier = tierService.getTier(tenantId);
         
-        return switch (type) {
-            case MESSAGES_PER_SECOND -> switch (tier) {
-                case FREE -> 2;
-                case PRO -> 10;
-                case ENTERPRISE -> 50;
-            };
-            case AI_TOKENS -> switch (tier) {
-                case FREE -> 50000;
-                case PRO -> 200000;
-                case ENTERPRISE -> 1000000;
-            };
-            case MAX_CONNECTIONS -> 50;
-            case CPU_THREADS -> 10;
-            case QUEUE_DEPTH -> 1000;
-        };
+        if (type == ResourceType.MESSAGES_PER_SECOND) {
+            if (tier == PlanType.FREE) return 2;
+            if (tier == PlanType.ENTERPRISE) return 50;
+            return 10; // PRO / Default
+        }
+        
+        if (type == ResourceType.AI_TOKENS) {
+            if (tier == PlanType.FREE) return 50000;
+            if (tier == PlanType.ENTERPRISE) return 1000000;
+            return 200000; // PRO / Default
+        }
+        
+        if (type == ResourceType.MAX_CONNECTIONS) return 50;
+        if (type == ResourceType.CPU_THREADS) return 10;
+        if (type == ResourceType.QUEUE_DEPTH) return 1000;
+        return 1000;
     }
 }

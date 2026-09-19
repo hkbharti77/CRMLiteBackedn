@@ -68,7 +68,6 @@ public class DripSequenceService {
      * Scheduled job evaluating active drip participants due for step execution.
      */
     @Scheduled(fixedDelay = 60000) // Runs every minute
-    @Transactional
     public void processDueDripSteps() {
         List<DripParticipant> dueParticipants = dripParticipantRepository.findByStatusAndNextRunAtBefore(
                 DripParticipant.ParticipantStatus.ACTIVE,
@@ -76,11 +75,16 @@ public class DripSequenceService {
         );
 
         for (DripParticipant participant : dueParticipants) {
-            processParticipantStep(participant);
+            try {
+                processParticipantStep(participant);
+            } catch (Exception e) {
+                log.error("[DripSequence] Error processing participantId={}: {}", participant.getId(), e.getMessage());
+            }
         }
     }
 
-    private void processParticipantStep(DripParticipant participant) {
+    @Transactional
+    public void processParticipantStep(DripParticipant participant) {
         DripSequence sequence = participant.getSequence();
         Contact contact = participant.getContact();
 

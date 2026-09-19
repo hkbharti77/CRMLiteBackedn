@@ -240,6 +240,91 @@ export function createCatalogManager({ messagesContainer, onAddUserBubble, creat
                 messagesContainer.appendChild(container);
             }
             messagesContainer.scrollTop = messagesContainer.scrollHeight;
+        },
+
+        renderSingleDocumentCard(doc) {
+            if (!messagesContainer || !doc) return;
+
+            const row = createBotRow ? createBotRow() : null;
+            const card = document.createElement('div');
+            card.className = 'catalog-card catalog-single-doc-card';
+            card.style.cursor = 'default';
+            card.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+            card.style.background = 'rgba(16, 185, 129, 0.05)';
+            card.style.padding = '12px';
+            card.style.borderRadius = '12px';
+            card.style.marginTop = '6px';
+            card.style.maxWidth = '300px';
+
+            const header = document.createElement('div');
+            header.style.display = 'flex';
+            header.style.alignItems = 'center';
+            header.style.gap = '8px';
+            header.style.marginBottom = '6px';
+
+            const icon = document.createElement('span');
+            icon.style.fontSize = '20px';
+            icon.textContent = doc.mediaType === 'IMAGE' ? '🖼️' : '📄';
+            header.appendChild(icon);
+
+            const title = document.createElement('div');
+            title.className = 'catalog-card-title';
+            title.style.margin = '0';
+            title.style.fontWeight = 'bold';
+            title.style.fontSize = '13px';
+            title.textContent = doc.title || doc.fileName || 'Catalog Document';
+            header.appendChild(title);
+            card.appendChild(header);
+
+            if (doc.description) {
+                const desc = document.createElement('div');
+                desc.className = 'catalog-card-desc';
+                desc.style.marginBottom = '8px';
+                desc.style.fontSize = '11px';
+                desc.textContent = doc.description;
+                card.appendChild(desc);
+            }
+
+            // Action Button: Download / View PDF
+            const actionBtn = document.createElement('a');
+            let docTargetUrl = doc.url || doc.directCloudinaryUrl || '#';
+            if (docTargetUrl && docTargetUrl !== '#') {
+                if (typeof resolveUrl === 'function') {
+                    docTargetUrl = resolveUrl(docTargetUrl, apiBase) || docTargetUrl;
+                } else if (docTargetUrl.startsWith('/')) {
+                    const base = (apiBase || '').replace(/\/api\/v1\/public\/?$/, '').replace(/\/api\/v1\/?$/, '').replace(/\/$/, '');
+                    docTargetUrl = `${base}${docTargetUrl}`;
+                }
+            }
+            actionBtn.href = docTargetUrl;
+            actionBtn.target = '_blank';
+            actionBtn.rel = 'noopener noreferrer';
+            actionBtn.className = 'flow-btn';
+            actionBtn.style.display = 'inline-flex';
+            actionBtn.style.alignItems = 'center';
+            actionBtn.style.justifyContent = 'center';
+            actionBtn.style.gap = '6px';
+            actionBtn.style.padding = '8px 14px';
+            actionBtn.style.marginTop = '4px';
+            actionBtn.style.textDecoration = 'none';
+            actionBtn.style.borderRadius = '8px';
+            actionBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+            actionBtn.style.color = '#ffffff';
+            actionBtn.style.fontWeight = '600';
+            actionBtn.style.fontSize = '12px';
+            actionBtn.innerHTML = `<span>View & Download ${doc.mediaType === 'IMAGE' ? 'Image' : 'PDF'}</span> ↗`;
+            card.appendChild(actionBtn);
+
+            if (row) {
+                const content = row.querySelector('.message-row-content');
+                if (content) content.appendChild(card);
+                else row.appendChild(card);
+                messagesContainer.appendChild(row);
+            } else {
+                card.classList.add('message', 'bot');
+                messagesContainer.appendChild(card);
+            }
+            messagesContainer.scrollTop = messagesContainer.scrollHeight;
         }
     };
 }

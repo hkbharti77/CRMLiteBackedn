@@ -55,6 +55,7 @@ public class DocumentChunk {
     public void setId(UUID id) { this.id = id; }
     public UUID getDocumentId() { return documentId; }
     public void setDocumentId(UUID documentId) { this.documentId = documentId; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Tenant getTenant() { return tenant; }
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
     public UUID getTenantId() { return tenantId; }

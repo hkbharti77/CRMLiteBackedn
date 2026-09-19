@@ -113,12 +113,23 @@ export async function initWidget({ businessId, apiBase } = {}) {
             } else {
                 const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
                 if (triggered) {
-                    flowEngine.addBotBubble(finalResponse);
+                    if (data.catalog) {
+                        const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title, actionType) => {
+                            flowEngine.handleMenuAction(id, title, actionType);
+                        }, data.catalog);
+                        if (entry) {
+                            const history = storage.loadHistory();
+                            history.push(entry);
+                            storage.saveHistory(history);
+                        }
+                    } else {
+                        flowEngine.addBotBubble(finalResponse);
+                    }
                     setTimeout(() => flowEngine.suggestForm(), 600);
                 } else {
                     const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title, actionType) => {
                         flowEngine.handleMenuAction(id, title, actionType);
-                    });
+                    }, data.catalog);
                     if (entry) {
                         const history = storage.loadHistory();
                         history.push(entry);

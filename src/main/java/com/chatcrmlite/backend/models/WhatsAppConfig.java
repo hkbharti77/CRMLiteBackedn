@@ -158,6 +158,24 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "booking_button_label", length = 50)
     private String bookingButtonLabel;
 
+    @Column(name = "enable_ai_catalogs")
+    private Boolean enableAiCatalogs = false;
+
+    @Column(name = "catalog_send_cooldown_seconds")
+    private Integer catalogSendCooldownSeconds = 300;
+
+    @Column(name = "catalog_relevance_threshold")
+    private Double catalogRelevanceThreshold = 0.65;
+
+    public Boolean getEnableAiCatalogs() { return enableAiCatalogs != null && enableAiCatalogs; }
+    public void setEnableAiCatalogs(Boolean enableAiCatalogs) { this.enableAiCatalogs = enableAiCatalogs; }
+
+    public Integer getCatalogSendCooldownSeconds() { return catalogSendCooldownSeconds != null ? catalogSendCooldownSeconds : 300; }
+    public void setCatalogSendCooldownSeconds(Integer catalogSendCooldownSeconds) { this.catalogSendCooldownSeconds = catalogSendCooldownSeconds; }
+
+    public Double getCatalogRelevanceThreshold() { return catalogRelevanceThreshold != null ? catalogRelevanceThreshold : 0.65; }
+    public void setCatalogRelevanceThreshold(Double catalogRelevanceThreshold) { this.catalogRelevanceThreshold = catalogRelevanceThreshold; }
+
     public WhatsAppConfig() {}
 
     public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String portfolioUrl, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showSosButton, Boolean showSupportFormButton) {
@@ -187,6 +205,7 @@ public class WhatsAppConfig implements Serializable {
     }
 
     public UUID getId() { return id; }
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public Tenant getTenant() { return tenant; }
     public String getPhoneNumberId() { return phoneNumberId; }
     public String getWabaId() { return wabaId; }

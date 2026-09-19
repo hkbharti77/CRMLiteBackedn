@@ -58,6 +58,12 @@ It automates customer interactions across multiple channels (WhatsApp, Web Chat 
 - 🎯 **Automated Lead Scoring** - Dynamic AI and rule-based lead scoring based on interaction history, contact metadata, and deal value.
 - 📅 **Appointments & Google Calendar Sync** - Full appointment booking system integrated with Google Calendar APIs.
 
+### 💳 In-Chat WhatsApp Payments & Billing Gateway
+- 💳 **Multi-Gateway Payment Integration** - Native support for Razorpay, Cashfree, Stripe, and PhonePe with dynamic checkout link generation.
+- ⏱️ **Meta 24-Hour Customer Window Policy Enforcement** - Automatic session evaluation; dispatches interactive in-session bills when window is active, or Meta-approved payment templates (`{{1}}`..`{{4}}`) when session is expired.
+- 🪄 **1-Click Meta Payment Templates & Compliance** - Pre-approved billing schemas (`order_payment_request`, `payment_reminder_urgent`, `payment_link_cta`) deployed directly to Meta WABA.
+- 🔄 **Autonomous Payment Reconciliation & Outbox Workers** - Background cron polling payment gateways for asynchronous webhook catchup and status rollups.
+
 ### 🧠 AI & RAG Engine
 - 🧠 **Vector RAG Engine & FAQ System** - Document ingestion (PDF, DOCX, TXT), vector embeddings, guardrail validation, and FAQ auto-resolution.
 - 🤖 **AI Agent Fallback** - Intelligent AI agent takeover when human agents are offline or unassigned.
@@ -213,21 +219,28 @@ sequenceDiagram
 - **Targeted Broadcasts**: Send bulk WhatsApp messages to contact segments with dynamic merge fields.
 - **Campaign Analytics**: Real-time tracking of sent, delivered, read, and failed message statuses.
 - **Template Management**: Create, sync, and submit WhatsApp message templates to Meta for approval.
+- **Campaign Lifecycle & Cleanup**: Single campaign deletion and 1-click bulk campaign wiping with full cascade deletion across recipients, executions, analytics, and audit logs.
 
-### 🆕 6. Advanced Email Engine & Webhooks (`/api/v1/emails/*` & `/api/v1/email-tracking/*`)
+### 🆕 6. In-Chat WhatsApp Payments & Billing Gateway (`/api/v1/payments/*`)
+- **Multi-Gateway Support**: Native payment link generation for Razorpay, Cashfree, Stripe, and PhonePe.
+- **Meta 24-Hour Policy Compliance**: Automated session detection that sends interactive checkout bills within active 24-hr customer windows, or pre-approved Meta payment templates when expired.
+- **1-Click Meta Payment Templates**: Instant deployment of WhatsApp-compliant payment and reminder templates to Meta WABA.
+- **Reconciliation & Audit**: Background polling workers for gateway status sync, webhook verification, and payment audit logging.
+
+### 🆕 7. Advanced Email Engine & Webhooks (`/api/v1/emails/*` & `/api/v1/email-tracking/*`)
 - **Multi-Provider SMTP**: Configure tenant-specific SMTP servers, SendGrid, or Amazon SES credentials.
 - **Email Tracking**: Open rate tracking pixels and click-through redirect tracking.
 - **Delivery Webhooks**: Process bounce, spam report, and delivery confirmation webhooks.
 
-### 🆕 7. Lead Bulk Import & Intelligent Lead Scoring (`/api/v1/leads/bulk-upload` & `/api/v1/lead-scoring/*`)
+### 🆕 8. Lead Bulk Import & Intelligent Lead Scoring (`/api/v1/leads/bulk-upload` & `/api/v1/lead-scoring/*`)
 - **Async Bulk Upload**: Process large CSV/Excel spreadsheets of leads with field mapping and validation.
 - **Dynamic Lead Scoring**: Auto-compute lead engagement scores based on customer activity, interaction frequency, and pipeline stage.
 
-### 🆕 8. FAQ & RAG Knowledge Base (`/api/v1/knowledge-base/*` & `/api/v1/faqs/*`)
+### 🆕 9. FAQ & RAG Knowledge Base (`/api/v1/knowledge-base/*` & `/api/v1/faqs/*`)
 - **Document Vectorization**: Upload PDF/DOCX files to generate vector embeddings for intelligent bot retrieval.
 - **FAQ Auto-Matching**: Search indexed FAQ knowledge bases to answer customer queries accurately before escalating to human agents.
 
-### 🆕 9. Multi-tier Subscriptions & White-Label Branding
+### 🆕 10. Multi-tier Subscriptions & White-Label Branding
 - **Tier Quota Enforcement**: FREE, MIN, PRO, and ENTERPRISE plans with automated lifecycle downgrades upon expiry.
 - **Custom Widget Branding**: Custom colors, logo URLs, and removal of default watermarks for PRO/ENTERPRISE tiers.
 
@@ -286,8 +299,19 @@ GET    /api/public/webchat/history          📜 Webchat message history
 GET    /api/v1/whatsapp/config              ⚙️ WhatsApp credentials & status
 POST   /api/v1/whatsapp/campaigns           📣 Create broadcast campaign
 POST   /api/v1/whatsapp/campaigns/{id}/send 🚀 Execute campaign dispatch
+DELETE /api/v1/whatsapp/campaigns/{id}      🗑️ Delete single campaign
+DELETE /api/v1/whatsapp/campaigns           🧹 Clear all tenant campaigns
 GET    /api/v1/whatsapp/templates           📋 Message templates
 POST   /api/v1/whatsapp/webhook             🔗 Meta webhook callback
+```
+
+### 💳 WhatsApp Payments & Gateway
+```
+POST   /api/v1/payments/request             💳 Create payment request & dispatch link
+GET    /api/v1/payments/transactions        📊 List payment transactions & statuses
+GET    /api/v1/payments/analytics           📈 Revenue & conversion metrics
+POST   /api/v1/payments/templates/deploy    🪄 1-Click deploy templates to Meta WABA
+POST   /api/v1/payments/webhook/{gateway}   🔗 Inbound payment gateway webhook
 ```
 
 ### 📞 Voice & Telephony

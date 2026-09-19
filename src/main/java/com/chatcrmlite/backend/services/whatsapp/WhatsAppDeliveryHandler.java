@@ -41,6 +41,22 @@ public class WhatsAppDeliveryHandler {
 
             String responseType = (String) context.getMetadata().getOrDefault("responseType", "NONE");
             String pendingResponse = (String) context.getMetadata().get("pendingResponse");
+            String documentUrl = (String) context.getMetadata().get("documentUrl");
+            String documentFilename = (String) context.getMetadata().get("documentFilename");
+            String imgUrl = (String) context.getMetadata().get("imgUrl");
+            String videoUrl = (String) context.getMetadata().get("videoUrl");
+            String mediaType = (String) context.getMetadata().get("mediaType");
+            String mediaUrl = (String) context.getMetadata().get("mediaUrl");
+
+            if (mediaUrl != null && !mediaUrl.isBlank()) {
+                if ("IMAGE".equalsIgnoreCase(mediaType) || mediaUrl.matches("(?i).*\\.(jpg|jpeg|png|webp|gif)(\\?.*)?$")) {
+                    imgUrl = mediaUrl;
+                    documentUrl = null;
+                } else if ("VIDEO".equalsIgnoreCase(mediaType) || mediaUrl.matches("(?i).*\\.(mp4|3gp|mov|avi|webm)(\\?.*)?$")) {
+                    videoUrl = mediaUrl;
+                    documentUrl = null;
+                }
+            }
 
             log.info("[WhatsApp-Outbound] Dispatching response responseType={} correlationId={} messageId={}",
                     responseType, context.getMessageId(), context.getMessageId());
@@ -49,7 +65,7 @@ public class WhatsAppDeliveryHandler {
                 case "AI":
                 case "PLAIN":
                     if (pendingResponse != null) {
-                        messageService.sendInteractiveAiResponse(contact, pendingResponse, config, owner);
+                        messageService.sendInteractiveAiResponse(contact, pendingResponse, imgUrl, videoUrl, documentUrl, documentFilename, config, owner);
                     }
                     break;
                 case "GREETING":

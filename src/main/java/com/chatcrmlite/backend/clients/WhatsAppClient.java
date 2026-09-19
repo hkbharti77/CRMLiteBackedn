@@ -22,6 +22,11 @@ public interface WhatsAppClient {
     String sendImage(String to, String imageUrl, String caption, String accessToken, String phoneNumberId);
 
     /**
+     * Sends a document (PDF, brochure, catalog) through the WhatsApp API.
+     */
+    String sendDocument(String to, String documentUrl, String fileName, String caption, String accessToken, String phoneNumberId);
+
+    /**
      * Sends an interactive list or button menu message through the WhatsApp Business API.
      */
     String sendInteractiveMenu(String to, MenuDto menu, String accessToken, String phoneNumberId);

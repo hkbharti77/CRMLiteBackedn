@@ -756,7 +756,7 @@ export function createUIController({
             appendMessageRow(messages, 'bot', msgDiv);
         },
 
-        renderCustomMenu(jsonString, defaultMessage, overrideBodyText, currentTheme, onActionSelect) {
+        renderCustomMenu(jsonString, defaultMessage, overrideBodyText, currentTheme, onActionSelect, catalogDoc) {
             const { messages } = elements;
             if (!messages) return;
 
@@ -796,6 +796,131 @@ export function createUIController({
             textSpan.className = 'message-text';
             textSpan.innerHTML = parseMarkdown(bodyMsg, apiBaseRef);
             msgDiv.appendChild(textSpan);
+
+            // If a catalog document/media/image is provided, embed it directly into the single message bubble
+            if (catalogDoc) {
+                const docCard = document.createElement('div');
+                docCard.className = 'catalog-card catalog-single-doc-card';
+                docCard.style.cursor = 'default';
+                docCard.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                docCard.style.background = 'rgba(16, 185, 129, 0.05)';
+                docCard.style.padding = '12px';
+                docCard.style.borderRadius = '12px';
+                docCard.style.marginTop = '8px';
+                docCard.style.marginBottom = '8px';
+                docCard.style.maxWidth = '100%';
+                docCard.style.boxSizing = 'border-box';
+
+                let targetUrl = catalogDoc.url || catalogDoc.directCloudinaryUrl || catalogDoc.imageUrl || catalogDoc.mediaUrl || '#';
+                if (targetUrl && targetUrl !== '#') {
+                    if (typeof resolveImageUrl === 'function') {
+                        targetUrl = resolveImageUrl(targetUrl, apiBaseRef) || targetUrl;
+                    } else if (targetUrl.startsWith('/')) {
+                        const base = (apiBaseRef || '')
+                            .replace(/\/api\/v1\/public\/?$/, '')
+                            .replace(/\/api\/v1\/?$/, '')
+                            .replace(/\/$/, '');
+                        targetUrl = `${base}${targetUrl}`;
+                    }
+                }
+
+                // Detect media type
+                const rawType = String(catalogDoc.mediaType || catalogDoc.type || '').toUpperCase();
+                const mimeType = String(catalogDoc.mimeType || '').toLowerCase();
+                const isImage = rawType === 'IMAGE' || mimeType.startsWith('image/') || /\.(jpe?g|png|webp|gif|svg|avif|bmp)($|\?)/i.test(targetUrl);
+                const isVideo = rawType === 'VIDEO' || mimeType.startsWith('video/') || /\.(mp4|webm|mov|avi|3gp|mkv)($|\?)/i.test(targetUrl);
+                const isAudio = rawType === 'AUDIO' || mimeType.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac)($|\?)/i.test(targetUrl);
+
+                if (isImage && targetUrl !== '#') {
+                    const imgPreview = document.createElement('img');
+                    imgPreview.src = targetUrl;
+                    imgPreview.alt = catalogDoc.title || catalogDoc.name || 'Catalog Image';
+                    imgPreview.style.width = '100%';
+                    imgPreview.style.maxHeight = '200px';
+                    imgPreview.style.objectFit = 'cover';
+                    imgPreview.style.borderRadius = '8px';
+                    imgPreview.style.marginBottom = '8px';
+                    imgPreview.style.display = 'block';
+                    imgPreview.style.cursor = 'pointer';
+                    imgPreview.onclick = () => window.open(targetUrl, '_blank');
+                    docCard.appendChild(imgPreview);
+                } else if (isVideo && targetUrl !== '#') {
+                    const videoPreview = document.createElement('video');
+                    videoPreview.src = targetUrl;
+                    videoPreview.controls = true;
+                    videoPreview.playsInline = true;
+                    videoPreview.preload = 'metadata';
+                    videoPreview.style.width = '100%';
+                    videoPreview.style.maxHeight = '220px';
+                    videoPreview.style.borderRadius = '8px';
+                    videoPreview.style.marginBottom = '8px';
+                    videoPreview.style.display = 'block';
+                    docCard.appendChild(videoPreview);
+                } else if (isAudio && targetUrl !== '#') {
+                    const audioPreview = document.createElement('audio');
+                    audioPreview.src = targetUrl;
+                    audioPreview.controls = true;
+                    audioPreview.style.width = '100%';
+                    audioPreview.style.marginBottom = '8px';
+                    audioPreview.style.display = 'block';
+                    docCard.appendChild(audioPreview);
+                }
+
+                const header = document.createElement('div');
+                header.style.display = 'flex';
+                header.style.alignItems = 'center';
+                header.style.gap = '8px';
+                header.style.marginBottom = '6px';
+
+                const icon = document.createElement('span');
+                icon.style.fontSize = '20px';
+                icon.textContent = isImage ? '🖼️' : isVideo ? '🎬' : isAudio ? '🎵' : '📄';
+                header.appendChild(icon);
+
+                const title = document.createElement('div');
+                title.className = 'catalog-card-title';
+                title.style.margin = '0';
+                title.style.fontWeight = 'bold';
+                title.style.fontSize = '13px';
+                title.textContent = catalogDoc.title || catalogDoc.name || catalogDoc.fileName || (isImage ? 'Catalog Image' : isVideo ? 'Catalog Video' : 'Catalog Document');
+                header.appendChild(title);
+                docCard.appendChild(header);
+
+                if (catalogDoc.description) {
+                    const desc = document.createElement('div');
+                    desc.className = 'catalog-card-desc';
+                    desc.style.marginBottom = '8px';
+                    desc.style.fontSize = '11px';
+                    desc.textContent = catalogDoc.description;
+                    docCard.appendChild(desc);
+                }
+
+                if (targetUrl !== '#') {
+                    const actionBtn = document.createElement('a');
+                    actionBtn.href = targetUrl;
+                    actionBtn.target = '_blank';
+                    actionBtn.rel = 'noopener noreferrer';
+                    actionBtn.className = 'flow-btn';
+                    actionBtn.style.display = 'inline-flex';
+                    actionBtn.style.alignItems = 'center';
+                    actionBtn.style.justifyContent = 'center';
+                    actionBtn.style.gap = '6px';
+                    actionBtn.style.padding = '8px 14px';
+                    actionBtn.style.marginTop = '4px';
+                    actionBtn.style.textDecoration = 'none';
+                    actionBtn.style.borderRadius = '8px';
+                    actionBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                    actionBtn.style.color = '#ffffff';
+                    actionBtn.style.fontWeight = '600';
+                    actionBtn.style.fontSize = '12px';
+
+                    const buttonLabel = isImage ? 'View Full Image' : isVideo ? 'Open Video' : isAudio ? 'Listen Audio' : 'View & Download PDF';
+                    actionBtn.innerHTML = `<span>${buttonLabel}</span> ↗`;
+                    docCard.appendChild(actionBtn);
+                }
+
+                msgDiv.appendChild(docCard);
+            }
 
             const t = currentTheme || activeTheme || theme;
 

@@ -39,6 +39,10 @@ public class WhatsAppAiService {
     private final RagRetrievalService ragRetrievalService;
     private final ConversationMemoryService conversationMemoryService;
     @Autowired(required = false) private UserRepository userRepository;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.catalog.CatalogCandidateService catalogCandidateService;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.catalog.AiCatalogDecisionService aiCatalogDecisionService;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.catalog.AiCatalogActionValidator aiCatalogActionValidator;
+    @Autowired(required = false) private WhatsAppOutboundService whatsAppOutboundService;
 
     @Transactional
     public void evaluateAiIntake(ProcessingContext context) {
@@ -91,6 +95,42 @@ public class WhatsAppAiService {
                     context.getMetadata().put("responseType", "GREETING");
                     break;
                 case CALL_AI:
+                    if (Boolean.TRUE.equals(config.getEnableAiCatalogs()) && catalogCandidateService != null && aiCatalogDecisionService != null && aiCatalogActionValidator != null) {
+                        double threshold = config.getCatalogRelevanceThreshold() != null ? config.getCatalogRelevanceThreshold() : 0.65;
+                        var candidates = catalogCandidateService.findCandidates(context.getTenantId(), text, threshold);
+                        var catalogAction = aiCatalogDecisionService.decideFromCandidates(candidates, text, com.chatcrmlite.backend.dto.ai.action.AiAction.DecisionSource.NATIVE_TOOL);
+
+                        if (catalogAction.type() == com.chatcrmlite.backend.dto.ai.action.AiAction.AiActionType.CLARIFY) {
+                            context.getMetadata().put("pendingResponse", catalogAction.caption());
+                            context.getMetadata().put("responseType", "PLAIN");
+                            aiCatalogActionValidator.recordAudit(context.getTenantId(), contact, catalogAction, context.getMessageId(), "CLARIFY", true, false, "Clarification asked", null);
+                            break;
+                        } else if (catalogAction.type() == com.chatcrmlite.backend.dto.ai.action.AiAction.AiActionType.SEND_CATALOG) {
+                            var valResult = aiCatalogActionValidator.validate(context.getTenantId(), contact, catalogAction, config, context.getMessageId());
+                            if (valResult.approved() && whatsAppOutboundService != null) {
+                                String mediaUrl = whatsAppOutboundService.resolveCatalogDocumentUrl(valResult.catalog());
+                                String captionText = (catalogAction.caption() != null && !catalogAction.caption().isBlank())
+                                        ? catalogAction.caption()
+                                        : "Here is the " + valResult.catalog().getTitle() + " you requested!";
+
+                                boolean isImage = "IMAGE".equalsIgnoreCase(valResult.catalog().getMediaType())
+                                        || (valResult.catalog().getMimeType() != null && valResult.catalog().getMimeType().startsWith("image/"))
+                                        || (valResult.catalog().getFileName() != null && valResult.catalog().getFileName().matches("(?i).*\\.(png|jpe?g|webp|gif)$"));
+
+                                context.getMetadata().put("pendingResponse", captionText);
+                                if (isImage) {
+                                    context.getMetadata().put("imgUrl", mediaUrl);
+                                } else {
+                                    context.getMetadata().put("documentUrl", mediaUrl);
+                                    context.getMetadata().put("documentFilename", valResult.catalog().getFileName());
+                                }
+                                context.getMetadata().put("responseType", "PLAIN");
+                                aiCatalogActionValidator.markExecuted(context.getTenantId(), contact, catalogAction, valResult.catalog(), context.getMessageId(), null, valResult.idempotencyKey());
+                                break;
+                            }
+                        }
+                    }
+
                     ConversationContext memContext = conversationMemoryService.getWhatsAppContext(contact, text);
                     String aiResponse = ragRetrievalService.getAiResponse(memContext, ownerId);
                     if (aiResponse != null && !aiResponse.isBlank()) {

@@ -11,6 +11,9 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class WhatsAppAiTemplateResponse {
+    private String name;
+    private String category;
+    private String language;
     private String headerContent;
     private String bodyText;
     private String footerText;

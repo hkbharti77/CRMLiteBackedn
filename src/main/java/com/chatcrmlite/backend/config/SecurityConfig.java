@@ -116,6 +116,7 @@ public class SecurityConfig {
                     "/api/v1/auth/**",
                     "/api/v1/webhook/**",
                     "/api/v1/webhooks/**",
+                    "/api/v1/payments/webhook/**",
                     "/api/v1/public/**",
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
                     "/api/v1/integrations/meta/gateway/**", // Meta WhatsApp Gateway launcher & callbacks
