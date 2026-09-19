@@ -76,13 +76,25 @@ public class FlowPublishWorker {
             FlowPublishJob j = jobRepository.findById(jobId).orElse(null);
             if (j == null || (j.getStatus() != PublishJobStatus.PENDING && j.getStatus() != PublishJobStatus.PROCESSING)) return null;
 
+            WhatsAppFlow flow = flowRepository.findByIdForUpdate(j.getFlow().getId()).orElse(null);
+            FlowRevision revision = j.getRevision();
+            if (flow == null || revision == null) return null;
+
+            // Enforce concurrency lease: only one active PUBLISHING revision per flow
+            boolean anotherPublishing = revisionRepository.existsByFlowIdAndRevisionStatus(flow.getId(), com.chatcrmlite.backend.models.flows.FlowRevisionStatus.PUBLISHING);
+            if (anotherPublishing && revision.getRevisionStatus() != com.chatcrmlite.backend.models.flows.FlowRevisionStatus.PUBLISHING) {
+                // Backoff and retry later since another revision holds the lease
+                j.setNextRetryAt(LocalDateTime.now().plusSeconds(30));
+                jobRepository.save(j);
+                return null;
+            }
+
+            revision.setRevisionStatus(com.chatcrmlite.backend.models.flows.FlowRevisionStatus.PUBLISHING);
+            revisionRepository.save(revision);
+
             j.setStatus(PublishJobStatus.PROCESSING);
             j.setAttempts(j.getAttempts() + 1);
             jobRepository.save(j);
-
-            WhatsAppFlow flow = j.getFlow();
-            FlowRevision revision = j.getRevision();
-            if (flow == null || revision == null) return null;
 
             PublishJobContext c = new PublishJobContext();
             c.jobId = j.getId();
@@ -90,7 +102,8 @@ public class FlowPublishWorker {
             c.revisionId = revision.getId();
             c.flowName = flow.getName();
             c.categoryName = flow.getCategory().name();
-            c.metaFlowId = flow.getMetaFlowId();
+            c.activeMetaFlowId = flow.getMetaFlowId();
+            c.revisionMetaFlowId = revision.getMetaFlowId();
             c.fieldsConfigJson = revision.getFieldsConfigJson();
             c.flowJson = revision.getFlowJson();
             c.attempts = j.getAttempts();
@@ -127,18 +140,18 @@ public class FlowPublishWorker {
             }
 
             // Step 1: Create Meta Flow Container if it doesn't exist
-            String metaFlowId = ctx.metaFlowId;
+            String metaFlowId = ctx.revisionMetaFlowId;
             if (metaFlowId == null || metaFlowId.isBlank()) {
-                metaFlowId = metaFlowClient.createFlowContainer(ctx.wabaId, ctx.flowName, List.of(ctx.categoryName), ctx.accessToken);
+                metaFlowId = metaFlowClient.createFlowContainer(ctx.wabaId, ctx.flowName, List.of(ctx.categoryName), ctx.accessToken, ctx.activeMetaFlowId);
                 final String finalMetaFlowId = metaFlowId;
                 transactionTemplate.executeWithoutResult(status -> {
-                    WhatsAppFlow f = flowRepository.findById(ctx.flowId).orElse(null);
-                    if (f != null) {
-                        f.setMetaFlowId(finalMetaFlowId);
-                        flowRepository.save(f);
+                    FlowRevision r = revisionRepository.findById(ctx.revisionId).orElse(null);
+                    if (r != null) {
+                        r.setMetaFlowId(finalMetaFlowId);
+                        revisionRepository.save(r);
                     }
                 });
-                ctx.metaFlowId = metaFlowId;
+                ctx.revisionMetaFlowId = metaFlowId;
             }
 
             // Step 2: Compile & Upload Flow JSON Assets (Version 7.0)
@@ -172,32 +185,43 @@ public class FlowPublishWorker {
             // Step 3: Publish Flow on Meta
             metaFlowClient.publishFlow(metaFlowId, ctx.accessToken);
 
+            com.chatcrmlite.backend.clients.MetaFlowClient.FlowStatusResult metaStatus = metaFlowClient.fetchFlowStatus(metaFlowId, ctx.accessToken);
+            if (!"PUBLISHED".equalsIgnoreCase(metaStatus.getStatus())) {
+                throw new IllegalStateException("Meta API returned status '" + metaStatus.getStatus() + "' after publish. Reconciliation required.");
+            }
+
             // Step 4: Atomic Database State Updates
             final String finalMetaFlowId = metaFlowId;
             transactionTemplate.executeWithoutResult(status -> {
+                WhatsAppFlow f = flowRepository.findByIdForUpdate(ctx.flowId).orElse(null);
+                if (f == null) return;
+
                 List<FlowRevision> existingRevisions = revisionRepository.findAllByFlowIdOrderByVersionDesc(ctx.flowId);
                 for (FlowRevision r : existingRevisions) {
-                    if (r.getStatus() == RevisionStatus.PUBLISHED && !r.getId().equals(ctx.revisionId)) {
-                        r.setStatus(RevisionStatus.ARCHIVED);
+                    if (r.getRevisionStatus() == com.chatcrmlite.backend.models.flows.FlowRevisionStatus.PUBLISHED && !r.getId().equals(ctx.revisionId)) {
+                        r.setRevisionStatus(com.chatcrmlite.backend.models.flows.FlowRevisionStatus.SUPERSEDED);
                         revisionRepository.save(r);
                     }
                 }
 
                 FlowRevision rev = revisionRepository.findById(ctx.revisionId).orElse(null);
                 if (rev != null) {
-                    rev.setStatus(RevisionStatus.PUBLISHED);
+                    rev.setRevisionStatus(com.chatcrmlite.backend.models.flows.FlowRevisionStatus.PUBLISHED);
+                    rev.setMetaStatus(metaStatus.getStatus());
+                    try {
+                        rev.setValidationErrorsJson(new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(metaStatus.getValidationErrors()));
+                    } catch (Exception ignored) {}
                     rev.setPublishedAt(LocalDateTime.now());
                     revisionRepository.save(rev);
+                    f.setPublishedRevision(rev);
                 }
 
-                WhatsAppFlow f = flowRepository.findById(ctx.flowId).orElse(null);
-                if (f != null) {
-                    f.setPublishedRevision(rev);
-                    f.setStatus(FlowLifecycleStatus.PUBLISHED);
-                    f.setPublishedAt(LocalDateTime.now());
-                    f.setLastSyncError(null);
-                    flowRepository.save(f);
-                }
+                f.setActiveRevisionId(ctx.revisionId);
+                f.setActiveMetaFlowId(finalMetaFlowId);
+                f.setStatus(FlowLifecycleStatus.PUBLISHED);
+                f.setPublishedAt(LocalDateTime.now());
+                f.setLastSyncError(null);
+                flowRepository.save(f);
 
                 FlowPublishJob j = jobRepository.findById(jobId).orElse(null);
                 if (j != null) {
@@ -241,7 +265,7 @@ public class FlowPublishWorker {
                 auditService.logAction(ctx.flowId, ctx.revisionId, ctx.createdBy,
                         FlowAuditAction.FLOW_PUBLISH_FAILED, "PUBLISHING", "PUBLISH_FAILED", "{\"error\":\"" + errorMsg + "\"}");
 
-                broadcastFlowUpdate(ctx.tenantId, ctx.flowId, ctx.flowName, ctx.metaFlowId, "PUBLISH_FAILED", errorMsg);
+                broadcastFlowUpdate(ctx.tenantId, ctx.flowId, ctx.flowName, ctx.revisionMetaFlowId, "PUBLISH_FAILED", errorMsg);
             }
         }
     }
@@ -267,7 +291,8 @@ public class FlowPublishWorker {
         String flowName;
         String categoryName;
         String wabaId;
-        String metaFlowId;
+        String activeMetaFlowId;
+        String revisionMetaFlowId;
         String fieldsConfigJson;
         String flowJson;
         String accessToken;

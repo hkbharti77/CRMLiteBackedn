@@ -7,6 +7,7 @@ import com.chatcrmlite.backend.models.Message;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.MessageRepository;
+import com.chatcrmlite.backend.repositories.flows.FlowSendSessionRepository;
 import com.chatcrmlite.backend.services.websocket.DistributedWebSocketPublisher;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -29,6 +30,7 @@ public class WhatsAppOutboundService {
 
     private final WhatsAppClient whatsappClient;
     private final MessageRepository messageRepository;
+    private final FlowSendSessionRepository flowSendSessionRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
 
     @org.springframework.beans.factory.annotation.Value("${app.public.url:}")
@@ -65,21 +67,53 @@ public class WhatsAppOutboundService {
 
     @Transactional
     public Message sendFlow(Contact contact, String headerText, String bodyText, String footerText,
-                            String metaFlowId, String ctaText, WhatsAppConfig config, User owner) {
+                            com.chatcrmlite.backend.models.flows.WhatsAppFlow flow,
+                            com.chatcrmlite.backend.models.flows.FlowRevision revision, 
+                            String ctaText, String screen, WhatsAppConfig config, User owner) {
         try {
+            // 1. Generate unique token
+            String flowToken = "fs_" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+
+            // 2. Persist the session FIRST so webhook ingress can definitively resolve it
+            com.chatcrmlite.backend.models.flows.FlowSendSession session = com.chatcrmlite.backend.models.flows.FlowSendSession.builder()
+                .flowToken(flowToken)
+                .flow(flow)
+                .revision(revision)
+                .metaFlowId(revision.getMetaFlowId())
+                .contact(contact)
+                .expiresAt(java.time.LocalDateTime.now().plusHours(72))
+                .status(com.chatcrmlite.backend.models.flows.FlowSendSessionStatus.CREATED)
+                .build();
+            
+            // Link tenant context securely
+            if (owner != null && owner.getTenant() != null) {
+                session.setTenantId(owner.getTenant().getId());
+            } else if (contact != null && contact.getTenant() != null) {
+                session.setTenantId(contact.getTenant().getId());
+            }
+            
+            session = flowSendSessionRepository.save(session);
+
+            // 3. Dispatch to Meta
             String metaMessageId = whatsappClient.sendFlowMessage(
                     contact.getWaId(),
                     headerText,
                     bodyText,
                     footerText,
-                    metaFlowId,
+                    revision.getMetaFlowId(),
                     ctaText,
-                    "flow_session_" + contact.getId() + "_" + System.currentTimeMillis(),
-                    "MAIN_SCREEN",
+                    flowToken,
+                    screen != null && !screen.isBlank() ? screen : "MAIN_SCREEN",
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
-            return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + bodyText + ")", metaMessageId, "FLOW");
+
+            // 4. Update session as successfully sent
+            session.setStatus(com.chatcrmlite.backend.models.flows.FlowSendSessionStatus.SENT);
+            session.setMessageId(metaMessageId);
+            flowSendSessionRepository.save(session);
+
+            return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + (bodyText != null ? bodyText : "Form") + ")", metaMessageId, "FLOW");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send FLOW to contact={} owner={}: {}",
                     contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);

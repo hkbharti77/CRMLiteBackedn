@@ -28,8 +28,20 @@ public class WhatsAppFlow extends BaseTenantEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
+    /** @deprecated Each revision now owns its Meta container ID via {@link FlowRevision#metaFlowId}.
+     * This field is kept for backward compatibility during migration.
+     * Use {@code activeMetaFlowId} for routing to the currently live Meta container. */
+    @Deprecated
     @Column(name = "meta_flow_id")
-    private String metaFlowId; // Parent Meta Flow Container ID
+    private String metaFlowId;
+
+    /** UUID of the currently active (published) FlowRevision. Set atomically on publish success. */
+    @Column(name = "active_revision_id")
+    private UUID activeRevisionId;
+
+    /** Meta Flow container ID for the currently active published revision. Used for routing. */
+    @Column(name = "active_meta_flow_id")
+    private String activeMetaFlowId;
 
     @Column(name = "waba_id", nullable = false)
     private String wabaId; // Scoped strictly to tenant's WABA

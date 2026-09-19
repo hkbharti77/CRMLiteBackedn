@@ -5,6 +5,10 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.repositories.flows.WhatsAppFlowRepository;
+import com.chatcrmlite.backend.repositories.flows.FlowRevisionRepository;
+import com.chatcrmlite.backend.models.flows.WhatsAppFlow;
+import com.chatcrmlite.backend.models.flows.FlowRevision;
 import com.chatcrmlite.backend.services.flow.FlowStateMachine;
 import com.chatcrmlite.backend.services.workflow.ProcessingContext;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -25,6 +29,8 @@ public class WhatsAppFlowHandler {
     private final ObjectMapper objectMapper;
     private final WhatsAppOutboundService outboundService;
     private final WhatsAppMenuService whatsappMenuService;
+    private final WhatsAppFlowRepository whatsappFlowRepository;
+    private final FlowRevisionRepository flowRevisionRepository;
 
     @Transactional
     public void executeFlowLogic(ProcessingContext context) {
@@ -106,7 +112,7 @@ public class WhatsAppFlowHandler {
                 }
 
                 // Check Enterprise Native Flow Router before conversational bot
-                boolean routedToFlow = tryRouteToNativeFlow(contact, owner, config, text, selectionId);
+                boolean routedToFlow = tryRouteToNativeFlow(contact, owner, config, context.getTenantId(), text, selectionId);
                 if (routedToFlow) {
                     context.getMetadata().put("responseType", "FLOW_CONSUMED");
                     return;
@@ -139,7 +145,7 @@ public class WhatsAppFlowHandler {
         }
     }
 
-    private boolean tryRouteToNativeFlow(Contact contact, User owner, WhatsAppConfig config, String text, String selectionId) {
+    private boolean tryRouteToNativeFlow(Contact contact, User owner, WhatsAppConfig config, java.util.UUID tenantId, String text, String selectionId) {
         String intentKey = detectIntent(text, selectionId);
         if (intentKey == null) {
             return false;
@@ -163,8 +169,22 @@ public class WhatsAppFlowHandler {
                             String footerText = targetConfig.path("footerText").asText(config.getVerifiedName());
 
                             log.info("🎯 [FlowRouter] Dispatching Native Flow '{}' for intent '{}' to {}", metaFlowId, intentKey, contact.getWaId());
-                            outboundService.sendFlow(contact, headerText, promptText, footerText, metaFlowId, ctaText, config, owner);
-                            return true;
+                            
+                            WhatsAppFlow flow = whatsappFlowRepository.findByMetaFlowIdAndTenantId(metaFlowId, tenantId).orElse(null);
+                            if (flow == null && metaFlowId != null) {
+                                // fallback if routing config uses the original metaFlowId
+                                flow = whatsappFlowRepository.findByMetaFlowId(metaFlowId).orElse(null);
+                            }
+                            
+                            if (flow != null && flow.getActiveRevisionId() != null) {
+                                FlowRevision revision = flowRevisionRepository.findById(flow.getActiveRevisionId()).orElse(null);
+                                if (revision != null) {
+                                    outboundService.sendFlow(contact, headerText, promptText, footerText, flow, revision, ctaText, null, config, owner);
+                                    return true;
+                                }
+                            }
+                            log.warn("⚠️ [FlowRouter] Failed to resolve active flow objects for metaFlowId={}", metaFlowId);
+                            return false;
                         } else if ("CHATBOT".equalsIgnoreCase(mode)) {
                             log.info("🤖 [FlowRouter] Starting Chatbot flow for intent '{}' to {}", intentKey, contact.getWaId());
                             return flowStateMachine.startFlow(contact, owner, text, intentKey);

@@ -72,7 +72,14 @@ public class WebSocketEventBus {
     private void forwardEvent(WebSocketEvent event) {
         log.debug("[WebSocket-Bus] Received distributed event for destination: {}", event.getDestination());
         metricsService.recordReceive();
+        
+        Object payload = event.getPayload();
+        // Jackson default-typing may deserialize the 'Object payload' field itself as an array ["java.util.HashMap", {...}]
+        if (payload instanceof java.util.List<?> list && list.size() == 2 && list.get(0) instanceof String) {
+            payload = list.get(1);
+        }
+        
         // FORWARD to local connected clients on this node
-        messagingTemplate.convertAndSend(event.getDestination(), event.getPayload());
+        messagingTemplate.convertAndSend(event.getDestination(), payload);
     }
 }

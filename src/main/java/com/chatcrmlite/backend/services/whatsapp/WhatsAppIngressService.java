@@ -45,6 +45,7 @@ public class WhatsAppIngressService {
     @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.team.AgentAssignmentService agentAssignmentService;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowSubmissionRepository flowSubmissionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowOutboxEventRepository flowOutboxEventRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowSendSessionRepository flowSendSessionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.UserRepository userRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.clients.WhatsAppClient whatsappClient;
@@ -169,12 +170,53 @@ public class WhatsAppIngressService {
             // Transactional Outbox Pattern: Ingest Flow Submission and queue FlowOutboxEvent in same ACID transaction
             if (isFlowNfmReply && flowSubmissionRepository != null && flowOutboxEventRepository != null) {
                 try {
+                    // Extract flow_token from response JSON to map back to the exact revision
+                    String flowToken = null;
+                    if (flowResponseJson != null && !flowResponseJson.isBlank()) {
+                        try {
+                            JsonNode flowRoot = objectMapper.readTree(flowResponseJson);
+                            flowToken = flowRoot.path("flow_token").asText(null);
+                        } catch (Exception ignored) {}
+                    }
+
+                    if (flowToken == null || flowToken.isBlank()) {
+                        log.warn("⚠️ [Flow-Ingress] flow_token missing from nfm_reply. Webhook payload invalid. Skipping flow outbox.");
+                        return; // Completely skip processing for invalid webhooks without a token
+                    }
+
+                    com.chatcrmlite.backend.models.flows.FlowSendSession session = null;
+                    com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus initialStatus = com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.UNRESOLVED;
+                    
+                    if (flowSendSessionRepository != null && context.getTenantId() != null) {
+                        session = flowSendSessionRepository.findByTenant_IdAndFlowToken(context.getTenantId(), flowToken).orElse(null);
+                        
+                        if (session != null) {
+                            if (session.getExpiresAt() != null && session.getExpiresAt().isBefore(LocalDateTime.now())) {
+                                log.warn("⚠️ [Flow-Ingress] flow_token '{}' expired for tenant {}. Diagnostic record created, no outbox trigger.", flowToken, context.getTenantId());
+                                session.setStatus(com.chatcrmlite.backend.models.flows.FlowSendSessionStatus.EXPIRED);
+                                flowSendSessionRepository.save(session);
+                                initialStatus = com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.UNRESOLVED;
+                            } else {
+                                session.setStatus(com.chatcrmlite.backend.models.flows.FlowSendSessionStatus.RESPONDED);
+                                flowSendSessionRepository.save(session);
+                                initialStatus = com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.RECEIVED;
+                            }
+                        } else {
+                            log.warn("⚠️ [Flow-Ingress] flow_token '{}' unknown for tenant {}. Diagnostic record created, no outbox trigger.", flowToken, context.getTenantId());
+                            initialStatus = com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.UNRESOLVED;
+                        }
+                    }
+
                     com.chatcrmlite.backend.models.flows.FlowSubmission submission = com.chatcrmlite.backend.models.flows.FlowSubmission.builder()
                             .eventId(context.getMessageId())
                             .contact(contact)
                             .customerPhone(context.getWaId())
                             .rawResponseJson(flowResponseJson)
-                            .processingStatus(com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.RECEIVED)
+                            .flowToken(flowToken)
+                            .processingStatus(initialStatus)
+                            .flow(session != null ? session.getFlow() : null)
+                            .revision(session != null ? session.getRevision() : null)
+                            .metaFlowId(session != null ? session.getMetaFlowId() : null)
                             .build();
                     if (tenant != null) {
                         submission.setTenant(tenant);
@@ -183,21 +225,26 @@ public class WhatsAppIngressService {
                     }
                     submission = flowSubmissionRepository.save(submission);
 
-                    com.chatcrmlite.backend.models.flows.FlowOutboxEvent outboxEvent = com.chatcrmlite.backend.models.flows.FlowOutboxEvent.builder()
-                            .aggregateType("FLOW_SUBMISSION")
-                            .aggregateId(submission.getId())
-                            .eventType("FLOW_SUBMITTED")
-                            .payloadJson(flowResponseJson)
-                            .status(com.chatcrmlite.backend.models.flows.OutboxStatus.PENDING)
-                            .build();
-                    if (tenant != null) {
-                        outboxEvent.setTenant(tenant);
-                    } else if (owner != null && owner.getTenant() != null) {
-                        outboxEvent.setTenant(owner.getTenant());
+                    // Only enqueue outbox event if the token resolved successfully
+                    if (initialStatus == com.chatcrmlite.backend.models.flows.SubmissionProcessingStatus.RECEIVED) {
+                        com.chatcrmlite.backend.models.flows.FlowOutboxEvent outboxEvent = com.chatcrmlite.backend.models.flows.FlowOutboxEvent.builder()
+                                .aggregateType("FLOW_SUBMISSION")
+                                .aggregateId(submission.getId())
+                                .eventType("FLOW_SUBMITTED")
+                                .payloadJson(flowResponseJson)
+                                .status(com.chatcrmlite.backend.models.flows.OutboxStatus.PENDING)
+                                .build();
+                        if (tenant != null) {
+                            outboxEvent.setTenant(tenant);
+                        } else if (owner != null && owner.getTenant() != null) {
+                            outboxEvent.setTenant(owner.getTenant());
+                        }
+                        flowOutboxEventRepository.save(outboxEvent);
+                        log.info("📥 [Flow-Ingress] Created FlowSubmission {} (RECEIVED) and FlowOutboxEvent (Tenant: {})",
+                                submission.getId(), tenant != null ? tenant.getId() : "null");
+                    } else {
+                        log.info("📥 [Flow-Ingress] Created FlowSubmission {} (UNRESOLVED) - Outbox processing skipped", submission.getId());
                     }
-                    flowOutboxEventRepository.save(outboxEvent);
-                    log.info("📥 [Flow-Ingress] Created FlowSubmission {} and FlowOutboxEvent {} in single ACID transaction (Tenant: {})", 
-                            submission.getId(), outboxEvent.getId(), tenant != null ? tenant.getId() : "null");
                 } catch (Exception ex) {
                     log.warn("⚠️ [Flow-Ingress] Error writing FlowSubmission / FlowOutboxEvent: {}", ex.getMessage());
                 }

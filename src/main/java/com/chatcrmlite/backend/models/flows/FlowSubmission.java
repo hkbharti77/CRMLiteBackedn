@@ -45,6 +45,10 @@ public class FlowSubmission extends BaseTenantEntity {
     @Column(name = "meta_flow_id")
     private String metaFlowId;
 
+    /** The flow_token from nfm_reply response_json; used to look up the originating FlowSendSession. */
+    @Column(name = "flow_token")
+    private String flowToken;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contact_id")
     @JsonIgnoreProperties({"tags", "owner", "assignedAgent"})

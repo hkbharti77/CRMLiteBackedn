@@ -11,6 +11,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import com.chatcrmlite.backend.repositories.flows.WhatsAppFlowRepository;
+import com.chatcrmlite.backend.repositories.flows.FlowRevisionRepository;
+import com.chatcrmlite.backend.repositories.WhatsAppConfigRepository;
+import com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService;
+import com.chatcrmlite.backend.models.flows.WhatsAppFlow;
+import com.chatcrmlite.backend.models.flows.FlowRevision;
+import com.chatcrmlite.backend.models.WhatsAppConfig;
+import com.chatcrmlite.backend.dto.SendFlowRequest;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -36,6 +44,18 @@ public class MessageController {
 
     @Autowired
     private com.chatcrmlite.backend.services.ContactService contactService;
+
+    @Autowired
+    private WhatsAppFlowRepository whatsappFlowRepository;
+
+    @Autowired
+    private FlowRevisionRepository flowRevisionRepository;
+
+    @Autowired
+    private WhatsAppConfigRepository whatsappConfigRepository;
+
+    @Autowired
+    private WhatsAppOutboundService whatsappOutboundService;
 
     @GetMapping("/chats")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -158,6 +178,54 @@ public class MessageController {
             return ResponseEntity.ok("Menu sent successfully");
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Failed to send menu: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/{contactId}/flow")
+    public ResponseEntity<?> sendFlow(
+            @PathVariable UUID contactId,
+            @RequestBody SendFlowRequest request,
+            @AuthenticationPrincipal String email) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "User not found"));
+
+        Contact contact = contactRepository.findById(contactId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Contact not found"));
+
+        if (!authorizationService.canSendMessage(contact, user)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Chat is locked by another agent");
+        }
+
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(user.getTenant().getId())
+                .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + user.getTenant().getId()));
+
+        WhatsAppFlow flow = whatsappFlowRepository.findById(request.getFlowId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Flow not found"));
+
+        if (flow.getActiveRevisionId() == null || flow.getActiveMetaFlowId() == null) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.BAD_REQUEST, "Flow is not published yet");
+        }
+
+        FlowRevision revision = flowRevisionRepository.findById(flow.getActiveRevisionId())
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Active Flow Revision not found"));
+
+        try {
+            whatsappOutboundService.sendFlow(
+                    contact,
+                    request.getHeaderText(),
+                    request.getBodyText(),
+                    request.getFooterText(),
+                    flow,
+                    revision,
+                    request.getCtaText(),
+                    request.getScreen(),
+                    config,
+                    user
+            );
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body("Failed to send flow: " + e.getMessage());
         }
     }
 }

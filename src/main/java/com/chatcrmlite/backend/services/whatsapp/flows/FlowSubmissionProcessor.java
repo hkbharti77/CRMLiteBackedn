@@ -18,6 +18,12 @@ import com.chatcrmlite.backend.services.ReferenceNumberService;
 import com.chatcrmlite.backend.services.SlaService;
 import com.chatcrmlite.backend.services.TicketNumberGenerator;
 import com.chatcrmlite.backend.services.lead.LeadService;
+import com.chatcrmlite.backend.services.AppointmentService;
+import com.chatcrmlite.backend.repositories.flows.FlowOutboxEventRepository;
+import com.chatcrmlite.backend.models.flows.FlowOutboxEvent;
+import com.chatcrmlite.backend.models.flows.OutboxStatus;
+import com.chatcrmlite.backend.util.DateTimeParser;
+import org.springframework.dao.DataIntegrityViolationException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -57,6 +63,12 @@ public class FlowSubmissionProcessor {
 
     @Autowired(required = false)
     private CacheManager cacheManager;
+
+    @Autowired(required = false)
+    private AppointmentService appointmentService;
+
+    @Autowired(required = false)
+    private FlowOutboxEventRepository flowOutboxEventRepository;
 
     public FlowSubmissionProcessor(FlowSubmissionRepository submissionRepository,
                                    LeadRepository leadRepository,
@@ -227,6 +239,39 @@ public class FlowSubmissionProcessor {
         String time = normalizedMap.getOrDefault("time_slot", "");
         String flowDisplayName = cleanFlowDisplayName(submission.getFlow(), "Appointment Booking");
         String dealLabel = flowDisplayName + " - " + service + (!date.isBlank() ? " (" + date + (!time.isBlank() ? " " + time : "") + ")" : "");
+
+        LocalDateTime apptTime = null;
+        try {
+            apptTime = DateTimeParser.extractAndParse(normalizedMap);
+        } catch (Exception e) {
+            log.warn("⚠️ [FlowProcessor] Failed to parse appointment time from flow data: {}", e.getMessage());
+            apptTime = LocalDateTime.now().plusDays(1).withHour(10).withMinute(0);
+        }
+
+        try {
+            if (appointmentService != null) {
+                com.chatcrmlite.backend.models.Appointment appt = appointmentService.bookFromFlow(
+                        contact, owner, flowDisplayName + " - " + service, normalizedMap, apptTime, "FLOW");
+
+                // Enqueue calendar sync event for the async outbox
+                if (flowOutboxEventRepository != null) {
+                    FlowOutboxEvent syncEvent = FlowOutboxEvent.builder()
+                            .aggregateType("APPOINTMENT")
+                            .aggregateId(appt.getId())
+                            .eventType("CALENDAR_SYNC_REQUESTED")
+                            .payloadJson(submission.getRawResponseJson())
+                            .status(OutboxStatus.PENDING)
+                            .build();
+                    syncEvent.setTenant(tenant);
+                    flowOutboxEventRepository.save(syncEvent);
+                }
+            }
+        } catch (DataIntegrityViolationException ex) {
+            log.warn("🚨 [FlowProcessor] Slot conflict detected (DB Constraint) for time {}: {}", apptTime, ex.getMessage());
+            submission.setProcessingError("Slot conflict: " + date + " " + time);
+            // Optionally, trigger a slot conflict notification via confirmationService here.
+            throw new IllegalStateException("Requested time slot is no longer available. Please select another slot.", ex);
+        }
 
         String leadNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.LEAD);
 

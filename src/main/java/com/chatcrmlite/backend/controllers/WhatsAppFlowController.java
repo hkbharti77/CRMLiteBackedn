@@ -9,6 +9,8 @@ import com.chatcrmlite.backend.repositories.flows.WhatsAppFlowAuditLogRepository
 import com.chatcrmlite.backend.services.whatsapp.flows.WhatsAppFlowService;
 import com.chatcrmlite.backend.dto.flow.FlowFieldConfig;
 import com.chatcrmlite.backend.services.FlowConfigService;
+import com.chatcrmlite.backend.services.ai.AiFlowGeneratorService;
+import com.chatcrmlite.backend.models.flows.dto.AiFlowDraftDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -36,6 +38,7 @@ public class WhatsAppFlowController {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final FlowConfigService flowConfigService;
+    private final AiFlowGeneratorService aiFlowGeneratorService;
 
     public WhatsAppFlowController(WhatsAppFlowService flowService,
                                   FlowRevisionRepository revisionRepository,
@@ -43,7 +46,8 @@ public class WhatsAppFlowController {
                                   WhatsAppFlowAuditLogRepository auditLogRepository,
                                   UserRepository userRepository,
                                   ObjectMapper objectMapper,
-                                  FlowConfigService flowConfigService) {
+                                  FlowConfigService flowConfigService,
+                                  AiFlowGeneratorService aiFlowGeneratorService) {
         this.flowService = flowService;
         this.revisionRepository = revisionRepository;
         this.submissionRepository = submissionRepository;
@@ -51,6 +55,7 @@ public class WhatsAppFlowController {
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
         this.flowConfigService = flowConfigService;
+        this.aiFlowGeneratorService = aiFlowGeneratorService;
     }
 
     private User resolveAuthenticatedUser(Object principal) {
@@ -96,6 +101,24 @@ public class WhatsAppFlowController {
     public ResponseEntity<List<WhatsAppFlow>> getPublishedFlows(@AuthenticationPrincipal Object principal) {
         User user = resolveAuthenticatedUser(principal);
         return ResponseEntity.ok(flowService.getPublishedFlows(user));
+    }
+
+    @PostMapping("/generate-ai")
+    public ResponseEntity<Map<String, Object>> generateFlowWithAi(@RequestBody Map<String, String> payload, @AuthenticationPrincipal Object principal) {
+        // Ensure authentication / tenant isolation
+        resolveAuthenticatedUser(principal);
+        
+        String prompt = payload.get("prompt");
+        if (prompt == null || prompt.isBlank()) {
+            throw new IllegalArgumentException("Prompt is required");
+        }
+        
+        AiFlowDraftDto draft = aiFlowGeneratorService.generateFlow(prompt);
+        
+        Map<String, Object> response = new HashMap<>();
+        response.put("generationId", UUID.randomUUID().toString());
+        response.put("draft", draft);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/{id}")
