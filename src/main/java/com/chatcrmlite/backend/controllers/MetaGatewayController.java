@@ -241,22 +241,7 @@ public class MetaGatewayController {
             const TOKEN = '__TOKEN__';
             const ORIGIN = '__ORIGIN__';
             let sdkReady = false;
-
-            window.fbAsyncInit = function() {
-              try {
-                FB.init({
-                  appId: APP_ID,
-                  cookie: true,
-                  xfbml: false,
-                  version: 'v21.0'
-                });
-                sdkReady = true;
-                const btn = document.getElementById('connectBtn');
-                btn.disabled = false;
-              } catch (e) {
-                console.warn('FB.init error:', e);
-              }
-            };
+            let pendingLogin = false;
 
             function setStatus(type, html) {
               const box = document.getElementById('statusBox');
@@ -265,10 +250,64 @@ public class MetaGatewayController {
               box.style.display = 'block';
             }
 
+            function initSdkIfAvailable() {
+              if (window.FB && typeof window.FB.init === 'function') {
+                try {
+                  window.FB.init({
+                    appId: APP_ID,
+                    cookie: true,
+                    xfbml: false,
+                    version: 'v21.0'
+                  });
+                  sdkReady = true;
+                  const btn = document.getElementById('connectBtn');
+                  btn.disabled = false;
+                  btn.innerHTML = '<svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg><span>Connect with Facebook</span>';
+                  const box = document.getElementById('statusBox');
+                  if (box && box.className.includes('status-error') && box.innerText.includes('SDK is loading')) {
+                    box.style.display = 'none';
+                  }
+                  if (pendingLogin) {
+                    pendingLogin = false;
+                    launchFacebookLogin();
+                  }
+                } catch (e) {
+                  console.warn('FB.init error:', e);
+                  setStatus('error', 'Facebook SDK initialization error: ' + (e.message || e));
+                }
+              }
+            }
+
+            window.fbAsyncInit = function() {
+              initSdkIfAvailable();
+            };
+
+            function handleSdkScriptError() {
+              sdkReady = false;
+              setStatus('error', '⚠️ <strong>Failed to load Meta JavaScript SDK from connect.facebook.net</strong><br><br>Common causes:<br>• An ad-blocker or privacy extension (e.g. uBlock Origin, Brave Shields) blocked the script.<br>• Corporate firewall / VPN restricting facebook.net.<br><br>Please disable ad-blocking on this window and refresh.');
+              const btn = document.getElementById('connectBtn');
+              btn.disabled = false;
+              btn.innerHTML = 'Retry Loading SDK';
+              btn.onclick = function() { window.location.reload(); };
+            }
+
             function launchFacebookLogin() {
               if (!sdkReady || typeof FB === 'undefined' || !FB.login) {
-                setStatus('error', 'Meta JavaScript SDK is loading. Please retry in a few seconds.');
-                return;
+                if (window.FB && typeof window.FB.init === 'function') {
+                  initSdkIfAvailable();
+                  if (!sdkReady || !FB.login) {
+                    pendingLogin = true;
+                    setStatus('loading', 'Initializing Meta SDK, opening login in a moment...');
+                    return;
+                  }
+                } else {
+                  pendingLogin = true;
+                  const btn = document.getElementById('connectBtn');
+                  btn.disabled = true;
+                  btn.innerHTML = '<span class="spinner"></span> <span>Loading Meta SDK...</span>';
+                  setStatus('loading', 'Meta JavaScript SDK is downloading. Connecting automatically as soon as ready...');
+                  return;
+                }
               }
 
               const btn = document.getElementById('connectBtn');
@@ -328,13 +367,18 @@ public class MetaGatewayController {
                 override_default_response_type: true,
                 extras: {
                   setup: {},
-                  featureType: 'coexistence',
+                  featureType: 'whatsapp_business_app_onboarding',
                   sessionInfoVersion: '3'
                 }
               });
             }
           </script>
-          <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
+          <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js" onerror="handleSdkScriptError()"></script>
+          <script>
+            if (window.FB) {
+              initSdkIfAvailable();
+            }
+          </script>
         </body>
         </html>
         """

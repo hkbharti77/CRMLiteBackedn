@@ -240,7 +240,13 @@ sequenceDiagram
 - **Document Vectorization**: Upload PDF/DOCX files to generate vector embeddings for intelligent bot retrieval.
 - **FAQ Auto-Matching**: Search indexed FAQ knowledge bases to answer customer queries accurately before escalating to human agents.
 
-### 🆕 10. Multi-tier Subscriptions & White-Label Branding
+### 🆕 10. Meta Commerce Catalog, Checkout & Product Buyers API (`/api/v1/commerce/*`)
+- **Meta Catalog Sync**: Direct Graph API integration syncing Meta Commerce Catalogs and product inventories into PostgreSQL (`commerce_catalogs`, `commerce_products`).
+- **Interactive Product Dispatch**: Send single-product cards and multi-product section catalog messages to WhatsApp contacts.
+- **In-Chat Checkout & Autonomous Address Parsing**: Extracts customer shipping address, city, and pincode from chat messages (`CheckoutAddressParser.java`) to generate Razorpay payment links.
+- **Paginated Product Buyers Endpoint**: High-performance `GET /api/v1/commerce/products/{sku}/buyers?page=0&size=20` returning order summary counts (`totalOrders`) and paginated buyer lists (`ProductBuyersResponse.java`).
+
+### 🆕 11. Multi-tier Subscriptions & White-Label Branding
 - **Tier Quota Enforcement**: FREE, MIN, PRO, and ENTERPRISE plans with automated lifecycle downgrades upon expiry.
 - **Custom Widget Branding**: Custom colors, logo URLs, and removal of default watermarks for PRO/ENTERPRISE tiers.
 

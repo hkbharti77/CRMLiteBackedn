@@ -167,14 +167,15 @@ public class SecurityConfig {
                 .contentSecurityPolicy(csp -> csp
                     .policyDirectives(
                         "default-src 'self'; " +
-                        "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
+                        "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://connect.facebook.net https://*.facebook.com https://*.fbcdn.net; " +
+                        "frame-src 'self' https://www.facebook.com https://web.facebook.com https://*.facebook.com; " +
                         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; " +
-                        "img-src 'self' data: https:; " +
+                        "img-src 'self' data: https: blob:; " +
                         "font-src 'self' https://fonts.gstatic.com; " +
                         "media-src 'self' data: blob: https:; " +
-                        "connect-src 'self' *; " +
+                        "connect-src 'self' * https://connect.facebook.net https://graph.facebook.com https://*.facebook.com; " +
                         "frame-ancestors *; " +
-                        "form-action 'self'; " +
+                        "form-action 'self' https://*.facebook.com; " +
                         "base-uri 'self';"
                     )
                 )
