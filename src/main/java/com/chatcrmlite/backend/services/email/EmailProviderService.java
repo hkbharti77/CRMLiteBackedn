@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -45,6 +46,9 @@ public class EmailProviderService {
             }
             if (provider.getBusinessId() == null || provider.getBusinessId().isEmpty()) {
                 provider.setBusinessId(existing.getBusinessId());
+            }
+            if (provider.getCredentialsPayload() == null || provider.getCredentialsPayload().isBlank()) {
+                provider.setCredentialsPayload(existing.getCredentialsPayload());
             }
         }
         
@@ -85,6 +89,15 @@ public class EmailProviderService {
         boolean success = false;
         String status = "ERROR";
         try {
+            if ("SMTP".equalsIgnoreCase(provider.getProviderType())) {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                Map<String, Object> creds = mapper.readValue(
+                        provider.getCredentialsPayload(), Map.class);
+                String password = String.valueOf(creds.getOrDefault("password", "")).trim();
+                if (password.isEmpty()) {
+                    throw new IllegalArgumentException("SMTP password is required");
+                }
+            }
             EmailSenderProvider sender = factory.getProvider(provider);
             sender.sendTestEmail(testEmail, provider.getFromEmail());
             status = "CONNECTED";
