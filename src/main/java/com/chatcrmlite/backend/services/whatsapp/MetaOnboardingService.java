@@ -161,6 +161,13 @@ public class MetaOnboardingService {
         return response;
     }
 
+    public OnboardingSession getSession(String sessionId) {
+        if (!StringUtils.hasText(sessionId)) {
+            return null;
+        }
+        return sessionStore.get(sessionId);
+    }
+
     /**
      * Validates single-use session ownership and transitions state.
      */

@@ -238,10 +238,21 @@ public class MetaGatewayController {
             const APP_ID = '__APP_ID__';
             const CONFIG_ID = '__CONFIG_ID__';
             const SESSION_ID = '__SESSION_ID__';
-            const TOKEN = '__TOKEN__';
+            let TOKEN = '__TOKEN__';
             const ORIGIN = '__ORIGIN__';
             let sdkReady = false;
             let pendingLogin = false;
+
+            if (!TOKEN || TOKEN === '__TOKEN__' || TOKEN === 'null' || TOKEN === 'undefined') {
+              try {
+                TOKEN = localStorage.getItem('crmlite_token') || localStorage.getItem('authToken') || '';
+              } catch(e) {}
+              if (!TOKEN && window.opener) {
+                try {
+                  TOKEN = window.opener.localStorage.getItem('crmlite_token') || window.opener.localStorage.getItem('authToken') || '';
+                } catch(e) {}
+              }
+            }
 
             function setStatus(type, html) {
               const box = document.getElementById('statusBox');
@@ -328,7 +339,8 @@ public class MetaGatewayController {
                     },
                     body: JSON.stringify({ 
                       code: oauthCode,
-                      sessionId: SESSION_ID
+                      sessionId: SESSION_ID,
+                      token: TOKEN
                     })
                   })
                   .then(res => res.json())
@@ -403,7 +415,19 @@ public class MetaGatewayController {
             @RequestBody Map<String, String> payload) {
 
         String token = (authHeader != null && authHeader.startsWith("Bearer ")) ? authHeader.substring(7) : null;
+        if (!StringUtils.hasText(token) && payload != null) {
+            token = payload.get("token");
+        }
         User user = resolveUser(token);
+
+        String sessionId = payload != null ? payload.get("sessionId") : null;
+        if (user == null && StringUtils.hasText(sessionId)) {
+            MetaOnboardingService.OnboardingSession session = metaOnboardingService.getSession(sessionId);
+            if (session != null && session.getUserId() != null) {
+                user = userRepository.findById(session.getUserId()).orElse(null);
+            }
+        }
+
         if (user == null) {
             return ResponseEntity.status(401).body(Map.of("error", "Authentication required to link WhatsApp account"));
         }
