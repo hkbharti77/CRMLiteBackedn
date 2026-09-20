@@ -643,6 +643,16 @@ public class CustomEmailService {
                             continue;
                         }
 
+                        if (!isValidEmail(recipient.getEmail())) {
+                            recipient.setDeliveryStatus(DeliveryStatus.FAILED);
+                            recipient.setFailedAt(LocalDateTime.now());
+                            recipient.setFailureMessage("Invalid email address: " + recipient.getEmail());
+                            recipientRepository.save(recipient);
+                            failedThisRun++;
+                            processedThisRun++;
+                            continue;
+                        }
+
                         String trackingToken = recipient.getTrackingToken();
                         if (trackingToken == null || trackingToken.isBlank()) {
                             trackingToken = trackingService.generateTrackingToken();
@@ -878,7 +888,18 @@ public class CustomEmailService {
     }
 
     private boolean isValidEmail(String email) {
-        return email != null && email.contains("@") && email.contains(".");
+        if (email == null || email.isBlank()) return false;
+        String trimmed = email.trim();
+        if (trimmed.contains(" ") || trimmed.contains("\t") || trimmed.contains("\n") || trimmed.contains("\r")) return false;
+        int atIndex = trimmed.indexOf('@');
+        if (atIndex <= 0 || atIndex >= trimmed.length() - 1) return false;
+        if (!trimmed.contains(".")) return false;
+        try {
+            new jakarta.mail.internet.InternetAddress(trimmed).validate();
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
     }
 
     private String personaliseString(String input, String recipientName, String recipientEmail, String businessName, String unsubUrl, String ctaLabel, String ctaUrl) {

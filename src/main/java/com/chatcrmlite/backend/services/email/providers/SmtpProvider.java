@@ -85,10 +85,15 @@ public class SmtpProvider implements EmailSenderProvider {
 
         for (EmailRequest req : requests) {
             try {
+                String toEmail = req.getToEmail();
+                if (toEmail == null || toEmail.isBlank() || toEmail.contains(" ") || toEmail.contains("\t")) {
+                    log.warn("Skipping invalid email address: '{}'", toEmail);
+                    throw new IllegalArgumentException("Invalid email address: " + toEmail);
+                }
                 MimeMessage message = sender.createMimeMessage();
                 MimeMessageHelper helper = new MimeMessageHelper(message, true, "UTF-8");
                 helper.setFrom(fromEmail);
-                helper.setTo(req.getToEmail());
+                helper.setTo(toEmail);
                 helper.setSubject(req.getSubject());
                 helper.setText(req.getHtmlBody(), true);
 
