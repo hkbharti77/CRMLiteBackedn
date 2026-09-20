@@ -56,9 +56,10 @@ public class RedisConfig {
                 .build();
 
         org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> poolConfig = new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
-        poolConfig.setMaxTotal(20);
-        poolConfig.setMaxIdle(10);
-        poolConfig.setMinIdle(2);
+        poolConfig.setMaxTotal(50);
+        poolConfig.setMaxIdle(25);
+        poolConfig.setMinIdle(5);
+        poolConfig.setMaxWait(Duration.ofMillis(5000));
 
         org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration clientConfig =
                 org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration.builder()
@@ -69,7 +70,8 @@ public class RedisConfig {
 
         org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory factory =
                 new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(redisConfig, clientConfig);
-        factory.setShareNativeConnection(false);
+        factory.setShareNativeConnection(true);
+        factory.setValidateConnection(false);
         return factory;
     }
 
