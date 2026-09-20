@@ -32,6 +32,48 @@ public class RedisConfig {
     private static final String CACHE_KEY_PREFIX = "v2::";
 
     @Bean
+    @org.springframework.context.annotation.Primary
+    public RedisConnectionFactory redisConnectionFactory(
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.host:localhost}") String host,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.port:6379}") int port,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.password:}") String password,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.timeout:10000}") long timeout) {
+
+        org.springframework.data.redis.connection.RedisStandaloneConfiguration redisConfig =
+                new org.springframework.data.redis.connection.RedisStandaloneConfiguration(host, port);
+        if (password != null && !password.trim().isEmpty()) {
+            redisConfig.setPassword(org.springframework.data.redis.connection.RedisPassword.of(password));
+        }
+
+        io.lettuce.core.SocketOptions socketOptions = io.lettuce.core.SocketOptions.builder()
+                .connectTimeout(Duration.ofMillis(timeout))
+                .keepAlive(true)
+                .build();
+
+        io.lettuce.core.ClientOptions clientOptions = io.lettuce.core.ClientOptions.builder()
+                .socketOptions(socketOptions)
+                .autoReconnect(true)
+                .build();
+
+        org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> poolConfig = new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
+        poolConfig.setMaxTotal(20);
+        poolConfig.setMaxIdle(10);
+        poolConfig.setMinIdle(2);
+
+        org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration clientConfig =
+                org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration.builder()
+                        .clientOptions(clientOptions)
+                        .commandTimeout(Duration.ofMillis(timeout))
+                        .poolConfig(poolConfig)
+                        .build();
+
+        org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory factory =
+                new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(redisConfig, clientConfig);
+        factory.setShareNativeConnection(false);
+        return factory;
+    }
+
+    @Bean
     public RedisTemplate<String, Object> redisTemplate(RedisConnectionFactory connectionFactory) {
         RedisTemplate<String, Object> template = new RedisTemplate<>();
         template.setConnectionFactory(connectionFactory);
