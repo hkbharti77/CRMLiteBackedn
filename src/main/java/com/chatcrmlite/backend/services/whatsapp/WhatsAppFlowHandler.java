@@ -20,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WhatsAppFlowHandler {
 
     private final WhatsAppConfigRepository whatsappConfigRepository;
@@ -31,6 +30,34 @@ public class WhatsAppFlowHandler {
     private final WhatsAppMenuService whatsappMenuService;
     private final WhatsAppFlowRepository whatsappFlowRepository;
     private final FlowRevisionRepository flowRevisionRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public WhatsAppFlowHandler(WhatsAppConfigRepository whatsappConfigRepository,
+                               ContactRepository contactRepository,
+                               FlowStateMachine flowStateMachine,
+                               ObjectMapper objectMapper,
+                               WhatsAppOutboundService outboundService,
+                               WhatsAppMenuService whatsappMenuService,
+                               WhatsAppFlowRepository whatsappFlowRepository,
+                               FlowRevisionRepository flowRevisionRepository) {
+        this.whatsappConfigRepository = whatsappConfigRepository;
+        this.contactRepository = contactRepository;
+        this.flowStateMachine = flowStateMachine;
+        this.objectMapper = objectMapper;
+        this.outboundService = outboundService;
+        this.whatsappMenuService = whatsappMenuService;
+        this.whatsappFlowRepository = whatsappFlowRepository;
+        this.flowRevisionRepository = flowRevisionRepository;
+    }
+
+    public WhatsAppFlowHandler(WhatsAppConfigRepository whatsappConfigRepository,
+                               ContactRepository contactRepository,
+                               FlowStateMachine flowStateMachine,
+                               ObjectMapper objectMapper,
+                               WhatsAppOutboundService outboundService,
+                               WhatsAppMenuService whatsappMenuService) {
+        this(whatsappConfigRepository, contactRepository, flowStateMachine, objectMapper, outboundService, whatsappMenuService, null, null);
+    }
 
     @Transactional
     public void executeFlowLogic(ProcessingContext context) {

@@ -75,6 +75,14 @@ public class Message extends BaseTenantEntity {
     @Column(name = "thumbnail_url", length = 1000)
     private String thumbnailUrl;
 
+    public enum DeliveryStatus {
+        SENT, DELIVERED, READ, FAILED
+    }
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "delivery_status", length = 20)
+    private DeliveryStatus deliveryStatus = null;
+
     public Message() {}
 
     public Message(UUID id, String waMessageId, List<String> tags, Contact contact, User owner, String content, Direction direction, LocalDateTime timestamp) {
@@ -124,6 +132,8 @@ public class Message extends BaseTenantEntity {
     public void setMediaId(String mediaId) { this.mediaId = mediaId; }
     public String getThumbnailUrl() { return thumbnailUrl; }
     public void setThumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; }
+    public DeliveryStatus getDeliveryStatus() { return deliveryStatus; }
+    public void setDeliveryStatus(DeliveryStatus deliveryStatus) { this.deliveryStatus = deliveryStatus; }
 
     @PrePersist
     protected void onCreate() {
@@ -152,6 +162,7 @@ public class Message extends BaseTenantEntity {
         private Long fileSize;
         private String mediaId;
         private String thumbnailUrl;
+        private DeliveryStatus deliveryStatus;
 
         public MessageBuilder id(UUID id) { this.id = id; return this; }
         public MessageBuilder waMessageId(String waMessageId) { this.waMessageId = waMessageId; return this; }
@@ -170,6 +181,7 @@ public class Message extends BaseTenantEntity {
         public MessageBuilder fileSize(Long fileSize) { this.fileSize = fileSize; return this; }
         public MessageBuilder mediaId(String mediaId) { this.mediaId = mediaId; return this; }
         public MessageBuilder thumbnailUrl(String thumbnailUrl) { this.thumbnailUrl = thumbnailUrl; return this; }
+        public MessageBuilder deliveryStatus(DeliveryStatus deliveryStatus) { this.deliveryStatus = deliveryStatus; return this; }
 
         public Message build() {
             Message msg = new Message(id, waMessageId, tags, contact, owner, content, direction, timestamp);
@@ -182,6 +194,7 @@ public class Message extends BaseTenantEntity {
             msg.setFileSize(this.fileSize);
             msg.setMediaId(this.mediaId);
             msg.setThumbnailUrl(this.thumbnailUrl);
+            msg.setDeliveryStatus(this.deliveryStatus);
             return msg;
         }
     }

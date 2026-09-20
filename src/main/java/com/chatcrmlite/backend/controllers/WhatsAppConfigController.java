@@ -188,6 +188,10 @@ public class WhatsAppConfigController {
             String phoneNumberId = (String) body.get("phoneNumberId");
             if (phoneNumberId != null && !phoneNumberId.isBlank()) config.setPhoneNumberId(phoneNumberId.trim());
         }
+        if (body.containsKey("businessId")) {
+            String businessId = (String) body.get("businessId");
+            if (businessId != null && !businessId.isBlank()) config.setBusinessId(businessId.trim());
+        }
         if (body.containsKey("wabaId")) {
             String wabaId = (String) body.get("wabaId");
             if (wabaId != null && !wabaId.isBlank()) config.setWabaId(wabaId.trim());

@@ -394,7 +394,84 @@ public class MetaWhatsAppClient implements WhatsAppClient {
     }
 
     @Override
-    public String sendCatalogMessage(String to, String text, String accessToken, String phoneNumberId) {
+    public String sendSingleProductMessage(String to, String catalogId, String productRetailerId, String bodyText, String accessToken, String phoneNumberId) {
+        String url = getGraphBaseUrl() + "/" + phoneNumberId + "/messages";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
+        body.put("to", to);
+        body.put("type", "interactive");
+
+        Map<String, Object> interactive = new HashMap<>();
+        interactive.put("type", "product");
+
+        if (bodyText != null && !bodyText.isBlank()) {
+            Map<String, Object> bodyObj = new HashMap<>();
+            bodyObj.put("text", bodyText);
+            interactive.put("body", bodyObj);
+        }
+
+        Map<String, Object> action = new HashMap<>();
+        action.put("catalog_id", catalogId);
+        action.put("product_retailer_id", productRetailerId);
+
+        interactive.put("action", action);
+        body.put("interactive", interactive);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
+    @Override
+    public String sendMultiProductMessage(String to, String catalogId, String headerText, String bodyText, String footerText, List<Map<String, Object>> sections, String accessToken, String phoneNumberId) {
+        String url = getGraphBaseUrl() + "/" + phoneNumberId + "/messages";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
+        body.put("to", to);
+        body.put("type", "interactive");
+
+        Map<String, Object> interactive = new HashMap<>();
+        interactive.put("type", "product_list");
+
+        if (headerText != null && !headerText.isBlank()) {
+            Map<String, Object> headerObj = new HashMap<>();
+            headerObj.put("type", "text");
+            headerObj.put("text", headerText);
+            interactive.put("header", headerObj);
+        }
+
+        Map<String, Object> bodyObj = new HashMap<>();
+        bodyObj.put("text", bodyText != null && !bodyText.isBlank() ? bodyText : "Please view our products below:");
+        interactive.put("body", bodyObj);
+
+        if (footerText != null && !footerText.isBlank()) {
+            Map<String, Object> footerObj = new HashMap<>();
+            footerObj.put("text", footerText);
+            interactive.put("footer", footerObj);
+        }
+
+        Map<String, Object> action = new HashMap<>();
+        action.put("catalog_id", catalogId);
+        action.put("sections", sections);
+
+        interactive.put("action", action);
+        body.put("interactive", interactive);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
+    @Override
+    public String sendCatalogTemplate(String to, String templateName, String languageCode, String accessToken, String phoneNumberId) {
         String url = String.format(META_URL, phoneNumberId);
 
         HttpHeaders headers = new HttpHeaders();
@@ -403,22 +480,21 @@ public class MetaWhatsAppClient implements WhatsAppClient {
 
         Map<String, Object> body = new HashMap<>();
         body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
         body.put("to", to);
-        body.put("type", "interactive");
+        body.put("type", "template");
 
-        Map<String, Object> interactive = new HashMap<>();
-        interactive.put("type", "catalog_message");
+        Map<String, Object> template = new HashMap<>();
+        template.put("name", templateName);
+        
+        Map<String, String> lang = new HashMap<>();
+        lang.put("code", languageCode != null ? languageCode : "en_US");
+        template.put("language", lang);
 
-        Map<String, Object> bodyObj = new HashMap<>();
-        bodyObj.put("text", text != null && !text.isBlank() ? text : "Please check out our catalog below:");
-        interactive.put("body", bodyObj);
+        Map<String, Object> components = new HashMap<>();
+        template.put("components", new ArrayList<>()); // Standard template message layout, Meta adds the CATALOG button natively based on template configuration.
 
-        Map<String, Object> action = new HashMap<>();
-        action.put("name", "catalog_message");
-
-        // We omit parameters (thumbnail_product_retailer_id) to use default
-        interactive.put("action", action);
-        body.put("interactive", interactive);
+        body.put("template", template);
 
         return executeApiCallWithRetry(url, headers, body);
     }

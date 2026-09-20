@@ -51,6 +51,7 @@ public class WhatsAppIngressService {
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.clients.WhatsAppClient whatsappClient;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private WhatsAppMediaSizeValidator mediaSizeValidator;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.catalog.WhatsAppOrderService whatsappOrderService;
 
     @Transactional
     public void resolveAndSaveIngress(ProcessingContext context) {
@@ -116,12 +117,37 @@ public class WhatsAppIngressService {
                     isFlowNfmReply = true;
                     flowResponseJson = interactive.path("nfm_reply").path("response_json").asText("{}");
                     text = formatFlowResponseForChat(flowResponseJson);
+                } else if ("button_reply".equals(interactiveType)) {
+                    String buttonId = interactive.path("button_reply").path("id").asText("");
+                    text = interactive.path("button_reply").path("title").asText("Interactive Response");
+                    context.getMetadata().put("buttonId", buttonId);
+                } else if ("list_reply".equals(interactiveType)) {
+                    String listId = interactive.path("list_reply").path("id").asText("");
+                    text = interactive.path("list_reply").path("title").asText("Interactive Response");
+                    context.getMetadata().put("buttonId", listId);
                 } else {
                     text = interactive.path(interactiveType).path("title").asText("Interactive Response");
                 }
             } else if ("image".equals(msgType) || "video".equals(msgType) || "audio".equals(msgType) || "document".equals(msgType) || "sticker".equals(msgType)) {
                 JsonNode mediaNode = messageNode.path(msgType);
                 text = processIncomingMedia(msgType, mediaNode, context.getTenantId(), config, incomingMessageBuilder);
+            } else if ("order".equals(msgType)) {
+                JsonNode orderNode = messageNode.path("order");
+                text = "🛒 New Order Received";
+                if (whatsappOrderService != null) {
+                    try {
+                        String phoneNumberId = value.path("metadata").path("phone_number_id").asText();
+                        String wabaId = config.getWabaId();
+                        com.chatcrmlite.backend.models.CommerceOrder order = whatsappOrderService.processOrder(
+                                context.getTenantId(), wabaId, phoneNumberId, context.getMessageId(), contact, orderNode);
+                        if (order != null) {
+                            text += String.format("\nTotal: %s %s\nItems: %d", order.getTotal(), order.getCurrency(), order.getItems().size());
+                        }
+                    } catch (Exception ex) {
+                        log.error("Failed to process WhatsApp order: {}", ex.getMessage());
+                        text += "\n(Error processing order details)";
+                    }
+                }
             } else {
                 text = "Unsupported message type: " + msgType;
             }
@@ -252,6 +278,7 @@ public class WhatsAppIngressService {
 
             // Store metadata for next stages
             context.getMetadata().put("isNewContact", messageRepository.countByContact(contact) == 1);
+            context.getMetadata().put("contactId", contact.getId());
             context.getMetadata().put("text", text);
             context.getMetadata().put("type", msgType);
             context.getMetadata().put("isFlowNfmReply", isFlowNfmReply);

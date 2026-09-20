@@ -1,6 +1,9 @@
 package com.chatcrmlite.backend.services.payments;
 
 import com.chatcrmlite.backend.dto.payments.NormalizedPaymentWebhookEvent;
+import com.chatcrmlite.backend.dto.payments.PaymentStatusResult;
+import com.chatcrmlite.backend.models.Contact;
+import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.models.enums.*;
 import com.chatcrmlite.backend.models.payments.*;
 import com.chatcrmlite.backend.repositories.payments.*;
@@ -31,6 +34,12 @@ public class PaymentWebhookProcessor {
     private final PaymentStateMachine stateMachine;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final com.chatcrmlite.backend.repositories.CommerceOrderRepository commerceOrderRepository;
+    private final com.chatcrmlite.backend.repositories.CommerceCheckoutSessionRepository checkoutSessionRepository;
+    private final com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
+    private final com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
+    private final com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService outboundService;
+    private final PaymentProviderFactory providerFactory;
 
     @Transactional
     public boolean processNormalizedEvent(NormalizedPaymentWebhookEvent event) {
@@ -92,6 +101,22 @@ public class PaymentWebhookProcessor {
             }
 
             if (order == null || tx == null) {
+                // Check if target is a native WhatsApp Commerce Cart Order (CommerceOrder)
+                com.chatcrmlite.backend.models.CommerceOrder commerceOrder = null;
+                if (event.getOrderReferenceId() != null) {
+                    try {
+                        UUID cOrderId = UUID.fromString(event.getOrderReferenceId());
+                        commerceOrder = commerceOrderRepository.findByIdAndTenantId(cOrderId, tenantId).orElse(null);
+                    } catch (Exception ignored) {}
+                }
+                if (commerceOrder == null && event.getProviderOrderId() != null) {
+                    commerceOrder = commerceOrderRepository.findByTenantIdAndPaymentLinkId(tenantId, event.getProviderOrderId()).orElse(null);
+                }
+
+                if (commerceOrder != null) {
+                    return processCommerceOrderWebhook(commerceOrder, event, webhookEvent, tenantId);
+                }
+
                 log.warn("Could not match webhook event {} to existing order/transaction for tenant {}", eventKey, tenantId);
                 webhookEvent.setProcessingStatus(PaymentWebhookStatus.IGNORED);
                 webhookEvent.setErrorMessage("No matching order or transaction found");
@@ -173,4 +198,127 @@ public class PaymentWebhookProcessor {
             throw new RuntimeException(ex);
         }
     }
+
+    private boolean processCommerceOrderWebhook(
+            com.chatcrmlite.backend.models.CommerceOrder commerceOrder,
+            NormalizedPaymentWebhookEvent event,
+            PaymentWebhookEvent webhookEvent,
+            UUID tenantId) {
+
+        PaymentTransactionStatus newTxStatus = event.getTransactionStatus();
+
+        if (newTxStatus == PaymentTransactionStatus.SUCCESS) {
+            commerceOrder.setPaymentStatus("PAID");
+            commerceOrder.setStatus("CONFIRMED");
+            commerceOrder.setCheckoutStatus("COMPLETED");
+            commerceOrder.setPaymentReferenceId(event.getProviderPaymentId());
+            commerceOrder.setPaidAt(java.time.LocalDateTime.now());
+            commerceOrder.setPaymentAmount(commerceOrder.getTotal());
+            commerceOrderRepository.save(commerceOrder);
+
+            // Complete checkout session if active
+            checkoutSessionRepository.findByOrderId(commerceOrder.getId()).ifPresent(session -> {
+                session.setCheckoutStep("COMPLETED");
+                checkoutSessionRepository.save(session);
+            });
+
+            // Also update linked WhatsAppOrder and PaymentTransaction for /payments dashboard
+            orderRepository.findByExternalReferenceIdAndTenantId(commerceOrder.getId().toString(), tenantId)
+                .ifPresent(wOrder -> {
+                    wOrder.setPaymentStatus(WhatsAppOrderPaymentStatus.PAID);
+                    wOrder.setOrderStatus(WhatsAppOrderStatus.CONFIRMED);
+                    wOrder.setPaidAt(Instant.now());
+                    orderRepository.save(wOrder);
+
+                    transactionRepository.findAllByOrderIdAndTenantId(wOrder.getId(), tenantId).forEach(tx -> {
+                        tx.setStatus(PaymentTransactionStatus.SUCCESS);
+                        tx.setProviderPaymentId(event.getProviderPaymentId());
+                        tx.setPaidAt(Instant.now());
+                        transactionRepository.save(tx);
+                    });
+                    log.info("💳 Synced WhatsAppOrder {} and transactions to PAID/SUCCESS", wOrder.getReferenceId());
+                });
+
+            // Send confirmation WhatsApp message to customer
+            WhatsAppConfig waConfig = whatsappConfigRepository.findByTenantId(tenantId).orElse(null);
+            if (waConfig != null && commerceOrder.getCustomerWaId() != null) {
+                Contact contact = contactRepository.findByWaIdAndTenant_Id(commerceOrder.getCustomerWaId(), tenantId).orElse(null);
+                if (contact != null) {
+                    String msg = String.format(
+                        "🎉 *Payment Successful!*\n" +
+                        "Order ID: #%s\n" +
+                        "Amount Paid: ₹%s\n\n" +
+                        "Your payment has been received and your order is confirmed! We will notify you once your order is dispatched. Thank you for shopping with us!",
+                        commerceOrder.getId().toString().substring(0, 8),
+                        commerceOrder.getTotal().toPlainString()
+                    );
+                    outboundService.sendText(contact, msg, waConfig, null);
+                    log.info("📢 Dispatched payment confirmation message to customer {} for order {}", commerceOrder.getCustomerWaId(), commerceOrder.getId());
+                }
+            }
+        } else if (newTxStatus == PaymentTransactionStatus.FAILED) {
+            commerceOrder.setPaymentStatus("PAYMENT_FAILED");
+            commerceOrderRepository.save(commerceOrder);
+
+            WhatsAppConfig waConfig = whatsappConfigRepository.findByTenantId(tenantId).orElse(null);
+            if (waConfig != null && commerceOrder.getCustomerWaId() != null) {
+                Contact contact = contactRepository.findByWaIdAndTenant_Id(commerceOrder.getCustomerWaId(), tenantId).orElse(null);
+                if (contact != null && commerceOrder.getPaymentLinkUrl() != null) {
+                    String msg = String.format(
+                        "⚠️ Payment for Order #%s was unsuccessful.\n\n" +
+                        "If you wish to retry, please use the link below:\n%s",
+                        commerceOrder.getId().toString().substring(0, 8),
+                        commerceOrder.getPaymentLinkUrl()
+                    );
+                    outboundService.sendText(contact, msg, waConfig, null);
+                }
+            }
+        }
+
+        if (webhookEvent != null) {
+            webhookEvent.setProcessingStatus(PaymentWebhookStatus.PROCESSED);
+            webhookEvent.setProcessedAt(Instant.now());
+            webhookEvent.setErrorMessage(null);
+            webhookEventRepository.save(webhookEvent);
+        }
+        log.info("✅ Successfully processed CommerceOrder {} payment webhook status={}", commerceOrder.getId(), newTxStatus);
+        return true;
+    }
+
+    @Transactional
+    public boolean markCommerceOrderPaid(com.chatcrmlite.backend.models.CommerceOrder commerceOrder, String paymentRefId) {
+        UUID tenantId = commerceOrder.getTenant().getId();
+        NormalizedPaymentWebhookEvent event = NormalizedPaymentWebhookEvent.builder()
+                .tenantId(tenantId)
+                .eventType("payment_link.paid")
+                .providerOrderId(commerceOrder.getPaymentLinkId())
+                .providerPaymentId(paymentRefId != null ? paymentRefId : "pay_sim_" + System.currentTimeMillis())
+                .currency(commerceOrder.getCurrency())
+                .amountMinor(commerceOrder.getTotal().multiply(new java.math.BigDecimal(100)).longValue())
+                .transactionStatus(PaymentTransactionStatus.SUCCESS)
+                .occurredAt(java.time.Instant.now())
+                .build();
+        return processCommerceOrderWebhook(commerceOrder, event, null, tenantId);
+    }
+
+    @Transactional
+    public boolean syncCommerceOrderFromProvider(com.chatcrmlite.backend.models.CommerceOrder commerceOrder) {
+        if (commerceOrder.getPaymentLinkId() == null) {
+            return false;
+        }
+        UUID tenantId = commerceOrder.getTenant().getId();
+        try {
+            PaymentProvider provider = providerFactory.getProvider(PaymentIntegrationType.RAZORPAY_DIRECT);
+            PaymentStatusResult result = provider.getPaymentStatus(tenantId, commerceOrder.getPaymentLinkId());
+            if (result.getStatus() == PaymentTransactionStatus.SUCCESS) {
+                return markCommerceOrderPaid(commerceOrder, commerceOrder.getPaymentLinkId());
+            } else {
+                log.info("Razorpay payment link {} status is currently {}", commerceOrder.getPaymentLinkId(), result.getStatus());
+            }
+        } catch (Exception e) {
+            log.error("Failed to sync commerce order payment status from provider: {}", e.getMessage());
+        }
+        return false;
+    }
 }
+

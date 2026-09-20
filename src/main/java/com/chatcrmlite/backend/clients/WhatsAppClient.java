@@ -47,9 +47,19 @@ public interface WhatsAppClient {
     String sendLocation(String to, double latitude, double longitude, String name, String address, String accessToken, String phoneNumberId);
 
     /**
-     * Sends a catalog message through the WhatsApp Business API.
+     * Sends a single product message through the WhatsApp Business API.
      */
-    String sendCatalogMessage(String to, String text, String accessToken, String phoneNumberId);
+    String sendSingleProductMessage(String to, String catalogId, String productRetailerId, String bodyText, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends a multi-product message through the WhatsApp Business API.
+     */
+    String sendMultiProductMessage(String to, String catalogId, String headerText, String bodyText, String footerText, java.util.List<java.util.Map<String, Object>> sections, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends a catalog template message through the WhatsApp Business API.
+     */
+    String sendCatalogTemplate(String to, String templateName, String languageCode, String accessToken, String phoneNumberId);
 
     /**
      * Sends an interactive WhatsApp Flow message to a recipient.

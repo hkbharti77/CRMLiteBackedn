@@ -28,6 +28,7 @@ public class WebhookWorker implements StreamListener<String, MapRecord<String, S
     private final com.chatcrmlite.backend.repositories.WhatsAppTemplateRepository whatsappTemplateRepository;
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     @Autowired private com.chatcrmlite.backend.services.whatsapp.campaign.CampaignAnalyticsService campaignAnalyticsService;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.MessageDeliveryStatusService messageDeliveryStatusService;
     @Autowired private RedisStateService redisStateService;
     @Autowired private com.chatcrmlite.backend.clients.WhatsAppClient whatsappClient;
 
@@ -149,6 +150,14 @@ public class WebhookWorker implements StreamListener<String, MapRecord<String, S
                                 campaignAnalyticsService.processWebhookStatus(waMsgId, statusStr, errorReason);
                             } catch (Exception ex) {
                                 log.warn("[Worker] Error updating campaign status for message {}: {}", waMsgId, ex.getMessage());
+                            }
+                        }
+
+                        if (!waMsgId.isBlank() && messageDeliveryStatusService != null) {
+                            try {
+                                messageDeliveryStatusService.updateDeliveryStatus(waMsgId, statusStr);
+                            } catch (Exception ex) {
+                                log.warn("[Worker] Error updating delivery status for message {}: {}", waMsgId, ex.getMessage());
                             }
                         }
                     }

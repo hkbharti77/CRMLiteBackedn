@@ -2,6 +2,7 @@ package com.chatcrmlite.backend.services.whatsapp;
 
 import com.chatcrmlite.backend.clients.WhatsAppClient;
 import com.chatcrmlite.backend.dto.MenuDto;
+import com.chatcrmlite.backend.dto.catalog.SendProductResult;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.models.Message;
 import com.chatcrmlite.backend.models.User;
@@ -23,7 +24,6 @@ import java.util.stream.Collectors;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WhatsAppOutboundService {
 
     private static final String UNKNOWN_META_ID = "unknown_id";
@@ -32,6 +32,31 @@ public class WhatsAppOutboundService {
     private final MessageRepository messageRepository;
     private final FlowSendSessionRepository flowSendSessionRepository;
     private final DistributedWebSocketPublisher distributedWebSocketPublisher;
+    private final org.springframework.transaction.support.TransactionTemplate transactionTemplate;
+    private final OutboundSendIdempotencyService outboundSendIdempotencyService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public WhatsAppOutboundService(WhatsAppClient whatsappClient,
+                                  MessageRepository messageRepository,
+                                  FlowSendSessionRepository flowSendSessionRepository,
+                                  DistributedWebSocketPublisher distributedWebSocketPublisher,
+                                  org.springframework.transaction.support.TransactionTemplate transactionTemplate,
+                                  OutboundSendIdempotencyService outboundSendIdempotencyService) {
+        this.whatsappClient = whatsappClient;
+        this.messageRepository = messageRepository;
+        this.flowSendSessionRepository = flowSendSessionRepository;
+        this.distributedWebSocketPublisher = distributedWebSocketPublisher;
+        this.transactionTemplate = transactionTemplate;
+        this.outboundSendIdempotencyService = outboundSendIdempotencyService;
+    }
+
+    public WhatsAppOutboundService(WhatsAppClient whatsappClient,
+                                  MessageRepository messageRepository,
+                                  DistributedWebSocketPublisher distributedWebSocketPublisher) {
+        this(whatsappClient, messageRepository, null, distributedWebSocketPublisher, null, null);
+    }
 
     @org.springframework.beans.factory.annotation.Value("${app.public.url:}")
     private String appPublicUrl;
@@ -146,22 +171,7 @@ public class WhatsAppOutboundService {
         }
     }
 
-    @Transactional
-    public Message sendCatalogMessage(Contact contact, String text, WhatsAppConfig config, User owner) {
-        try {
-            String metaMessageId = whatsappClient.sendCatalogMessage(
-                    contact.getWaId(),
-                    text,
-                    config.getAccessToken(),
-                    config.getPhoneNumberId()
-            );
-            return recordOutgoing(contact, owner, "Sent Catalog", metaMessageId, "CATALOG");
-        } catch (Exception e) {
-            log.error("[WhatsApp-Outbound] Failed to send CATALOG reply to contact={} owner={}: {}",
-                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
-            throw e;
-        }
-    }
+
 
     @Transactional
     public Message sendImage(Contact contact, String imageUrl, String caption, WhatsAppConfig config, User owner) {
@@ -237,6 +247,19 @@ public class WhatsAppOutboundService {
     }
 
     private Message recordOutgoing(Contact contact, User owner, String content, String metaMessageId, String responseType, String mediaUrl) {
+        if (owner == null && contact != null) {
+            if (contact.getOwner() != null) {
+                owner = contact.getOwner();
+            } else if (contact.getTenant() != null && userRepository != null) {
+                java.util.List<User> users = userRepository.findAllByTenant(contact.getTenant());
+                if (!users.isEmpty()) {
+                    owner = users.stream()
+                            .filter(u -> u.getRole() == User.Role.OWNER || u.getRole() == User.Role.ADMIN)
+                            .findFirst()
+                            .orElse(users.get(0));
+                }
+            }
+        }
         String storedMessageId = normalizeMetaMessageId(metaMessageId);
         Message message = Message.builder()
                 .contact(contact)
@@ -248,6 +271,7 @@ public class WhatsAppOutboundService {
                 .mediaType(responseType)
                 .mediaUrl(mediaUrl)
                 .thumbnailUrl(mediaUrl)
+                .deliveryStatus(Message.DeliveryStatus.SENT)
                 .build();
 
         Message saved = messageRepository.save(message);
@@ -256,6 +280,90 @@ public class WhatsAppOutboundService {
         log.info("[WhatsApp-Outbound] Sent {} reply to contact={} owner={} metaMessageId={} storedMessageId={}",
                 responseType, contact.getWaId(), (owner != null ? owner.getId() : "null"), metaMessageId, storedMessageId);
         return saved;
+    }
+
+    public SendProductResult sendSingleProduct(Contact contact, String metaCatalogId,
+            String productRetailerId, String productName, String bodyText,
+            WhatsAppConfig config, User owner, String idempotencyKey, String executionId) {
+
+        // 1. Meta API call strictly OUTSIDE database transaction
+        String metaMessageId = whatsappClient.sendSingleProductMessage(
+                contact.getWaId(),
+                metaCatalogId,
+                productRetailerId,
+                bodyText,
+                config.getAccessToken(),
+                config.getPhoneNumberId()
+        );
+
+        // 2. Mark META_ACCEPTED in Redis immediately (with execution ownership token)
+        boolean accepted = outboundSendIdempotencyService.markMetaAccepted(
+                idempotencyKey, executionId, metaMessageId);
+        if (!accepted) {
+            log.warn("[WhatsApp-Outbound] Lease expired or executionId superseded for key={}", idempotencyKey);
+        }
+
+        // 3. Database transaction strictly for CRM persistence
+        SendProductResult result = transactionTemplate.execute(status -> {
+            Message saved = recordOutgoing(contact, owner, "Product: " + productName, metaMessageId, "PRODUCT");
+            return new SendProductResult(saved.getWaMessageId(), saved.getId().toString());
+        });
+
+        // 4. DB TRANSACTION COMMITTED SUCCESSFULLY HERE!
+        // Transition Redis state to SUCCEEDED post-commit
+        outboundSendIdempotencyService.markSucceeded(idempotencyKey, result.messageId());
+
+        return result;
+    }
+
+    public SendProductResult sendMultiProduct(Contact contact, String metaCatalogId,
+            String headerText, String bodyText, String footerText,
+            List<Map<String, Object>> sections, List<String> productNames,
+            WhatsAppConfig config, User owner, String idempotencyKey, String executionId) {
+
+        // 1. Meta API call strictly OUTSIDE database transaction
+        String metaMessageId = whatsappClient.sendMultiProductMessage(
+                contact.getWaId(),
+                metaCatalogId,
+                headerText,
+                bodyText,
+                footerText,
+                sections,
+                config.getAccessToken(),
+                config.getPhoneNumberId()
+        );
+
+        // 2. Mark META_ACCEPTED in Redis immediately (with execution ownership token)
+        boolean accepted = outboundSendIdempotencyService.markMetaAccepted(
+                idempotencyKey, executionId, metaMessageId);
+        if (!accepted) {
+            log.warn("[WhatsApp-Outbound] Lease expired or executionId superseded for key={}", idempotencyKey);
+        }
+
+        // 3. Database transaction strictly for CRM persistence
+        String summary = "Products: " + (productNames != null && !productNames.isEmpty() ? String.join(", ", productNames) : "Catalog Selection");
+        SendProductResult result = transactionTemplate.execute(status -> {
+            Message saved = recordOutgoing(contact, owner, summary, metaMessageId, "PRODUCT_LIST");
+            return new SendProductResult(saved.getWaMessageId(), saved.getId().toString());
+        });
+
+        // 4. DB TRANSACTION COMMITTED SUCCESSFULLY HERE!
+        // Transition Redis state to SUCCEEDED post-commit
+        outboundSendIdempotencyService.markSucceeded(idempotencyKey, result.messageId());
+
+        return result;
+    }
+
+    public SendProductResult recoverPendingCrmPersistence(Contact contact, User owner,
+            String summary, String metaMessageId, String mediaType, String idempotencyKey) {
+        SendProductResult result = transactionTemplate.execute(status -> {
+            Message saved = recordOutgoing(contact, owner, summary, metaMessageId, mediaType);
+            return new SendProductResult(saved.getWaMessageId(), saved.getId().toString());
+        });
+
+        // Committed successfully -> mark SUCCEEDED post-commit
+        outboundSendIdempotencyService.markSucceeded(idempotencyKey, result.messageId());
+        return result;
     }
 
     private String normalizeMetaMessageId(String metaMessageId) {
@@ -278,6 +386,7 @@ public class WhatsAppOutboundService {
         wsPayload.put("fileName", message.getFileName());
         wsPayload.put("fileSize", message.getFileSize());
         wsPayload.put("thumbnailUrl", message.getThumbnailUrl());
+        wsPayload.put("deliveryStatus", message.getDeliveryStatus() != null ? message.getDeliveryStatus().name() : "SENT");
 
         UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : (owner != null ? owner.getId() : null);
         if (tenantId != null) {

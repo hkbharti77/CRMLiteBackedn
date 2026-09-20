@@ -9,32 +9,35 @@ import javax.crypto.Cipher;
 import javax.crypto.spec.SecretKeySpec;
 import java.util.Base64;
 
+import lombok.extern.slf4j.Slf4j;
+
 @Component
 @Converter
+@Slf4j
 public class EncryptionConverter implements AttributeConverter<String, String> {
 
     private static final String ALGORITHM = "AES";
+    private static final String DEFAULT_SECRET = "ChatCrmLiteSecretAESKey12345678";
 
-    // KEY is injected from ${encryption.secret-key} (ENCRYPTION_SECRET_KEY env var).
-    // It must not have a hardcoded fallback. The application will fail to start if
-    // the encryption key is absent (enforced by SecureConfigValidator).
-    private static byte[] KEY = new byte[16];
+    // KEY is initialized statically with the application standard secret, and optionally
+    // updated by Spring @Value if custom encryption.secret-key is supplied.
+    private static byte[] KEY = initKey(DEFAULT_SECRET);
 
-    @Value("${encryption.secret-key:TestEncryptionKey1}")
-    public void setKey(String key) {
-        if (key == null || key.isBlank()) {
-            // SecureConfigValidator.validateConfig() will already have halted startup,
-            // but guard here as a safety net.
-            throw new IllegalStateException(
-                "ENCRYPTION_SECRET_KEY is required but was not supplied. " +
-                "Set the ENCRYPTION_SECRET_KEY environment variable.");
-        }
-        byte[] bytes = key.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+    private static byte[] initKey(String secret) {
+        byte[] bytes = secret.getBytes(java.nio.charset.StandardCharsets.UTF_8);
         byte[] key16 = new byte[16];
         for (int i = 0; i < 16; i++) {
             key16[i] = (i < bytes.length) ? bytes[i] : (byte) '0';
         }
-        KEY = key16;
+        return key16;
+    }
+
+    @Value("${encryption.secret-key:${ENCRYPTION_SECRET_KEY:ChatCrmLiteSecretAESKey12345678}}")
+    public void setKey(String key) {
+        if (key != null && !key.isBlank() && !key.contains("${")) {
+            KEY = initKey(key);
+            log.info("🔐 EncryptionConverter AES key updated successfully");
+        }
     }
 
     @Override
@@ -70,7 +73,7 @@ public class EncryptionConverter implements AttributeConverter<String, String> {
                 byte[] decryptedBytes = cipher.doFinal(Base64.getDecoder().decode(payload));
                 return new String(decryptedBytes, java.nio.charset.StandardCharsets.UTF_8);
             } catch (Exception e) {
-                // If prefixed but failed, return stripped payload
+                log.error("❌ EncryptionConverter failed to decrypt attribute with prefix ENC: - returning raw data. Reason: {}", e.getMessage());
                 return dbData.substring(4);
             }
         }

@@ -40,4 +40,7 @@ public interface WhatsAppOrderRepository extends JpaRepository<WhatsAppOrder, UU
 
     @Query("SELECT o FROM WhatsAppOrder o WHERE o.tenant.id = :tenantId AND o.customerWaId = :customerWaId ORDER BY o.createdAt DESC")
     Page<WhatsAppOrder> findAllByTenantIdAndCustomerWaId(@Param("tenantId") UUID tenantId, @Param("customerWaId") String customerWaId, Pageable pageable);
+
+    @Query("SELECT o FROM WhatsAppOrder o WHERE o.externalReferenceId = :externalRef AND o.tenant.id = :tenantId")
+    Optional<WhatsAppOrder> findByExternalReferenceIdAndTenantId(@Param("externalRef") String externalRef, @Param("tenantId") UUID tenantId);
 }

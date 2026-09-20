@@ -4,6 +4,7 @@ import com.chatcrmlite.backend.models.Message;
 import com.chatcrmlite.backend.models.Contact;
 import com.chatcrmlite.backend.dto.MessageDTO;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import java.util.*;
@@ -43,4 +44,27 @@ public interface MessageRepository extends JpaRepository<Message, UUID> {
         @Param("tenantId") UUID tenantId,
         @Param("customerWaId") String customerWaId
     );
+
+    @Modifying
+    @Query("UPDATE Message m SET m.deliveryStatus = com.chatcrmlite.backend.models.Message.DeliveryStatus.READ " +
+           "WHERE m.waMessageId = :waMessageId " +
+           "AND (m.deliveryStatus IN (com.chatcrmlite.backend.models.Message.DeliveryStatus.SENT, " +
+           "                          com.chatcrmlite.backend.models.Message.DeliveryStatus.DELIVERED) " +
+           "     OR m.deliveryStatus IS NULL)")
+    int markReadConditional(@Param("waMessageId") String waMessageId);
+
+    @Modifying
+    @Query("UPDATE Message m SET m.deliveryStatus = com.chatcrmlite.backend.models.Message.DeliveryStatus.DELIVERED " +
+           "WHERE m.waMessageId = :waMessageId " +
+           "AND (m.deliveryStatus = com.chatcrmlite.backend.models.Message.DeliveryStatus.SENT " +
+           "     OR m.deliveryStatus IS NULL)")
+    int markDeliveredConditional(@Param("waMessageId") String waMessageId);
+
+    @Modifying
+    @Query("UPDATE Message m SET m.deliveryStatus = com.chatcrmlite.backend.models.Message.DeliveryStatus.FAILED " +
+           "WHERE m.waMessageId = :waMessageId " +
+           "AND (m.deliveryStatus IN (com.chatcrmlite.backend.models.Message.DeliveryStatus.SENT, " +
+           "                          com.chatcrmlite.backend.models.Message.DeliveryStatus.DELIVERED) " +
+           "     OR m.deliveryStatus IS NULL)")
+    int markFailedConditional(@Param("waMessageId") String waMessageId);
 }

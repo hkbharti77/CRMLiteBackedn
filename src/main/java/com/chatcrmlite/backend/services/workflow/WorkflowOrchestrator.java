@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,7 +15,6 @@ import java.util.UUID;
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class WorkflowOrchestrator {
 
     private final QueueRouter router;
@@ -22,6 +22,35 @@ public class WorkflowOrchestrator {
     private final MeterRegistry meterRegistry;
     private final com.chatcrmlite.backend.services.whatsapp.WhatsAppIngressService whatsappIngressService;
     private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
+    private final com.chatcrmlite.backend.services.whatsapp.checkout.CommerceCheckoutService checkoutService;
+    private final com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
+
+    @Autowired
+    public WorkflowOrchestrator(
+            QueueRouter router,
+            WorkflowStateTracker tracker,
+            MeterRegistry meterRegistry,
+            com.chatcrmlite.backend.services.whatsapp.WhatsAppIngressService whatsappIngressService,
+            com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService,
+            com.chatcrmlite.backend.services.whatsapp.checkout.CommerceCheckoutService checkoutService,
+            com.chatcrmlite.backend.repositories.ContactRepository contactRepository) {
+        this.router = router;
+        this.tracker = tracker;
+        this.meterRegistry = meterRegistry;
+        this.whatsappIngressService = whatsappIngressService;
+        this.quotaEnforcerService = quotaEnforcerService;
+        this.checkoutService = checkoutService;
+        this.contactRepository = contactRepository;
+    }
+
+    public WorkflowOrchestrator(
+            QueueRouter router,
+            WorkflowStateTracker tracker,
+            MeterRegistry meterRegistry,
+            com.chatcrmlite.backend.services.whatsapp.WhatsAppIngressService whatsappIngressService,
+            com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService) {
+        this(router, tracker, meterRegistry, whatsappIngressService, quotaEnforcerService, null, null);
+    }
 
     @Transactional
     public void startWorkflow(String messageId, String waId, UUID tenantId, String payload) {
@@ -60,6 +89,8 @@ public class WorkflowOrchestrator {
             boolean isFlowNfmReply = Boolean.TRUE.equals(context.getMetadata().get("isFlowNfmReply"));
             boolean hasActiveFlow = Boolean.TRUE.equals(context.getMetadata().get("hasActiveFlow"));
             boolean botPaused = Boolean.TRUE.equals(context.getMetadata().get("botPaused"));
+            UUID contactId = (UUID) context.getMetadata().get("contactId");
+            String buttonId = (String) context.getMetadata().get("buttonId");
 
             if (isEcho || botPaused || isFlowNfmReply) {
                 log.info("⏸️ [Workflow] SMB Echo, Bot Paused, or Flow nfm_reply for contact {}. Skipping AI/Flow routing.", context.getWaId());
@@ -67,11 +98,46 @@ public class WorkflowOrchestrator {
                 return;
             }
 
+            // Case 1: WhatsApp Native Cart Order arrived -> Handled by WhatsAppOrderService & CommerceCheckoutService
+            if ("order".equals(type)) {
+                log.info("🛒 [Workflow] WhatsApp Order received and processed by CommerceCheckoutService for waId={}. Completing workflow.", waId);
+                completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
+                return;
+            }
+
+            // Case 2: Checkout payment selection button clicked (PAY_ONLINE_* or PAY_COD_*)
+            if (checkoutService != null && contactRepository != null && buttonId != null && (buttonId.startsWith("PAY_ONLINE_") || buttonId.startsWith("PAY_COD_"))) {
+                com.chatcrmlite.backend.models.Contact contact = contactId != null ? contactRepository.findById(contactId).orElse(null) : null;
+                if (contact != null) {
+                    boolean handled = checkoutService.handleInteractiveButton(tenantId, waId, buttonId, contact);
+                    if (handled) {
+                        log.info("💳 [Workflow] Handled checkout payment choice button {} for waId={}.", buttonId, waId);
+                        completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
+                        return;
+                    }
+                }
+            }
+
+            // Case 3: Customer is in an active checkout session (e.g. sending address/email)
+            if (checkoutService != null && contactRepository != null && checkoutService.hasActiveSession(tenantId, waId)) {
+                com.chatcrmlite.backend.models.Contact contact = contactId != null ? contactRepository.findById(contactId).orElse(null) : null;
+                if (contact != null) {
+                    boolean handled = checkoutService.handleCustomerMessage(tenantId, waId, text, contact);
+                    if (handled) {
+                        log.info("📍 [Workflow] Handled customer checkout message for waId={}. Completing workflow.", waId);
+                        completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
+                        return;
+                    }
+                }
+            }
+
+
             // Check if message is a flow trigger, navigation command, or form cancel
             String lower = (text != null ? text.trim().toLowerCase() : "");
             String cleanLower = lower.replaceAll("[^a-z0-9 ]", "").trim();
             boolean isCommandOrIntent = cleanLower.matches("^(cancel|stop|exit|quit|terminate|menu|options|help|start|services|show|hi|hello|hey|namaste|hii|heyy|hi there|hello there|good morning|good evening|good afternoon)$")
                     || cleanLower.matches(".*(appointment|doctor|clinic|consultation|checkup|specialist|dentist|physician|salon|spa|booking|reserve|slot|table|haircut|facial|massage|reservation|quote|pricing|inquiry|inquire|lead|enquiry|estimate|catalog|feedback|rating|review|survey|complaint|support).*");
+
 
             // Route to flow worker if:
             //   1. An active form/flow is currently running for this contact (PRIORITY: isolates active form from RAG/AI), OR

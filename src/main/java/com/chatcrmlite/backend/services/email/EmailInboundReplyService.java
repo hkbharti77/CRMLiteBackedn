@@ -21,12 +21,25 @@ import java.util.regex.Pattern;
 
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class EmailInboundReplyService {
 
     private final EmailCampaignRecipientRepository recipientRepository;
     private final EmailInboundMessageRepository inboundMessageRepository;
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public EmailInboundReplyService(EmailCampaignRecipientRepository recipientRepository,
+                                  EmailInboundMessageRepository inboundMessageRepository,
+                                  com.chatcrmlite.backend.repositories.TenantRepository tenantRepository) {
+        this.recipientRepository = recipientRepository;
+        this.inboundMessageRepository = inboundMessageRepository;
+        this.tenantRepository = tenantRepository;
+    }
+
+    public EmailInboundReplyService(EmailCampaignRecipientRepository recipientRepository,
+                                  EmailInboundMessageRepository inboundMessageRepository) {
+        this(recipientRepository, inboundMessageRepository, null);
+    }
     
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.chatcrmlite.backend.services.ai.AiOrchestrator aiOrchestrator;
