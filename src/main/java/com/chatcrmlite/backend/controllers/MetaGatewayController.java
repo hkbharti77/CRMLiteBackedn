@@ -433,7 +433,6 @@ public class MetaGatewayController {
         }
 
         String code = payload.get("code");
-        String sessionId = payload.get("sessionId");
 
         if (!StringUtils.hasText(code)) {
             return ResponseEntity.badRequest().body(Map.of("error", "OAuth authorization code is required"));
