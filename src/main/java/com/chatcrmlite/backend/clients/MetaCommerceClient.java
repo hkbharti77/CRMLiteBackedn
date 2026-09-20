@@ -46,7 +46,8 @@ public class MetaCommerceClient {
                 JsonNode root = executeGet(url, accessToken);
                 if (root != null && root.has("owner_business_info") && root.path("owner_business_info").has("id")) {
                     String bmId = root.path("owner_business_info").path("id").asText();
-                    log.info("[Commerce] Resolved Meta Business Portfolio ID {} for WABA {}", bmId, wabaId);
+                    String bmName = root.path("owner_business_info").path("name").asText("Unknown");
+                    log.info("[Commerce] Resolved Meta Business Portfolio ID {} (Name: '{}') for WABA {}", bmId, bmName, wabaId);
                     return bmId;
                 }
             } catch (Exception e) {
@@ -184,6 +185,10 @@ public class MetaCommerceClient {
                         "(3) The access token does not have catalog management permissions. " +
                         "(4) The WABA is not properly associated with the catalog. " +
                         "Support reference: fbtrace_id=" + fbtraceId;
+            } else if ("1690129".equals(subcode) || (userMsg != null && userMsg.contains("aren't an admin of this business"))) {
+                userMsg = "You don't have Admin permission on Meta Business Portfolio (" + fbtraceId + ") to create a catalog via API. " +
+                        "Please open Meta Commerce Manager (https://business.facebook.com/commerce), create or find your Catalog ID, " +
+                        "and use 'Connect Existing Catalog' in CRM Panel.";
             } else if (userMsg.isBlank()) {
                 userMsg = errorNode.path("message").asText("Meta Commerce API call failed.");
             }

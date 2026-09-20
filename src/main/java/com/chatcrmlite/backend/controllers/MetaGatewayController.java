@@ -48,6 +48,9 @@ public class MetaGatewayController {
     @Autowired
     private JwtUtils jwtUtils;
 
+    @Autowired
+    private com.chatcrmlite.backend.clients.MetaCommerceClient metaCommerceClient;
+
     @Value("${meta.app.id:1573307991099476}")
     private String metaAppId;
 
@@ -492,6 +495,17 @@ public class MetaGatewayController {
             return ResponseEntity.ok(Map.of("connected", false));
         }
 
+        // Auto-resolve businessId if missing but WABA is present
+        if (!StringUtils.hasText(config.getBusinessId()) && StringUtils.hasText(config.getWabaId()) && StringUtils.hasText(config.getAccessToken())) {
+            try {
+                String realBmId = metaCommerceClient.resolveBusinessManagerId(config.getWabaId(), config.getAccessToken());
+                if (StringUtils.hasText(realBmId)) {
+                    config.setBusinessId(realBmId);
+                    whatsappConfigRepository.save(config);
+                }
+            } catch (Exception ignored) {}
+        }
+
         Map<String, Object> status = new HashMap<>();
         status.put("connected", true);
         status.put("connectionType", config.getConnectionType());
@@ -503,6 +517,7 @@ public class MetaGatewayController {
         status.put("verifiedName", config.getVerifiedName());
         status.put("qualityRating", config.getQualityRating());
         status.put("wabaId", config.getWabaId());
+        status.put("businessId", config.getBusinessId());
         status.put("verificationStatus", config.getVerificationStatus());
 
         return ResponseEntity.ok(status);

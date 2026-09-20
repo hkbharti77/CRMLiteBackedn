@@ -270,6 +270,7 @@ public class MetaOnboardingService {
             resp.put("displayPhoneNumber", savedConfig.getDisplayPhoneNumber());
             resp.put("verifiedName", savedConfig.getVerifiedName());
             resp.put("wabaId", savedConfig.getWabaId());
+            resp.put("businessId", savedConfig.getBusinessId());
             resp.put("connectionType", savedConfig.getConnectionType());
             resp.put("connectionStatus", savedConfig.getConnectionStatus());
             resp.put("webhookSubscriptionStatus", savedConfig.getWebhookSubscriptionStatus());

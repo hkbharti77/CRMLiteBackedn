@@ -55,6 +55,9 @@ public class WhatsAppConfigController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.services.whatsapp.WhatsAppTemplateService whatsappTemplateService;
 
+    @Autowired
+    private com.chatcrmlite.backend.clients.MetaCommerceClient metaCommerceClient;
+
     @Value("${app.public.url:}")
     private String publicAppUrl;
 
@@ -87,6 +90,18 @@ public class WhatsAppConfigController {
                     defaultConf.setConnectionType("LEGACY");
                     return defaultConf;
                 });
+
+        if (config.getId() != null && (config.getBusinessId() == null || config.getBusinessId().isBlank())
+                && config.getWabaId() != null && !config.getWabaId().isBlank()
+                && config.getAccessToken() != null && !config.getAccessToken().isBlank()) {
+            try {
+                String realBmId = metaCommerceClient.resolveBusinessManagerId(config.getWabaId(), config.getAccessToken());
+                if (realBmId != null && !realBmId.isBlank()) {
+                    config.setBusinessId(realBmId);
+                    whatsappConfigRepository.save(config);
+                }
+            } catch (Exception ignored) {}
+        }
 
         return ResponseEntity.ok(config);
     }
