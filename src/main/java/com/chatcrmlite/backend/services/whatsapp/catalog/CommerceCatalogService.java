@@ -31,13 +31,25 @@ public class CommerceCatalogService {
 
     @Transactional
     public CommerceCatalog createAndConnectCatalog(UUID tenantId, String businessId, String wabaId, String name, String accessToken) {
-        if (businessId == null || businessId.isBlank()) {
-            throw new IllegalStateException("Business Manager ID is required to create a catalog. Please ensure it is set in your WhatsApp Configuration.");
+        // If businessId is missing or accidentally equals wabaId, resolve true Business Manager ID from Meta
+        if (businessId == null || businessId.isBlank() || businessId.equals(wabaId)) {
+            String realBmId = metaCommerceClient.resolveBusinessManagerId(wabaId, accessToken);
+            if (realBmId != null && !realBmId.isBlank()) {
+                businessId = realBmId;
+                whatsappConfigRepository.findByTenantId(tenantId).ifPresent(cfg -> {
+                    cfg.setBusinessId(realBmId);
+                    whatsappConfigRepository.save(cfg);
+                });
+            }
+        }
+
+        if (businessId == null || businessId.isBlank() || businessId.equals(wabaId)) {
+            throw new IllegalStateException("Could not resolve Meta Business Portfolio ID for your account. Please connect an existing catalog using Catalog ID instead.");
         }
 
         JsonNode createResponse = metaCommerceClient.createCatalog(businessId, name, accessToken);
         if (createResponse == null || !createResponse.has("id")) {
-            throw new RuntimeException("Failed to create catalog in Meta");
+            throw new RuntimeException("Failed to create catalog in Meta: " + (createResponse != null ? createResponse.toString() : "empty response"));
         }
         String metaCatalogId = createResponse.get("id").asText();
 

@@ -37,6 +37,39 @@ public class MetaCommerceClient {
     }
 
     /**
+     * Resolves the true Meta Business Manager / Portfolio ID from the WABA owner info or /me/businesses.
+     */
+    public String resolveBusinessManagerId(String wabaId, String accessToken) {
+        if (wabaId != null && !wabaId.isBlank()) {
+            try {
+                String url = String.format("%s/%s?fields=owner_business_info&access_token=%s", getGraphBaseUrl(), wabaId, accessToken);
+                JsonNode root = executeGet(url, accessToken);
+                if (root != null && root.has("owner_business_info") && root.path("owner_business_info").has("id")) {
+                    String bmId = root.path("owner_business_info").path("id").asText();
+                    log.info("[Commerce] Resolved Meta Business Portfolio ID {} for WABA {}", bmId, wabaId);
+                    return bmId;
+                }
+            } catch (Exception e) {
+                log.warn("[Commerce] Could not resolve owner_business_info for WABA {}: {}", wabaId, e.getMessage());
+            }
+        }
+
+        try {
+            String meUrl = String.format("%s/me/businesses?access_token=%s", getGraphBaseUrl(), accessToken);
+            JsonNode root = executeGet(meUrl, accessToken);
+            if (root != null && root.has("data") && root.path("data").isArray() && root.path("data").size() > 0) {
+                String bmId = root.path("data").get(0).path("id").asText();
+                log.info("[Commerce] Resolved Meta Business Portfolio ID {} from /me/businesses", bmId);
+                return bmId;
+            }
+        } catch (Exception e) {
+            log.warn("[Commerce] Could not resolve business from /me/businesses: {}", e.getMessage());
+        }
+
+        return null;
+    }
+
+    /**
      * List all connected catalogs for a WABA.
      */
     public JsonNode listConnectedCatalogs(String wabaId, String accessToken) {

@@ -233,6 +233,12 @@ public class MetaOnboardingService {
             // 4. Resolve Authoritative WABA ID
             String wabaId = resolveWaba(businessId, tokenResult.getAccessToken(), debugResult);
 
+            // 4b. Resolve true Meta Business Portfolio ID (owner_business_info or /me/businesses)
+            String realBmId = resolveBusinessPortfolioId(wabaId, tokenResult.getAccessToken());
+            if (StringUtils.hasText(realBmId)) {
+                businessId = realBmId;
+            }
+
             // 5. Resolve Registered Phone Number Details
             PhoneDetailsResult phoneDetails = resolvePhoneNumber(wabaId, tokenResult.getAccessToken());
 
@@ -421,6 +427,42 @@ public class MetaOnboardingService {
         } catch (Exception ignored) {}
 
         throw new IllegalStateException("Could not resolve WABA ID for the authenticated WhatsApp Business Account");
+    }
+
+    /**
+     * Resolves the true Meta Business Portfolio ID from the WABA owner info or /me/businesses.
+     */
+    public String resolveBusinessPortfolioId(String wabaId, String accessToken) {
+        if (StringUtils.hasText(wabaId) && StringUtils.hasText(accessToken)) {
+            try {
+                String url = String.format("%s/%s?fields=owner_business_info&access_token=%s",
+                        getGraphApiUrl(), wabaId, accessToken);
+                ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);
+                JsonNode root = objectMapper.readTree(response.getBody());
+                if (root.has("owner_business_info") && root.path("owner_business_info").has("id")) {
+                    String bmId = root.path("owner_business_info").path("id").asText();
+                    log.info("[MetaOnboarding] Resolved Meta Business Portfolio ID {} for WABA {}", bmId, wabaId);
+                    return bmId;
+                }
+            } catch (Exception e) {
+                log.warn("[MetaOnboarding] Could not resolve owner_business_info for WABA {}: {}", wabaId, e.getMessage());
+            }
+        }
+
+        try {
+            String meUrl = String.format("%s/me/businesses?access_token=%s", getGraphApiUrl(), accessToken);
+            ResponseEntity<String> response = restTemplate.getForEntity(meUrl, String.class);
+            JsonNode data = objectMapper.readTree(response.getBody()).path("data");
+            if (data.isArray() && data.size() > 0) {
+                String bmId = data.get(0).path("id").asText();
+                log.info("[MetaOnboarding] Resolved Meta Business Portfolio ID {} from /me/businesses", bmId);
+                return bmId;
+            }
+        } catch (Exception e) {
+            log.warn("[MetaOnboarding] Could not resolve business from /me/businesses: {}", e.getMessage());
+        }
+
+        return null;
     }
 
     /**
