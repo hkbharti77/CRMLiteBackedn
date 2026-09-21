@@ -47,6 +47,14 @@ public class WebhookQueueProducer {
                 .ofMap(Collections.singletonMap("payload", payload));
         
         redisTemplate.opsForStream().add(record);
+
+        // Bounded retention policy: trim older acknowledged entries approximately
+        try {
+            redisTemplate.opsForStream().trim(streamName, maxLen);
+        } catch (Exception e) {
+            log.debug("Stream trimming skipped: {}", e.getMessage());
+        }
+
         log.info("📥 [Queue] Enqueued webhook payload. CorrelationId: {}, Stream: {}", correlationId, streamName);
         
         return correlationId;

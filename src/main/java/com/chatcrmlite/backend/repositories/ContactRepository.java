@@ -21,6 +21,16 @@ public interface ContactRepository extends JpaRepository<Contact, UUID>, JpaSpec
     Optional<Contact> findFirstByEmailAndTenant_Id(String email, UUID tenantId);
     boolean existsByWaIdAndTenant_Id(String waId, UUID tenantId);
     Optional<Contact> findByWaIdAndTenant_Id(String waId, UUID tenantId);
+
+    @Query("SELECT c FROM Contact c WHERE c.tenant.id = :tenantId AND c.waId = :waId")
+    Optional<Contact> findByTenantIdAndWaId(@Param("tenantId") UUID tenantId, @Param("waId") String waId);
+
+    @Query("SELECT c FROM Contact c WHERE c.tenant.id = :tenantId AND c.bsuid = :bsuid")
+    Optional<Contact> findByTenantIdAndBsuid(@Param("tenantId") UUID tenantId, @Param("bsuid") String bsuid);
+
+    @Query("SELECT c FROM Contact c WHERE c.tenant.id = :tenantId AND c.parentBsuid = :parentBsuid")
+    Optional<Contact> findByTenantIdAndParentBsuid(@Param("tenantId") UUID tenantId, @Param("parentBsuid") String parentBsuid);
+
     Optional<Contact> findByWaIdAndOwner(String waId, User owner);
     List<Contact> findAllByOwner(User owner);
     Optional<Contact> findByWaId(String waId);

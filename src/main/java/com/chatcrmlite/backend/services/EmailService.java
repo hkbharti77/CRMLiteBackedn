@@ -862,5 +862,29 @@ public class EmailService {
         
         sendTemplate(toEmail, "We received your inquiry", "lead-enquiry-received", ctx);
     }
+
+    /**
+     * Send urgent security alert to tenant admins/owners when Meta sends security events (e.g. PIN change/reset).
+     */
+    public void sendSecurityAlertEmail(String toEmail, String recipientName, String eventType, String metaUserId, String details) {
+        Context ctx = new Context();
+        ctx.setVariable("heading", "⚠️ Security Alert: WhatsApp 2FA Activity");
+        ctx.setVariable("greeting", "Hi " + (recipientName != null && !recipientName.isBlank() ? recipientName : "Admin") + ",");
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<p><strong>Security Event:</strong> ").append(eventType != null ? eventType : "UNKNOWN").append("</p>");
+        if (metaUserId != null && !metaUserId.isBlank()) {
+            sb.append("<p><strong>Meta User ID:</strong> ").append(metaUserId).append("</p>");
+        }
+        sb.append("<p>").append(details != null ? details : "A two-step verification activity occurred on your WhatsApp Business Account.").append("</p>");
+        sb.append("<p style='color:#dc2626;'><strong>If you or your team did not authorize this action, please access your Meta Business Manager security dashboard immediately.</strong></p>");
+
+        ctx.setVariable("messageHtml", sb.toString());
+        String ctaUrl = platformBrandUrl != null ? platformBrandUrl + "/settings?tab=whatsapp" : "https://gyanvaniai.online/settings?tab=whatsapp";
+        ctx.setVariable("buttonText", "Check WhatsApp Settings");
+        ctx.setVariable("buttonLink", ctaUrl);
+
+        sendTemplate(toEmail, "⚠️ Security Alert: WhatsApp 2FA " + eventType, "email-template", ctx);
+    }
 }
 

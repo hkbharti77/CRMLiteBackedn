@@ -14,6 +14,22 @@ public interface WhatsAppClient {
     String sendMessage(String to, String text, String accessToken, String phoneNumberId);
 
     /**
+     * Sends a message adhering to Meta WhatsApp Business API addressing:
+     * uses "to" if phoneNumber is present, or "recipient" if bsuid is present.
+     */
+    String sendMessageToRecipient(String phoneNumber, String bsuid, String text, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends a message supporting direct BSUID or Parent BSUID ("recipient") vs phone ("to").
+     */
+    String sendMessageToRecipient(String phoneNumber, String bsuid, String parentBsuid, String text, String accessToken, String phoneNumberId);
+
+    /**
+     * Sends a message resolved by WhatsAppRecipientResolver.
+     */
+    String sendMessageToRecipient(com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppRecipientResolver.ResolvedRecipient recipient, String text, String accessToken, String phoneNumberId);
+
+    /**
      * Sends an image message through the WhatsApp API.
      * @param to The recipient
      * @param imageUrl The URL of the image

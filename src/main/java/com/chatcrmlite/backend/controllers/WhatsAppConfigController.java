@@ -240,6 +240,16 @@ public class WhatsAppConfigController {
                 } catch (Exception ignored) {}
             }
         }
+        if (body.containsKey("botCooldownMinutes")) {
+            Object val = body.get("botCooldownMinutes");
+            if (val instanceof Number num) {
+                config.setBotCooldownMinutes(num.intValue());
+            } else if (val instanceof String str && !str.isBlank()) {
+                try {
+                    config.setBotCooldownMinutes(Integer.parseInt(str.trim()));
+                } catch (Exception ignored) {}
+            }
+        }
 
         WhatsAppConfig saved = whatsappConfigRepository.save(config);
 

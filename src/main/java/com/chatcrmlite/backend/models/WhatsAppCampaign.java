@@ -104,6 +104,18 @@ public class WhatsAppCampaign extends BaseTenantEntity {
     private LocalDateTime completedAt;
     private LocalDateTime createdAt;
 
+    @Column(name = "pause_reason")
+    private String pauseReason;
+
+    @Column(name = "paused_at")
+    private java.time.Instant pausedAt;
+
+    @Column(name = "paused_by", length = 50)
+    private String pausedBy;
+
+    @Column(name = "pause_source_event_id")
+    private String pauseSourceEventId;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)
     @JsonIgnoreProperties({"password", "tenant", "ipWhitelist", "googleAccessToken", "googleRefreshToken", "hibernateLazyInitializer", "handler"})

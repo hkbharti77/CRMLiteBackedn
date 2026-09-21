@@ -97,9 +97,22 @@ public class WhatsAppIngressService {
                 }
             }
 
+            // Extract BSUID / Parent BSUID if phone wa_id is absent or if from_user_id / user_id is provided
+            String bsuid = extractBsuid(contactsNode, messageNode);
+            String parentBsuid = extractParentBsuid(contactsNode, messageNode);
+            String rawWaId = context.getWaId();
+            if (rawWaId != null && (rawWaId.startsWith("US.") || !rawWaId.matches("^\\+?[0-9]{7,15}$"))) {
+                if (rawWaId.startsWith("US.ENT.") && (parentBsuid == null || parentBsuid.isBlank())) {
+                    parentBsuid = rawWaId;
+                } else if (bsuid == null || bsuid.isBlank()) {
+                    bsuid = rawWaId;
+                }
+            }
+            String effectivePhone = (rawWaId != null && rawWaId.matches("^\\+?[0-9]{7,15}$")) ? rawWaId : null;
+
             // Resolve contact & save message
-            String profileName = extractProfileName(contactsNode, context.getWaId());
-            Contact contact = resolveContact(context.getWaId(), profileName, owner, tenant);
+            String profileName = extractProfileName(contactsNode, effectivePhone, bsuid, parentBsuid);
+            Contact contact = resolveContact(effectivePhone, bsuid, parentBsuid, profileName, owner, tenant);
             
             String msgType = messageNode.path("type").asText("text");
             String text = "";
@@ -166,29 +179,26 @@ public class WhatsAppIngressService {
                 contact = resolveContact(customerWaId, null, owner, tenant);
                 saveOutgoingEchoMessage(contact, text, context.getTimestamp() / 1000, context.getMessageId(), owner, context.getTenantId());
 
-                // Auto-pause AI bot and start 15-minute cooldown timer
-                contact.setBotPaused(true);
-                contact.setLastAgentReplyAt(LocalDateTime.now());
+                // Auto-pause AI bot and start configurable cooldown timer
+                int cooldownMinutes = (config != null && config.getBotCooldownMinutes() != null && config.getBotCooldownMinutes() > 0)
+                        ? config.getBotCooldownMinutes() : 15;
+                contact.setBotPausedUntil(Instant.now().plus(cooldownMinutes, java.time.temporal.ChronoUnit.MINUTES));
+                contact.setLastAgentReplyAt(Instant.now());
+                contact.setBotPauseReason("HUMAN_AGENT_MESSAGE");
                 contactRepository.save(contact);
 
                 context.getMetadata().put("isEcho", true);
                 context.getMetadata().put("botPaused", true);
-                log.info("📱 [SMB-Echo] Synced agent reply from mobile WhatsApp to CRM for customer {}. 15-min bot cooldown started.", customerWaId);
+                log.info("📱 [SMB-Echo] Synced agent reply from mobile WhatsApp to CRM for customer {}. {}-min bot cooldown started.", customerWaId, cooldownMinutes);
                 return;
             }
 
-            // Check 15-minute inactivity cooldown for bot auto-unmute
-            if (contact.isBotPaused() && contact.getLastAgentReplyAt() != null) {
-                LocalDateTime now = LocalDateTime.now();
-                long minutesElapsed = java.time.Duration.between(contact.getLastAgentReplyAt(), now).toMinutes();
-                if (minutesElapsed >= 15) {
-                    contact.setBotPaused(false);
-                    contact.setLastAgentReplyAt(null);
-                    contactRepository.save(contact);
-                    log.info("⏰ [Bot-Cooldown] 15 minutes passed since last agent reply (elapsed: {}m). Auto-unmuting bot for waId={}", minutesElapsed, contact.getWaId());
-                } else {
-                    log.info("⏸️ [Bot-Cooldown] Customer waId={} within 15-min human cooldown (elapsed: {}m). Bot remains paused for manual conversation.", contact.getWaId(), minutesElapsed);
-                }
+            // Check bot pause state
+            if (contact.isBotPaused()) {
+                long minutesRemaining = contact.getBotPausedUntil() != null 
+                        ? Math.max(0, java.time.Duration.between(Instant.now(), contact.getBotPausedUntil()).toMinutes())
+                        : 0;
+                log.info("⏸️ [Bot-Cooldown] Customer waId={} within human cooldown (~{}m remaining). Bot remains paused for manual conversation.", contact.getWaId(), minutesRemaining);
             }
 
             saveIncomingMessage(contact, text, context.getTimestamp() / 1000, context.getMessageId(), owner, context.getTenantId(), incomingMessageBuilder);
@@ -435,10 +445,53 @@ public class WhatsAppIngressService {
         return ".bin";
     }
 
-    private String extractProfileName(JsonNode contactsNode, String waId) {
+    private String extractBsuid(JsonNode contactsNode, JsonNode messageNode) {
+        if (messageNode != null) {
+            if (messageNode.has("from_user_id") && !messageNode.path("from_user_id").asText().isBlank()) {
+                return messageNode.path("from_user_id").asText().trim();
+            }
+            if (messageNode.has("user_id") && !messageNode.path("user_id").asText().isBlank()) {
+                return messageNode.path("user_id").asText().trim();
+            }
+        }
         if (contactsNode != null && contactsNode.isArray()) {
             for (JsonNode c : contactsNode) {
-                if (waId.equals(c.path("wa_id").asText())) {
+                if (c.has("user_id") && !c.path("user_id").asText().isBlank()) {
+                    return c.path("user_id").asText().trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String extractParentBsuid(JsonNode contactsNode, JsonNode messageNode) {
+        if (messageNode != null) {
+            if (messageNode.has("from_parent_user_id") && !messageNode.path("from_parent_user_id").asText().isBlank()) {
+                return messageNode.path("from_parent_user_id").asText().trim();
+            }
+            if (messageNode.has("parent_user_id") && !messageNode.path("parent_user_id").asText().isBlank()) {
+                return messageNode.path("parent_user_id").asText().trim();
+            }
+        }
+        if (contactsNode != null && contactsNode.isArray()) {
+            for (JsonNode c : contactsNode) {
+                if (c.has("parent_user_id") && !c.path("parent_user_id").asText().isBlank()) {
+                    return c.path("parent_user_id").asText().trim();
+                }
+            }
+        }
+        return null;
+    }
+
+    private String extractProfileName(JsonNode contactsNode, String waId, String bsuid, String parentBsuid) {
+        if (contactsNode != null && contactsNode.isArray()) {
+            for (JsonNode c : contactsNode) {
+                String cWaId = c.path("wa_id").asText(null);
+                String cUserId = c.path("user_id").asText(null);
+                String cParentUserId = c.path("parent_user_id").asText(null);
+                if ((waId != null && waId.equals(cWaId))
+                        || (bsuid != null && bsuid.equals(cUserId))
+                        || (parentBsuid != null && parentBsuid.equals(cParentUserId))) {
                     String name = c.path("profile").path("name").asText();
                     if (name != null && !name.isBlank()) return name;
                 }
@@ -448,23 +501,68 @@ public class WhatsAppIngressService {
     }
 
     private Contact resolveContact(String waId, String profileName, User owner, Tenant tenant) {
+        return resolveContact(waId, null, null, profileName, owner, tenant);
+    }
+
+    private Contact resolveContact(String waId, String bsuid, String profileName, User owner, Tenant tenant) {
+        return resolveContact(waId, bsuid, null, profileName, owner, tenant);
+    }
+
+    private Contact resolveContact(String waId, String bsuid, String parentBsuid, String profileName, User owner, Tenant tenant) {
         UUID tenantId = (tenant != null) ? tenant.getId() : ((owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : null);
-        Optional<Contact> existing = (tenantId != null) 
-                ? contactRepository.findByWaIdAndTenant_Id(waId, tenantId)
-                : contactRepository.findByWaId(waId);
+        
+        Optional<Contact> existing = Optional.empty();
+
+        // 1. Priority 1: Check by direct BSUID if present (Meta 2026 user identity model)
+        if (bsuid != null && !bsuid.isBlank() && tenantId != null) {
+            existing = contactRepository.findByTenantIdAndBsuid(tenantId, bsuid.trim());
+        }
+
+        // 2. Priority 2: Check by Parent BSUID if present
+        if (existing.isEmpty() && parentBsuid != null && !parentBsuid.isBlank() && tenantId != null) {
+            existing = contactRepository.findByTenantIdAndParentBsuid(tenantId, parentBsuid.trim());
+        }
+
+        // 3. Priority 3: Check by waId / phone if present
+        if (existing.isEmpty() && waId != null && !waId.isBlank()) {
+            existing = (tenantId != null) 
+                    ? contactRepository.findByWaIdAndTenant_Id(waId.trim(), tenantId)
+                    : contactRepository.findByWaId(waId.trim());
+        }
+
         if (existing.isPresent()) {
             Contact c = existing.get();
+            boolean updated = false;
+            // Link BSUID if contact only had waId before
+            if ((c.getBsuid() == null || c.getBsuid().isBlank()) && bsuid != null && !bsuid.isBlank()) {
+                c.setBsuid(bsuid.trim());
+                updated = true;
+            }
+            // Link Parent BSUID if present
+            if ((c.getParentBsuid() == null || c.getParentBsuid().isBlank()) && parentBsuid != null && !parentBsuid.isBlank()) {
+                c.setParentBsuid(parentBsuid.trim());
+                updated = true;
+            }
+            // Link waId if contact was BSUID-only before
+            if ((c.getWaId() == null || c.getWaId().isBlank()) && waId != null && !waId.isBlank()) {
+                c.setWaId(waId.trim());
+                updated = true;
+            }
             if (profileName != null && !profileName.isBlank() && 
                 (c.getName() == null || c.getName().isBlank() || 
                  c.getName().startsWith("WhatsApp User") || 
                  c.getName().startsWith("Test User") || 
                  !profileName.equals(c.getName()))) {
-                log.info("[Ingress] Auto-updating contact name from '{}' to '{}' for waId={}", c.getName(), profileName, waId);
+                log.info("[Ingress] Auto-updating contact name from '{}' to '{}' for contactId={}", c.getName(), profileName, c.getId());
                 c.setName(profileName);
+                updated = true;
+            }
+            if (updated) {
                 contactRepository.save(c);
             }
             return c;
         }
+
         User assignedOwner = owner;
         if (agentAssignmentService != null && owner != null && owner.getTenant() != null) {
             User rrAgent = agentAssignmentService.getNextRoundRobinAgent(owner.getTenant());
@@ -473,8 +571,12 @@ public class WhatsAppIngressService {
             }
         }
         Contact newContact = Contact.builder()
-                .waId(waId)
-                .name(profileName != null && !profileName.isBlank() ? profileName : "WhatsApp User " + waId)
+                .waId(waId != null && !waId.isBlank() ? waId.trim() : null)
+                .bsuid(bsuid != null && !bsuid.isBlank() ? bsuid.trim() : null)
+                .parentBsuid(parentBsuid != null && !parentBsuid.isBlank() ? parentBsuid.trim() : null)
+                .name(profileName != null && !profileName.isBlank() 
+                        ? profileName 
+                        : "WhatsApp User " + (bsuid != null ? bsuid : (parentBsuid != null ? parentBsuid : waId)))
                 .source("WhatsApp")
                 .owner(assignedOwner)
                 .build();

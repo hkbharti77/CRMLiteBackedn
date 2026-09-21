@@ -22,6 +22,9 @@ public interface WhatsAppFlowRepository extends JpaRepository<WhatsAppFlow, UUID
     @Query("SELECT f FROM WhatsAppFlow f LEFT JOIN FETCH f.publishedRevision WHERE f.id = :id AND f.tenant.id = :tenantId")
     Optional<WhatsAppFlow> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
+    @Query("SELECT f FROM WhatsAppFlow f LEFT JOIN FETCH f.publishedRevision WHERE (f.metaFlowId = :metaFlowId OR f.activeMetaFlowId = :metaFlowId) AND f.tenant.id = :tenantId")
+    Optional<WhatsAppFlow> findByAnyMetaFlowIdAndTenantId(@Param("metaFlowId") String metaFlowId, @Param("tenantId") UUID tenantId);
+
     @Query("SELECT f FROM WhatsAppFlow f LEFT JOIN FETCH f.publishedRevision WHERE f.metaFlowId = :metaFlowId AND f.tenant.id = :tenantId")
     Optional<WhatsAppFlow> findByMetaFlowIdAndTenantId(@Param("metaFlowId") String metaFlowId, @Param("tenantId") UUID tenantId);
 

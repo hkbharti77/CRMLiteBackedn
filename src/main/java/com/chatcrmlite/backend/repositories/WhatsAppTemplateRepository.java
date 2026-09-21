@@ -26,5 +26,11 @@ public interface WhatsAppTemplateRepository extends JpaRepository<WhatsAppTempla
 
     Optional<WhatsAppTemplate> findFirstByMetaTemplateId(String metaTemplateId);
 
+    @Query("SELECT t FROM WhatsAppTemplate t WHERE t.metaTemplateId = :metaTemplateId AND t.owner.tenant.id = :tenantId")
+    Optional<WhatsAppTemplate> findByMetaTemplateIdAndTenantId(@Param("metaTemplateId") String metaTemplateId, @Param("tenantId") UUID tenantId);
+
+    @Query("SELECT t FROM WhatsAppTemplate t WHERE t.name = :name AND t.language = :language AND t.owner.tenant.id = :tenantId")
+    Optional<WhatsAppTemplate> findByNameAndLanguageAndTenantId(@Param("name") String name, @Param("language") String language, @Param("tenantId") UUID tenantId);
+
     void deleteByNameAndOwner(String name, User owner);
 }

@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.services.payments;
 import com.chatcrmlite.backend.dto.payments.NormalizedPaymentWebhookEvent;
 import com.chatcrmlite.backend.dto.payments.PaymentStatusResult;
 import com.chatcrmlite.backend.models.enums.PaymentTransactionStatus;
+import com.chatcrmlite.backend.models.enums.WhatsAppOrderPaymentStatus;
 import com.chatcrmlite.backend.models.payments.PaymentAuditLog;
 import com.chatcrmlite.backend.models.payments.PaymentTransaction;
 import com.chatcrmlite.backend.repositories.payments.PaymentAuditLogRepository;
@@ -47,9 +48,27 @@ public class PaymentReconciliationWorker {
         for (PaymentTransaction tx : pendingTxList) {
             try {
                 reconcileSingleTransaction(tx);
+            } catch (IllegalStateException e) {
+                handleInactiveOrMissingConfig(tx, e.getMessage());
             } catch (Exception e) {
                 log.error("Failed to reconcile transaction {}: {}", tx.getId(), e.getMessage());
             }
+        }
+    }
+
+    private void handleInactiveOrMissingConfig(PaymentTransaction tx, String message) {
+        Instant cutoff24h = Instant.now().minus(24, ChronoUnit.HOURS);
+        if (tx.getCreatedAt() != null && tx.getCreatedAt().isBefore(cutoff24h)) {
+            tx.setStatus(PaymentTransactionStatus.FAILED);
+            tx.setFailureReason("Reconciliation expired: " + message);
+            if (tx.getOrder() != null && tx.getOrder().getPaymentStatus() == WhatsAppOrderPaymentStatus.CREATED) {
+                tx.getOrder().setPaymentStatus(WhatsAppOrderPaymentStatus.FAILED);
+            }
+            transactionRepository.save(tx);
+            log.warn("Payment transaction {} marked FAILED after 24h expiration: {}", tx.getId(), message);
+        } else {
+            log.warn("Payment provider configuration not active for transaction {} (tenant {}): {}",
+                    tx.getId(), tx.getTenantId(), message);
         }
     }
 

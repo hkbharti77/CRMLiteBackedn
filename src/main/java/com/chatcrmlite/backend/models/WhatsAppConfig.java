@@ -96,6 +96,59 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "account_status")
     private String accountStatus = "ACTIVE";
 
+    @Column(name = "account_status_reason", length = 500)
+    private String accountStatusReason;
+
+    @Column(name = "account_status_updated_at")
+    private java.time.Instant accountStatusUpdatedAt;
+
+    @Column(name = "last_restriction_event_at")
+    private java.time.Instant lastRestrictionEventAt;
+
+    @Column(name = "last_capability_event_at")
+    private java.time.Instant lastCapabilityEventAt;
+
+    @Column(name = "last_lifecycle_event_at")
+    private java.time.Instant lastLifecycleEventAt;
+
+    @Column(name = "messaging_limit_value")
+    private Long messagingLimitValue;
+
+    @Column(name = "messaging_limit_type", length = 50)
+    private String messagingLimitType;
+
+    @Column(name = "messaging_limit_raw", length = 50)
+    private String messagingLimitRaw;
+
+    @Column(name = "max_phones_per_business_portfolio")
+    private Integer maxPhonesPerBusinessPortfolio;
+
+    @Column(name = "max_phones_per_waba")
+    private Integer maxPhonesPerWaba;
+
+    @Column(name = "capability_updated_at")
+    private java.time.Instant capabilityUpdatedAt;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "restriction_json", columnDefinition = "jsonb")
+    private String restrictionJson;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "capability_json", columnDefinition = "jsonb")
+    private String capabilityJson;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "violation_json", columnDefinition = "jsonb")
+    private String violationJson;
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "ban_info_json", columnDefinition = "jsonb")
+    private String banInfoJson;
+
+    /** Configurable duration (in minutes) that AI bot remains paused after human agent replies via mobile app */
+    @Column(name = "bot_cooldown_minutes", nullable = false)
+    private Integer botCooldownMinutes = 15;
+
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "interactive_menu_json", columnDefinition = "jsonb")
     private String interactiveMenuJson;
@@ -333,6 +386,69 @@ public class WhatsAppConfig implements Serializable {
     public void setAppointmentButtonLabel(String appointmentButtonLabel) { this.appointmentButtonLabel = appointmentButtonLabel; }
     public String getBookingButtonLabel() { return bookingButtonLabel; }
     public void setBookingButtonLabel(String bookingButtonLabel) { this.bookingButtonLabel = bookingButtonLabel; }
+    public Integer getBotCooldownMinutes() { return botCooldownMinutes != null && botCooldownMinutes > 0 ? botCooldownMinutes : 15; }
+    public void setBotCooldownMinutes(Integer botCooldownMinutes) { this.botCooldownMinutes = botCooldownMinutes != null && botCooldownMinutes > 0 ? botCooldownMinutes : 15; }
+
+    public String getAccountStatusReason() { return accountStatusReason; }
+    public void setAccountStatusReason(String accountStatusReason) { this.accountStatusReason = accountStatusReason; }
+    public java.time.Instant getAccountStatusUpdatedAt() { return accountStatusUpdatedAt; }
+    public void setAccountStatusUpdatedAt(java.time.Instant accountStatusUpdatedAt) { this.accountStatusUpdatedAt = accountStatusUpdatedAt; }
+    public java.time.Instant getLastRestrictionEventAt() { return lastRestrictionEventAt; }
+    public void setLastRestrictionEventAt(java.time.Instant lastRestrictionEventAt) { this.lastRestrictionEventAt = lastRestrictionEventAt; }
+    public java.time.Instant getLastCapabilityEventAt() { return lastCapabilityEventAt; }
+    public void setLastCapabilityEventAt(java.time.Instant lastCapabilityEventAt) { this.lastCapabilityEventAt = lastCapabilityEventAt; }
+    public java.time.Instant getLastLifecycleEventAt() { return lastLifecycleEventAt; }
+    public void setLastLifecycleEventAt(java.time.Instant lastLifecycleEventAt) { this.lastLifecycleEventAt = lastLifecycleEventAt; }
+    public Long getMessagingLimitValue() { return messagingLimitValue; }
+    public void setMessagingLimitValue(Long messagingLimitValue) { this.messagingLimitValue = messagingLimitValue; }
+    public String getMessagingLimitType() { return messagingLimitType; }
+    public void setMessagingLimitType(String messagingLimitType) { this.messagingLimitType = messagingLimitType; }
+    public String getMessagingLimitRaw() { return messagingLimitRaw; }
+    public void setMessagingLimitRaw(String messagingLimitRaw) { this.messagingLimitRaw = messagingLimitRaw; }
+    public Integer getMaxPhonesPerBusinessPortfolio() { return maxPhonesPerBusinessPortfolio; }
+    public void setMaxPhonesPerBusinessPortfolio(Integer maxPhonesPerBusinessPortfolio) { this.maxPhonesPerBusinessPortfolio = maxPhonesPerBusinessPortfolio; }
+    public Integer getMaxPhonesPerWaba() { return maxPhonesPerWaba; }
+    public void setMaxPhonesPerWaba(Integer maxPhonesPerWaba) { this.maxPhonesPerWaba = maxPhonesPerWaba; }
+    public java.time.Instant getCapabilityUpdatedAt() { return capabilityUpdatedAt; }
+    public void setCapabilityUpdatedAt(java.time.Instant capabilityUpdatedAt) { this.capabilityUpdatedAt = capabilityUpdatedAt; }
+    public String getRestrictionJson() { return restrictionJson; }
+    public void setRestrictionJson(String restrictionJson) { this.restrictionJson = restrictionJson; }
+    public String getCapabilityJson() { return capabilityJson; }
+    public void setCapabilityJson(String capabilityJson) { this.capabilityJson = capabilityJson; }
+    public String getViolationJson() { return violationJson; }
+    public void setViolationJson(String violationJson) { this.violationJson = violationJson; }
+    public String getBanInfoJson() { return banInfoJson; }
+    public void setBanInfoJson(String banInfoJson) { this.banInfoJson = banInfoJson; }
+
+    public boolean hasActiveRestriction(String restrictionType) {
+        if (restrictionJson == null || restrictionJson.isBlank() || restrictionType == null) return false;
+        try {
+            return restrictionJson.contains(restrictionType) && restrictionJson.contains("\"active\":true");
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    public boolean canSendCampaigns() {
+        if ("DISABLED".equalsIgnoreCase(accountStatus) || "BANNED".equalsIgnoreCase(accountStatus)) return false;
+        return !hasActiveRestriction("RESTRICTED_BIZ_INITIATED_MESSAGING");
+    }
+
+    public boolean canReplyToCustomerInitiated() {
+        if ("DISABLED".equalsIgnoreCase(accountStatus) || "BANNED".equalsIgnoreCase(accountStatus)) return false;
+        return !hasActiveRestriction("RESTRICTED_CUSTOMER_INITIATED_MESSAGING");
+    }
+
+    public boolean canSendUtilityTemplates() {
+        if ("DISABLED".equalsIgnoreCase(accountStatus) || "BANNED".equalsIgnoreCase(accountStatus)) return false;
+        return !hasActiveRestriction("RESTRICTED_UTILITY_TEMPLATES")
+                && !hasActiveRestriction("RESTRICTED_DIRECT_SEND_UTILITY_TEMPLATES");
+    }
+
+    public boolean canAddPhoneNumber() {
+        if ("DISABLED".equalsIgnoreCase(accountStatus) || "BANNED".equalsIgnoreCase(accountStatus)) return false;
+        return !hasActiveRestriction("RESTRICTED_ADD_PHONE_NUMBER_ACTION");
+    }
 
     public static WhatsAppConfigBuilder builder() { return new WhatsAppConfigBuilder(); }
 

@@ -76,6 +76,14 @@ public class WhatsAppFlow extends BaseTenantEntity {
     @Column(name = "last_sync_error", length = 2000)
     private String lastSyncError;
 
+    /** Meta-reported operational state: DRAFT, PUBLISHED, DEPRECATED, BLOCKED, THROTTLED */
+    @Column(name = "meta_status", length = 50)
+    private String metaStatus;
+
+    /** Reason given by Meta during FLOW_STATUS_CHANGE (e.g. policy violation) */
+    @Column(name = "last_meta_event_reason", length = 1000)
+    private String lastMetaEventReason;
+
     @Column(name = "published_at")
     private LocalDateTime publishedAt;
 

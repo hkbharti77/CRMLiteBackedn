@@ -124,8 +124,20 @@ public class RedisStreamConfig {
                         .executor(taskExecutor)
                         .errorHandler(t -> {
                             String msg = t != null ? t.getMessage() : "";
+                            Throwable cause = t != null ? t.getCause() : null;
+                            String causeMsg = cause != null ? cause.getMessage() : "";
+                            boolean isClosed = (msg != null && (msg.contains("Connection closed") || msg.contains("Connection reset") || msg.contains("ClosedChannelException")))
+                                    || (causeMsg != null && (causeMsg.contains("Connection closed") || causeMsg.contains("Connection reset") || causeMsg.contains("ClosedChannelException")));
+
                             if (msg != null && (msg.contains("Redisson is shutdown") || msg.contains("RedissonShutdownException"))) {
                                 log.debug("Redis stream worker [{}] stopped gracefully (Redisson shutdown).", consumerName);
+                            } else if (isClosed) {
+                                log.warn("🔌 [RedisStreamWorker-{}] Redis connection closed on stream '{}'. Backing off 2s for reconnection...", consumerName, stream);
+                                try {
+                                    Thread.sleep(2000);
+                                } catch (InterruptedException ignored) {
+                                    Thread.currentThread().interrupt();
+                                }
                             } else if (t instanceof NullPointerException && msg != null && msg.contains("\"records\" is null")) {
                                 log.debug("Redis stream worker [{}] encountered null records (often due to read timeout). Retrying...", consumerName);
                             } else if (t instanceof org.springframework.dao.QueryTimeoutException || (msg != null && msg.contains("Redis command timed out"))) {

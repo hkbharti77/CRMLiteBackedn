@@ -122,6 +122,97 @@ public class IdempotencyService {
         }
     }
 
+    private static final String REDIS_LOCK_PREFIX = "webhook:lock:";
+    private static final String REDIS_PROCESSED_PREFIX = "webhook:processed:";
+
+    /**
+     * Checks if a WAMID has already been successfully committed to the database.
+     */
+    public boolean isProcessed(String waMessageId, UUID tenantId) {
+        if (waMessageId == null || waMessageId.isBlank()) return false;
+        String processedKey = REDIS_PROCESSED_PREFIX + tenantId + ":" + waMessageId;
+        Boolean exists = redisTemplate.hasKey(processedKey);
+        if (Boolean.TRUE.equals(exists)) {
+            return true;
+        }
+        boolean inDb = processedMessageRepository.existsByMessageId(waMessageId);
+        if (inDb) {
+            redisTemplate.opsForValue().set(processedKey, "PROCESSED", Duration.ofHours(72));
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Acquires a short-lived processing lock (2 minutes TTL) using atomic SetNX.
+     * Prevents concurrent worker races without causing permanent message loss if a worker crashes.
+     */
+    public boolean acquireProcessingLock(String waMessageId, UUID tenantId, String workerId) {
+        if (waMessageId == null || waMessageId.isBlank()) return true;
+        String lockKey = REDIS_LOCK_PREFIX + tenantId + ":" + waMessageId;
+        try {
+            Boolean locked = redisTemplate.opsForValue().setIfAbsent(lockKey, workerId != null ? workerId : "LOCKED", Duration.ofMinutes(2));
+            return Boolean.TRUE.equals(locked);
+        } catch (Exception e) {
+            log.warn("Redis error while acquiring processing lock for messageId={}: {}", waMessageId, e.getMessage());
+            return true; // fail-open to allow DB unique constraint to govern
+        }
+    }
+
+    /**
+     * Marks the message as successfully processed:
+     * 1. Inserts into ProcessedMessage DB table (idempotent unique constraint authority)
+     * 2. Sets long-lived Redis key (72 hours TTL)
+     * 3. Releases the short-lived processing lock
+     */
+    public void markAsProcessedSuccess(String waMessageId, UUID tenantId) {
+        if (waMessageId == null || waMessageId.isBlank()) return;
+        String lockKey = REDIS_LOCK_PREFIX + tenantId + ":" + waMessageId;
+        String processedKey = REDIS_PROCESSED_PREFIX + tenantId + ":" + waMessageId;
+
+        try {
+            // DB persistence
+            transactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
+            transactionTemplate.executeWithoutResult(status -> {
+                UUID userId = userRepository.findFirstUserIdByTenantId(tenantId)
+                        .orElse(null);
+                if (userId != null) {
+                    User owner = userRepository.getReferenceById(userId);
+                    ProcessedMessage record = ProcessedMessage.builder()
+                            .messageId(waMessageId)
+                            .owner(owner)
+                            .build();
+                    processedMessageRepository.saveAndFlush(record);
+                }
+            });
+        } catch (DataIntegrityViolationException e) {
+            // Expected on duplicate race
+            log.debug("ProcessedMessage DB entry already exists for messageId={}", waMessageId);
+        } catch (Exception e) {
+            log.warn("Error recording ProcessedMessage DB row for messageId={}: {}", waMessageId, e.getMessage());
+        }
+
+        try {
+            redisTemplate.opsForValue().set(processedKey, "PROCESSED", Duration.ofHours(72));
+            redisTemplate.delete(lockKey);
+        } catch (Exception e) {
+            log.warn("Redis error updating processed status for messageId={}: {}", waMessageId, e.getMessage());
+        }
+    }
+
+    /**
+     * Releases short-lived lock if processing failed before commit.
+     */
+    public void releaseProcessingLock(String waMessageId, UUID tenantId) {
+        if (waMessageId == null || waMessageId.isBlank()) return;
+        String lockKey = REDIS_LOCK_PREFIX + tenantId + ":" + waMessageId;
+        try {
+            redisTemplate.delete(lockKey);
+        } catch (Exception e) {
+            log.warn("Redis error releasing lock for messageId={}: {}", waMessageId, e.getMessage());
+        }
+    }
+
     /**
      * Legacy method for backward compatibility.
      */

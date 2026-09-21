@@ -126,9 +126,9 @@ class MetaOnboardingServiceTest {
         when(restTemplate.getForEntity(contains("/debug_token"), eq(String.class)))
                 .thenReturn(new ResponseEntity<>(debugTokenJson, HttpStatus.OK));
 
-        // 3. Mock owned WABA lookup
+        // 3. Mock owned WABA lookup (lenient since direct scope resolution is prioritized)
         String wabaAccountsJson = "{\"data\":[{\"id\":\"waba_456\",\"name\":\"Test WABA\"}]}";
-        when(restTemplate.getForEntity(contains("/owned_whatsapp_business_accounts"), eq(String.class)))
+        lenient().when(restTemplate.getForEntity(contains("/owned_whatsapp_business_accounts"), eq(String.class)))
                 .thenReturn(new ResponseEntity<>(wabaAccountsJson, HttpStatus.OK));
 
         // 4. Mock phone numbers lookup
@@ -173,7 +173,7 @@ class MetaOnboardingServiceTest {
                 .thenReturn(new ResponseEntity<>(debugTokenJson, HttpStatus.OK));
 
         String wabaAccountsJson = "{\"data\":[{\"id\":\"waba_456\",\"name\":\"Test WABA\"}]}";
-        when(restTemplate.getForEntity(contains("/owned_whatsapp_business_accounts"), eq(String.class)))
+        lenient().when(restTemplate.getForEntity(contains("/owned_whatsapp_business_accounts"), eq(String.class)))
                 .thenReturn(new ResponseEntity<>(wabaAccountsJson, HttpStatus.OK));
 
         String phoneNumbersJson = "{\"data\":[{\"id\":\"phone_789\",\"display_phone_number\":\"+1 555-0199\",\"verified_name\":\"GyanVaniAi\",\"quality_rating\":\"GREEN\"}]}";
@@ -194,5 +194,22 @@ class MetaOnboardingServiceTest {
         assertEquals("ACTIVE", result.get("connectionStatus"));
         assertEquals("FAILED", result.get("webhookSubscriptionStatus"));
         assertNotNull(result.get("webhookSubscriptionError"));
+    }
+
+    @Test
+    @DisplayName("Should resolve WABA via owned_whatsapp_business_accounts fallback when debug token has no granular scope")
+    void testResolveWabaFallbackToOwnedWhenScopeMissing() {
+        MetaOnboardingService.TokenDebugResult debugWithoutWaba = MetaOnboardingService.TokenDebugResult.builder()
+                .isValid(true)
+                .businessId("biz_999")
+                .wabaId(null)
+                .build();
+
+        String wabaAccountsJson = "{\"data\":[{\"id\":\"waba_fallback_888\",\"name\":\"Fallback WABA\"}]}";
+        when(restTemplate.getForEntity(contains("/owned_whatsapp_business_accounts"), eq(String.class)))
+                .thenReturn(new ResponseEntity<>(wabaAccountsJson, HttpStatus.OK));
+
+        String resolvedWaba = metaOnboardingService.resolveWaba("biz_999", "mock_token", debugWithoutWaba);
+        assertEquals("waba_fallback_888", resolvedWaba);
     }
 }

@@ -18,7 +18,6 @@ public class Contact extends BaseTenantEntity {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false)
     private String waId; 
 
     private String displayId;
@@ -43,8 +42,11 @@ public class Contact extends BaseTenantEntity {
     @com.fasterxml.jackson.annotation.JsonIgnore
     private User owner;
 
-    @Column(name = "bot_paused", nullable = false)
-    private boolean botPaused = false;
+    @Column(name = "bot_paused_until")
+    private java.time.Instant botPausedUntil;
+
+    @Column(name = "bot_pause_reason", length = 50)
+    private String botPauseReason;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "support_state", nullable = false, length = 20, columnDefinition = "VARCHAR(20) DEFAULT 'IDLE'")
@@ -66,7 +68,25 @@ public class Contact extends BaseTenantEntity {
     private java.time.LocalDateTime escalatedAt;
 
     @Column(name = "last_agent_reply_at")
-    private java.time.LocalDateTime lastAgentReplyAt;
+    private java.time.Instant lastAgentReplyAt;
+
+    @Column(name = "bsuid", length = 128)
+    private String bsuid;
+
+    @Column(name = "parent_bsuid", length = 128)
+    private String parentBsuid;
+
+    @Column(name = "marketing_opted_out", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean marketingOptedOut = false;
+
+    @Column(name = "marketing_opted_out_at")
+    private java.time.Instant marketingOptedOutAt;
+
+    @Column(name = "marketing_opt_out_source", length = 100)
+    private String marketingOptOutSource;
+
+    @Column(name = "marketing_preference_at")
+    private java.time.Instant marketingPreferenceAt;
 
     public Contact() {}
 
@@ -79,7 +99,10 @@ public class Contact extends BaseTenantEntity {
         this.tags = (tags != null) ? tags : new ArrayList<>();
         this.source = source;
         this.owner = owner;
-        this.botPaused = botPaused;
+        if (botPaused) {
+            this.botPausedUntil = java.time.Instant.now().plus(15, java.time.temporal.ChronoUnit.MINUTES);
+            this.botPauseReason = "MANUAL_TOGGLE";
+        }
     }
 
     public UUID getId() { return id; }
@@ -100,8 +123,31 @@ public class Contact extends BaseTenantEntity {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public User getOwner() { return owner; }
     public void setOwner(User owner) { this.owner = owner; }
-    public boolean isBotPaused() { return botPaused; }
-    public void setBotPaused(boolean botPaused) { this.botPaused = botPaused; }
+
+    public boolean isBotPaused() {
+        return botPausedUntil != null && java.time.Instant.now().isBefore(botPausedUntil);
+    }
+
+    public void setBotPaused(boolean paused) {
+        setBotPaused(paused, 15);
+    }
+
+    public void setBotPaused(boolean paused, int minutes) {
+        if (paused) {
+            int duration = minutes > 0 ? minutes : 15;
+            this.botPausedUntil = java.time.Instant.now().plus(duration, java.time.temporal.ChronoUnit.MINUTES);
+            this.botPauseReason = "MANUAL_TOGGLE";
+        } else {
+            this.botPausedUntil = null;
+            this.botPauseReason = null;
+        }
+    }
+
+    public java.time.Instant getBotPausedUntil() { return botPausedUntil; }
+    public void setBotPausedUntil(java.time.Instant botPausedUntil) { this.botPausedUntil = botPausedUntil; }
+
+    public String getBotPauseReason() { return botPauseReason; }
+    public void setBotPauseReason(String botPauseReason) { this.botPauseReason = botPauseReason; }
 
     public com.chatcrmlite.backend.models.livechat.SupportState getSupportState() { return supportState != null ? supportState : com.chatcrmlite.backend.models.livechat.SupportState.IDLE; }
     public void setSupportState(com.chatcrmlite.backend.models.livechat.SupportState supportState) { this.supportState = supportState; }
@@ -128,14 +174,28 @@ public class Contact extends BaseTenantEntity {
     public java.time.LocalDateTime getEscalatedAt() { return escalatedAt; }
     public void setEscalatedAt(java.time.LocalDateTime escalatedAt) { this.escalatedAt = escalatedAt; }
 
-    public java.time.LocalDateTime getLastAgentReplyAt() { return lastAgentReplyAt; }
-    public void setLastAgentReplyAt(java.time.LocalDateTime lastAgentReplyAt) { this.lastAgentReplyAt = lastAgentReplyAt; }
+    public java.time.Instant getLastAgentReplyAt() { return lastAgentReplyAt; }
+    public void setLastAgentReplyAt(java.time.Instant lastAgentReplyAt) { this.lastAgentReplyAt = lastAgentReplyAt; }
 
     public String getPhone() { return waId; }
-    public Boolean getOptedOut() { return false; }
+    public Boolean getOptedOut() { return marketingOptedOut; }
     public Boolean getBlacklisted() { return false; }
     public java.util.Map<String, Object> getCustomFields() { return java.util.Collections.emptyMap(); }
     public java.time.LocalDateTime getLastInteractiveAt() { return null; }
+
+    public String getBsuid() { return bsuid; }
+    public void setBsuid(String bsuid) { this.bsuid = bsuid; }
+    public String getParentBsuid() { return parentBsuid; }
+    public void setParentBsuid(String parentBsuid) { this.parentBsuid = parentBsuid; }
+    public boolean isMarketingOptedOut() { return marketingOptedOut; }
+    public Boolean getMarketingOptedOut() { return marketingOptedOut; }
+    public void setMarketingOptedOut(boolean marketingOptedOut) { this.marketingOptedOut = marketingOptedOut; }
+    public java.time.Instant getMarketingOptedOutAt() { return marketingOptedOutAt; }
+    public void setMarketingOptedOutAt(java.time.Instant marketingOptedOutAt) { this.marketingOptedOutAt = marketingOptedOutAt; }
+    public String getMarketingOptOutSource() { return marketingOptOutSource; }
+    public void setMarketingOptOutSource(String marketingOptOutSource) { this.marketingOptOutSource = marketingOptOutSource; }
+    public java.time.Instant getMarketingPreferenceAt() { return marketingPreferenceAt; }
+    public void setMarketingPreferenceAt(java.time.Instant marketingPreferenceAt) { this.marketingPreferenceAt = marketingPreferenceAt; }
 
     @PrePersist
     @PreUpdate
@@ -169,6 +229,8 @@ public class Contact extends BaseTenantEntity {
         private String source;
         private User owner;
         private boolean botPaused;
+        private String bsuid;
+        private String parentBsuid;
 
         public ContactBuilder id(UUID id) { this.id = id; return this; }
         public ContactBuilder waId(String waId) { this.waId = waId; return this; }
@@ -179,9 +241,14 @@ public class Contact extends BaseTenantEntity {
         public ContactBuilder source(String source) { this.source = source; return this; }
         public ContactBuilder owner(User owner) { this.owner = owner; return this; }
         public ContactBuilder botPaused(boolean botPaused) { this.botPaused = botPaused; return this; }
+        public ContactBuilder bsuid(String bsuid) { this.bsuid = bsuid; return this; }
+        public ContactBuilder parentBsuid(String parentBsuid) { this.parentBsuid = parentBsuid; return this; }
 
         public Contact build() {
-            return new Contact(id, waId, displayId, name, email, tags, source, owner, botPaused);
+            Contact c = new Contact(id, waId, displayId, name, email, tags, source, owner, botPaused);
+            c.setBsuid(this.bsuid);
+            c.setParentBsuid(this.parentBsuid);
+            return c;
         }
     }
 }

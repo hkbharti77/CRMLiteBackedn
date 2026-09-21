@@ -48,8 +48,15 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
     @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.SET_NULL)
     private Contact contact;
 
-    @Column(nullable = false)
+    @Column(name = "phone_number")
     private String phoneNumber;
+
+    @Column(name = "bsuid", length = 128)
+    private String bsuid;
+
+    @Builder.Default
+    @Column(name = "recipient_identity_type", length = 20)
+    private String recipientIdentityType = "PHONE";
 
     @Column(columnDefinition = "TEXT")
     private String resolvedVariablesJson; // JSON payload of rendered parameters for this contact

@@ -111,7 +111,6 @@ public class VoiceSessionService {
     /**
      * Process incoming audio stream or file for a business
      */
-    @Transactional
     public VoiceTurnResult processVoiceTurn(
             UUID businessId,
             String visitorId,
@@ -126,7 +125,6 @@ public class VoiceSessionService {
     /**
      * Enterprise Process Voice Turn with MIME validation, Language Preference, and Barge-In Invalidation
      */
-    @Transactional
     public VoiceTurnResult processVoiceTurn(
             UUID businessId,
             String visitorId,
@@ -333,24 +331,30 @@ public class VoiceSessionService {
             log.warn("Could not persist web chat message for voice turn: {}", e.getMessage());
         }
 
-        // 11. Persist Turn and Session Telemetry
-        session.setLanguage(languageMode);
-        sessionRepository.save(session);
+        double audioDuration = estimateAudioDuration(speechAudio);
 
-        VoiceTurn turn = new VoiceTurn();
-        turn.setSession(session);
-        turn.setTurnNumber(turnNum);
-        turn.setUserTranscript(transcript);
-        turn.setBotResponseText(botReplyText);
-        turn.setAudioDurationSeconds(estimateAudioDuration(speechAudio));
-        turn.setSttLatencyMs(sttLatency);
-        turn.setLlmLatencyMs(llmLatency);
-        turn.setTtsLatencyMs(ttsLatency);
-        turn.setTtfaMs(ttfa);
-        turn.setDetectedLanguage(languageMode);
-        turnRepository.save(turn);
+        // 11. Persist Turn and Session Telemetry (isolated so errors do not drop synthesized audio)
+        try {
+            session.setLanguage(languageMode);
+            sessionRepository.save(session);
 
-        // 12. Update Daily Usage Aggregation
+            VoiceTurn turn = new VoiceTurn();
+            turn.setSession(session);
+            turn.setTurnNumber(turnNum);
+            turn.setUserTranscript(transcript);
+            turn.setBotResponseText(botReplyText);
+            turn.setAudioDurationSeconds(audioDuration);
+            turn.setSttLatencyMs(sttLatency);
+            turn.setLlmLatencyMs(llmLatency);
+            turn.setTtsLatencyMs(ttsLatency);
+            turn.setTtfaMs(ttfa);
+            turn.setDetectedLanguage(languageMode);
+            turnRepository.save(turn);
+        } catch (Exception e) {
+            log.warn("Failed to persist voice turn telemetry for session={}: {}", session.getId(), e.getMessage());
+        }
+
+        // 12. Update Daily Usage Aggregation (non-blocking, atomic)
         recordDailyUsage(business, 3, botReplyText.length());
 
         VoiceTurnResult result = new VoiceTurnResult();
@@ -368,7 +372,7 @@ public class VoiceSessionService {
         result.llmLatencyMs = llmLatency;
         result.ttsLatencyMs = ttsLatency;
         result.ttfaMs = ttfa;
-        result.audioDurationSeconds = turn.getAudioDurationSeconds();
+        result.audioDurationSeconds = audioDuration;
 
         return result;
     }
@@ -480,8 +484,16 @@ public class VoiceSessionService {
     }
 
     private void recordDailyUsage(User business, int sttSecs, int ttsChars) {
+        if (business == null || business.getId() == null) return;
         try {
             LocalDate today = LocalDate.now();
+            try {
+                usageRepository.upsertUsage(business.getId(), today, sttSecs, ttsChars);
+                return;
+            } catch (Exception nativeEx) {
+                log.debug("Native usage upsert failed, falling back to JPA: {}", nativeEx.getMessage());
+            }
+
             VoiceUsage usage = usageRepository.findByBusinessIdAndUsageDate(business.getId(), today)
                     .orElseGet(() -> {
                         VoiceUsage u = new VoiceUsage();
@@ -494,12 +506,12 @@ public class VoiceSessionService {
                         return u;
                     });
 
-            usage.setSttSecondsTotal(usage.getSttSecondsTotal() + sttSecs);
-            usage.setTtsCharactersTotal(usage.getTtsCharactersTotal() + ttsChars);
-            usage.setRequestCount(usage.getRequestCount() + 1);
+            usage.setSttSecondsTotal((usage.getSttSecondsTotal() != null ? usage.getSttSecondsTotal() : 0) + sttSecs);
+            usage.setTtsCharactersTotal((usage.getTtsCharactersTotal() != null ? usage.getTtsCharactersTotal() : 0) + ttsChars);
+            usage.setRequestCount((usage.getRequestCount() != null ? usage.getRequestCount() : 0) + 1);
             usageRepository.save(usage);
         } catch (Exception e) {
-            log.warn("Usage tracking error: {}", e.getMessage());
+            log.warn("Usage tracking error for business {}: {}", business.getId(), e.getMessage());
         }
     }
 

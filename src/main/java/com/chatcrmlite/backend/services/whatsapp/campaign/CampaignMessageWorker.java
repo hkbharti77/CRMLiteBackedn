@@ -32,6 +32,8 @@ public class CampaignMessageWorker {
     private final CampaignAnalyticsService analyticsService;
     private final CampaignAuditService auditService;
     private final ObjectMapper objectMapper;
+    private final WhatsAppRecipientResolver recipientResolver;
+    private final ContactRepository contactRepository;
 
     /**
      * Scheduled task that polls for active RUNNING campaigns and dispatches messages
@@ -159,11 +161,61 @@ public class CampaignMessageWorker {
         recipient.setAttemptCount(attempt + 1);
 
         try {
+            // Gate 2: Pre-Send Compliance Guard (Re-evaluate latest contact opt-out status)
+            Contact latestContact = null;
+            if (recipient.getContact() != null && recipient.getContact().getId() != null) {
+                latestContact = contactRepository.findById(recipient.getContact().getId()).orElse(recipient.getContact());
+                if (Boolean.TRUE.equals(latestContact.getOptedOut()) ||
+                    Boolean.TRUE.equals(latestContact.isMarketingOptedOut()) ||
+                    Boolean.TRUE.equals(latestContact.getBlacklisted())) {
+                    log.info("🛑 [CampaignWorker] ContactId={} opted out before dispatch. Skipping recipientId={}",
+                            latestContact.getId(), recipient.getId());
+                    recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.SKIPPED);
+                    recipient.setSkipReason("OPTED_OUT_AT_DISPATCH");
+                    recipientRepository.save(recipient);
+                    return;
+                }
+            }
+
+            // Gate 0 Capability Validation: Check if template is an auth template excluding BSUID
+            boolean isAuthExcludingBsuid = snapshot != null &&
+                    recipientResolver.isAuthTemplateExcludingBsuid(
+                            snapshot.getCategory(),
+                            snapshot.getButtonsJson()
+                    );
+
+            // Dynamic Recipient Identity Re-Resolution at Send Time (Catch identity/BSUID migrations)
+            WhatsAppRecipientResolver.ResolvedRecipient targetRecipient = recipientResolver.resolve(
+                    latestContact,
+                    recipient.getPhoneNumber(),
+                    isAuthExcludingBsuid
+            );
+
+            if (!targetRecipient.isSendable()) {
+                String skipReason = isAuthExcludingBsuid && (latestContact != null && (latestContact.getBsuid() != null || latestContact.getParentBsuid() != null))
+                        ? "BLOCKED_AUTH_TEMPLATE_REQUIRES_PHONE"
+                        : "UNSENDABLE_IDENTITY_AT_DISPATCH";
+                log.warn("⚠️ [CampaignWorker] RecipientId={} unsendable identity (reason={}). Skipping.", recipient.getId(), skipReason);
+                recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.SKIPPED);
+                recipient.setSkipReason(skipReason);
+                recipientRepository.save(recipient);
+                return;
+            }
+
+            // Update recipient snapshot with latest resolved identity
+            if (targetRecipient.phoneNumber() != null) {
+                recipient.setPhoneNumber(targetRecipient.phoneNumber());
+            }
+            if (targetRecipient.getEffectiveBsuid() != null) {
+                recipient.setBsuid(targetRecipient.getEffectiveBsuid());
+            }
+            recipient.setRecipientIdentityType(targetRecipient.identityType().name());
+
             List<String> parameters = parseParameters(recipient.getResolvedVariablesJson());
 
-            // Build Meta template payload parameters or send text fallback
-            String metaMessageId = whatsappClient.sendMessage(
-                    recipient.getPhoneNumber(),
+            // Build Meta template payload parameters or send text fallback with BSUID/Phone wire distinction
+            String metaMessageId = whatsappClient.sendMessageToRecipient(
+                    targetRecipient,
                     buildRenderedBody(snapshot.getBodyText(), parameters),
                     config.getAccessToken(),
                     config.getPhoneNumberId()

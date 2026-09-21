@@ -384,7 +384,13 @@ public class MetaOnboardingService {
      * Authoritative Multi-Tier WABA Resolution.
      */
     public String resolveWaba(String businessId, String accessToken, TokenDebugResult debugResult) {
-        // 1. Direct query on owned WhatsApp Business Accounts if businessId is known
+        // 1. Authoritative resolution from debug token granular scopes (Meta Embedded Signup standard)
+        if (debugResult != null && StringUtils.hasText(debugResult.getWabaId())) {
+            log.info("[MetaOnboarding] Resolved WABA ID {} directly from token granular scopes", debugResult.getWabaId());
+            return debugResult.getWabaId();
+        }
+
+        // 2. Direct query on owned WhatsApp Business Accounts if businessId is known
         if (StringUtils.hasText(businessId)) {
             try {
                 String ownedUrl = String.format("%s/%s/owned_whatsapp_business_accounts?access_token=%s",
@@ -395,10 +401,10 @@ public class MetaOnboardingService {
                     return data.get(0).path("id").asText();
                 }
             } catch (Exception e) {
-                log.warn("[MetaOnboarding] Could not query owned_whatsapp_business_accounts: {}", e.getMessage());
+                log.debug("[MetaOnboarding] Could not query owned_whatsapp_business_accounts: {}", e.getMessage());
             }
 
-            // 2. Query client_whatsapp_business_accounts
+            // 3. Query client_whatsapp_business_accounts
             try {
                 String clientUrl = String.format("%s/%s/client_whatsapp_business_accounts?access_token=%s",
                         getGraphApiUrl(), businessId, accessToken);
@@ -408,16 +414,11 @@ public class MetaOnboardingService {
                     return data.get(0).path("id").asText();
                 }
             } catch (Exception e) {
-                log.warn("[MetaOnboarding] Could not query client_whatsapp_business_accounts: {}", e.getMessage());
+                log.debug("[MetaOnboarding] Could not query client_whatsapp_business_accounts: {}", e.getMessage());
             }
         }
 
-        // 3. Fallback to debug token granular scopes target_ids
-        if (debugResult != null && StringUtils.hasText(debugResult.getWabaId())) {
-            return debugResult.getWabaId();
-        }
-
-        // 4. Query /me/accounts as final fallback
+        // 4. Query /me/whatsapp_business_accounts as final fallback
         try {
             String meUrl = String.format("%s/me/whatsapp_business_accounts?access_token=%s", getGraphApiUrl(), accessToken);
             ResponseEntity<String> response = restTemplate.getForEntity(meUrl, String.class);

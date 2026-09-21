@@ -35,7 +35,13 @@ public interface WhatsAppCampaignRepository extends JpaRepository<WhatsAppCampai
 
     /**
      * Returns only campaigns with the given status — pushes the filter to the DB.
-     * Used by CampaignMessageWorker to avoid loading all campaigns and filtering in Java.
      */
     List<WhatsAppCampaign> findAllByStatus(WhatsAppCampaign.Status status);
+
+    @org.springframework.data.jpa.repository.Query("SELECT c FROM WhatsAppCampaign c WHERE c.tenant.id = :tenantId AND (c.templateSnapshot.originalTemplateId = :templateId OR c.templateSnapshot.metaTemplateId = :metaTemplateId) AND c.status IN :statuses")
+    List<WhatsAppCampaign> findAllByTenantIdAndTemplateIdAndStatusIn(
+            @org.springframework.data.repository.query.Param("tenantId") UUID tenantId,
+            @org.springframework.data.repository.query.Param("templateId") UUID templateId,
+            @org.springframework.data.repository.query.Param("metaTemplateId") String metaTemplateId,
+            @org.springframework.data.repository.query.Param("statuses") List<WhatsAppCampaign.Status> statuses);
 }

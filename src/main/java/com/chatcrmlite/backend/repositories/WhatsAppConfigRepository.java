@@ -50,10 +50,24 @@ public interface WhatsAppConfigRepository extends JpaRepository<WhatsAppConfig, 
 
     Optional<WhatsAppConfig> findByWabaId(String wabaId);
 
+    @Cacheable(value = "whatsapp_waba_exists", key = "#wabaId")
+    boolean existsByWabaId(String wabaId);
+
+    @Query("SELECT t.id FROM WhatsAppConfig w JOIN w.tenant t WHERE TRIM(w.wabaId) = TRIM(:wabaId)")
+    Optional<UUID> findTenantIdByWabaId(@Param("wabaId") String wabaId);
+
     @Cacheable(value = "whatsapp_verify_tokens", key = "#verifyToken")
     boolean existsByVerifyToken(String verifyToken);
 
     @Override
-    @CacheEvict(value = "whatsapp_verify_tokens", allEntries = true)
+    @CacheEvict(value = {"whatsapp_verify_tokens", "whatsapp_waba_exists"}, allEntries = true)
     <S extends WhatsAppConfig> S save(S entity);
+
+    @Override
+    @CacheEvict(value = {"whatsapp_verify_tokens", "whatsapp_waba_exists"}, allEntries = true)
+    void delete(WhatsAppConfig entity);
+
+    @Override
+    @CacheEvict(value = {"whatsapp_verify_tokens", "whatsapp_waba_exists"}, allEntries = true)
+    void deleteById(UUID id);
 }

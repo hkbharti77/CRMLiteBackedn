@@ -110,6 +110,7 @@ public class Message extends BaseTenantEntity {
     public String getContent() { return content; }
     public Direction getDirection() { return direction; }
     public LocalDateTime getTimestamp() { return timestamp; }
+    public void setTimestamp(LocalDateTime timestamp) { this.timestamp = timestamp; }
 
     public void setId(UUID id) { this.id = id; }
     public void setWaMessageId(String waMessageId) { this.waMessageId = waMessageId; }

@@ -28,6 +28,9 @@ public class WhatsAppWebhookController {
     private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsappConfigRepository;
 
     @Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper objectMapper;
+
+    @Autowired
     private com.chatcrmlite.backend.services.WebhookSignatureService signatureService;
 
     @GetMapping
@@ -35,22 +38,19 @@ public class WhatsAppWebhookController {
             @Parameter(hidden = true) @RequestParam(value = "hub.mode", required = false) String mode,
             @Parameter(hidden = true) @RequestParam(value = "hub.verify_token", required = false) String token,
             @Parameter(hidden = true) @RequestParam(value = "hub.challenge", required = false) String challenge) {
-        
+
         if (mode == null || token == null || challenge == null) {
             log.warn("❌ Webhook GET request missing required parameters (mode, token, challenge)");
-            return ResponseEntity.badRequest().body("Missing required parameters");
+            return ResponseEntity.badRequest().body("Missing required parameters: hub.mode, hub.verify_token, or hub.challenge");
         }
 
-        // SECURITY: Do not log the verify token value — it's a shared secret
-        log.debug("Incoming verify request: mode={}", mode);
-
-        boolean isValid = whatsappConfigRepository.existsByVerifyToken(token.trim()) || token.trim().equals(globalVerifyToken);
-        
-        if ("subscribe".equals(mode.trim()) && isValid) {
-            log.info("✅ Webhook verified successfully");
-            return ResponseEntity.ok(challenge);
+        if ("subscribe".equals(mode)) {
+            boolean isValid = whatsappConfigRepository.existsByVerifyToken(token.trim()) || token.trim().equals(globalVerifyToken);
+            if (isValid) {
+                log.info("✅ Webhook verified successfully");
+                return ResponseEntity.ok(challenge);
+            }
         }
-        
         log.warn("❌ Webhook verification failed - No matching config found in database and does not match global token");
         return ResponseEntity.status(403).body("Verification failed");
     }
@@ -84,6 +84,29 @@ public class WhatsAppWebhookController {
                              request.getRemoteAddr(), signature);
                     return ResponseEntity.status(401).body("Invalid signature");
                 }
+            }
+
+            // Object & WABA identity check
+            try {
+                com.fasterxml.jackson.databind.JsonNode root = objectMapper.readTree(payload);
+                String object = root.path("object").asText("");
+                if (!"whatsapp_business_account".equals(object)) {
+                    log.debug("Ignoring non-WABA webhook object: {}", object);
+                    return ResponseEntity.ok().build();
+                }
+
+                com.fasterxml.jackson.databind.JsonNode entryArray = root.path("entry");
+                if (entryArray.isArray() && !entryArray.isEmpty()) {
+                    String wabaId = entryArray.get(0).path("id").asText("");
+                    if (!wabaId.isBlank() && !whatsappConfigRepository.existsByWabaId(wabaId)) {
+                        log.warn("⚠️ [SECURITY] Webhook received for unmapped/unknown WABA ID: {} from IP: {}. Discarding to prevent cross-tenant leakage.",
+                                wabaId, request.getRemoteAddr());
+                        // Return 200 OK so Meta doesn't storm webhook retries indefinitely
+                        return ResponseEntity.ok().build();
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("Error inspecting webhook payload structure: {}", e.getMessage());
             }
 
             log.info("✅ Webhook signature verified or skipped. Enqueueing payload for async processing...");

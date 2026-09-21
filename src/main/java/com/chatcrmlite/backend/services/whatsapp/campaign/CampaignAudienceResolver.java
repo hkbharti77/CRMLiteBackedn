@@ -26,6 +26,7 @@ public class CampaignAudienceResolver {
     private final WhatsAppCampaignAnalyticsRepository analyticsRepository;
     private final PersonalizationEngine personalizationEngine;
     private final ObjectMapper objectMapper;
+    private final WhatsAppRecipientResolver recipientResolver;
 
     @Transactional
     public void resolveAndFreezeAudience(WhatsAppCampaign campaign) {
@@ -71,9 +72,26 @@ public class CampaignAudienceResolver {
 
             Contact contact = tr.getContact();
 
-            // Opt-out / DND validation
-            if (contact != null && (Boolean.TRUE.equals(contact.getOptedOut()) || Boolean.TRUE.equals(contact.getBlacklisted()))) {
+            // Opt-out / DND validation (Gate 1: Marketing Suppression)
+            if (contact != null && (Boolean.TRUE.equals(contact.getOptedOut()) || Boolean.TRUE.equals(contact.isMarketingOptedOut()) || Boolean.TRUE.equals(contact.getBlacklisted()))) {
                 recordSkippedRecipient(campaign, contact, normalizedPhone, "OPTED_OUT_OR_BLACK_LISTED");
+                skippedCount++;
+                continue;
+            }
+
+            // Gate 0 Capability Validation: Check if campaign template is an auth template excluding BSUID
+            boolean isAuthExcludingBsuid = campaign.getTemplateSnapshot() != null &&
+                    recipientResolver.isAuthTemplateExcludingBsuid(
+                            campaign.getTemplateSnapshot().getCategory(),
+                            campaign.getTemplateSnapshot().getButtonsJson()
+                    );
+
+            WhatsAppRecipientResolver.ResolvedRecipient resolved = recipientResolver.resolve(contact, normalizedPhone, isAuthExcludingBsuid);
+            if (!resolved.isSendable()) {
+                String skipReason = isAuthExcludingBsuid && (contact != null && (contact.getBsuid() != null || contact.getParentBsuid() != null))
+                        ? "BLOCKED_AUTH_TEMPLATE_REQUIRES_PHONE"
+                        : "UNSENDABLE_IDENTITY";
+                recordSkippedRecipient(campaign, contact, normalizedPhone, skipReason);
                 skippedCount++;
                 continue;
             }
@@ -102,7 +120,9 @@ public class CampaignAudienceResolver {
             WhatsAppCampaignRecipient recipient = WhatsAppCampaignRecipient.builder()
                     .campaign(campaign)
                     .contact(contact != null && contact.getId() != null ? contact : null) // Only link if it's a persisted contact
-                    .phoneNumber(normalizedPhone)
+                    .phoneNumber(resolved.phoneNumber() != null ? resolved.phoneNumber() : normalizedPhone)
+                    .bsuid(resolved.getEffectiveBsuid())
+                    .recipientIdentityType(resolved.identityType().name())
                     .resolvedVariablesJson(paramsJson)
                     .status(WhatsAppCampaignRecipient.RecipientStatus.PENDING)
                     .retryCount(0)

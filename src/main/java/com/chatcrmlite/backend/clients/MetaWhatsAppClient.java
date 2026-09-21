@@ -13,6 +13,8 @@ import java.util.Map;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.chatcrmlite.backend.dto.MenuDto;
+import com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppRecipientResolver;
+import com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppRecipientResolver.ResolvedRecipient;
 import lombok.extern.slf4j.Slf4j;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
@@ -95,6 +97,54 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         body.put("to", to);
         body.put("type", "text");
 
+        Map<String, String> textBody = new HashMap<>();
+        textBody.put("body", text);
+        body.put("text", textBody);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
+    @Override
+    public String sendMessageToRecipient(String phoneNumber, String bsuid, String text, String accessToken, String phoneNumberId) {
+        return sendMessageToRecipient(phoneNumber, bsuid, null, text, accessToken, phoneNumberId);
+    }
+
+    @Override
+    public String sendMessageToRecipient(String phoneNumber, String bsuid, String parentBsuid, String text, String accessToken, String phoneNumberId) {
+        WhatsAppRecipientResolver.RecipientIdentityType type = WhatsAppRecipientResolver.RecipientIdentityType.UNSENDABLE;
+        if (phoneNumber != null && !phoneNumber.isBlank()) {
+            type = WhatsAppRecipientResolver.RecipientIdentityType.PHONE;
+        } else if (bsuid != null && !bsuid.isBlank()) {
+            type = WhatsAppRecipientResolver.RecipientIdentityType.BSUID;
+        } else if (parentBsuid != null && !parentBsuid.isBlank()) {
+            type = WhatsAppRecipientResolver.RecipientIdentityType.PARENT_BSUID;
+        }
+        return sendMessageToRecipient(new WhatsAppRecipientResolver.ResolvedRecipient(phoneNumber, bsuid, parentBsuid, type), text, accessToken, phoneNumberId);
+    }
+
+    @Override
+    public String sendMessageToRecipient(com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppRecipientResolver.ResolvedRecipient recipient, String text, String accessToken, String phoneNumberId) {
+        if (recipient == null || !recipient.isSendable()) {
+            throw new IllegalArgumentException("Cannot send message to unsendable recipient");
+        }
+        String url = String.format(META_URL, phoneNumberId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("recipient_type", "individual");
+
+        if (recipient.identityType() == WhatsAppRecipientResolver.RecipientIdentityType.PHONE) {
+            body.put("to", recipient.value());
+        } else if (recipient.identityType() == WhatsAppRecipientResolver.RecipientIdentityType.BSUID
+                || recipient.identityType() == WhatsAppRecipientResolver.RecipientIdentityType.PARENT_BSUID) {
+            body.put("recipient", recipient.value());
+        }
+
+        body.put("type", "text");
         Map<String, String> textBody = new HashMap<>();
         textBody.put("body", text);
         body.put("text", textBody);
@@ -521,6 +571,31 @@ public class MetaWhatsAppClient implements WhatsAppClient {
         } catch (Exception e) {
             log.error("[MetaAPI] Error fetching templates for WABA {}: {}", wabaId, e.getMessage());
             throw new RuntimeException("Failed to fetch templates from Meta Graph API");
+        }
+    }
+
+    /**
+     * Fetch a single message template by its Meta Template ID.
+     * GET {graphBaseUrl}/{metaTemplateId}?fields=id,name,status,category,language,components
+     */
+    public JsonNode fetchSingleMessageTemplate(String metaTemplateId, String accessToken) {
+        if (metaTemplateId == null || metaTemplateId.isBlank() || accessToken == null || accessToken.isBlank()) {
+            throw new IllegalArgumentException("Meta Template ID and Access Token must not be null or blank");
+        }
+        String url = String.format("%s/%s?fields=id,name,status,category,language,components", getGraphBaseUrl(), metaTemplateId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+
+        try {
+            HttpEntity<Void> request = new HttpEntity<>(headers);
+            org.springframework.http.ResponseEntity<String> response = restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, request, String.class);
+            return objectMapper.readTree(response.getBody());
+        } catch (HttpStatusCodeException e) {
+            log.error("[MetaAPI] Failed to fetch single message template {}: {}", metaTemplateId, e.getResponseBodyAsString());
+            throw new RuntimeException("Meta API Error: " + parseMetaError(e.getResponseBodyAsString(), e.getStatusCode().toString()));
+        } catch (Exception e) {
+            log.error("[MetaAPI] Error fetching template {}: {}", metaTemplateId, e.getMessage());
+            throw new RuntimeException("Failed to fetch template from Meta Graph API");
         }
     }
 

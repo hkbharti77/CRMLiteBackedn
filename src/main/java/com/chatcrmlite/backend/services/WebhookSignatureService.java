@@ -105,6 +105,20 @@ public class WebhookSignatureService {
                 log.warn("Error looking up WhatsAppConfig for phone_number_id: {}. Falling back to global secret.", phoneNumberId, e);
             }
         }
+
+        // Fallback to checking tenant config by WABA ID (for account/template updates)
+        String wabaId = extractWabaIdFromPayload(payload);
+        if (wabaId != null && !wabaId.isBlank()) {
+            try {
+                WhatsAppConfig config = whatsAppConfigRepository.findByWabaId(wabaId).orElse(null);
+                if (config != null && config.getAppSecret() != null && !config.getAppSecret().isBlank()) {
+                    return config.getAppSecret();
+                }
+            } catch (Exception e) {
+                log.debug("Error looking up WhatsAppConfig for waba_id: {}", wabaId, e);
+            }
+        }
+
         return (globalAppSecret != null && !globalAppSecret.isBlank()) ? globalAppSecret : null;
     }
 
@@ -140,10 +154,30 @@ public class WebhookSignatureService {
                 return matcher.group(1);
             }
             
-            log.warn("Could not find phone_number_id in webhook payload");
+            log.debug("phone_number_id not found in webhook payload (account or template update)");
             return null;
         } catch (Exception e) {
             log.error("Error extracting phone_number_id from payload", e);
+            return null;
+        }
+    }
+
+    /**
+     * Extracts the WABA ID from the WhatsApp webhook payload root entry.
+     * 
+     * @param payload The raw JSON payload from WhatsApp
+     * @return The waba_id if found, null otherwise
+     */
+    private String extractWabaIdFromPayload(String payload) {
+        try {
+            Pattern wabaIdPattern = Pattern.compile("\"entry\"\\s*:\\s*\\[\\s*\\{\\s*\"id\"\\s*:\\s*\"([^\"]+)\"");
+            Matcher matcher = wabaIdPattern.matcher(payload);
+            if (matcher.find()) {
+                return matcher.group(1);
+            }
+            return null;
+        } catch (Exception e) {
+            log.debug("Error extracting waba_id from payload", e);
             return null;
         }
     }
