@@ -47,12 +47,18 @@ public class RedisConfig {
 
         io.lettuce.core.SocketOptions socketOptions = io.lettuce.core.SocketOptions.builder()
                 .connectTimeout(Duration.ofMillis(timeout))
-                .keepAlive(true)
+                .keepAlive(io.lettuce.core.SocketOptions.KeepAliveOptions.builder()
+                        .enable()
+                        .idle(Duration.ofSeconds(15))
+                        .interval(Duration.ofSeconds(5))
+                        .count(3)
+                        .build())
                 .build();
 
         io.lettuce.core.ClientOptions clientOptions = io.lettuce.core.ClientOptions.builder()
                 .socketOptions(socketOptions)
                 .autoReconnect(true)
+                .disconnectedBehavior(io.lettuce.core.ClientOptions.DisconnectedBehavior.REJECT_COMMANDS)
                 .build();
 
         org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> poolConfig = new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
@@ -60,6 +66,8 @@ public class RedisConfig {
         poolConfig.setMaxIdle(25);
         poolConfig.setMinIdle(5);
         poolConfig.setMaxWait(Duration.ofMillis(5000));
+        poolConfig.setTestOnBorrow(true);
+        poolConfig.setTestWhileIdle(true);
 
         org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration clientConfig =
                 org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration.builder()
@@ -70,8 +78,10 @@ public class RedisConfig {
 
         org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory factory =
                 new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(redisConfig, clientConfig);
-        factory.setShareNativeConnection(true);
-        factory.setValidateConnection(false);
+        // MUST be false: stream workers execute blocking commands (XREADGROUP ... BLOCK)
+        // If true, all workers share ONE single connection, creating head-of-line blocking and 10s command timeouts.
+        factory.setShareNativeConnection(false);
+        factory.setValidateConnection(true);
         return factory;
     }
 

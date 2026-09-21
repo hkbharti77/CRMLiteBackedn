@@ -128,6 +128,13 @@ public class RedisStreamConfig {
                                 log.debug("Redis stream worker [{}] stopped gracefully (Redisson shutdown).", consumerName);
                             } else if (t instanceof NullPointerException && msg != null && msg.contains("\"records\" is null")) {
                                 log.debug("Redis stream worker [{}] encountered null records (often due to read timeout). Retrying...", consumerName);
+                            } else if (t instanceof org.springframework.dao.QueryTimeoutException || (msg != null && msg.contains("Redis command timed out"))) {
+                                log.warn("⏱️ [RedisStreamWorker-{}] Redis read timed out on stream '{}'. Backing off 1s before retry...", consumerName, stream);
+                                try {
+                                    Thread.sleep(1000);
+                                } catch (InterruptedException ignored) {
+                                    Thread.currentThread().interrupt();
+                                }
                             } else {
                                 log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}",
                                         consumerName, stream, (t != null ? t.getMessage() : "unknown error"), t);
