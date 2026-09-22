@@ -13,10 +13,11 @@ RUN --mount=type=cache,target=/root/.m2 \
     mvn -f pom.xml dependency:go-offline -B -q -T 1C
 
 COPY src ./src
-# -o   = offline mode: skips all network calls, dependencies already cached above
 # -T 1C = 1 thread per CPU core (parallel module compilation)
+# Note: -o (offline) removed — dependency:go-offline misses some transitive artifacts
+#       causing build failures. Cache mount already avoids redundant downloads.
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml package -Dmaven.test.skip=true -B -q -o -T 1C && \
+    mvn -f pom.xml package -Dmaven.test.skip=true -B -q -T 1C && \
     mkdir -p target/dependency && \
     cd target/dependency && \
     jar -xf ../*.jar
