@@ -1,20 +1,27 @@
-# ── Stage 1: Builds ────────────────────────────────────────────────────────────
+# ── Stage 1: Build ────────────────────────────────────────────────────────────
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /workspace
 
+# Tune Maven JVM: tier-1 JIT stops early compilation = faster startup of mvn itself
+# Not the app runtime — just the build tooling
+ENV MAVEN_OPTS="-XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx512m -Xms256m"
+
 # Cache Maven dependencies separately from source code
+# This layer only re-runs when pom.xml changes
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml dependency:go-offline -B -q
+    mvn -f pom.xml dependency:go-offline -B -q -T 1C
 
 COPY src ./src
+# -o   = offline mode: skips all network calls, dependencies already cached above
+# -T 1C = 1 thread per CPU core (parallel module compilation)
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml package -Dmaven.test.skip=true -B -q && \
+    mvn -f pom.xml package -Dmaven.test.skip=true -B -q -o -T 1C && \
     mkdir -p target/dependency && \
     cd target/dependency && \
     jar -xf ../*.jar
 
-# ── Stage 2: Runtime (distroless for minimal attack surface) ──────────────────
+# ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre-jammy AS runtime
 
 # Security: run as non-root user
