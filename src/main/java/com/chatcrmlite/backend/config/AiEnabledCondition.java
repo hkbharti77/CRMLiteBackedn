@@ -12,6 +12,10 @@ public class AiEnabledCondition implements Condition {
         if ("none".equals(provider)) {
             return false;
         }
+        if ("bedrock".equals(provider)) {
+            String key = context.getEnvironment().getProperty("ai.bedrock.api-key");
+            return key != null && !key.isBlank() && !key.startsWith("dummy");
+        }
         if ("openrouter".equals(provider)) {
             String key = context.getEnvironment().getProperty("ai.openrouter.api-key");
             return key != null && !key.isBlank() && !key.startsWith("dummy");

@@ -1,9 +1,8 @@
 package com.chatcrmlite.backend.dto;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.UUID;
-
-import java.io.Serializable;
 
 public class ContactDTO implements Serializable {
     private static final long serialVersionUID = 1L;
@@ -16,6 +15,12 @@ public class ContactDTO implements Serializable {
     private List<String> tags;
     private String source;
     private boolean botPaused;
+    
+    // Channel-specific consent fields
+    private String whatsappConsentStatus = "UNKNOWN";
+    private String emailConsentStatus = "UNKNOWN";
+    private String smsConsentStatus = "UNKNOWN";
+    private boolean marketingOptedOut = false;
 
     public ContactDTO() {}
 
@@ -47,6 +52,15 @@ public class ContactDTO implements Serializable {
     public boolean isBotPaused() { return botPaused; }
     public void setBotPaused(boolean botPaused) { this.botPaused = botPaused; }
 
+    public String getWhatsappConsentStatus() { return whatsappConsentStatus; }
+    public void setWhatsappConsentStatus(String whatsappConsentStatus) { this.whatsappConsentStatus = whatsappConsentStatus; }
+    public String getEmailConsentStatus() { return emailConsentStatus; }
+    public void setEmailConsentStatus(String emailConsentStatus) { this.emailConsentStatus = emailConsentStatus; }
+    public String getSmsConsentStatus() { return smsConsentStatus; }
+    public void setSmsConsentStatus(String smsConsentStatus) { this.smsConsentStatus = smsConsentStatus; }
+    public boolean isMarketingOptedOut() { return marketingOptedOut; }
+    public void setMarketingOptedOut(boolean marketingOptedOut) { this.marketingOptedOut = marketingOptedOut; }
+
     public static ContactDTOBuilder builder() {
         return new ContactDTOBuilder();
     }
@@ -60,6 +74,10 @@ public class ContactDTO implements Serializable {
         private List<String> tags;
         private String source;
         private boolean botPaused;
+        private String whatsappConsentStatus = "UNKNOWN";
+        private String emailConsentStatus = "UNKNOWN";
+        private String smsConsentStatus = "UNKNOWN";
+        private boolean marketingOptedOut = false;
 
         public ContactDTOBuilder id(UUID id) { this.id = id; return this; }
         public ContactDTOBuilder waId(String waId) { this.waId = waId; return this; }
@@ -69,9 +87,18 @@ public class ContactDTO implements Serializable {
         public ContactDTOBuilder tags(List<String> tags) { this.tags = tags; return this; }
         public ContactDTOBuilder source(String source) { this.source = source; return this; }
         public ContactDTOBuilder botPaused(boolean botPaused) { this.botPaused = botPaused; return this; }
+        public ContactDTOBuilder whatsappConsentStatus(String whatsappConsentStatus) { this.whatsappConsentStatus = whatsappConsentStatus; return this; }
+        public ContactDTOBuilder emailConsentStatus(String emailConsentStatus) { this.emailConsentStatus = emailConsentStatus; return this; }
+        public ContactDTOBuilder smsConsentStatus(String smsConsentStatus) { this.smsConsentStatus = smsConsentStatus; return this; }
+        public ContactDTOBuilder marketingOptedOut(boolean marketingOptedOut) { this.marketingOptedOut = marketingOptedOut; return this; }
 
         public ContactDTO build() {
-            return new ContactDTO(id, waId, name, email, phone, tags, source, botPaused);
+            ContactDTO dto = new ContactDTO(id, waId, name, email, phone, tags, source, botPaused);
+            dto.setWhatsappConsentStatus(whatsappConsentStatus);
+            dto.setEmailConsentStatus(emailConsentStatus);
+            dto.setSmsConsentStatus(smsConsentStatus);
+            dto.setMarketingOptedOut(marketingOptedOut);
+            return dto;
         }
     }
 }

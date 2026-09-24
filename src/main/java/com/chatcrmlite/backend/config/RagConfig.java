@@ -53,6 +53,15 @@ public class RagConfig {
     @Value("${ai.openrouter.model-name:google/gemini-2.5-flash}")
     private String openRouterModelName;
 
+    @Value("${ai.bedrock.api-key:}")
+    private String bedrockApiKey;
+
+    @Value("${ai.bedrock.model-name:us.amazon.nova-micro-v1:0}")
+    private String bedrockModelName;
+
+    @Value("${ai.bedrock.base-url:https://bedrock-runtime.us-east-1.amazonaws.com}")
+    private String bedrockBaseUrl;
+
     /**
      * Local ONNX embedding model — no API key required.
      * Produces 384-dimensional vectors compatible with the document_chunks schema.
@@ -85,10 +94,25 @@ public class RagConfig {
     }
 
     /**
-     * Configuration of Chat Model bean supporting Gemini, OpenRouter, and Ollama/Local OpenAI
+     * Configuration of Chat Model bean supporting Gemini, Bedrock, OpenRouter, and Ollama/Local OpenAI
      */
     @Bean
     public ChatLanguageModel geminiChatModel() {
+        if ("bedrock".equalsIgnoreCase(aiProvider)) {
+            if (bedrockApiKey == null || bedrockApiKey.isBlank()) {
+                return null;
+            }
+            String url = (bedrockBaseUrl != null && !bedrockBaseUrl.isBlank()) 
+                    ? bedrockBaseUrl.trim() 
+                    : "https://bedrock-runtime.us-east-1.amazonaws.com";
+            return com.chatcrmlite.backend.services.ai.BedrockChatModel.builder()
+                    .baseUrl(url)
+                    .apiKey(bedrockApiKey)
+                    .modelName(bedrockModelName)
+                    .timeout(java.time.Duration.ofSeconds(120))
+                    .build();
+        }
+
         if ("openrouter".equalsIgnoreCase(aiProvider)) {
             if (openRouterApiKey == null || openRouterApiKey.isBlank()) {
                 return null;
@@ -141,7 +165,8 @@ public class RagConfig {
                 aiProvider, 
                 modelName, 
                 openAiModelName,
-                openRouterModelName
+                openRouterModelName,
+                bedrockModelName
         );
     }
 
@@ -164,19 +189,22 @@ public class RagConfig {
         private final String modelName;
         private final String openAiModelName;
         private final String openRouterModelName;
+        private final String bedrockModelName;
 
         public ChatLanguageModelAiProvider(ChatLanguageModel chatLanguageModel,
                                            ModelHealthMonitor healthMonitor,
                                            String aiProvider,
                                            String modelName,
                                            String openAiModelName,
-                                           String openRouterModelName) {
+                                           String openRouterModelName,
+                                           String bedrockModelName) {
             this.chatLanguageModel = chatLanguageModel;
             this.healthMonitor = healthMonitor;
             this.aiProvider = aiProvider;
             this.modelName = modelName;
             this.openAiModelName = openAiModelName;
             this.openRouterModelName = openRouterModelName;
+            this.bedrockModelName = bedrockModelName;
         }
 
         @Override
@@ -243,6 +271,9 @@ public class RagConfig {
 
         @Override
         public String getModelName() {
+            if ("bedrock".equalsIgnoreCase(aiProvider)) {
+                return bedrockModelName;
+            }
             if ("openrouter".equalsIgnoreCase(aiProvider)) {
                 return openRouterModelName;
             }

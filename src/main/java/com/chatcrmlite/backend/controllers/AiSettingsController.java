@@ -13,8 +13,15 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
+import org.springframework.beans.factory.annotation.Value;
+import dev.langchain4j.model.chat.ChatLanguageModel;
+import dev.langchain4j.data.message.UserMessage;
+import dev.langchain4j.data.message.AiMessage;
+import dev.langchain4j.model.output.Response;
+
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -242,4 +249,42 @@ public class AiSettingsController {
         response.put("leadCustomerEmailBody",    tenant.getLeadCustomerEmailBody());
         return ResponseEntity.ok(response);
     }
+
+    @Autowired(required = false)
+    private ChatLanguageModel chatLanguageModel;
+
+    @Value("${ai.provider:zai}")
+    private String configuredProvider;
+
+    // ─── GET  /api/v1/settings/ai/test-provider ─────────────────────────────
+    /**
+     * Test active AI provider (Bedrock, Zai, OpenRouter, etc.) connection and key validity.
+     */
+    @GetMapping("/test-provider")
+    public ResponseEntity<Map<String, Object>> testAiProvider(@AuthenticationPrincipal String email) {
+        if (email == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("configuredProvider", configuredProvider);
+
+        if (chatLanguageModel == null) {
+            res.put("status", "ERROR");
+            res.put("message", "No active ChatLanguageModel bean configured. Check AI_PROVIDER and API Key in .env.");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(res);
+        }
+
+        try {
+            Response<AiMessage> modelResponse = chatLanguageModel.generate(List.of(UserMessage.from("Hello! Test AI response.")));
+            res.put("status", "SUCCESS");
+            res.put("response", modelResponse.content() != null ? modelResponse.content().text() : "No response content");
+            res.put("tokenUsage", modelResponse.tokenUsage() != null ? modelResponse.tokenUsage().toString() : "N/A");
+            return ResponseEntity.ok(res);
+        } catch (Exception e) {
+            log.error("[AiSettings] AI Provider test error: {}", e.getMessage(), e);
+            res.put("status", "FAILED");
+            res.put("error", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(res);
+        }
+    }
 }
+

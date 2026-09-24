@@ -28,6 +28,8 @@ public class SecureConfigValidator {
         String provider = env.getProperty("ai.provider", "google");
         if ("google".equalsIgnoreCase(provider) || "gemini".equalsIgnoreCase(provider)) {
             checkSecret("langchain4j.google-ai.gemini.api-key", missingSecrets);
+        } else if ("bedrock".equalsIgnoreCase(provider)) {
+            checkSecret("ai.bedrock.api-key", missingSecrets);
         } else if ("openrouter".equalsIgnoreCase(provider)) {
             checkSecret("ai.openrouter.api-key", missingSecrets);
         } else if ("openai".equalsIgnoreCase(provider) || "ollama".equalsIgnoreCase(provider) || "local".equalsIgnoreCase(provider)) {

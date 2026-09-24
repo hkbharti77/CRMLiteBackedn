@@ -52,6 +52,7 @@ public class WhatsAppIngressService {
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private WhatsAppMediaSizeValidator mediaSizeValidator;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.catalog.WhatsAppOrderService whatsappOrderService;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.services.ContactConsentService contactConsentService;
 
     @Transactional
     public void resolveAndSaveIngress(ProcessingContext context) {
@@ -560,6 +561,9 @@ public class WhatsAppIngressService {
             if (updated) {
                 contactRepository.save(c);
             }
+            if (contactConsentService != null && tenantId != null) {
+                contactConsentService.recordInboundWhatsAppOptIn(tenantId, c.getId(), waId != null ? waId : bsuid);
+            }
             return c;
         }
 
@@ -580,7 +584,11 @@ public class WhatsAppIngressService {
                 .source("WhatsApp")
                 .owner(assignedOwner)
                 .build();
-        return contactRepository.save(newContact);
+        Contact savedContact = contactRepository.save(newContact);
+        if (contactConsentService != null && tenantId != null) {
+            contactConsentService.recordInboundWhatsAppOptIn(tenantId, savedContact.getId(), waId != null ? waId : bsuid);
+        }
+        return savedContact;
     }
 
     private void saveOutgoingEchoMessage(Contact contact, String text, long timestamp, String waMessageId, User owner, UUID tenantId) {

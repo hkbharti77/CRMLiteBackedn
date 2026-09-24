@@ -27,6 +27,9 @@ public class ContactService {
     @Autowired
     private TagService tagService;
 
+    @Autowired
+    private com.chatcrmlite.backend.repositories.journey.ContactChannelPreferenceRepository preferenceRepository;
+
     private boolean isAdmin(User user) {
         return user != null && (user.getRole() == User.Role.ADMIN || user.getRole() == User.Role.OWNER || user.getRole() == User.Role.AGENT);
     }
@@ -318,6 +321,21 @@ public class ContactService {
      * Must be called within a transaction where tags are already loaded.
      */
     private ContactDTO toDTO(Contact c) {
+        String waStatus = "UNKNOWN";
+        String emailStatus = "UNKNOWN";
+        String smsStatus = "UNKNOWN";
+
+        if (c.getTenant() != null) {
+            java.util.Optional<com.chatcrmlite.backend.models.journey.ContactChannelPreference> prefOpt =
+                    preferenceRepository.findByBusinessIdAndContactId(c.getTenant().getId().toString(), c.getId());
+            if (prefOpt.isPresent()) {
+                com.chatcrmlite.backend.models.journey.ContactChannelPreference pref = prefOpt.get();
+                if (pref.getWhatsappConsentStatus() != null) waStatus = pref.getWhatsappConsentStatus();
+                if (pref.getEmailConsentStatus() != null) emailStatus = pref.getEmailConsentStatus();
+                if (pref.getSmsConsentStatus() != null) smsStatus = pref.getSmsConsentStatus();
+            }
+        }
+
         return ContactDTO.builder()
                 .id(c.getId())
                 .waId(c.getWaId())
@@ -325,6 +343,10 @@ public class ContactService {
                 .email(c.getEmail())
                 .source(c.getSource())
                 .botPaused(c.isBotPaused())
+                .whatsappConsentStatus(waStatus)
+                .emailConsentStatus(emailStatus)
+                .smsConsentStatus(smsStatus)
+                .marketingOptedOut(c.isMarketingOptedOut())
                 .tags(c.getTags().stream()
                         .map(Tag::getName)
                         .collect(Collectors.toList()))
