@@ -83,8 +83,15 @@ public class WhatsAppFlowService {
 
     @Transactional
     public WhatsAppFlow saveDraft(String name, FlowCategory category, String fieldsConfigJson, String confirmationMessage, User user) {
+        return saveDraft(name, category, fieldsConfigJson, confirmationMessage, null, user);
+    }
+
+    @Transactional
+    public WhatsAppFlow saveDraft(String name, FlowCategory category, String fieldsConfigJson, String confirmationMessage, String customFlowJson, User user) {
         UUID tenantId = getTenantId(user);
-        flowValidator.validateFieldsConfig(name, fieldsConfigJson);
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Flow name cannot be empty");
+        }
 
         WhatsAppConfig config = whatsappConfigRepository.findByTenantId(tenantId)
                 .orElseThrow(() -> new IllegalStateException("Tenant WhatsApp account is not configured"));
@@ -95,8 +102,15 @@ public class WhatsAppFlowService {
             throw new IllegalStateException("WABA ID is not configured on your WhatsApp account");
         }
 
-        String compiledFlowJson = schemaBuilder.buildMetaFlowJson(name, "Please complete the form below:", fieldsConfigJson);
-        flowValidator.validateCompiledMetaJson(compiledFlowJson);
+        String finalFlowJson;
+        if (customFlowJson != null && !customFlowJson.isBlank()) {
+            flowValidator.validateCompiledMetaJson(customFlowJson);
+            finalFlowJson = customFlowJson;
+        } else {
+            flowValidator.validateFieldsConfig(name, fieldsConfigJson);
+            finalFlowJson = schemaBuilder.buildMetaFlowJson(name, "Please complete the form below:", fieldsConfigJson);
+            flowValidator.validateCompiledMetaJson(finalFlowJson);
+        }
 
         WhatsAppFlow flow = WhatsAppFlow.builder()
                 .name(name.trim())
@@ -111,8 +125,8 @@ public class WhatsAppFlowService {
         FlowRevision revision = FlowRevision.builder()
                 .flow(flow)
                 .versionNumber(1)
-                .fieldsConfigJson(fieldsConfigJson)
-                .flowJson(compiledFlowJson)
+                .fieldsConfigJson(fieldsConfigJson != null ? fieldsConfigJson : "[]")
+                .flowJson(finalFlowJson)
                 .confirmationMessage(confirmationMessage != null ? confirmationMessage.trim() : "Thank you! We have received your submission.")
                 .status(RevisionStatus.DRAFT)
                 .createdBy(user)
@@ -128,13 +142,28 @@ public class WhatsAppFlowService {
 
     @Transactional
     public WhatsAppFlow updateDraftRevision(UUID flowId, String name, FlowCategory category, String fieldsConfigJson, String confirmationMessage, User user) {
+        return updateDraftRevision(flowId, name, category, fieldsConfigJson, confirmationMessage, null, user);
+    }
+
+    @Transactional
+    public WhatsAppFlow updateDraftRevision(UUID flowId, String name, FlowCategory category, String fieldsConfigJson, String confirmationMessage, String customFlowJson, User user) {
         UUID tenantId = getTenantId(user);
         WhatsAppFlow flow = flowRepository.findByIdAndTenantId(flowId, tenantId)
                 .orElseThrow(() -> new NoSuchElementException("Flow not found or access denied"));
 
-        flowValidator.validateFieldsConfig(name, fieldsConfigJson);
-        String compiledFlowJson = schemaBuilder.buildMetaFlowJson(name, "Please complete the form below:", fieldsConfigJson);
-        flowValidator.validateCompiledMetaJson(compiledFlowJson);
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("Flow name cannot be empty");
+        }
+
+        String finalFlowJson;
+        if (customFlowJson != null && !customFlowJson.isBlank()) {
+            flowValidator.validateCompiledMetaJson(customFlowJson);
+            finalFlowJson = customFlowJson;
+        } else {
+            flowValidator.validateFieldsConfig(name, fieldsConfigJson);
+            finalFlowJson = schemaBuilder.buildMetaFlowJson(name, "Please complete the form below:", fieldsConfigJson);
+            flowValidator.validateCompiledMetaJson(finalFlowJson);
+        }
 
         flow.setName(name.trim());
         if (category != null) flow.setCategory(category);
@@ -146,16 +175,16 @@ public class WhatsAppFlowService {
         if (latestRevisionOpt.isPresent() && latestRevisionOpt.get().getStatus() == RevisionStatus.DRAFT) {
             // Update existing draft revision
             revision = latestRevisionOpt.get();
-            revision.setFieldsConfigJson(fieldsConfigJson);
-            revision.setFlowJson(compiledFlowJson);
+            if (fieldsConfigJson != null) revision.setFieldsConfigJson(fieldsConfigJson);
+            revision.setFlowJson(finalFlowJson);
             if (confirmationMessage != null) revision.setConfirmationMessage(confirmationMessage.trim());
         } else {
             // Create a new draft revision incrementing version
             revision = FlowRevision.builder()
                     .flow(flow)
                     .versionNumber(maxVersion + 1)
-                    .fieldsConfigJson(fieldsConfigJson)
-                    .flowJson(compiledFlowJson)
+                    .fieldsConfigJson(fieldsConfigJson != null ? fieldsConfigJson : "[]")
+                    .flowJson(finalFlowJson)
                     .confirmationMessage(confirmationMessage != null ? confirmationMessage.trim() : "Thank you! We have received your submission.")
                     .status(RevisionStatus.DRAFT)
                     .createdBy(user)

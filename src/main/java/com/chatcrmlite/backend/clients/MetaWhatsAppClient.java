@@ -910,4 +910,125 @@ public class MetaWhatsAppClient implements WhatsAppClient {
     public byte[] downloadMedia(String mediaUrl, String accessToken) {
         return streamMedia(mediaUrl, accessToken, 100L * 1024 * 1024, in -> in.readAllBytes());
     }
+
+    // ==========================================
+    // WHATSAPP GRAPH CALLING ENDPOINTS (v21.0+)
+    // ==========================================
+
+    public JsonNode preAcceptCall(String phoneNumberId, String accessToken, String callId, String sdpAnswer) {
+        String url = String.format("%s/%s/%s/calls", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> session = Map.of(
+            "sdp_type", "answer",
+            "sdp", sdpAnswer != null ? sdpAnswer : ""
+        );
+        Map<String, Object> body = Map.of(
+            "action", "pre_accept",
+            "call_id", callId,
+            "session", session
+        );
+        return executePostCall(url, accessToken, body, "pre_accept");
+    }
+
+    public JsonNode acceptIncomingCall(String phoneNumberId, String accessToken, String callId) {
+        String url = String.format("%s/%s/%s/calls", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> body = Map.of(
+            "action", "accept",
+            "call_id", callId
+        );
+        return executePostCall(url, accessToken, body, "accept");
+    }
+
+    public JsonNode rejectIncomingCall(String phoneNumberId, String accessToken, String callId, String reason) {
+        String url = String.format("%s/%s/%s/calls", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> body = Map.of(
+            "action", "reject",
+            "call_id", callId,
+            "reason", reason != null ? reason : "USER_BUSY"
+        );
+        return executePostCall(url, accessToken, body, "reject");
+    }
+
+    public JsonNode initiateBusinessCall(String phoneNumberId, String accessToken, String toWaId, String sdpOffer, String bizOpaqueCallbackData) {
+        String url = String.format("%s/%s/%s/calls", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> session = Map.of(
+            "sdp_type", "offer",
+            "sdp", sdpOffer != null ? sdpOffer : ""
+        );
+        Map<String, Object> body = new HashMap<>();
+        body.put("action", "connect");
+        body.put("to", toWaId);
+        body.put("session", session);
+        if (bizOpaqueCallbackData != null && !bizOpaqueCallbackData.isBlank()) {
+            body.put("biz_opaque_callback_data", bizOpaqueCallbackData);
+        }
+        return executePostCall(url, accessToken, body, "connect");
+    }
+
+    public JsonNode terminateCall(String phoneNumberId, String accessToken, String callId) {
+        String url = String.format("%s/%s/%s/calls", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> body = Map.of(
+            "action", "terminate",
+            "call_id", callId
+        );
+        return executePostCall(url, accessToken, body, "terminate");
+    }
+
+    private JsonNode executePostCall(String url, String accessToken, Map<String, Object> body, String actionName) {
+        Map<String, Object> payload = new HashMap<>(body);
+        payload.putIfAbsent("messaging_product", "whatsapp");
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        HttpEntity<Map<String, Object>> entity = new HttpEntity<>(payload, headers);
+        Retry retry = retryRegistry.retry("whatsAppClient");
+
+        try {
+            return Retry.decorateSupplier(retry, () -> {
+                return restTemplate.postForObject(url, entity, JsonNode.class);
+            }).get();
+        } catch (HttpStatusCodeException e) {
+            String fullError = e.getResponseBodyAsString();
+            log.error("❌ [MetaAPI] Call action '{}' failed: HTTP {} - {}", actionName, e.getStatusCode(), fullError);
+            throw new RuntimeException("Meta Call API Error (" + actionName + "): " + parseMetaError(fullError, e.getStatusCode().toString()), e);
+        } catch (Exception e) {
+            log.error("❌ [MetaAPI] Error executing call action '{}': {}", actionName, e.getMessage());
+            throw new RuntimeException("Failed to execute Meta call action (" + actionName + "): " + e.getMessage(), e);
+        }
+    }
+
+    public JsonNode getCallPermissions(String phoneNumberId, String accessToken, String userWaId) {
+        String url = String.format("%s/%s/%s/call_permissions?user=%s", apiBaseUrl, apiVersion, phoneNumberId, userWaId);
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+        HttpEntity<Void> entity = new HttpEntity<>(headers);
+        Retry retry = retryRegistry.retry("whatsAppClient");
+
+        try {
+            return Retry.decorateSupplier(retry, () -> {
+                return restTemplate.exchange(url, org.springframework.http.HttpMethod.GET, entity, JsonNode.class).getBody();
+            }).get();
+        } catch (Exception e) {
+            log.warn("⚠️ [MetaAPI] Failed to fetch call permissions for userWaId={}: {}", userWaId, e.getMessage());
+            return null;
+        }
+    }
+
+    public JsonNode sendCallPermissionRequest(String phoneNumberId, String accessToken, String toWaId, String messageText) {
+        String url = String.format("%s/%s/%s/messages", apiBaseUrl, apiVersion, phoneNumberId);
+        Map<String, Object> body = Map.of(
+            "messaging_product", "whatsapp",
+            "recipient_type", "individual",
+            "to", toWaId,
+            "type", "interactive",
+            "interactive", Map.of(
+                "type", "voice_call",
+                "body", Map.of("text", messageText != null ? messageText : "Would you like our AI assistant to call you?"),
+                "action", Map.of("name", "call_permission_request")
+            )
+        );
+        return executePostCall(url, accessToken, body, "send_call_permission_request");
+    }
 }
+

@@ -332,6 +332,22 @@
       <artifactId>razorpay-java</artifactId>
       <version>1.4.3</version>
     </dependency>
+    <!-- BouncyCastle for WebRTC DTLS 1.2 & SRTP -->
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcprov-jdk18on</artifactId>
+      <version>1.78.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bcpkix-jdk18on</artifactId>
+      <version>1.78.1</version>
+    </dependency>
+    <dependency>
+      <groupId>org.bouncycastle</groupId>
+      <artifactId>bctls-jdk18on</artifactId>
+      <version>1.78.1</version>
+    </dependency>
   </dependencies>
 
   <build>

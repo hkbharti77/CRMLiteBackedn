@@ -80,6 +80,14 @@ public class WhatsAppPhoneNumberConfig extends BaseTenantEntity {
     private Boolean metaBusinessAgentEnabled = false;
 
     @Builder.Default
+    @Column(name = "signaling_mode", length = 32)
+    private String signalingMode = "GRAPH";
+
+    @Builder.Default
+    @Column(name = "max_concurrent_calls")
+    private Integer maxConcurrentCalls = 5;
+
+    @Builder.Default
     @Column(name = "updated_at", nullable = false)
     private Instant updatedAt = Instant.now();
 

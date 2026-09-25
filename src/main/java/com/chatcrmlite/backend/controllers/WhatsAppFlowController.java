@@ -173,8 +173,9 @@ public class WhatsAppFlowController {
             fieldsConfigJson = "[]";
         }
         String confirmationMessage = (String) payload.get("confirmationMessage");
+        String flowJson = (String) payload.get("flowJson");
 
-        WhatsAppFlow flow = flowService.saveDraft(name, category, fieldsConfigJson, confirmationMessage, user);
+        WhatsAppFlow flow = flowService.saveDraft(name, category, fieldsConfigJson, confirmationMessage, flowJson, user);
         return ResponseEntity.ok(flow);
     }
 
@@ -193,8 +194,9 @@ public class WhatsAppFlowController {
             fieldsConfigJson = "[]";
         }
         String confirmationMessage = (String) payload.get("confirmationMessage");
+        String flowJson = (String) payload.get("flowJson");
 
-        WhatsAppFlow flow = flowService.updateDraftRevision(id, name, category, fieldsConfigJson, confirmationMessage, user);
+        WhatsAppFlow flow = flowService.updateDraftRevision(id, name, category, fieldsConfigJson, confirmationMessage, flowJson, user);
         return ResponseEntity.ok(flow);
     }
 

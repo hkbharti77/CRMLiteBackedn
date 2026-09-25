@@ -72,7 +72,7 @@ public class FlowValidator {
     }
 
     /**
-     * Validates compiled Meta Flow JSON schema.
+     * Validates compiled Meta Flow JSON schema according to Meta Cloud API Guidelines (v7.0).
      */
     public void validateCompiledMetaJson(String flowJson) {
         if (flowJson == null || flowJson.isBlank()) {
@@ -80,13 +80,39 @@ public class FlowValidator {
         }
         try {
             JsonNode root = objectMapper.readTree(flowJson);
+            if (!root.isObject()) {
+                throw new IllegalArgumentException("Meta Flow JSON root must be a JSON object");
+            }
+
             String ver = root.path("version").asText("");
-            if (ver.isBlank() || (!ver.startsWith("6.") && !ver.startsWith("7."))) {
-                throw new IllegalArgumentException("Meta Flow JSON must specify a valid version (e.g. 7.0, 6.3)");
+            if (ver.isBlank()) {
+                throw new IllegalArgumentException("Meta Flow JSON must specify a 'version' field (e.g. '7.0', '6.3')");
             }
-            if (!root.has("screens") || !root.path("screens").isArray() || root.path("screens").size() == 0) {
-                throw new IllegalArgumentException("Meta Flow JSON must specify at least one screen");
+
+            JsonNode screens = root.path("screens");
+            if (!screens.isArray() || screens.size() == 0) {
+                throw new IllegalArgumentException("Meta Flow JSON must contain at least one screen in 'screens' array");
             }
+
+            Set<String> screenIds = new HashSet<>();
+            for (int i = 0; i < screens.size(); i++) {
+                JsonNode screen = screens.get(i);
+                String screenId = screen.path("id").asText("").trim();
+                if (screenId.isBlank()) {
+                    throw new IllegalArgumentException("Screen at index " + i + " is missing an 'id'");
+                }
+                if (screenIds.contains(screenId)) {
+                    throw new IllegalArgumentException("Duplicate screen id detected: '" + screenId + "'");
+                }
+                screenIds.add(screenId);
+
+                JsonNode layout = screen.path("layout");
+                if (layout.isMissingNode() || !layout.isObject()) {
+                    throw new IllegalArgumentException("Screen '" + screenId + "' must have a 'layout' object");
+                }
+            }
+        } catch (IllegalArgumentException iae) {
+            throw iae;
         } catch (Exception e) {
             throw new IllegalArgumentException("Compiled Meta Flow JSON is invalid: " + e.getMessage());
         }

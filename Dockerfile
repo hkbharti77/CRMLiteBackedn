@@ -40,7 +40,7 @@ COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes  .
 # Removed Docker HEALTHCHECK because Render does its own TCP health checks,
 # and Docker's healthcheck was killing the container before it could finish booting on 0.1 CPU.
 
-EXPOSE 8080
+EXPOSE 8080 50000-50100/udp
 
 # JVM flags optimized for containers:
 #   UseSerialGC: uses minimal memory footprint compared to G1GC

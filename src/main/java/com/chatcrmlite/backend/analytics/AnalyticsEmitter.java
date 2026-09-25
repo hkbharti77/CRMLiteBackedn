@@ -10,18 +10,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
 
-@Data @Builder
-class AnalyticsEvent {
-    private String type; // AI_USAGE, CONVERSION, TENANT_GROWTH
-    private UUID tenantId;
-    private long timestamp;
-    private Map<String, Object> data;
-}
-
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AnalyticsEmitter {
+
+    @Data
+    @Builder
+    public static class AnalyticsEvent {
+        private String type; // AI_USAGE, CONVERSION, TENANT_GROWTH
+        private UUID tenantId;
+        private long timestamp;
+        private Map<String, Object> data;
+    }
 
     private final StringRedisTemplate redisTemplate;
     private final String STREAM_KEY = "analytics:stream";

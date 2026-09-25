@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.time.Instant;
 import java.util.UUID;
 
 @Service
@@ -83,6 +84,8 @@ public class WebhookWorker implements StreamListener<String, MapRecord<String, S
     @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.StandbyProcessor standbyProcessor;
     @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.PhoneCallingSettingsService phoneCallingSettingsService;
     @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.BusinessUsernameService businessUsernameService;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.WhatsAppCallingAgentService callingAgentService;
+    @Autowired(required = false) private com.chatcrmlite.backend.services.whatsapp.OutboundCallPermissionService outboundCallPermissionService;
 
     @Value("${whatsapp.async.stream.ingress}")
     private String streamName;
@@ -224,6 +227,16 @@ public class WebhookWorker implements StreamListener<String, MapRecord<String, S
                         businessUsernameService.handleUsernameUpdate(entry, change, eventTimestamp);
                     }
                     break;
+                case "calls":
+                    if (callingAgentService != null) {
+                        try {
+                            com.chatcrmlite.backend.dto.whatsapp.WhatsAppCallWebhookEnvelope envelope = objectMapper.readValue(payload, com.chatcrmlite.backend.dto.whatsapp.WhatsAppCallWebhookEnvelope.class);
+                            callingAgentService.processWebhookEnvelope(envelope);
+                        } catch (Exception e) {
+                            log.error("❌ [WebhookWorker] Error processing call webhook envelope: {}", e.getMessage(), e);
+                        }
+                    }
+                    break;
                 default:
                     log.debug("ℹ️ [BSP] Unhandled webhook field: {}", field);
                     break;
@@ -291,6 +304,34 @@ public class WebhookWorker implements StreamListener<String, MapRecord<String, S
                         contactIdentityService.processSystemMessage(firstMsg, tenantId, value);
                     }
                     return false;
+                }
+
+                // Intercept call permission interactive replies
+                if ("interactive".equalsIgnoreCase(msgType)) {
+                    JsonNode interactive = firstMsg.path("interactive");
+                    String interType = interactive.path("type").asText("");
+                    JsonNode permReply = interactive.has("call_permission_reply") ? interactive.path("call_permission_reply") : interactive.path("voice_call");
+                    if ("call_permission_reply".equalsIgnoreCase(interType) || "voice_call".equalsIgnoreCase(interType) || !permReply.isMissingNode()) {
+                        if (outboundCallPermissionService != null && !permReply.isMissingNode()) {
+                            String status = permReply.path("status").asText(null);
+                            String permType = permReply.path("permission_type").asText(null);
+                            Boolean isPermanent = permReply.has("is_permanent") ? permReply.path("is_permanent").asBoolean() : null;
+                            String responseSource = permReply.path("response_source").asText("USER_RESPONSE");
+                            Instant expiresAt = null;
+                            if (permReply.has("expiration_timestamp")) {
+                                long expSeconds = permReply.path("expiration_timestamp").asLong(0);
+                                if (expSeconds > 0) expiresAt = Instant.ofEpochSecond(expSeconds);
+                            }
+                            if (status != null && !status.isBlank()) {
+                                outboundCallPermissionService.reconcilePermissionFromWebhook(
+                                    tenantId, phoneNumberId.trim(), waId, status.toUpperCase(),
+                                    permType != null ? permType.toUpperCase() : null,
+                                    isPermanent, responseSource, expiresAt
+                                );
+                                log.info("📞 [CallPermissionReply] Reconciled call permission from reply for user={}: status={}", waId, status);
+                            }
+                        }
+                    }
                 }
 
                 if (!resourceManager.canConsume(tenantId,

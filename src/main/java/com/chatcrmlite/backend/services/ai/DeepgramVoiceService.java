@@ -214,7 +214,7 @@ public class DeepgramVoiceService {
         }
 
         long start = System.currentTimeMillis();
-        String activeModel = (customModel != null && !customModel.isBlank()) ? customModel : ttsModel;
+        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-stella-en");
         String safeKey = maskKey(apiKey);
 
         String url = "https://api.deepgram.com/v1/speak?model=" + activeModel + "&encoding=mulaw&sample_rate=8000&container=none";

@@ -1,0 +1,558 @@
+package com.chatcrmlite.backend.services.voice;
+
+import com.chatcrmlite.backend.services.ai.DeepgramVoiceService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Service;
+
+import java.io.ByteArrayOutputStream;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * Enterprise Native Java WebRTC Media Gateway for WhatsApp Business Calling.
+ * Handles UDP socket lifecycle, STUN Binding responses, RTP packetization, and AI audio streaming.
+ */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class WhatsAppWebRtcMediaGateway {
+
+    private final WhatsAppVoiceCallBridgeService voiceCallBridgeService;
+    private final DeepgramVoiceService deepgramVoiceService;
+    private final WebRtcDtlsHandler dtlsHandler;
+
+    @Value("${crmlite.calling.media.port-range-start:50000}")
+    private int portRangeStart;
+
+    @Value("${crmlite.calling.media.public-ip:127.0.0.1}")
+    private String publicMediaIp;
+
+    private volatile String resolvedPublicIp = null;
+
+    private final Map<String, WebRtcMediaSession> activeSessions = new ConcurrentHashMap<>();
+    private final ScheduledExecutorService scheduler = Executors.newScheduledThreadPool(4);
+
+    /**
+     * Resolves the server's public IP address for WebRTC NAT traversal
+     */
+    private String getPublicMediaIp() {
+        if (publicMediaIp != null && !publicMediaIp.isBlank() && !"127.0.0.1".equals(publicMediaIp) && !"localhost".equalsIgnoreCase(publicMediaIp)) {
+            return publicMediaIp;
+        }
+        if (resolvedPublicIp != null) return resolvedPublicIp;
+
+        try {
+            java.net.URL url = new java.net.URL("https://api.ipify.org");
+            try (java.io.BufferedReader in = new java.io.BufferedReader(new java.io.InputStreamReader(url.openStream()))) {
+                String ip = in.readLine().trim();
+                if (ip.matches("^\\d+\\.\\d+\\.\\d+\\.\\d+$")) {
+                    resolvedPublicIp = ip;
+                    log.info("🌐 [WebRtcGateway] Auto-resolved public media IP: {}", resolvedPublicIp);
+                    return resolvedPublicIp;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [WebRtcGateway] Could not auto-detect public IP (using fallback): {}", e.getMessage());
+        }
+        return "127.0.0.1";
+    }
+
+    /**
+     * Initializes a media session for an incoming/outgoing WhatsApp call and generates the WebRTC SDP answer.
+     */
+    public String createMediaSession(String callId, UUID tenantId, String fromWaId, String sdpOffer) {
+        log.info("🎙️ [WebRtcGateway] Creating WebRTC media session for callId={}", callId);
+        if (sdpOffer != null) {
+            log.info("📄 [WebRtcGateway] Meta Remote SDP Offer for callId={}:\n{}", callId, sdpOffer);
+        }
+
+        // Terminate any existing session for this callId
+        terminateSession(callId);
+
+        // 1. Allocate UDP DatagramSocket
+        DatagramSocket socket = allocateSocket();
+        int localPort = socket.getLocalPort();
+        String localIp = "127.0.0.1";
+        try {
+            localIp = InetAddress.getLocalHost().getHostAddress();
+        } catch (Exception ignored) {
+        }
+
+        // 2. STUN NAT Hole-Punching via Google STUN server (stun.l.google.com:19302)
+        InetSocketAddress srflxCandidate = discoverSrflxCandidate(socket);
+        String effectiveIp = (srflxCandidate != null) ? srflxCandidate.getHostString() : getPublicMediaIp();
+
+        // 3. Parse Remote Meta Candidate and SDP details
+        InetSocketAddress remoteMetaAddress = parseRemoteMetaCandidate(sdpOffer);
+        log.info("🎯 [WebRtcGateway] Target Meta Remote Candidate: {}", remoteMetaAddress);
+
+        String mid = parseAttribute(sdpOffer, "(?m)^a=mid:(\\S+)", "audio");
+        String opusPt = parseAttribute(sdpOffer, "(?m)^a=rtpmap:(\\d+)\\s+opus/48000/2", "111");
+
+        long sessionId = Math.abs((long) callId.hashCode() + 1000000000L);
+        String ufrag = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
+        String pwd = UUID.randomUUID().toString().replace("-", "").substring(0, 24);
+        String fingerprint = dtlsHandler.getSha256Fingerprint();
+
+        WebRtcMediaSession session = new WebRtcMediaSession(
+                callId, tenantId, fromWaId, socket, remoteMetaAddress, Integer.parseInt(opusPt), ufrag, pwd
+        );
+        activeSessions.put(callId, session);
+
+        // 4. Start Inbound UDP Listener & STUN Handler
+        startInboundListener(session);
+
+        // 5. Generate RFC 8866 compliant SDP answer tailored for Meta WhatsApp WebRTC Engine
+        StringBuilder sdp = new StringBuilder();
+        sdp.append("v=0\r\n");
+        sdp.append("o=- ").append(sessionId).append(" 2 IN IP4 127.0.0.1\r\n");
+        sdp.append("s=CRMLite WebRTC Engine\r\n");
+        sdp.append("t=0 0\r\n");
+        sdp.append("a=group:BUNDLE ").append(mid).append("\r\n");
+        sdp.append("a=msid-semantic: WMS\r\n");
+        sdp.append("m=audio ").append(localPort).append(" UDP/TLS/RTP/SAVPF ").append(opusPt).append("\r\n");
+        sdp.append("c=IN IP4 ").append(effectiveIp).append("\r\n");
+        sdp.append("a=rtcp:9 IN IP4 0.0.0.0\r\n");
+        sdp.append("a=ice-ufrag:").append(ufrag).append("\r\n");
+        sdp.append("a=ice-pwd:").append(pwd).append("\r\n");
+        sdp.append("a=ice-options:trickle\r\n");
+        sdp.append("a=fingerprint:SHA-256 ").append(fingerprint).append("\r\n");
+        sdp.append(sdpOffer != null ? "a=setup:active\r\n" : "a=setup:actpass\r\n");
+        sdp.append("a=mid:").append(mid).append("\r\n");
+        sdp.append("a=rtcp-mux\r\n");
+        sdp.append("a=rtcp-rsize\r\n");
+        sdp.append("a=sendrecv\r\n");
+        sdp.append("a=rtpmap:").append(opusPt).append(" opus/48000/2\r\n");
+        sdp.append("a=fmtp:").append(opusPt).append(" maxaveragebitrate=20000;maxplaybackrate=16000;minptime=20;sprop-maxcapturerate=16000;useinbandfec=1\r\n");
+        sdp.append("a=ptime:20\r\n");
+        sdp.append("a=maxptime:20\r\n");
+        sdp.append("a=candidate:1 1 UDP 2130706431 ").append(localIp).append(" ").append(localPort).append(" typ host\r\n");
+        if (srflxCandidate != null) {
+            sdp.append("a=candidate:2 1 UDP 1694498815 ").append(srflxCandidate.getHostString()).append(" ").append(srflxCandidate.getPort())
+               .append(" typ srflx raddr ").append(localIp).append(" rport ").append(localPort).append("\r\n");
+        } else if (!"127.0.0.1".equals(effectiveIp)) {
+            sdp.append("a=candidate:2 1 UDP 1694498815 ").append(effectiveIp).append(" ").append(localPort)
+               .append(" typ srflx raddr ").append(localIp).append(" rport ").append(localPort).append("\r\n");
+        }
+        sdp.append("a=end-of-candidates\r\n");
+
+        return sdp.toString();
+    }
+
+    /**
+     * Discovers external NAT mapped candidate using Google STUN
+     */
+    private InetSocketAddress discoverSrflxCandidate(DatagramSocket socket) {
+        try {
+            InetSocketAddress stunServer = new InetSocketAddress("stun.l.google.com", 19302);
+            byte[] txId = new byte[12];
+            java.util.concurrent.ThreadLocalRandom.current().nextBytes(txId);
+
+            ByteBuffer req = ByteBuffer.allocate(20);
+            req.putShort((short) 0x0001); // STUN Binding Request
+            req.putShort((short) 0x0000); // 0 attributes
+            req.putInt(0x2112A442);       // Magic Cookie
+            req.put(txId);
+
+            byte[] reqBytes = req.array();
+            DatagramPacket reqPacket = new DatagramPacket(reqBytes, reqBytes.length, stunServer);
+            socket.send(reqPacket);
+
+            byte[] resBuffer = new byte[512];
+            DatagramPacket resPacket = new DatagramPacket(resBuffer, resBuffer.length);
+            socket.setSoTimeout(1000);
+            try {
+                socket.receive(resPacket);
+                byte[] data = resPacket.getData();
+                if (data.length >= 20 && data[0] == 0x01 && data[1] == 0x01) {
+                    int offset = 20;
+                    while (offset + 4 <= resPacket.getLength()) {
+                        int attrType = ((data[offset] & 0xFF) << 8) | (data[offset + 1] & 0xFF);
+                        int attrLen = ((data[offset + 2] & 0xFF) << 8) | (data[offset + 3] & 0xFF);
+                        if (attrType == 0x0020 && offset + 4 + attrLen <= resPacket.getLength()) {
+                            int family = data[offset + 5] & 0xFF;
+                            if (family == 0x01) {
+                                int xorPort = ((data[offset + 6] & 0xFF) << 8) | (data[offset + 7] & 0xFF);
+                                int mappedPort = xorPort ^ (0x2112A442 >> 16);
+                                int b1 = (data[offset + 8] & 0xFF) ^ 0x21;
+                                int b2 = (data[offset + 9] & 0xFF) ^ 0x12;
+                                int b3 = (data[offset + 10] & 0xFF) ^ 0xA4;
+                                int b4 = (data[offset + 11] & 0xFF) ^ 0x42;
+                                String mappedIp = b1 + "." + b2 + "." + b3 + "." + b4;
+                                InetSocketAddress srflx = new InetSocketAddress(mappedIp, mappedPort);
+                                log.info("🌐 [WebRtcGateway] Google STUN resolved srflx candidate: {}", srflx);
+                                return srflx;
+                            }
+                        }
+                        offset += 4 + attrLen;
+                        if (attrLen % 4 != 0) {
+                            offset += (4 - (attrLen % 4));
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ [WebRtcGateway] STUN response timeout: {}", e.getMessage());
+            } finally {
+                socket.setSoTimeout(0);
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [WebRtcGateway] STUN NAT discovery error: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Starts outbound media streaming immediately upon call activation (prevents 138021 MEDIA_RECEIVE_TIMEOUT).
+     */
+    public void startOutboundMedia(String callId) {
+        WebRtcMediaSession session = activeSessions.get(callId);
+        if (session == null || !session.running.get()) return;
+
+        log.info("▶️ [WebRtcGateway] Starting prompt outbound media stream for callId={}", callId);
+
+        // Send active STUN binding ping to Meta's remote candidate to establish 2-way ICE path
+        if (session.remoteAddress != null) {
+            session.sendStunBindingPing(session.remoteAddress);
+        }
+
+        // Schedule periodic RTP comfort frame transmission every 20ms and periodic STUN keep-alive every 500ms
+        session.outboundTask = scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (!session.running.get() || session.remoteAddress == null) return;
+                byte[] rtpFrame = session.buildNextRtpPacket();
+                DatagramPacket packet = new DatagramPacket(rtpFrame, rtpFrame.length, session.remoteAddress);
+                session.socket.send(packet);
+
+                // Periodic STUN keepalive ping every ~500ms (every 25 frames)
+                if (session.sequenceNumber.get() % 25 == 0) {
+                    session.sendStunBindingPing(session.remoteAddress);
+                }
+            } catch (Exception e) {
+                // Socket closed or network glitch
+            }
+        }, 0, 20, TimeUnit.MILLISECONDS);
+
+        // Schedule periodic VAD endpointing loop to detect user speech and trigger AI response
+        session.vadTask = scheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (!session.running.get() || session.isProcessingTurn.get()) return;
+                long silenceDuration = System.currentTimeMillis() - session.lastInboundPacketTime;
+                int bufferSize = session.inboundPcmBuffer.size();
+
+                // If user spoke (received > 3000 bytes) and has paused for >= 700ms
+                if (bufferSize > 3000 && silenceDuration >= 700 && session.lastInboundPacketTime > 0) {
+                    byte[] userAudio;
+                    synchronized (session.inboundPcmBuffer) {
+                        userAudio = session.inboundPcmBuffer.toByteArray();
+                        session.inboundPcmBuffer.reset();
+                    }
+                    session.isProcessingTurn.set(true);
+                    log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes), processing AI turn for callId={}", userAudio.length, callId);
+
+                    CompletableFuture.runAsync(() -> {
+                        try {
+                            WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
+                                    voiceCallBridgeService.processCallTurn(session.tenantId, callId, userAudio, "audio/wav", null);
+                            log.info("🤖 [WebRtcGateway] AI Response for callId={}: {}", callId, turn.aiResponseText());
+                            if (turn.synthesizedAudio() != null && turn.synthesizedAudio().length > 0) {
+                                enqueueOutboundAudio(callId, turn.synthesizedAudio());
+                            }
+                        } catch (Exception e) {
+                            log.error("❌ [WebRtcGateway] Error processing user voice turn: {}", e.getMessage());
+                        } finally {
+                            session.isProcessingTurn.set(false);
+                        }
+                    });
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ [WebRtcGateway] Error in VAD monitor: {}", e.getMessage());
+            }
+        }, 1000, 250, TimeUnit.MILLISECONDS);
+
+        // Trigger welcome voice turn asynchronously
+        CompletableFuture.runAsync(() -> {
+            try {
+                Thread.sleep(1000); // 1-second pause after connection
+                WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
+                        voiceCallBridgeService.processCallTurn(session.tenantId, callId, new byte[0], "audio/wav", "Hello, I just connected");
+                log.info("🤖 [WebRtcGateway] Welcome AI Greeting for callId={}: {}", callId, turn.aiResponseText());
+                if (turn.synthesizedAudio() != null && turn.synthesizedAudio().length > 0) {
+                    enqueueOutboundAudio(callId, turn.synthesizedAudio());
+                }
+            } catch (Exception e) {
+                log.error("❌ [WebRtcGateway] Error generating welcome turn: {}", e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Enqueues synthesized audio into the WebRTC session output queue (sliced into 20ms frames)
+     */
+    public void enqueueOutboundAudio(String callId, byte[] audioBytes) {
+        if (audioBytes == null || audioBytes.length == 0) return;
+        WebRtcMediaSession session = activeSessions.get(callId);
+        if (session == null || !session.running.get()) return;
+
+        int chunkSize = 160; // ~20ms frames
+        for (int i = 0; i < audioBytes.length; i += chunkSize) {
+            int len = Math.min(chunkSize, audioBytes.length - i);
+            byte[] chunk = Arrays.copyOfRange(audioBytes, i, i + len);
+            session.outboundAudioQueue.offer(chunk);
+        }
+        log.info("🔊 [WebRtcGateway] Enqueued {} audio frames for callId={}", (audioBytes.length + chunkSize - 1) / chunkSize, callId);
+    }
+
+    /**
+     * Flushes queued outbound audio on caller barge-in
+     */
+    public void flushOutboundAudio(String callId) {
+        WebRtcMediaSession session = activeSessions.get(callId);
+        if (session != null) {
+            session.outboundAudioQueue.clear();
+            log.info("🛑 [WebRtcGateway] Flushed outbound audio queue (barge-in) for callId={}", callId);
+        }
+    }
+
+    /**
+     * Terminates the WebRTC media session and cleans up UDP ports.
+     */
+    public void terminateSession(String callId) {
+        WebRtcMediaSession session = activeSessions.remove(callId);
+        if (session != null) {
+            session.running.set(false);
+            if (session.outboundTask != null) {
+                session.outboundTask.cancel(true);
+            }
+            if (session.vadTask != null) {
+                session.vadTask.cancel(true);
+            }
+            if (session.socket != null && !session.socket.isClosed()) {
+                session.socket.close();
+            }
+            log.info("⏹️ [WebRtcGateway] Media session closed for callId={}", callId);
+        }
+    }
+
+    private void startInboundListener(WebRtcMediaSession session) {
+        Thread listenerThread = new Thread(() -> {
+            byte[] buffer = new byte[2048];
+            DatagramPacket packet = new DatagramPacket(buffer, buffer.length);
+            log.info("👂 [WebRtcGateway] Listening for UDP/RTP packets on port {}", session.socket.getLocalPort());
+
+            while (session.running.get() && !session.socket.isClosed()) {
+                try {
+                    session.socket.receive(packet);
+                    byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
+                    InetSocketAddress sender = (InetSocketAddress) packet.getSocketAddress();
+                    log.info("📦 [WebRtcGateway] Received Inbound UDP packet len={} type=0x{} from {}", data.length, (data.length > 0 ? Integer.toHexString(data[0] & 0xFF) : "0"), sender);
+
+                    // Update remote address if Meta sends from a different IP/port
+                    if (session.remoteAddress == null) {
+                        session.remoteAddress = sender;
+                    }
+
+                    // 1. Handle STUN Binding Request (0x0001)
+                    if (data.length >= 20 && data[0] == 0x00 && data[1] == 0x01) {
+                        handleStunBindingRequest(session, data, sender);
+                        continue;
+                    }
+
+                    // 2. Handle RTP Audio Packet
+                    if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
+                        session.inboundPacketsCount.incrementAndGet();
+                        session.lastInboundPacketTime = System.currentTimeMillis();
+
+                        // Barge-in: if user speaks while AI is playing, flush audio
+                        if (!session.outboundAudioQueue.isEmpty()) {
+                            flushOutboundAudio(session.callId);
+                        }
+
+                        // Extract RTP payload (skip 12-byte header)
+                        byte[] payload = Arrays.copyOfRange(data, 12, data.length);
+                        synchronized (session.inboundPcmBuffer) {
+                            session.inboundPcmBuffer.write(payload);
+                        }
+                    }
+
+                } catch (Exception e) {
+                    if (!session.running.get()) break;
+                }
+            }
+        });
+        listenerThread.setName("webrtc-media-" + session.callId.substring(0, Math.min(10, session.callId.length())));
+        listenerThread.setDaemon(true);
+        listenerThread.start();
+    }
+
+    /**
+     * Responds to Meta STUN Binding Requests with XOR-MAPPED-ADDRESS to finalize ICE connection.
+     */
+    private void handleStunBindingRequest(WebRtcMediaSession session, byte[] stunRequest, InetSocketAddress sender) {
+        try {
+            byte[] transactionId = Arrays.copyOfRange(stunRequest, 8, 20);
+            ByteBuffer res = ByteBuffer.allocate(32);
+            res.putShort((short) 0x0101); // STUN Binding Success Response
+            res.putShort((short) 12);     // Length of attributes (XOR-MAPPED-ADDRESS is 12 bytes)
+            res.putInt(0x2112A442);       // Magic Cookie
+            res.put(transactionId);       // Transaction ID
+
+            // Attribute: XOR-MAPPED-ADDRESS (0x0020)
+            res.putShort((short) 0x0020);
+            res.putShort((short) 8);      // Attribute length
+            res.put((byte) 0);            // Reserved
+            res.put((byte) 0x01);         // IPv4 family
+            int xorPort = sender.getPort() ^ (0x2112A442 >> 16);
+            res.putShort((short) xorPort);
+            byte[] ipBytes = sender.getAddress().getAddress();
+            for (int i = 0; i < 4; i++) {
+                res.put((byte) (ipBytes[i] ^ (0x2112A442 >> (24 - i * 8))));
+            }
+
+            byte[] responseBytes = res.array();
+            DatagramPacket respPacket = new DatagramPacket(responseBytes, responseBytes.length, sender);
+            session.socket.send(respPacket);
+        } catch (Exception e) {
+            log.warn("⚠️ [WebRtcGateway] Error responding to STUN request: {}", e.getMessage());
+        }
+    }
+
+    private DatagramSocket allocateSocket() {
+        for (int p = portRangeStart; p < portRangeStart + 500; p++) {
+            try {
+                return new DatagramSocket(p);
+            } catch (Exception ignored) {
+            }
+        }
+        try {
+            return new DatagramSocket(); // fallback to any available port
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to allocate UDP DatagramSocket for WebRTC: " + e.getMessage(), e);
+        }
+    }
+
+    private InetSocketAddress parseRemoteMetaCandidate(String sdpOffer) {
+        if (sdpOffer == null) return null;
+        Matcher m = Pattern.compile("(?m)^a=candidate:\\S+\\s+\\d+\\s+udp\\s+\\d+\\s+(\\S+)\\s+(\\d+)", Pattern.CASE_INSENSITIVE).matcher(sdpOffer);
+        if (m.find()) {
+            try {
+                String ip = m.group(1);
+                int port = Integer.parseInt(m.group(2));
+                return new InetSocketAddress(InetAddress.getByName(ip), port);
+            } catch (Exception ignored) {
+            }
+        }
+        // Fallback to c=IN IP4 line
+        Matcher cMatcher = Pattern.compile("(?m)^c=IN IP4 (\\S+)").matcher(sdpOffer);
+        Matcher mMatcher = Pattern.compile("(?m)^m=audio (\\d+)").matcher(sdpOffer);
+        if (cMatcher.find() && mMatcher.find()) {
+            try {
+                return new InetSocketAddress(InetAddress.getByName(cMatcher.group(1)), Integer.parseInt(mMatcher.group(1)));
+            } catch (Exception ignored) {
+            }
+        }
+        return null;
+    }
+
+    private String parseAttribute(String sdp, String regex, String defaultVal) {
+        if (sdp == null) return defaultVal;
+        Matcher m = Pattern.compile(regex, Pattern.CASE_INSENSITIVE).matcher(sdp);
+        return m.find() ? m.group(1).trim() : defaultVal;
+    }
+
+    /**
+     * Active WebRTC Call Media Session
+     */
+    public static class WebRtcMediaSession {
+        final String callId;
+        final UUID tenantId;
+        final String fromWaId;
+        final DatagramSocket socket;
+        volatile InetSocketAddress remoteAddress;
+        final int payloadType;
+        final String ufrag;
+        final String pwd;
+        final AtomicBoolean running = new AtomicBoolean(true);
+        final AtomicInteger sequenceNumber = new AtomicInteger(1000);
+        final AtomicLong timestamp = new AtomicLong(0);
+        final AtomicLong inboundPacketsCount = new AtomicLong(0);
+        volatile long lastInboundPacketTime = 0;
+        final long ssrc = 850231558L;
+        final ConcurrentLinkedQueue<byte[]> outboundAudioQueue = new ConcurrentLinkedQueue<>();
+        final ByteArrayOutputStream inboundPcmBuffer = new ByteArrayOutputStream();
+        final AtomicBoolean isProcessingTurn = new AtomicBoolean(false);
+        ScheduledFuture<?> outboundTask;
+        ScheduledFuture<?> vadTask;
+
+        WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd) {
+            this.callId = callId;
+            this.tenantId = tenantId;
+            this.fromWaId = fromWaId;
+            this.socket = socket;
+            this.remoteAddress = remoteAddress;
+            this.payloadType = payloadType;
+            this.ufrag = ufrag;
+            this.pwd = pwd;
+        }
+
+        /**
+         * Builds an RTP packet containing either next queued audio frame or Opus comfort silence (0xF8, 0xFF, 0xFE)
+         */
+        public byte[] buildNextRtpPacket() {
+            byte[] payload = outboundAudioQueue.poll();
+            if (payload == null) {
+                payload = new byte[]{(byte) 0xF8, (byte) 0xFF, (byte) 0xFE}; // Opus silence frame
+            }
+
+            ByteBuffer buf = ByteBuffer.allocate(12 + payload.length);
+
+            // RTP Header
+            buf.put((byte) 0x80);                                // Version 2, no padding, no extensions, 0 CSRC
+            buf.put((byte) (payloadType & 0x7F));                // Marker=0, PayloadType (111)
+            buf.putShort((short) sequenceNumber.getAndIncrement()); // Sequence Number
+            buf.putInt((int) timestamp.getAndAdd(960));          // Timestamp (+960 samples for 20ms @ 48kHz)
+            buf.putInt((int) ssrc);                              // SSRC
+            buf.put(payload);
+
+            return buf.array();
+        }
+
+        /**
+         * Sends an active STUN binding request ping to the remote candidate to open NAT bindings and establish 2-way ICE path
+         */
+        public void sendStunBindingPing(InetSocketAddress destination) {
+            if (destination == null || socket.isClosed()) return;
+            try {
+                byte[] txId = new byte[12];
+                java.util.concurrent.ThreadLocalRandom.current().nextBytes(txId);
+
+                ByteBuffer buf = ByteBuffer.allocate(20);
+                buf.putShort((short) 0x0001); // STUN Binding Request
+                buf.putShort((short) 0x0000); // 0 attributes
+                buf.putInt(0x2112A442);       // Magic Cookie
+                buf.put(txId);
+
+                byte[] packetData = buf.array();
+                DatagramPacket packet = new DatagramPacket(packetData, packetData.length, destination);
+                socket.send(packet);
+                log.info("📡 [WebRtcGateway] Sent active STUN ICE binding ping to Meta remote address: {}", destination);
+            } catch (Exception e) {
+                log.warn("⚠️ [WebRtcGateway] Failed to send STUN binding ping: {}", e.getMessage());
+            }
+        }
+    }
+}
+

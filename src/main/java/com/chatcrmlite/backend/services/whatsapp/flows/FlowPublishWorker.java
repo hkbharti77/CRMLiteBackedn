@@ -156,7 +156,23 @@ public class FlowPublishWorker {
 
             // Step 2: Compile & Upload Flow JSON Assets (Version 7.0)
             String flowJson = null;
-            if (ctx.fieldsConfigJson != null && !ctx.fieldsConfigJson.isBlank()) {
+            if (ctx.flowJson != null && !ctx.flowJson.isBlank()) {
+                flowJson = ctx.flowJson;
+                // Ensure version header is 7.0
+                if (!flowJson.contains("\"version\"")) {
+                    flowJson = flowJson.replaceAll("^\\{", "{\"version\": \"7.0\", ");
+                } else {
+                    flowJson = flowJson.replaceAll("\"version\"\\s*:\\s*\"[^\"]+\"", "\"version\": \"7.0\"");
+                }
+                final String finalFlowJson = flowJson;
+                transactionTemplate.executeWithoutResult(status -> {
+                    FlowRevision r = revisionRepository.findById(ctx.revisionId).orElse(null);
+                    if (r != null) {
+                        r.setFlowJson(finalFlowJson);
+                        revisionRepository.save(r);
+                    }
+                });
+            } else if (ctx.fieldsConfigJson != null && !ctx.fieldsConfigJson.isBlank()) {
                 flowJson = schemaBuilder.buildMetaFlowJson(ctx.flowName, "Please complete the form below:", ctx.fieldsConfigJson);
                 final String finalFlowJson = flowJson;
                 transactionTemplate.executeWithoutResult(status -> {
@@ -166,19 +182,9 @@ public class FlowPublishWorker {
                         revisionRepository.save(r);
                     }
                 });
-            } else {
-                flowJson = ctx.flowJson;
-                if (flowJson != null) {
-                    flowJson = flowJson.replaceAll("\"version\"\\s*:\\s*\"[^\"]+\"", "\"version\": \"7.0\"");
-                    final String finalFlowJson = flowJson;
-                    transactionTemplate.executeWithoutResult(status -> {
-                        FlowRevision r = revisionRepository.findById(ctx.revisionId).orElse(null);
-                        if (r != null) {
-                            r.setFlowJson(finalFlowJson);
-                            revisionRepository.save(r);
-                        }
-                    });
-                }
+            }
+            if (flowJson == null || flowJson.isBlank()) {
+                throw new IllegalStateException("Cannot publish Flow: No flowJson or fieldsConfigJson available on revision.");
             }
             metaFlowClient.uploadFlowAssets(metaFlowId, flowJson, ctx.accessToken);
 
