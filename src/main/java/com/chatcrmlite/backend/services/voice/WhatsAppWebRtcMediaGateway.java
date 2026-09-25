@@ -140,13 +140,10 @@ public class WhatsAppWebRtcMediaGateway {
         sdp.append("a=fmtp:").append(opusPt).append(" maxaveragebitrate=20000;maxplaybackrate=16000;minptime=20;sprop-maxcapturerate=16000;useinbandfec=1\r\n");
         sdp.append("a=ptime:20\r\n");
         sdp.append("a=maxptime:20\r\n");
-        sdp.append("a=candidate:1 1 UDP 2130706431 ").append(localIp).append(" ").append(localPort).append(" typ host\r\n");
-        if (srflxCandidate != null) {
+        sdp.append("a=candidate:1 1 UDP 2130706431 ").append(effectiveIp).append(" ").append(localPort).append(" typ host\r\n");
+        if (srflxCandidate != null && !srflxCandidate.getHostString().equals(effectiveIp)) {
             sdp.append("a=candidate:2 1 UDP 1694498815 ").append(srflxCandidate.getHostString()).append(" ").append(srflxCandidate.getPort())
-               .append(" typ srflx raddr ").append(localIp).append(" rport ").append(localPort).append("\r\n");
-        } else if (!"127.0.0.1".equals(effectiveIp)) {
-            sdp.append("a=candidate:2 1 UDP 1694498815 ").append(effectiveIp).append(" ").append(localPort)
-               .append(" typ srflx raddr ").append(localIp).append(" rport ").append(localPort).append("\r\n");
+               .append(" typ srflx raddr ").append(effectiveIp).append(" rport ").append(localPort).append("\r\n");
         }
         sdp.append("a=end-of-candidates\r\n");
 
