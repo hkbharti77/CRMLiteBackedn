@@ -130,14 +130,15 @@ public class WhatsAppWebRtcMediaGateway {
         String opusPt = parseAttribute(sdpOffer, "(?m)^a=rtpmap:(\\d+)\\s+opus/48000/2", "111");
         String remoteUfrag = parseAttribute(sdpOffer, "(?m)^a=ice-ufrag:(\\S+)", null);
         String remotePwd = parseAttribute(sdpOffer, "(?m)^a=ice-pwd:(\\S+)", null);
+        String remoteFingerprint = parseAttribute(sdpOffer, "(?m)^a=fingerprint:SHA-256\\s+(\\S+)", null);
 
         long sessionId = Math.abs((long) callId.hashCode() + 1000000000L);
         String ufrag = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
         String pwd = UUID.randomUUID().toString().replace("-", "").substring(0, 24);
-        String fingerprint = dtlsHandler.getSha256Fingerprint();
+        String localFingerprint = dtlsHandler.getSha256Fingerprint();
 
         WebRtcMediaSession session = new WebRtcMediaSession(
-                callId, tenantId, fromWaId, socket, remoteMetaAddress, Integer.parseInt(opusPt), ufrag, pwd, remoteUfrag, remotePwd
+                callId, tenantId, fromWaId, socket, remoteMetaAddress, Integer.parseInt(opusPt), ufrag, pwd, remoteUfrag, remotePwd, remoteFingerprint, localFingerprint
         );
         activeSessions.put(callId, session);
 
@@ -158,7 +159,7 @@ public class WhatsAppWebRtcMediaGateway {
         sdp.append("a=ice-ufrag:").append(ufrag).append("\r\n");
         sdp.append("a=ice-pwd:").append(pwd).append("\r\n");
         sdp.append("a=ice-options:trickle\r\n");
-        sdp.append("a=fingerprint:SHA-256 ").append(fingerprint).append("\r\n");
+        sdp.append("a=fingerprint:SHA-256 ").append(localFingerprint).append("\r\n");
         sdp.append("a=setup:active\r\n"); // We act as DTLS client (initiator)
         sdp.append("a=mid:").append(mid).append("\r\n");
         sdp.append("a=rtcp-mux\r\n");
@@ -268,7 +269,7 @@ public class WhatsAppWebRtcMediaGateway {
         if (session == null || !session.running.get()) return;
 
         session.state = CallMediaState.ICE_CHECKING;
-        log.info("▶️ [WebRtcGateway] Starting ICE check and DTLS handshake for callId={}", callId);
+        log.info("▶️ [WebRtcGateway] ICE_CHECK_STARTED: Starting ICE checks and DTLS handshake for callId={}", callId);
 
         // Send active STUN binding ping to Meta's remote candidate
         if (session.remoteAddress != null) {
@@ -302,6 +303,7 @@ public class WhatsAppWebRtcMediaGateway {
                         session.state = CallMediaState.SRTP_READY;
                         session.state = CallMediaState.MEDIA_ACTIVE;
                         log.info("🚀 [WebRtcGateway] Call callId={} transition to MEDIA_ACTIVE (SRTP Encryption & Decryption Ready)", callId);
+                        logSessionDiagnostics(session);
 
                         // Start active media streaming and VAD tasks
                         startMediaStreamingTasks(session);
@@ -333,7 +335,7 @@ public class WhatsAppWebRtcMediaGateway {
 
                 DatagramPacket packet = new DatagramPacket(srtpPacket, srtpPacket.length, session.remoteAddress);
                 session.socket.send(packet);
-                session.outboundPacketsCount.incrementAndGet();
+                session.outboundSrtpPacketsCount.incrementAndGet();
 
                 // Periodic STUN keepalive ping every ~1s (every 50 frames)
                 if (session.sequenceNumber.get() % 50 == 0) {
@@ -445,9 +447,28 @@ public class WhatsAppWebRtcMediaGateway {
             if (session.socket != null && !session.socket.isClosed()) {
                 session.socket.close();
             }
-            log.info("⏹️ [WebRtcGateway] Media session closed for callId={}. Inbound packets: {}, Outbound packets: {}",
-                    callId, session.inboundPacketsCount.get(), session.outboundPacketsCount.get());
+            logSessionDiagnostics(session);
         }
+    }
+
+    private void logSessionDiagnostics(WebRtcMediaSession session) {
+        log.info("\n=== WebRTC SESSION DIAGNOSTICS ===\n" +
+                 "callId: {}\n" +
+                 "state: {}\n" +
+                 "remoteCandidate: {}\n" +
+                 "dtlsRole: CLIENT (a=setup:active)\n" +
+                 "localFingerprint: {}\n" +
+                 "remoteFingerprint: {}\n" +
+                 "srtpProfile: SRTP_AES128_CM_HMAC_SHA1_80 (0x0001)\n" +
+                 "inboundStunPackets: {}\n" +
+                 "outboundStunPackets: {}\n" +
+                 "inboundDtlsPackets: {}\n" +
+                 "inboundSrtpPackets: {}\n" +
+                 "outboundSrtpPackets: {}\n" +
+                 "==================================",
+                session.callId, session.state, session.remoteAddress, session.localFingerprint, session.remoteFingerprint,
+                session.inboundStunPacketsCount.get(), session.outboundStunPacketsCount.get(),
+                session.inboundDtlsPacketsCount.get(), session.inboundSrtpPacketsCount.get(), session.outboundSrtpPacketsCount.get());
     }
 
     private void startInboundListener(WebRtcMediaSession session) {
@@ -462,13 +483,17 @@ public class WhatsAppWebRtcMediaGateway {
                     byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
                     InetSocketAddress sender = (InetSocketAddress) packet.getSocketAddress();
 
-                    // Update remote address if Meta sends from a different candidate port
-                    if (session.remoteAddress == null) {
+                    // Update remote address and DTLS transport candidate
+                    if (session.remoteAddress == null || !session.remoteAddress.equals(sender)) {
                         session.remoteAddress = sender;
+                        if (session.dtlsTransportAdapter != null) {
+                            session.dtlsTransportAdapter.setRemoteAddress(sender);
+                        }
                     }
 
                     // 1. Handle STUN Binding Request (0x0001) or Response (0x0101)
                     if (data.length >= 20 && (data[0] == 0x00 || data[0] == 0x01) && data[1] == 0x01) {
+                        session.inboundStunPacketsCount.incrementAndGet();
                         session.state = CallMediaState.ICE_CONNECTED;
                         handleStunBindingRequest(session, data, sender);
                         continue;
@@ -477,6 +502,7 @@ public class WhatsAppWebRtcMediaGateway {
                     // 2. Handle DTLS packets (ContentType: 20=ChangeCipherSpec, 21=Alert, 22=Handshake, 23=ApplicationData)
                     int firstByte = data[0] & 0xFF;
                     if (firstByte >= 20 && firstByte <= 63) {
+                        session.inboundDtlsPacketsCount.incrementAndGet();
                         if (session.dtlsTransportAdapter != null) {
                             session.dtlsTransportAdapter.enqueueInbound(data);
                         }
@@ -485,7 +511,7 @@ public class WhatsAppWebRtcMediaGateway {
 
                     // 3. Handle Inbound SRTP/RTP Audio Packet
                     if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
-                        session.inboundPacketsCount.incrementAndGet();
+                        session.inboundSrtpPacketsCount.incrementAndGet();
                         session.lastInboundPacketTime = System.currentTimeMillis();
 
                         // Decrypt SRTP packet using receiver transformer if available
@@ -580,6 +606,7 @@ public class WhatsAppWebRtcMediaGateway {
             byte[] responseBytes = buf.array();
             DatagramPacket respPacket = new DatagramPacket(responseBytes, responseBytes.length, sender);
             session.socket.send(respPacket);
+            session.outboundStunPacketsCount.incrementAndGet();
             log.info("✅ [WebRtcGateway] Sent STUN Binding Success Response with XOR-MAPPED-ADDRESS & Integrity to {}", sender);
         } catch (Exception e) {
             log.warn("⚠️ [WebRtcGateway] Error responding to STUN request: {}", e.getMessage());
@@ -658,6 +685,8 @@ public class WhatsAppWebRtcMediaGateway {
         final String pwd;
         final String remoteUfrag;
         final String remotePwd;
+        final String remoteFingerprint;
+        final String localFingerprint;
         final WebRtcDtlsHandler.UdpDatagramTransport dtlsTransportAdapter;
         volatile org.bouncycastle.tls.DTLSTransport dtlsTransport;
         volatile SrtpTransformer senderSrtpTransformer;
@@ -666,8 +695,11 @@ public class WhatsAppWebRtcMediaGateway {
         final AtomicBoolean running = new AtomicBoolean(true);
         final AtomicInteger sequenceNumber = new AtomicInteger(1000);
         final AtomicLong timestamp = new AtomicLong(0);
-        final AtomicLong inboundPacketsCount = new AtomicLong(0);
-        final AtomicLong outboundPacketsCount = new AtomicLong(0);
+        final AtomicLong inboundStunPacketsCount = new AtomicLong(0);
+        final AtomicLong outboundStunPacketsCount = new AtomicLong(0);
+        final AtomicLong inboundDtlsPacketsCount = new AtomicLong(0);
+        final AtomicLong inboundSrtpPacketsCount = new AtomicLong(0);
+        final AtomicLong outboundSrtpPacketsCount = new AtomicLong(0);
         volatile long lastInboundPacketTime = 0;
         final long ssrc = 850231558L;
         final ConcurrentLinkedQueue<byte[]> outboundAudioQueue = new ConcurrentLinkedQueue<>();
@@ -676,7 +708,7 @@ public class WhatsAppWebRtcMediaGateway {
         ScheduledFuture<?> outboundTask;
         ScheduledFuture<?> vadTask;
 
-        WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd, String remoteUfrag, String remotePwd) {
+        WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd, String remoteUfrag, String remotePwd, String remoteFingerprint, String localFingerprint) {
             this.callId = callId;
             this.tenantId = tenantId;
             this.fromWaId = fromWaId;
@@ -687,6 +719,8 @@ public class WhatsAppWebRtcMediaGateway {
             this.pwd = pwd;
             this.remoteUfrag = remoteUfrag;
             this.remotePwd = remotePwd;
+            this.remoteFingerprint = remoteFingerprint;
+            this.localFingerprint = localFingerprint;
             this.dtlsTransportAdapter = new WebRtcDtlsHandler.UdpDatagramTransport(socket, remoteAddress);
         }
 
@@ -798,7 +832,8 @@ public class WhatsAppWebRtcMediaGateway {
                 if (packetData.length > 0) {
                     DatagramPacket packet = new DatagramPacket(packetData, packetData.length, destination);
                     socket.send(packet);
-                    log.info("📡 [WebRtcGateway] Sent authenticated STUN ICE binding ping to Meta remote address: {}", destination);
+                    outboundStunPacketsCount.incrementAndGet();
+                    log.info("📡 [WebRtcGateway] STUN_REQUEST_SENT: Sent authenticated STUN ICE binding ping to Meta at {}", destination);
                 }
             } catch (Exception e) {
                 log.warn("⚠️ [WebRtcGateway] Failed to send STUN binding ping: {}", e.getMessage());

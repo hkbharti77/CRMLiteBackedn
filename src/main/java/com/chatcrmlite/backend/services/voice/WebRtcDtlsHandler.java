@@ -33,6 +33,7 @@ import java.security.cert.X509Certificate;
 import java.security.spec.ECGenParameterSpec;
 import java.util.Date;
 import java.util.Hashtable;
+import java.util.Vector;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -61,6 +62,7 @@ public class WebRtcDtlsHandler {
         private final int selectedSrtpProfile;
         private final String cipherSuite;
         private final String protocolVersion;
+        private final String remoteCertificateFingerprint;
         private final String errorMessage;
     }
 
@@ -86,14 +88,7 @@ public class WebRtcDtlsHandler {
             this.certificate = new JcaX509CertificateConverter().getCertificate(certHolder);
 
             // Compute standard RFC 8122 SHA-256 fingerprint formatted with colons
-            MessageDigest md = MessageDigest.getInstance("SHA-256");
-            byte[] digest = md.digest(this.certificate.getEncoded());
-            StringBuilder fp = new StringBuilder();
-            for (int i = 0; i < digest.length; i++) {
-                if (i > 0) fp.append(":");
-                fp.append(String.format("%02X", digest[i]));
-            }
-            this.sha256Fingerprint = fp.toString();
+            this.sha256Fingerprint = computeSha256Fingerprint(this.certificate.getEncoded());
             log.info("🔐 [WebRtcDtls] Initialized DTLS SHA-256 Certificate Fingerprint: {}", this.sha256Fingerprint);
 
         } catch (Exception e) {
@@ -102,18 +97,33 @@ public class WebRtcDtlsHandler {
         }
     }
 
+    public static String computeSha256Fingerprint(byte[] derEncoded) {
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(derEncoded);
+            StringBuilder fp = new StringBuilder();
+            for (int i = 0; i < digest.length; i++) {
+                if (i > 0) fp.append(":");
+                fp.append(String.format("%02X", digest[i]));
+            }
+            return fp.toString();
+        } catch (Exception e) {
+            return "UNKNOWN";
+        }
+    }
+
     /**
      * Executes the DTLS 1.2 Client Handshake with Meta's media endpoint to negotiate SRTP keys.
      */
     public DtlsHandshakeResult startDtlsClientHandshake(DatagramSocket socket, InetSocketAddress remoteAddress, UdpDatagramTransport transport) {
-        log.info("🚀 [WebRtcDtls] Initiating DTLS 1.2 Handshake (Client Role) with Meta at {}", remoteAddress);
+        log.info("🚀 [WebRtcDtls] DTLS_HANDSHAKE_STARTED: Initiating DTLS 1.2 Handshake (Client Role) with Meta at {}", remoteAddress);
         try {
             JcaTlsCrypto crypto = new JcaTlsCryptoProvider().create(new SecureRandom());
             DTLSClientProtocol protocol = new DTLSClientProtocol();
 
             final byte[][] exportedKeyingMaterial = new byte[1][];
             final int[] negotiatedSrtpProfile = new int[]{-1};
-            final String[] negotiatedCipher = new String[]{"UNKNOWN"};
+            final String[] remoteCertFingerprint = new String[]{"UNKNOWN"};
 
             DefaultTlsClient client = new DefaultTlsClient(crypto) {
                 @Override
@@ -134,19 +144,33 @@ public class WebRtcDtlsHandler {
                 }
 
                 @Override
+                public void notifyHandshakeBeginning() throws IOException {
+                    super.notifyHandshakeBeginning();
+                    log.info("🔐 [WebRtcDtls] DTLS_HANDSHAKE_BEGINNING (ClientHello outbound to {})", remoteAddress);
+                }
+
+                @Override
                 public TlsAuthentication getAuthentication() throws IOException {
                     return new TlsAuthentication() {
                         @Override
-                        public void notifyServerCertificate(TlsServerCertificate serverCertificate) {
-                            log.info("🔐 [WebRtcDtls] Received Remote Meta DTLS Server Certificate");
+                        public void notifyServerCertificate(TlsServerCertificate serverCertificate) throws IOException {
+                            if (serverCertificate != null && serverCertificate.getCertificate() != null) {
+                                TlsCertificate[] chain = serverCertificate.getCertificate().getCertificateList();
+                                if (chain != null && chain.length > 0) {
+                                    byte[] der = chain[0].getEncoded();
+                                    remoteCertFingerprint[0] = computeSha256Fingerprint(der);
+                                    log.info("🔐 [WebRtcDtls] DTLS_SERVER_CERT_RECEIVED: Remote Fingerprint={}", remoteCertFingerprint[0]);
+                                }
+                            }
                         }
 
                         @Override
                         public TlsCredentials getClientCredentials(CertificateRequest certificateRequest) throws IOException {
-                            log.info("🔐 [WebRtcDtls] Providing local ECDSA client credentials to Meta server");
+                            log.info("🔐 [WebRtcDtls] DTLS_CLIENT_CERT_REQUEST_RECEIVED: Providing local ECDSA client credentials (Fingerprint={})", sha256Fingerprint);
                             JcaTlsCertificate jcaCert = new JcaTlsCertificate(crypto, certificate);
                             Certificate cert = new Certificate(new TlsCertificate[]{jcaCert});
                             SignatureAndHashAlgorithm sigAlg = new SignatureAndHashAlgorithm(HashAlgorithm.sha256, SignatureAlgorithm.ecdsa);
+                            log.info("🔐 [WebRtcDtls] DTLS_CLIENT_CERT_SENT: Using Signature Algorithm: SHA256withECDSA");
                             return new JcaDefaultTlsCredentialedSigner(new TlsCryptoParameters(context), crypto, keyPair.getPrivate(), cert, sigAlg);
                         }
                     };
@@ -172,7 +196,7 @@ public class WebRtcDtlsHandler {
                     UseSRTPData srtpData = TlsSRTPUtils.getUseSRTPExtension(serverExtensions);
                     if (srtpData != null && srtpData.getProtectionProfiles() != null && srtpData.getProtectionProfiles().length > 0) {
                         negotiatedSrtpProfile[0] = srtpData.getProtectionProfiles()[0];
-                        log.info("🔒 [WebRtcDtls] Negotiated SRTP Protection Profile: 0x{}", Integer.toHexString(negotiatedSrtpProfile[0]));
+                        log.info("🔒 [WebRtcDtls] Negotiated SRTP Protection Profile: 0x{} (SRTP_AES128_CM_HMAC_SHA1_80)", Integer.toHexString(negotiatedSrtpProfile[0]));
                     }
                 }
 
@@ -181,12 +205,24 @@ public class WebRtcDtlsHandler {
                     super.notifyHandshakeComplete();
                     // RFC 5764: Derive 60 bytes of SRTP keying material using extractor-dtls_srtp
                     exportedKeyingMaterial[0] = context.exportKeyingMaterial("EXTRACTOR-dtls_srtp", null, 60);
-                    log.info("🔑 [WebRtcDtls] Successfully exported 60 bytes of SRTP Keying Material");
+                    log.info("🔑 [WebRtcDtls] DTLS_HANDSHAKE_FINISHED: Successfully exported 60 bytes of SRTP Keying Material");
+                }
+
+                @Override
+                public void notifyAlertRaised(short alertLevel, short alertDescription, String message, Throwable cause) {
+                    log.warn("⚠️ [WebRtcDtls] DTLS_ALERT_RAISED: level={} desc={}({}) msg={} cause={}",
+                            alertLevel, alertDescription, AlertDescription.getName(alertDescription), message, (cause != null ? cause.getMessage() : "none"));
+                }
+
+                @Override
+                public void notifyAlertReceived(short alertLevel, short alertDescription) {
+                    log.warn("⚠️ [WebRtcDtls] DTLS_ALERT_RECEIVED from Meta: level={} desc={}({})",
+                            alertLevel, alertDescription, AlertDescription.getName(alertDescription));
                 }
             };
 
             DTLSTransport dtlsTransport = protocol.connect(client, transport);
-            log.info("✅ [WebRtcDtls] DTLS 1.2 Handshake Completed Successfully with Meta at {}", remoteAddress);
+            log.info("✅ [WebRtcDtls] DTLS_CONNECTED: DTLS 1.2 Handshake Completed Successfully with Meta at {}", remoteAddress);
 
             return DtlsHandshakeResult.builder()
                     .success(true)
@@ -195,6 +231,7 @@ public class WebRtcDtlsHandler {
                     .selectedSrtpProfile(negotiatedSrtpProfile[0] > 0 ? negotiatedSrtpProfile[0] : SRTPProtectionProfile.SRTP_AES128_CM_HMAC_SHA1_80)
                     .cipherSuite("TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256")
                     .protocolVersion("DTLS 1.2")
+                    .remoteCertificateFingerprint(remoteCertFingerprint[0])
                     .build();
 
         } catch (Exception e) {
@@ -211,12 +248,16 @@ public class WebRtcDtlsHandler {
      */
     public static class UdpDatagramTransport implements DatagramTransport {
         private final DatagramSocket socket;
-        private final InetSocketAddress remoteAddress;
+        private volatile InetSocketAddress remoteAddress;
         private final BlockingQueue<byte[]> inboundQueue = new LinkedBlockingQueue<>();
         private volatile boolean closed = false;
 
         public UdpDatagramTransport(DatagramSocket socket, InetSocketAddress remoteAddress) {
             this.socket = socket;
+            this.remoteAddress = remoteAddress;
+        }
+
+        public void setRemoteAddress(InetSocketAddress remoteAddress) {
             this.remoteAddress = remoteAddress;
         }
 
