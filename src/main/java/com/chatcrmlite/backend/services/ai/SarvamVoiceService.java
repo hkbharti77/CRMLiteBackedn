@@ -85,10 +85,11 @@ public class SarvamVoiceService {
                 headers.set("api-subscription-key", apiKey.trim());
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 headers.setAccept(Collections.singletonList(MediaType.APPLICATION_OCTET_STREAM));
+                headers.set("Accept-Encoding", "identity");
                 headers.set("User-Agent", "ChatCRMLite-SarvamVoice/1.0");
 
                 Map<String, Object> body = new HashMap<>();
-                body.put("text", spokenText);
+                body.put("inputs", Collections.singletonList(spokenText));
                 body.put("target_language_code", langCode);
                 body.put("speaker", activeSpeaker);
                 body.put("model", defaultModel);
@@ -103,6 +104,21 @@ public class SarvamVoiceService {
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && response.getBody().length > 0) {
                     byte[] bodyBytes = response.getBody();
                     
+                    // Handle GZIP compression if Spring Boot didn't auto-decompress
+                    if (bodyBytes.length > 2 && bodyBytes[0] == (byte) 0x1F && bodyBytes[1] == (byte) 0x8B) {
+                        try (java.util.zip.GZIPInputStream gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(bodyBytes));
+                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+                            byte[] buffer = new byte[8192];
+                            int len;
+                            while ((len = gis.read(buffer)) > 0) {
+                                baos.write(buffer, 0, len);
+                            }
+                            bodyBytes = baos.toByteArray();
+                        } catch (Exception e) {
+                            log.warn("[Sarvam-TTS] Failed to decompress GZIP response: {}", e.getMessage());
+                        }
+                    }
+
                     // If Sarvam respects our Accept header, it returns a raw WAV file.
                     if (bodyBytes.length > 4 && bodyBytes[0] == 'R' && bodyBytes[1] == 'I' && bodyBytes[2] == 'F' && bodyBytes[3] == 'F') {
                         log.info("[Sarvam-TTS] Success in {}ms ({} raw WAV bytes)", latency, bodyBytes.length);
