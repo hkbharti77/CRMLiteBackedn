@@ -12,6 +12,7 @@ import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
@@ -21,6 +22,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.zip.CRC32;
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Enterprise Native Java WebRTC Media Gateway for WhatsApp Business Calling.
@@ -35,11 +39,32 @@ public class WhatsAppWebRtcMediaGateway {
     private final DeepgramVoiceService deepgramVoiceService;
     private final WebRtcDtlsHandler dtlsHandler;
 
-    @Value("${crmlite.calling.media.port-range-start:50000}")
+    @Value("${crmlite.calling.media.port-range-start}")
     private int portRangeStart;
 
-    @Value("${crmlite.calling.media.public-ip:127.0.0.1}")
+    @Value("${crmlite.calling.media.public-ip}")
     private String publicMediaIp;
+
+    @Value("${crmlite.calling.turn.enabled}")
+    private boolean turnEnabled;
+
+    @Value("${crmlite.calling.turn.stun-host}")
+    private String stunHost;
+
+    @Value("${crmlite.calling.turn.stun-port}")
+    private int stunPort;
+
+    @Value("${crmlite.calling.turn.relay-host}")
+    private String relayHost;
+
+    @Value("${crmlite.calling.turn.relay-port}")
+    private int relayPort;
+
+    @Value("${crmlite.calling.turn.username}")
+    private String turnUsername;
+
+    @Value("${crmlite.calling.turn.credential}")
+    private String turnCredential;
 
     private volatile String resolvedPublicIp = null;
 
@@ -102,6 +127,8 @@ public class WhatsAppWebRtcMediaGateway {
 
         String mid = parseAttribute(sdpOffer, "(?m)^a=mid:(\\S+)", "audio");
         String opusPt = parseAttribute(sdpOffer, "(?m)^a=rtpmap:(\\d+)\\s+opus/48000/2", "111");
+        String remoteUfrag = parseAttribute(sdpOffer, "(?m)^a=ice-ufrag:(\\S+)", null);
+        String remotePwd = parseAttribute(sdpOffer, "(?m)^a=ice-pwd:(\\S+)", null);
 
         long sessionId = Math.abs((long) callId.hashCode() + 1000000000L);
         String ufrag = UUID.randomUUID().toString().replace("-", "").substring(0, 8);
@@ -109,7 +136,7 @@ public class WhatsAppWebRtcMediaGateway {
         String fingerprint = dtlsHandler.getSha256Fingerprint();
 
         WebRtcMediaSession session = new WebRtcMediaSession(
-                callId, tenantId, fromWaId, socket, remoteMetaAddress, Integer.parseInt(opusPt), ufrag, pwd
+                callId, tenantId, fromWaId, socket, remoteMetaAddress, Integer.parseInt(opusPt), ufrag, pwd, remoteUfrag, remotePwd
         );
         activeSessions.put(callId, session);
 
@@ -145,17 +172,37 @@ public class WhatsAppWebRtcMediaGateway {
             sdp.append("a=candidate:2 1 UDP 1694498815 ").append(srflxCandidate.getHostString()).append(" ").append(srflxCandidate.getPort())
                .append(" typ srflx raddr ").append(effectiveIp).append(" rport ").append(localPort).append("\r\n");
         }
+        if (turnEnabled && relayHost != null && !relayHost.isBlank()) {
+            try {
+                InetAddress relayAddr = InetAddress.getByName(relayHost);
+                sdp.append("a=candidate:3 1 UDP 16777215 ").append(relayAddr.getHostAddress()).append(" ").append(relayPort)
+                   .append(" typ relay raddr ").append(effectiveIp).append(" rport ").append(localPort).append("\r\n");
+            } catch (Exception e) {
+                log.debug("Could not resolve TURN relay host for candidate: {}", e.getMessage());
+            }
+        }
         sdp.append("a=end-of-candidates\r\n");
 
         return sdp.toString();
     }
 
     /**
-     * Discovers external NAT mapped candidate using Google STUN
+     * Discovers external NAT mapped candidate using Metered STUN (fallback Google STUN)
      */
     private InetSocketAddress discoverSrflxCandidate(DatagramSocket socket) {
+        String targetHost = (stunHost != null && !stunHost.isBlank()) ? stunHost : "stun.relay.metered.ca";
+        int targetPort = (stunPort > 0) ? stunPort : 80;
+
+        InetSocketAddress candidate = queryStunServer(socket, targetHost, targetPort);
+        if (candidate == null) {
+            candidate = queryStunServer(socket, "stun.l.google.com", 19302);
+        }
+        return candidate;
+    }
+
+    private InetSocketAddress queryStunServer(DatagramSocket socket, String host, int port) {
         try {
-            InetSocketAddress stunServer = new InetSocketAddress("stun.l.google.com", 19302);
+            InetSocketAddress stunServer = new InetSocketAddress(host, port);
             byte[] txId = new byte[12];
             java.util.concurrent.ThreadLocalRandom.current().nextBytes(txId);
 
@@ -191,7 +238,7 @@ public class WhatsAppWebRtcMediaGateway {
                                 int b4 = (data[offset + 11] & 0xFF) ^ 0x42;
                                 String mappedIp = b1 + "." + b2 + "." + b3 + "." + b4;
                                 InetSocketAddress srflx = new InetSocketAddress(mappedIp, mappedPort);
-                                log.info("🌐 [WebRtcGateway] Google STUN resolved srflx candidate: {}", srflx);
+                                log.info("🌐 [WebRtcGateway] STUN ({}:{}) resolved srflx candidate: {}", host, port, srflx);
                                 return srflx;
                             }
                         }
@@ -202,12 +249,12 @@ public class WhatsAppWebRtcMediaGateway {
                     }
                 }
             } catch (Exception e) {
-                log.warn("⚠️ [WebRtcGateway] STUN response timeout: {}", e.getMessage());
+                log.warn("⚠️ [WebRtcGateway] STUN ({}:{}) response timeout: {}", host, port, e.getMessage());
             } finally {
                 socket.setSoTimeout(0);
             }
         } catch (Exception e) {
-            log.warn("⚠️ [WebRtcGateway] STUN NAT discovery error: {}", e.getMessage());
+            log.warn("⚠️ [WebRtcGateway] STUN ({}:{}) NAT discovery error: {}", host, port, e.getMessage());
         }
         return null;
     }
@@ -396,35 +443,83 @@ public class WhatsAppWebRtcMediaGateway {
     }
 
     /**
-     * Responds to Meta STUN Binding Requests with XOR-MAPPED-ADDRESS to finalize ICE connection.
+     * Responds to Meta STUN Binding Requests with XOR-MAPPED-ADDRESS, MESSAGE-INTEGRITY, and FINGERPRINT.
      */
     private void handleStunBindingRequest(WebRtcMediaSession session, byte[] stunRequest, InetSocketAddress sender) {
         try {
             byte[] transactionId = Arrays.copyOfRange(stunRequest, 8, 20);
-            ByteBuffer res = ByteBuffer.allocate(32);
-            res.putShort((short) 0x0101); // STUN Binding Success Response
-            res.putShort((short) 12);     // Length of attributes (XOR-MAPPED-ADDRESS is 12 bytes)
-            res.putInt(0x2112A442);       // Magic Cookie
-            res.put(transactionId);       // Transaction ID
 
-            // Attribute: XOR-MAPPED-ADDRESS (0x0020)
-            res.putShort((short) 0x0020);
-            res.putShort((short) 8);      // Attribute length
-            res.put((byte) 0);            // Reserved
-            res.put((byte) 0x01);         // IPv4 family
+            ByteArrayOutputStream attrStream = new ByteArrayOutputStream();
+
+            // 1. XOR-MAPPED-ADDRESS (0x0020)
+            attrStream.write(0x00); attrStream.write(0x20);
+            attrStream.write(0x00); attrStream.write(0x08);
+            attrStream.write(0x00); // Reserved
+            attrStream.write(0x01); // IPv4
             int xorPort = sender.getPort() ^ (0x2112A442 >> 16);
-            res.putShort((short) xorPort);
+            attrStream.write((xorPort >> 8) & 0xFF);
+            attrStream.write(xorPort & 0xFF);
             byte[] ipBytes = sender.getAddress().getAddress();
             for (int i = 0; i < 4; i++) {
-                res.put((byte) (ipBytes[i] ^ (0x2112A442 >> (24 - i * 8))));
+                attrStream.write(ipBytes[i] ^ (0x2112A442 >> (24 - i * 8)));
             }
 
-            byte[] responseBytes = res.array();
+            byte[] rawAttrs = attrStream.toByteArray();
+            int totalAttrLen = rawAttrs.length + (session.pwd != null ? 32 : 0);
+
+            ByteBuffer buf = ByteBuffer.allocate(20 + totalAttrLen);
+            buf.putShort((short) 0x0101); // STUN Binding Success Response
+            buf.putShort((short) totalAttrLen);
+            buf.putInt(0x2112A442);
+            buf.put(transactionId);
+            buf.put(rawAttrs);
+
+            if (session.pwd != null && !session.pwd.isBlank()) {
+                byte[] forHmac = buf.array();
+                int hmacLength = rawAttrs.length + 24;
+                forHmac[2] = (byte) ((hmacLength >> 8) & 0xFF);
+                forHmac[3] = (byte) (hmacLength & 0xFF);
+
+                byte[] hmacKey = session.pwd.getBytes(StandardCharsets.UTF_8);
+                byte[] integrity = hmacSha1(Arrays.copyOfRange(forHmac, 0, 20 + rawAttrs.length), hmacKey);
+
+                buf.position(20 + rawAttrs.length);
+                buf.putShort((short) 0x0008); // MESSAGE-INTEGRITY
+                buf.putShort((short) 20);
+                buf.put(integrity);
+
+                forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
+                forHmac[3] = (byte) (totalAttrLen & 0xFF);
+
+                int crc = computeStunFingerprint(forHmac, 20 + rawAttrs.length + 24);
+                buf.putShort((short) 0x8028); // FINGERPRINT
+                buf.putShort((short) 4);
+                buf.putInt(crc);
+            }
+
+            byte[] responseBytes = buf.array();
             DatagramPacket respPacket = new DatagramPacket(responseBytes, responseBytes.length, sender);
             session.socket.send(respPacket);
+            log.info("✅ [WebRtcGateway] Sent STUN Binding Success Response with XOR-MAPPED-ADDRESS & Integrity to {}", sender);
         } catch (Exception e) {
             log.warn("⚠️ [WebRtcGateway] Error responding to STUN request: {}", e.getMessage());
         }
+    }
+
+    private static byte[] hmacSha1(byte[] data, byte[] key) {
+        try {
+            Mac mac = Mac.getInstance("HmacSHA1");
+            mac.init(new SecretKeySpec(key, "HmacSHA1"));
+            return mac.doFinal(data);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to compute HMAC-SHA1 for STUN: " + e.getMessage(), e);
+        }
+    }
+
+    private static int computeStunFingerprint(byte[] data, int length) {
+        CRC32 crc = new CRC32();
+        crc.update(data, 0, length);
+        return ((int) crc.getValue()) ^ 0x5354554E;
     }
 
     private DatagramSocket allocateSocket() {
@@ -482,6 +577,8 @@ public class WhatsAppWebRtcMediaGateway {
         final int payloadType;
         final String ufrag;
         final String pwd;
+        final String remoteUfrag;
+        final String remotePwd;
         final AtomicBoolean running = new AtomicBoolean(true);
         final AtomicInteger sequenceNumber = new AtomicInteger(1000);
         final AtomicLong timestamp = new AtomicLong(0);
@@ -494,7 +591,7 @@ public class WhatsAppWebRtcMediaGateway {
         ScheduledFuture<?> outboundTask;
         ScheduledFuture<?> vadTask;
 
-        WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd) {
+        WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd, String remoteUfrag, String remotePwd) {
             this.callId = callId;
             this.tenantId = tenantId;
             this.fromWaId = fromWaId;
@@ -503,6 +600,8 @@ public class WhatsAppWebRtcMediaGateway {
             this.payloadType = payloadType;
             this.ufrag = ufrag;
             this.pwd = pwd;
+            this.remoteUfrag = remoteUfrag;
+            this.remotePwd = remotePwd;
         }
 
         /**
@@ -527,25 +626,94 @@ public class WhatsAppWebRtcMediaGateway {
             return buf.array();
         }
 
+        public byte[] buildStunBindingRequest() {
+            try {
+                byte[] txId = new byte[12];
+                java.util.concurrent.ThreadLocalRandom.current().nextBytes(txId);
+
+                ByteArrayOutputStream attrStream = new ByteArrayOutputStream();
+
+                // 1. USERNAME (0x0006): <remoteUfrag>:<localUfrag>
+                if (remoteUfrag != null && !remoteUfrag.isBlank()) {
+                    String username = remoteUfrag + ":" + ufrag;
+                    byte[] userBytes = username.getBytes(StandardCharsets.UTF_8);
+                    attrStream.write(0x00); attrStream.write(0x06);
+                    attrStream.write((userBytes.length >> 8) & 0xFF);
+                    attrStream.write(userBytes.length & 0xFF);
+                    attrStream.write(userBytes);
+                    int pad = (4 - (userBytes.length % 4)) % 4;
+                    for (int i = 0; i < pad; i++) attrStream.write(0);
+                }
+
+                // 2. PRIORITY (0x0024): 1853824767
+                attrStream.write(0x00); attrStream.write(0x24);
+                attrStream.write(0x00); attrStream.write(0x04);
+                attrStream.write(0x6E); attrStream.write(0x7F);
+                attrStream.write(0x00); attrStream.write((byte) 0xFF);
+
+                // 3. USE-CANDIDATE (0x0025): Length 0
+                attrStream.write(0x00); attrStream.write(0x25);
+                attrStream.write(0x00); attrStream.write(0x00);
+
+                // 4. ICE-CONTROLLED (0x8029): Length 8
+                attrStream.write((byte) 0x80); attrStream.write(0x29);
+                attrStream.write(0x00); attrStream.write(0x08);
+                byte[] tieBreaker = new byte[8];
+                java.util.concurrent.ThreadLocalRandom.current().nextBytes(tieBreaker);
+                attrStream.write(tieBreaker);
+
+                byte[] rawAttrs = attrStream.toByteArray();
+                int totalAttrLen = rawAttrs.length + (remotePwd != null && !remotePwd.isBlank() ? 32 : 0);
+                ByteBuffer buf = ByteBuffer.allocate(20 + totalAttrLen);
+
+                buf.putShort((short) 0x0001); // Binding Request
+                buf.putShort((short) totalAttrLen);
+                buf.putInt(0x2112A442);       // Magic Cookie
+                buf.put(txId);
+                buf.put(rawAttrs);
+
+                if (remotePwd != null && !remotePwd.isBlank()) {
+                    byte[] forHmac = buf.array();
+                    int hmacLength = rawAttrs.length + 24;
+                    forHmac[2] = (byte) ((hmacLength >> 8) & 0xFF);
+                    forHmac[3] = (byte) (hmacLength & 0xFF);
+
+                    byte[] hmacKey = remotePwd.getBytes(StandardCharsets.UTF_8);
+                    byte[] integrity = hmacSha1(Arrays.copyOfRange(forHmac, 0, 20 + rawAttrs.length), hmacKey);
+
+                    buf.position(20 + rawAttrs.length);
+                    buf.putShort((short) 0x0008); // MESSAGE-INTEGRITY
+                    buf.putShort((short) 20);
+                    buf.put(integrity);
+
+                    forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
+                    forHmac[3] = (byte) (totalAttrLen & 0xFF);
+
+                    int crc = computeStunFingerprint(forHmac, 20 + rawAttrs.length + 24);
+                    buf.putShort((short) 0x8028); // FINGERPRINT
+                    buf.putShort((short) 4);
+                    buf.putInt(crc);
+                }
+
+                return buf.array();
+            } catch (Exception e) {
+                log.warn("Error building STUN binding request: {}", e.getMessage());
+                return new byte[0];
+            }
+        }
+
         /**
          * Sends an active STUN binding request ping to the remote candidate to open NAT bindings and establish 2-way ICE path
          */
         public void sendStunBindingPing(InetSocketAddress destination) {
             if (destination == null || socket.isClosed()) return;
             try {
-                byte[] txId = new byte[12];
-                java.util.concurrent.ThreadLocalRandom.current().nextBytes(txId);
-
-                ByteBuffer buf = ByteBuffer.allocate(20);
-                buf.putShort((short) 0x0001); // STUN Binding Request
-                buf.putShort((short) 0x0000); // 0 attributes
-                buf.putInt(0x2112A442);       // Magic Cookie
-                buf.put(txId);
-
-                byte[] packetData = buf.array();
-                DatagramPacket packet = new DatagramPacket(packetData, packetData.length, destination);
-                socket.send(packet);
-                log.info("📡 [WebRtcGateway] Sent active STUN ICE binding ping to Meta remote address: {}", destination);
+                byte[] packetData = buildStunBindingRequest();
+                if (packetData.length > 0) {
+                    DatagramPacket packet = new DatagramPacket(packetData, packetData.length, destination);
+                    socket.send(packet);
+                    log.info("📡 [WebRtcGateway] Sent authenticated STUN ICE binding ping to Meta remote address: {}", destination);
+                }
             } catch (Exception e) {
                 log.warn("⚠️ [WebRtcGateway] Failed to send STUN binding ping: {}", e.getMessage());
             }
