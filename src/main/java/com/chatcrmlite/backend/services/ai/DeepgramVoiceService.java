@@ -107,9 +107,11 @@ public class DeepgramVoiceService {
                 : "en-IN";
         urlBuilder.append("&language=").append(dgLang);
 
-        // If the audio is raw mu-law from Exotel, we must tell Deepgram explicitly via query params
+        // If the audio is raw mu-law from Exotel or Opus from WhatsApp WebRTC, tell Deepgram explicitly via query params
         if (contentType.toLowerCase().contains("mulaw")) {
             urlBuilder.append("&encoding=mulaw&sample_rate=8000");
+        } else if (contentType.toLowerCase().contains("opus")) {
+            urlBuilder.append("&encoding=opus&sample_rate=48000");
         }
 
         String url = urlBuilder.toString();

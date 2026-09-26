@@ -11,7 +11,7 @@ import java.util.Arrays;
 
 /**
  * Standards-compliant SRTP (RFC 3711) Transformer for SRTP_AES128_CM_HMAC_SHA1_80.
- * Handles AES-128-CTR payload encryption/decryption and HMAC-SHA1-80 authentication tags.
+ * Handles AES-128-CTR payload encryption/decryption and HMAC-SHA1-80 authentication tags with ROC.
  */
 @Slf4j
 public class SrtpTransformer {
@@ -53,9 +53,10 @@ public class SrtpTransformer {
 
     private void deriveKey(Cipher cipher, byte[] masterSalt, byte label, byte[] outKey, int outLen) throws Exception {
         // IV = (masterSalt * 2^16) XOR (label * 2^48)
+        // In 16-byte big-endian IV: masterSalt in bytes 0..13, label at byte 9 (bits 48..55)
         byte[] iv = new byte[16];
         System.arraycopy(masterSalt, 0, iv, 0, 14);
-        iv[7] ^= label;
+        iv[9] ^= label;
 
         int blocksNeeded = (outLen + 15) / 16;
         ByteBuffer outBuf = ByteBuffer.allocate(blocksNeeded * 16);
@@ -103,14 +104,19 @@ public class SrtpTransformer {
             int payloadLen = rtpPacket.length - 12;
             byte[] encryptedPayload = ctrCipher.doFinal(rtpPacket, 12, payloadLen);
 
-            // Compute HMAC-SHA1 authentication tag over (RTP Header + Encrypted Payload)
+            // Compute HMAC-SHA1 authentication tag over (RTP Header + Encrypted Payload || ROC)
             ByteBuffer srtpBuf = ByteBuffer.allocate(rtpPacket.length + 10);
             srtpBuf.put(rtpPacket, 0, 12);
             srtpBuf.put(encryptedPayload);
 
+            ByteBuffer authBuf = ByteBuffer.allocate(rtpPacket.length + 4);
+            authBuf.put(rtpPacket, 0, 12);
+            authBuf.put(encryptedPayload);
+            authBuf.putInt(0); // ROC = 0 (32-bit rollover counter)
+
             Mac hmac = Mac.getInstance("HmacSHA1");
             hmac.init(new SecretKeySpec(authKey, "HmacSHA1"));
-            byte[] tag = hmac.doFinal(Arrays.copyOf(srtpBuf.array(), rtpPacket.length));
+            byte[] tag = hmac.doFinal(authBuf.array());
 
             // Append 10-byte auth tag
             srtpBuf.put(tag, 0, 10);
@@ -132,10 +138,14 @@ public class SrtpTransformer {
             byte[] packetData = Arrays.copyOf(srtpPacket, packetLen);
             byte[] receivedTag = Arrays.copyOfRange(srtpPacket, packetLen, srtpPacket.length);
 
-            // Verify authentication tag
+            // Verify authentication tag with 32-bit ROC
+            ByteBuffer authBuf = ByteBuffer.allocate(packetLen + 4);
+            authBuf.put(packetData);
+            authBuf.putInt(0); // ROC = 0
+
             Mac hmac = Mac.getInstance("HmacSHA1");
             hmac.init(new SecretKeySpec(authKey, "HmacSHA1"));
-            byte[] computedTag = hmac.doFinal(packetData);
+            byte[] computedTag = hmac.doFinal(authBuf.array());
 
             boolean match = true;
             for (int i = 0; i < 10; i++) {
@@ -146,8 +156,19 @@ public class SrtpTransformer {
             }
 
             if (!match) {
-                log.warn("⚠️ [SRTP] Authentication tag verification failed on incoming SRTP packet");
-                return null;
+                // Also check without ROC for implementations that omit ROC
+                byte[] rawComputedTag = hmac.doFinal(packetData);
+                boolean rawMatch = true;
+                for (int i = 0; i < 10; i++) {
+                    if (receivedTag[i] != rawComputedTag[i]) {
+                        rawMatch = false;
+                        break;
+                    }
+                }
+                if (!rawMatch) {
+                    log.warn("⚠️ [SRTP] Authentication tag verification failed on incoming SRTP packet");
+                    return null;
+                }
             }
 
             int seqNum = ((srtpPacket[2] & 0xFF) << 8) | (srtpPacket[3] & 0xFF);

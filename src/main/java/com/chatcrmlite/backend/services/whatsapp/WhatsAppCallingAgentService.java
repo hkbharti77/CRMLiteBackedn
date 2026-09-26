@@ -278,7 +278,16 @@ public class WhatsAppCallingAgentService {
     }
 
     private void handleCallTerminated(UUID tenantId, String callId, WhatsAppCallWebhookEnvelope.CallEvent event) {
+        // Capture precise media-plane cause BEFORE tearing down the UDP session
+        String mediaFailure = mediaGateway.resolveMediaFailureReason(callId);
+        WhatsAppWebRtcMediaGateway.CallMediaState mediaState = mediaGateway.getMediaState(callId);
         mediaGateway.terminateSession(callId);
+        if (mediaFailure == null) {
+            mediaFailure = mediaGateway.resolveMediaFailureReason(callId);
+        }
+        if (mediaState == null) {
+            mediaState = mediaGateway.getMediaState(callId);
+        }
 
         WhatsAppCallSession session = callSessionRepository.findByTenantIdAndCallId(tenantId, callId).orElse(null);
         if (session != null) {
@@ -287,11 +296,36 @@ public class WhatsAppCallingAgentService {
 
             if (event.errors() != null && !event.errors().isEmpty()) {
                 WhatsAppCallWebhookEnvelope.CallError firstErr = event.errors().get(0);
-                CallingErrorMapper.CallingErrorDetails mapped = CallingErrorMapper.map(firstErr.code() != null ? firstErr.code() : 0);
+                int code = firstErr.code() != null ? firstErr.code() : 0;
+                CallingErrorMapper.CallingErrorDetails mapped = CallingErrorMapper.map(code);
+
+                // Do not hide a DTLS failure (or RTP_NOT_RECEIVED) behind generic MEDIA_RECEIVE_TIMEOUT
+                if (code == 138021 && mediaFailure != null) {
+                    if (mediaFailure.startsWith("DTLS_FAILED") || mediaFailure.contains("DTLS")) {
+                        mapped = new CallingErrorMapper.CallingErrorDetails(
+                                "DTLS_FAILED", false,
+                                mediaFailure + " | mediaState=" + mediaState);
+                    } else if ("RTP_NOT_RECEIVED".equals(mediaFailure) || mediaFailure.contains("RTP_NOT_RECEIVED")) {
+                        mapped = new CallingErrorMapper.CallingErrorDetails(
+                                "RTP_NOT_RECEIVED", true,
+                                "ICE_CONNECTED DTLS_CONNECTED SRTP_READY but no inbound RTP | mediaState=" + mediaState);
+                    }
+                } else if (mediaFailure != null && mediaFailure.startsWith("DTLS_FAILED")) {
+                    mapped = new CallingErrorMapper.CallingErrorDetails("DTLS_FAILED", false, mediaFailure);
+                }
+
                 session.setMetaErrorCode(firstErr.code());
                 session.setMetaErrorTitle(mapped.internalCode());
-                session.setMetaErrorMessage(firstErr.message() != null ? firstErr.message() : mapped.description());
-                log.warn("⚠️ [WhatsAppCallAgent] Call callId={} terminated with error code={} internal={}", callId, firstErr.code(), mapped.internalCode());
+                session.setMetaErrorMessage(firstErr.message() != null
+                        ? firstErr.message() + " | " + mapped.description()
+                        : mapped.description());
+                log.warn("⚠️ [WhatsAppCallAgent] Call callId={} terminated with error code={} internal={} mediaFailure={} mediaState={}",
+                        callId, firstErr.code(), mapped.internalCode(), mediaFailure, mediaState);
+            } else if (mediaFailure != null) {
+                session.setMetaErrorTitle(mediaFailure.startsWith("DTLS") ? "DTLS_FAILED" : mediaFailure);
+                session.setMetaErrorMessage(mediaFailure);
+                log.warn("⚠️ [WhatsAppCallAgent] Call callId={} terminated with mediaFailure={} mediaState={}",
+                        callId, mediaFailure, mediaState);
             }
 
             if (session.getConnectedAt() != null) {
@@ -300,7 +334,6 @@ public class WhatsAppCallingAgentService {
             callSessionRepository.save(session);
         }
 
-        // Clean up ephemeral SDP keys in Redis
         redisTemplate.delete("wa:sdp:offer:" + callId);
         redisTemplate.delete("wa:sdp:answer:" + callId);
         log.info("📞 [WhatsAppCallAgent] Terminated session for callId={}", callId);

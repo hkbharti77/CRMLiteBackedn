@@ -29,7 +29,9 @@ public class CallingErrorMapper {
             case 138018 -> new CallingErrorDetails("CALLING_PREREQUISITES_NOT_MET", false, "Calling prerequisites (messaging tier, 2FA, verified name) not met");
             case 138019 -> new CallingErrorDetails("CALL_SETUP_FAILED", true, "Call setup failed during media/signaling negotiation");
             case 138020 -> new CallingErrorDetails("RELAY_CONNECTION_FAILED", true, "Failed to connect to Meta media relay");
-            case 138021 -> new CallingErrorDetails("MEDIA_RECEIVE_TIMEOUT", true, "Timed out waiting to receive media from Meta");
+            // Prefer remapping via WhatsAppCallingAgentService using local DTLS/RTP diagnostics;
+            // raw Meta 138021 often means DTLS never finished or RTP never arrived.
+            case 138021 -> new CallingErrorDetails("MEDIA_RECEIVE_TIMEOUT", true, "Timed out waiting to receive media from Meta (check local DTLS/RTP state)");
             case 138022 -> new CallingErrorDetails("MEDIA_TRANSMIT_TIMEOUT", true, "Timed out sending media to Meta relay");
             case 138023 -> new CallingErrorDetails("ACCEPTED_NO_MEDIA", true, "Call was accepted but no WebRTC media connection signals established");
             default -> new CallingErrorDetails("UNKNOWN_CALL_ERROR", true, "Meta Error Code: " + metaErrorCode);
