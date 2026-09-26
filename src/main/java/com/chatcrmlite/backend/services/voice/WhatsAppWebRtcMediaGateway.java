@@ -489,15 +489,27 @@ public class WhatsAppWebRtcMediaGateway {
         session.vadTask = scheduler.scheduleAtFixedRate(() -> {
             try {
                 if (!session.running.get() || session.state != CallMediaState.MEDIA_ACTIVE || session.isProcessingTurn.get()) return;
-                long silenceDuration = System.currentTimeMillis() - session.lastInboundPacketTime;
+                
                 int bufferSize = session.inboundPcmBuffer.size();
+                long silenceDuration = System.currentTimeMillis() - session.lastVoiceActivityTime;
 
-                if (bufferSize > 3000 && silenceDuration >= 700 && session.lastInboundPacketTime > 0) {
+                if (!session.hasSpokenInTurn) {
+                    // Prevent memory bloat from continuous silence packets before the user speaks
+                    if (bufferSize > 48000 * 2) { // Keep max 1 second of pre-roll silence
+                        synchronized (session.inboundPcmBuffer) {
+                            session.inboundPcmBuffer.reset();
+                        }
+                    }
+                    return;
+                }
+
+                if (silenceDuration >= 700 && session.lastVoiceActivityTime > 0) {
                     byte[] userAudio;
                     synchronized (session.inboundPcmBuffer) {
                         userAudio = session.inboundPcmBuffer.toByteArray();
                         session.inboundPcmBuffer.reset();
                     }
+                    session.hasSpokenInTurn = false;
                     session.isProcessingTurn.set(true);
                     flushOutboundAudio(callId);
                     log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes PCM @ 48kHz), processing AI turn for callId={}", userAudio.length, callId);
@@ -788,9 +800,18 @@ public class WhatsAppWebRtcMediaGateway {
                                 if (samplesDecoded > 0) {
                                     byte[] pcmBytes = new byte[samplesDecoded * 2];
                                     ByteBuffer pcmBuf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN);
+                                    long sumSquares = 0;
                                     for (int s = 0; s < samplesDecoded; s++) {
                                         pcmBuf.putShort(pcmSamples[s]);
+                                        sumSquares += pcmSamples[s] * pcmSamples[s];
                                     }
+                                    
+                                    double rms = Math.sqrt((double) sumSquares / samplesDecoded);
+                                    if (rms > 500) { // Typical silence is < 100, voice is > 1000
+                                        session.lastVoiceActivityTime = System.currentTimeMillis();
+                                        session.hasSpokenInTurn = true;
+                                    }
+
                                     synchronized (session.inboundPcmBuffer) {
                                         session.inboundPcmBuffer.write(pcmBytes);
                                     }
@@ -986,6 +1007,8 @@ public class WhatsAppWebRtcMediaGateway {
         final AtomicLong inboundSrtpPacketsCount = new AtomicLong(0);
         final AtomicLong outboundSrtpPacketsCount = new AtomicLong(0);
         volatile long lastInboundPacketTime = 0;
+        volatile long lastVoiceActivityTime = 0;
+        volatile boolean hasSpokenInTurn = false;
         final long ssrc = 850231558L;
         final ConcurrentLinkedQueue<byte[]> outboundAudioQueue = new ConcurrentLinkedQueue<>();
         final ByteArrayOutputStream inboundPcmBuffer = new ByteArrayOutputStream();
