@@ -58,6 +58,9 @@ public class OpusAudioEncoder {
                     } else if ("data".equals(chunkId)) {
                         dataOffset = offset + 8;
                         dataLen = chunkSize;
+                        if (dataLen < 0 || dataOffset + dataLen > audioBytes.length) {
+                            dataLen = audioBytes.length - dataOffset;
+                        }
                         break;
                     }
                     offset += 8 + chunkSize;
