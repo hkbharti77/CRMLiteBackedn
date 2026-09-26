@@ -28,43 +28,49 @@ import javax.crypto.spec.SecretKeySpec;
 
 /**
  * Enterprise Native Java WebRTC Media Gateway for WhatsApp Business Calling.
- * Handles UDP socket lifecycle, STUN Binding responses, RTP packetization, and AI audio streaming.
+ * Handles UDP socket lifecycle, STUN Binding responses, DTLS 1.2, SRTP encryption/decryption, and AI audio streaming.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class WhatsAppWebRtcMediaGateway {
 
+    public enum CallMediaState {
+        NEW,
+        ICE_CHECKING,
+        ICE_CONNECTED,
+        DTLS_HANDSHAKING,
+        DTLS_CONNECTED,
+        SRTP_READY,
+        MEDIA_ACTIVE,
+        FAILED,
+        TERMINATED
+    }
+
     private final WhatsAppVoiceCallBridgeService voiceCallBridgeService;
     private final DeepgramVoiceService deepgramVoiceService;
     private final WebRtcDtlsHandler dtlsHandler;
 
-    @Value("${crmlite.calling.media.port-range-start}")
+    @Value("${crmlite.calling.media.port-range-start:50000}")
     private int portRangeStart;
 
-    @Value("${crmlite.calling.media.public-ip}")
+    @Value("${crmlite.calling.media.public-ip:127.0.0.1}")
     private String publicMediaIp;
 
-    @Value("${crmlite.calling.turn.enabled}")
+    @Value("${crmlite.calling.turn.enabled:false}")
     private boolean turnEnabled;
 
-    @Value("${crmlite.calling.turn.stun-host}")
+    @Value("${crmlite.calling.turn.stun-host:stun.relay.metered.ca}")
     private String stunHost;
 
-    @Value("${crmlite.calling.turn.stun-port}")
+    @Value("${crmlite.calling.turn.stun-port:80}")
     private int stunPort;
 
-    @Value("${crmlite.calling.turn.relay-host}")
+    @Value("${crmlite.calling.turn.relay-host:}")
     private String relayHost;
 
-    @Value("${crmlite.calling.turn.relay-port}")
+    @Value("${crmlite.calling.turn.relay-port:50000}")
     private int relayPort;
-
-    @Value("${crmlite.calling.turn.username}")
-    private String turnUsername;
-
-    @Value("${crmlite.calling.turn.credential}")
-    private String turnCredential;
 
     private volatile String resolvedPublicIp = null;
 
@@ -111,13 +117,8 @@ public class WhatsAppWebRtcMediaGateway {
         // 1. Allocate UDP DatagramSocket
         DatagramSocket socket = allocateSocket();
         int localPort = socket.getLocalPort();
-        String localIp = "127.0.0.1";
-        try {
-            localIp = InetAddress.getLocalHost().getHostAddress();
-        } catch (Exception ignored) {
-        }
 
-        // 2. STUN NAT Hole-Punching via Google STUN server (stun.l.google.com:19302)
+        // 2. STUN NAT Hole-Punching via STUN server
         InetSocketAddress srflxCandidate = discoverSrflxCandidate(socket);
         String effectiveIp = (srflxCandidate != null) ? srflxCandidate.getHostString() : getPublicMediaIp();
 
@@ -158,7 +159,7 @@ public class WhatsAppWebRtcMediaGateway {
         sdp.append("a=ice-pwd:").append(pwd).append("\r\n");
         sdp.append("a=ice-options:trickle\r\n");
         sdp.append("a=fingerprint:SHA-256 ").append(fingerprint).append("\r\n");
-        sdp.append("a=setup:active\r\n");
+        sdp.append("a=setup:active\r\n"); // We act as DTLS client (initiator)
         sdp.append("a=mid:").append(mid).append("\r\n");
         sdp.append("a=rtcp-mux\r\n");
         sdp.append("a=rtcp-rsize\r\n");
@@ -187,7 +188,7 @@ public class WhatsAppWebRtcMediaGateway {
     }
 
     /**
-     * Discovers external NAT mapped candidate using Metered STUN (fallback Google STUN)
+     * Discovers external NAT mapped candidate using STUN
      */
     private InetSocketAddress discoverSrflxCandidate(DatagramSocket socket) {
         String targetHost = (stunHost != null && !stunHost.isBlank()) ? stunHost : "stun.relay.metered.ca";
@@ -260,15 +261,16 @@ public class WhatsAppWebRtcMediaGateway {
     }
 
     /**
-     * Starts outbound media streaming immediately upon call activation (prevents 138021 MEDIA_RECEIVE_TIMEOUT).
+     * Executes the WebRTC ICE connectivity and DTLS/SRTP handshake pipeline.
      */
     public void startOutboundMedia(String callId) {
         WebRtcMediaSession session = activeSessions.get(callId);
         if (session == null || !session.running.get()) return;
 
-        log.info("▶️ [WebRtcGateway] Starting prompt outbound media stream for callId={}", callId);
+        session.state = CallMediaState.ICE_CHECKING;
+        log.info("▶️ [WebRtcGateway] Starting ICE check and DTLS handshake for callId={}", callId);
 
-        // Send active STUN binding ping to Meta's remote candidate to establish 2-way ICE path
+        // Send active STUN binding ping to Meta's remote candidate
         if (session.remoteAddress != null) {
             session.sendStunBindingPing(session.remoteAddress);
         }
@@ -276,24 +278,65 @@ public class WhatsAppWebRtcMediaGateway {
         // Trigger DTLS 1.2 Handshake asynchronously with Meta endpoint
         CompletableFuture.runAsync(() -> {
             try {
+                session.state = CallMediaState.DTLS_HANDSHAKING;
                 if (session.remoteAddress != null) {
-                    session.dtlsTransport = dtlsHandler.startDtlsClientHandshake(session.socket, session.remoteAddress, session.dtlsTransportAdapter);
+                    WebRtcDtlsHandler.DtlsHandshakeResult result = dtlsHandler.startDtlsClientHandshake(
+                            session.socket, session.remoteAddress, session.dtlsTransportAdapter
+                    );
+
+                    if (result.isSuccess() && result.getSrtpKeyingMaterial() != null) {
+                        session.dtlsTransport = result.getDtlsTransport();
+                        session.state = CallMediaState.DTLS_CONNECTED;
+
+                        // Derive SRTP keys (RFC 5764 & RFC 3711)
+                        byte[] keyMaterial = result.getSrtpKeyingMaterial();
+                        byte[] clientMasterKey = Arrays.copyOfRange(keyMaterial, 0, 16);
+                        byte[] serverMasterKey = Arrays.copyOfRange(keyMaterial, 16, 32);
+                        byte[] clientMasterSalt = Arrays.copyOfRange(keyMaterial, 32, 46);
+                        byte[] serverMasterSalt = Arrays.copyOfRange(keyMaterial, 46, 60);
+
+                        // As DTLS client: encrypt outbound with client key/salt, decrypt inbound with server key/salt
+                        session.senderSrtpTransformer = new SrtpTransformer(clientMasterKey, clientMasterSalt, true);
+                        session.receiverSrtpTransformer = new SrtpTransformer(serverMasterKey, serverMasterSalt, false);
+
+                        session.state = CallMediaState.SRTP_READY;
+                        session.state = CallMediaState.MEDIA_ACTIVE;
+                        log.info("🚀 [WebRtcGateway] Call callId={} transition to MEDIA_ACTIVE (SRTP Encryption & Decryption Ready)", callId);
+
+                        // Start active media streaming and VAD tasks
+                        startMediaStreamingTasks(session);
+
+                    } else {
+                        session.state = CallMediaState.FAILED;
+                        log.error("❌ [WebRtcGateway] DTLS Handshake FAILED for callId={}: {}", callId, result.getErrorMessage());
+                        terminateSession(callId);
+                    }
                 }
             } catch (Exception e) {
-                log.warn("⚠️ [WebRtcGateway] DTLS Client Handshake warning: {}", e.getMessage());
+                session.state = CallMediaState.FAILED;
+                log.error("❌ [WebRtcGateway] Fatal DTLS Handshake exception: {}", e.getMessage(), e);
+                terminateSession(callId);
             }
         });
+    }
 
-        // Schedule periodic RTP comfort frame transmission every 20ms and periodic STUN keep-alive every 500ms
+    private void startMediaStreamingTasks(WebRtcMediaSession session) {
+        String callId = session.callId;
+
+        // 1. Schedule periodic SRTP comfort/audio frame transmission every 20ms
         session.outboundTask = scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (!session.running.get() || session.remoteAddress == null) return;
-                byte[] rtpFrame = session.buildNextRtpPacket();
-                DatagramPacket packet = new DatagramPacket(rtpFrame, rtpFrame.length, session.remoteAddress);
-                session.socket.send(packet);
+                if (!session.running.get() || session.state != CallMediaState.MEDIA_ACTIVE || session.remoteAddress == null) return;
 
-                // Periodic STUN keepalive ping every ~500ms (every 25 frames)
-                if (session.sequenceNumber.get() % 25 == 0) {
+                byte[] plainRtp = session.buildNextRtpPacket();
+                byte[] srtpPacket = session.senderSrtpTransformer != null ? session.senderSrtpTransformer.encryptRtp(plainRtp) : plainRtp;
+
+                DatagramPacket packet = new DatagramPacket(srtpPacket, srtpPacket.length, session.remoteAddress);
+                session.socket.send(packet);
+                session.outboundPacketsCount.incrementAndGet();
+
+                // Periodic STUN keepalive ping every ~1s (every 50 frames)
+                if (session.sequenceNumber.get() % 50 == 0) {
                     session.sendStunBindingPing(session.remoteAddress);
                 }
             } catch (Exception e) {
@@ -301,10 +344,10 @@ public class WhatsAppWebRtcMediaGateway {
             }
         }, 0, 20, TimeUnit.MILLISECONDS);
 
-        // Schedule periodic VAD endpointing loop to detect user speech and trigger AI response
+        // 2. Schedule periodic VAD endpointing loop to detect user speech and trigger AI response
         session.vadTask = scheduler.scheduleAtFixedRate(() -> {
             try {
-                if (!session.running.get() || session.isProcessingTurn.get()) return;
+                if (!session.running.get() || session.state != CallMediaState.MEDIA_ACTIVE || session.isProcessingTurn.get()) return;
                 long silenceDuration = System.currentTimeMillis() - session.lastInboundPacketTime;
                 int bufferSize = session.inboundPcmBuffer.size();
 
@@ -338,10 +381,10 @@ public class WhatsAppWebRtcMediaGateway {
             }
         }, 1000, 250, TimeUnit.MILLISECONDS);
 
-        // Trigger welcome voice turn asynchronously
+        // 3. Trigger welcome voice turn asynchronously
         CompletableFuture.runAsync(() -> {
             try {
-                Thread.sleep(1000); // 1-second pause after connection
+                Thread.sleep(800);
                 WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
                         voiceCallBridgeService.processCallTurn(session.tenantId, callId, new byte[0], "audio/wav", "Hello, I just connected");
                 log.info("🤖 [WebRtcGateway] Welcome AI Greeting for callId={}: {}", callId, turn.aiResponseText());
@@ -389,16 +432,21 @@ public class WhatsAppWebRtcMediaGateway {
         WebRtcMediaSession session = activeSessions.remove(callId);
         if (session != null) {
             session.running.set(false);
+            session.state = CallMediaState.TERMINATED;
             if (session.outboundTask != null) {
                 session.outboundTask.cancel(true);
             }
             if (session.vadTask != null) {
                 session.vadTask.cancel(true);
             }
+            if (session.dtlsTransportAdapter != null) {
+                session.dtlsTransportAdapter.close();
+            }
             if (session.socket != null && !session.socket.isClosed()) {
                 session.socket.close();
             }
-            log.info("⏹️ [WebRtcGateway] Media session closed for callId={}", callId);
+            log.info("⏹️ [WebRtcGateway] Media session closed for callId={}. Inbound packets: {}, Outbound packets: {}",
+                    callId, session.inboundPacketsCount.get(), session.outboundPacketsCount.get());
         }
     }
 
@@ -413,15 +461,15 @@ public class WhatsAppWebRtcMediaGateway {
                     session.socket.receive(packet);
                     byte[] data = Arrays.copyOf(packet.getData(), packet.getLength());
                     InetSocketAddress sender = (InetSocketAddress) packet.getSocketAddress();
-                    log.info("📦 [WebRtcGateway] Received Inbound UDP packet len={} type=0x{} from {}", data.length, (data.length > 0 ? Integer.toHexString(data[0] & 0xFF) : "0"), sender);
 
-                    // Update remote address if Meta sends from a different IP/port
+                    // Update remote address if Meta sends from a different candidate port
                     if (session.remoteAddress == null) {
                         session.remoteAddress = sender;
                     }
 
                     // 1. Handle STUN Binding Request (0x0001) or Response (0x0101)
                     if (data.length >= 20 && (data[0] == 0x00 || data[0] == 0x01) && data[1] == 0x01) {
+                        session.state = CallMediaState.ICE_CONNECTED;
                         handleStunBindingRequest(session, data, sender);
                         continue;
                     }
@@ -435,20 +483,31 @@ public class WhatsAppWebRtcMediaGateway {
                         continue;
                     }
 
-                    // 3. Handle RTP Audio Packet
+                    // 3. Handle Inbound SRTP/RTP Audio Packet
                     if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
                         session.inboundPacketsCount.incrementAndGet();
                         session.lastInboundPacketTime = System.currentTimeMillis();
 
-                        // Barge-in: if user speaks while AI is playing, flush audio
+                        // Decrypt SRTP packet using receiver transformer if available
+                        byte[] plainRtp = data;
+                        if (session.receiverSrtpTransformer != null) {
+                            byte[] decrypted = session.receiverSrtpTransformer.decryptSrtp(data);
+                            if (decrypted != null) {
+                                plainRtp = decrypted;
+                            }
+                        }
+
+                        // Barge-in: if user speaks while AI is playing, flush outbound queue
                         if (!session.outboundAudioQueue.isEmpty()) {
                             flushOutboundAudio(session.callId);
                         }
 
                         // Extract RTP payload (skip 12-byte header)
-                        byte[] payload = Arrays.copyOfRange(data, 12, data.length);
-                        synchronized (session.inboundPcmBuffer) {
-                            session.inboundPcmBuffer.write(payload);
+                        if (plainRtp.length > 12) {
+                            byte[] payload = Arrays.copyOfRange(plainRtp, 12, plainRtp.length);
+                            synchronized (session.inboundPcmBuffer) {
+                                session.inboundPcmBuffer.write(payload);
+                            }
                         }
                     }
 
@@ -551,7 +610,7 @@ public class WhatsAppWebRtcMediaGateway {
             }
         }
         try {
-            return new DatagramSocket(); // fallback to any available port
+            return new DatagramSocket();
         } catch (Exception e) {
             throw new RuntimeException("Failed to allocate UDP DatagramSocket for WebRTC: " + e.getMessage(), e);
         }
@@ -568,7 +627,6 @@ public class WhatsAppWebRtcMediaGateway {
             } catch (Exception ignored) {
             }
         }
-        // Fallback to c=IN IP4 line
         Matcher cMatcher = Pattern.compile("(?m)^c=IN IP4 (\\S+)").matcher(sdpOffer);
         Matcher mMatcher = Pattern.compile("(?m)^m=audio (\\d+)").matcher(sdpOffer);
         if (cMatcher.find() && mMatcher.find()) {
@@ -602,10 +660,14 @@ public class WhatsAppWebRtcMediaGateway {
         final String remotePwd;
         final WebRtcDtlsHandler.UdpDatagramTransport dtlsTransportAdapter;
         volatile org.bouncycastle.tls.DTLSTransport dtlsTransport;
+        volatile SrtpTransformer senderSrtpTransformer;
+        volatile SrtpTransformer receiverSrtpTransformer;
+        volatile CallMediaState state = CallMediaState.NEW;
         final AtomicBoolean running = new AtomicBoolean(true);
         final AtomicInteger sequenceNumber = new AtomicInteger(1000);
         final AtomicLong timestamp = new AtomicLong(0);
         final AtomicLong inboundPacketsCount = new AtomicLong(0);
+        final AtomicLong outboundPacketsCount = new AtomicLong(0);
         volatile long lastInboundPacketTime = 0;
         final long ssrc = 850231558L;
         final ConcurrentLinkedQueue<byte[]> outboundAudioQueue = new ConcurrentLinkedQueue<>();
@@ -744,4 +806,3 @@ public class WhatsAppWebRtcMediaGateway {
         }
     }
 }
-

@@ -153,7 +153,7 @@ public class WhatsAppCallingAgentService {
         // Promptly start outbound RTP comfort stream to prevent 138021 MEDIA_RECEIVE_TIMEOUT
         mediaGateway.startOutboundMedia(callId);
 
-        log.info("✅ [WhatsAppCallAgent] Call callId={} transition to ACTIVE and outbound media started", callId);
+        log.info("📞 [WhatsAppCallAgent] Call callId={} accepted. Initiated WebRTC media pipeline", callId);
     }
 
     private void handleOutboundConnectAnswer(UUID tenantId, String callId, WhatsAppCallWebhookEnvelope.CallEvent event) {
