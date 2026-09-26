@@ -67,6 +67,13 @@ public class OpusAudioEncoder {
                     dataOffset = 44;
                     dataLen = audioBytes.length - 44;
                 }
+            } else {
+                // Not a WAV file! Log first 10 bytes to see what it is (Base64 JSON? MP3?)
+                StringBuilder hex = new StringBuilder();
+                for(int i=0; i<Math.min(10, audioBytes.length); i++) {
+                    hex.append(String.format("%02X ", audioBytes[i]));
+                }
+                log.warn("⚠️ [OpusEncoder] Audio is NOT a WAV file (No RIFF header). First bytes: {}", hex.toString());
             }
 
             // Convert 16-bit PCM bytes to short[] samples
