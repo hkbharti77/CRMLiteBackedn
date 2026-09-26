@@ -84,7 +84,7 @@ public class SarvamVoiceService {
                 HttpHeaders headers = new HttpHeaders();
                 headers.set("api-subscription-key", apiKey.trim());
                 headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.setAccept(Collections.singletonList(MediaType.APPLICATION_OCTET_STREAM));
+                headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
                 headers.set("Accept-Encoding", "identity");
                 headers.set("User-Agent", "ChatCRMLite-SarvamVoice/1.0");
 
