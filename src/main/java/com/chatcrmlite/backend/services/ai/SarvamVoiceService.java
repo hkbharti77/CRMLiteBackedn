@@ -97,36 +97,13 @@ public class SarvamVoiceService {
                 body.put("speech_sample_rate", 22050);
 
                 HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-                ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, byte[].class);
+                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
 
                 int latency = (int) (System.currentTimeMillis() - start);
 
-                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && response.getBody().length > 0) {
-                    byte[] bodyBytes = response.getBody();
+                if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                    String jsonString = response.getBody();
                     
-                    // Handle GZIP compression if Spring Boot didn't auto-decompress
-                    if (bodyBytes.length > 2 && bodyBytes[0] == (byte) 0x1F && bodyBytes[1] == (byte) 0x8B) {
-                        try (java.util.zip.GZIPInputStream gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(bodyBytes));
-                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
-                            byte[] buffer = new byte[8192];
-                            int len;
-                            while ((len = gis.read(buffer)) > 0) {
-                                baos.write(buffer, 0, len);
-                            }
-                            bodyBytes = baos.toByteArray();
-                        } catch (Exception e) {
-                            log.warn("[Sarvam-TTS] Failed to decompress GZIP response: {}", e.getMessage());
-                        }
-                    }
-
-                    // If Sarvam respects our Accept header, it returns a raw WAV file.
-                    if (bodyBytes.length > 4 && bodyBytes[0] == 'R' && bodyBytes[1] == 'I' && bodyBytes[2] == 'F' && bodyBytes[3] == 'F') {
-                        log.info("[Sarvam-TTS] Success in {}ms ({} raw WAV bytes)", latency, bodyBytes.length);
-                        return bodyBytes;
-                    }
-
-                    // Otherwise, it might be JSON containing a base64 string: {"audios": ["UklGR..."]}
-                    String jsonString = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonString);
                         if (root.has("audios") && root.get("audios").isArray() && root.get("audios").size() > 0) {
@@ -138,11 +115,7 @@ public class SarvamVoiceService {
                             log.warn("[Sarvam-TTS] Missing 'audios' array in response: {}", jsonString.substring(0, Math.min(100, jsonString.length())));
                         }
                     } catch (Exception parseEx) {
-                        StringBuilder hex = new StringBuilder();
-                        for (int i = 0; i < Math.min(16, bodyBytes.length); i++) {
-                            hex.append(String.format("%02X ", bodyBytes[i]));
-                        }
-                        log.warn("[Sarvam-TTS] Failed to parse JSON response: {}. First 16 bytes: [{}]", parseEx.getMessage(), hex.toString().trim());
+                        log.warn("[Sarvam-TTS] Failed to parse JSON response: {}", parseEx.getMessage());
                     }
                     return new byte[0];
                 } else {
