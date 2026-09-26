@@ -158,7 +158,7 @@ public class WhatsAppWebRtcMediaGateway {
         sdp.append("a=ice-pwd:").append(pwd).append("\r\n");
         sdp.append("a=ice-options:trickle\r\n");
         sdp.append("a=fingerprint:SHA-256 ").append(fingerprint).append("\r\n");
-        sdp.append(sdpOffer != null ? "a=setup:active\r\n" : "a=setup:actpass\r\n");
+        sdp.append("a=setup:active\r\n");
         sdp.append("a=mid:").append(mid).append("\r\n");
         sdp.append("a=rtcp-mux\r\n");
         sdp.append("a=rtcp-rsize\r\n");
@@ -272,6 +272,17 @@ public class WhatsAppWebRtcMediaGateway {
         if (session.remoteAddress != null) {
             session.sendStunBindingPing(session.remoteAddress);
         }
+
+        // Trigger DTLS 1.2 Handshake asynchronously with Meta endpoint
+        CompletableFuture.runAsync(() -> {
+            try {
+                if (session.remoteAddress != null) {
+                    session.dtlsTransport = dtlsHandler.startDtlsClientHandshake(session.socket, session.remoteAddress, session.dtlsTransportAdapter);
+                }
+            } catch (Exception e) {
+                log.warn("⚠️ [WebRtcGateway] DTLS Client Handshake warning: {}", e.getMessage());
+            }
+        });
 
         // Schedule periodic RTP comfort frame transmission every 20ms and periodic STUN keep-alive every 500ms
         session.outboundTask = scheduler.scheduleAtFixedRate(() -> {
@@ -409,13 +420,22 @@ public class WhatsAppWebRtcMediaGateway {
                         session.remoteAddress = sender;
                     }
 
-                    // 1. Handle STUN Binding Request (0x0001)
-                    if (data.length >= 20 && data[0] == 0x00 && data[1] == 0x01) {
+                    // 1. Handle STUN Binding Request (0x0001) or Response (0x0101)
+                    if (data.length >= 20 && (data[0] == 0x00 || data[0] == 0x01) && data[1] == 0x01) {
                         handleStunBindingRequest(session, data, sender);
                         continue;
                     }
 
-                    // 2. Handle RTP Audio Packet
+                    // 2. Handle DTLS packets (ContentType: 20=ChangeCipherSpec, 21=Alert, 22=Handshake, 23=ApplicationData)
+                    int firstByte = data[0] & 0xFF;
+                    if (firstByte >= 20 && firstByte <= 63) {
+                        if (session.dtlsTransportAdapter != null) {
+                            session.dtlsTransportAdapter.enqueueInbound(data);
+                        }
+                        continue;
+                    }
+
+                    // 3. Handle RTP Audio Packet
                     if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
                         session.inboundPacketsCount.incrementAndGet();
                         session.lastInboundPacketTime = System.currentTimeMillis();
@@ -456,12 +476,13 @@ public class WhatsAppWebRtcMediaGateway {
             attrStream.write(0x00); attrStream.write(0x08);
             attrStream.write(0x00); // Reserved
             attrStream.write(0x01); // IPv4
-            int xorPort = sender.getPort() ^ (0x2112A442 >> 16);
+            int xorPort = sender.getPort() ^ 0x2112;
             attrStream.write((xorPort >> 8) & 0xFF);
             attrStream.write(xorPort & 0xFF);
             byte[] ipBytes = sender.getAddress().getAddress();
+            byte[] magic = new byte[]{(byte) 0x21, (byte) 0x12, (byte) 0xA4, (byte) 0x42};
             for (int i = 0; i < 4; i++) {
-                attrStream.write(ipBytes[i] ^ (0x2112A442 >> (24 - i * 8)));
+                attrStream.write(((ipBytes[i] & 0xFF) ^ (magic[i] & 0xFF)) & 0xFF);
             }
 
             byte[] rawAttrs = attrStream.toByteArray();
@@ -579,6 +600,8 @@ public class WhatsAppWebRtcMediaGateway {
         final String pwd;
         final String remoteUfrag;
         final String remotePwd;
+        final WebRtcDtlsHandler.UdpDatagramTransport dtlsTransportAdapter;
+        volatile org.bouncycastle.tls.DTLSTransport dtlsTransport;
         final AtomicBoolean running = new AtomicBoolean(true);
         final AtomicInteger sequenceNumber = new AtomicInteger(1000);
         final AtomicLong timestamp = new AtomicLong(0);
@@ -602,6 +625,7 @@ public class WhatsAppWebRtcMediaGateway {
             this.pwd = pwd;
             this.remoteUfrag = remoteUfrag;
             this.remotePwd = remotePwd;
+            this.dtlsTransportAdapter = new WebRtcDtlsHandler.UdpDatagramTransport(socket, remoteAddress);
         }
 
         /**
