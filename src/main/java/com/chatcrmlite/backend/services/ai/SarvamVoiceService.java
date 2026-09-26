@@ -89,7 +89,7 @@ public class SarvamVoiceService {
                 headers.set("User-Agent", "ChatCRMLite-SarvamVoice/1.0");
 
                 Map<String, Object> body = new HashMap<>();
-                body.put("inputs", Collections.singletonList(spokenText));
+                body.put("text", spokenText);
                 body.put("target_language_code", langCode);
                 body.put("speaker", activeSpeaker);
                 body.put("model", defaultModel);
@@ -138,7 +138,11 @@ public class SarvamVoiceService {
                             log.warn("[Sarvam-TTS] Missing 'audios' array in response: {}", jsonString.substring(0, Math.min(100, jsonString.length())));
                         }
                     } catch (Exception parseEx) {
-                        log.warn("[Sarvam-TTS] Failed to parse JSON response: {}", parseEx.getMessage());
+                        StringBuilder hex = new StringBuilder();
+                        for (int i = 0; i < Math.min(16, bodyBytes.length); i++) {
+                            hex.append(String.format("%02X ", bodyBytes[i]));
+                        }
+                        log.warn("[Sarvam-TTS] Failed to parse JSON response: {}. First 16 bytes: [{}]", parseEx.getMessage(), hex.toString().trim());
                     }
                     return new byte[0];
                 } else {
