@@ -101,14 +101,22 @@ public class SarvamVoiceService {
                 int latency = (int) (System.currentTimeMillis() - start);
 
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null && response.getBody().length > 0) {
-                    // Sarvam returns JSON containing a base64 string: {"audios": ["UklGR..."]}
-                    String jsonString = new String(response.getBody(), java.nio.charset.StandardCharsets.UTF_8);
+                    byte[] bodyBytes = response.getBody();
+                    
+                    // If Sarvam respects our Accept header, it returns a raw WAV file.
+                    if (bodyBytes.length > 4 && bodyBytes[0] == 'R' && bodyBytes[1] == 'I' && bodyBytes[2] == 'F' && bodyBytes[3] == 'F') {
+                        log.info("[Sarvam-TTS] Success in {}ms ({} raw WAV bytes)", latency, bodyBytes.length);
+                        return bodyBytes;
+                    }
+
+                    // Otherwise, it might be JSON containing a base64 string: {"audios": ["UklGR..."]}
+                    String jsonString = new String(bodyBytes, java.nio.charset.StandardCharsets.UTF_8);
                     try {
                         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonString);
                         if (root.has("audios") && root.get("audios").isArray() && root.get("audios").size() > 0) {
                             String base64Audio = root.get("audios").get(0).asText();
                             byte[] decodedWav = java.util.Base64.getDecoder().decode(base64Audio);
-                            log.info("[Sarvam-TTS] Success in {}ms ({} audio bytes)", latency, decodedWav.length);
+                            log.info("[Sarvam-TTS] Success in {}ms ({} audio bytes decoded from JSON)", latency, decodedWav.length);
                             return decodedWav;
                         } else {
                             log.warn("[Sarvam-TTS] Missing 'audios' array in response: {}", jsonString.substring(0, Math.min(100, jsonString.length())));
