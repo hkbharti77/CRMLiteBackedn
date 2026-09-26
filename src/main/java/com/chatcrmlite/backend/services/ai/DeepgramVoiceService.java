@@ -219,9 +219,9 @@ public class DeepgramVoiceService {
         String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-stella-en");
         String safeKey = maskKey(apiKey);
 
-        // Request WAV (linear16 PCM) so OpusAudioEncoder can parse the WAV header and resample correctly.
-        // Deepgram Aura supports encoding=linear16 with container=wav.
-        String url = "https://api.deepgram.com/v1/speak?model=" + activeModel + "&encoding=linear16&sample_rate=22050&container=wav";
+        // Request WAV (linear16 PCM) so OpusAudioEncoder can parse the WAV header without resampling.
+        // Deepgram Aura supports encoding=linear16 with container=wav, at 48kHz.
+        String url = "https://api.deepgram.com/v1/speak?model=" + activeModel + "&encoding=linear16&sample_rate=48000&container=wav";
         log.info("[Deepgram-TTS] Synthesizing speech with model={} for text length={} (Key: {})",
                 activeModel, spokenText.length(), safeKey);
 

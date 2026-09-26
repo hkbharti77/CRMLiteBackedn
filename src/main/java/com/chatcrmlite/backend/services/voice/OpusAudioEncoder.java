@@ -40,15 +40,33 @@ public class OpusAudioEncoder {
             int dataLen = audioBytes.length;
 
             // Check for WAV header ("RIFF")
-            if (audioBytes.length > 44 && audioBytes[0] == 'R' && audioBytes[1] == 'I' && audioBytes[2] == 'F' && audioBytes[3] == 'F') {
-                ByteBuffer header = ByteBuffer.wrap(audioBytes, 0, 44).order(ByteOrder.LITTLE_ENDIAN);
-                int channels = header.getShort(22) & 0xFFFF;
-                inputSampleRate = header.getInt(24);
-                int bitsPerSample = header.getShort(34) & 0xFFFF;
-                dataOffset = 44;
-                dataLen = audioBytes.length - 44;
-                log.info("🎵 [OpusEncoder] Parsed WAV header: sampleRate={}Hz channels={} bitsPerSample={}",
-                        inputSampleRate, channels, bitsPerSample);
+            if (audioBytes.length > 12 && audioBytes[0] == 'R' && audioBytes[1] == 'I' && audioBytes[2] == 'F' && audioBytes[3] == 'F') {
+                ByteBuffer header = ByteBuffer.wrap(audioBytes).order(ByteOrder.LITTLE_ENDIAN);
+                
+                // Parse format chunk to get sample rate
+                int offset = 12; // Skip RIFF, size, WAVE
+                while (offset + 8 < audioBytes.length) {
+                    String chunkId = new String(audioBytes, offset, 4);
+                    int chunkSize = header.getInt(offset + 4);
+                    
+                    if ("fmt ".equals(chunkId)) {
+                        int channels = header.getShort(offset + 10) & 0xFFFF;
+                        inputSampleRate = header.getInt(offset + 12);
+                        int bitsPerSample = header.getShort(offset + 22) & 0xFFFF;
+                        log.info("🎵 [OpusEncoder] Parsed WAV fmt: sampleRate={}Hz channels={} bitsPerSample={}", 
+                                inputSampleRate, channels, bitsPerSample);
+                    } else if ("data".equals(chunkId)) {
+                        dataOffset = offset + 8;
+                        dataLen = chunkSize;
+                        break;
+                    }
+                    offset += 8 + chunkSize;
+                }
+                if (dataOffset == 0) {
+                    // Fallback if data chunk not found
+                    dataOffset = 44;
+                    dataLen = audioBytes.length - 44;
+                }
             }
 
             // Convert 16-bit PCM bytes to short[] samples
