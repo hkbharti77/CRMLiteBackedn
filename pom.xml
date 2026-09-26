@@ -241,6 +241,13 @@
       <version>2.0.0</version>
     </dependency>
 
+    <!-- Pure-Java Opus Audio Codec for WebRTC -->
+    <dependency>
+      <groupId>io.github.jaredmdobson</groupId>
+      <artifactId>concentus</artifactId>
+      <version>1.0.2</version>
+    </dependency>
+
     <!-- Caching, Idempotency & Message Queue -->
     <dependency>
       <groupId>org.springframework.boot</groupId>

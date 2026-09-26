@@ -14,6 +14,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.*;
@@ -496,6 +497,7 @@ public class WhatsAppWebRtcMediaGateway {
                         session.inboundPcmBuffer.reset();
                     }
                     session.isProcessingTurn.set(true);
+                    flushOutboundAudio(callId);
                     log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes), processing AI turn for callId={}", userAudio.length, callId);
 
                     CompletableFuture.runAsync(() -> {
@@ -539,13 +541,11 @@ public class WhatsAppWebRtcMediaGateway {
         WebRtcMediaSession session = activeSessions.get(callId);
         if (session == null || !session.running.get()) return;
 
-        int chunkSize = 160;
-        for (int i = 0; i < audioBytes.length; i += chunkSize) {
-            int len = Math.min(chunkSize, audioBytes.length - i);
-            byte[] chunk = Arrays.copyOfRange(audioBytes, i, i + len);
-            session.outboundAudioQueue.offer(chunk);
+        List<byte[]> opusFrames = OpusAudioEncoder.encodeWavOrPcmToOpusFrames(audioBytes);
+        for (byte[] frame : opusFrames) {
+            session.outboundAudioQueue.offer(frame);
         }
-        log.info("🔊 [WebRtcGateway] Enqueued {} audio frames for callId={}", (audioBytes.length + chunkSize - 1) / chunkSize, callId);
+        log.info("🔊 [WebRtcGateway] Enqueued {} Opus audio frames for callId={}", opusFrames.size(), callId);
     }
 
     public void flushOutboundAudio(String callId) {
@@ -746,10 +746,6 @@ public class WhatsAppWebRtcMediaGateway {
                         byte[] decrypted = session.receiverSrtpTransformer.decryptSrtp(data);
                         if (decrypted != null) {
                             plainRtp = decrypted;
-                        }
-
-                        if (!session.outboundAudioQueue.isEmpty()) {
-                            flushOutboundAudio(session.callId);
                         }
 
                         if (plainRtp.length > 12) {
