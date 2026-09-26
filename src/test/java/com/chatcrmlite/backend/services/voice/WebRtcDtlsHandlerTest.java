@@ -301,6 +301,22 @@ public class WebRtcDtlsHandlerTest {
         assertArrayEquals(plainRtp, decryptedRtp, "Decrypted RTP must exactly match original plaintext RTP");
     }
 
+    @Test
+    void testRfc3711TestVectors() {
+        byte[] masterKey = java.util.HexFormat.of().parseHex("E1F97A0D3E018BE0D64FA32C06DE4139");
+        byte[] masterSalt = java.util.HexFormat.of().parseHex("0EC675AD498AFEEBB6960B3AABE6");
+
+        SrtpTransformer transformer = new SrtpTransformer(masterKey, masterSalt, true);
+
+        // Expected keys from RFC 3711 Appendix B.3:
+        // Cipher Key:  C61E7A93744F39EE10734AFE3FF7A087
+        // Auth Key:    CEBE321F6FF7716B6FD4AB49AF256A156D38BAA4 (first 20 bytes)
+        // Cipher Salt: 30CBBC08863D8C85D49DB34A9AE1
+        assertEquals("c61e7a93744f39ee10734afe3ff7a087", java.util.HexFormat.of().formatHex(transformer.getEncKey()).toLowerCase());
+        assertEquals("cebe321f6ff7716b6fd4ab49af256a156d38baa4", java.util.HexFormat.of().formatHex(transformer.getAuthKey()).toLowerCase());
+        assertEquals("30cbbc08863d8c85d49db34a9ae1", java.util.HexFormat.of().formatHex(transformer.getSaltKey()).toLowerCase());
+    }
+
     private static X509Certificate generateCert(String dnStr, KeyPair kp, String sigAlg) throws Exception {
         long now = System.currentTimeMillis();
         Date startDate = new Date(now - 24 * 60 * 60 * 1000L);

@@ -26,6 +26,10 @@ public class SrtpTransformer {
         deriveSessionKeys(masterKey, masterSalt);
     }
 
+    byte[] getEncKey() { return encKey; }
+    byte[] getAuthKey() { return authKey; }
+    byte[] getSaltKey() { return saltKey; }
+
     /**
      * Derives SRTP Session Encryption Key, Session Authentication Key, and Session Salting Key
      * as specified in RFC 3711 Section 4.3.
@@ -52,11 +56,10 @@ public class SrtpTransformer {
     }
 
     private void deriveKey(Cipher cipher, byte[] masterSalt, byte label, byte[] outKey, int outLen) throws Exception {
-        // IV = (masterSalt * 2^16) XOR (label * 2^48)
-        // In 16-byte big-endian IV: masterSalt in bytes 0..13, label at byte 9 (bits 48..55)
+        // In 16-byte big-endian IV: masterSalt in bytes 0..13, label right-aligned with key_id at byte 7 (14 - 7)
         byte[] iv = new byte[16];
         System.arraycopy(masterSalt, 0, iv, 0, 14);
-        iv[9] ^= label;
+        iv[7] ^= label;
 
         int blocksNeeded = (outLen + 15) / 16;
         ByteBuffer outBuf = ByteBuffer.allocate(blocksNeeded * 16);
