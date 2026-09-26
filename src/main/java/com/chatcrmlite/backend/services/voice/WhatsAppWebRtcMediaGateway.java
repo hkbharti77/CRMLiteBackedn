@@ -6,12 +6,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import io.github.jaredmdobson.concentus.OpusDecoder;
 import java.io.ByteArrayOutputStream;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
@@ -498,12 +500,15 @@ public class WhatsAppWebRtcMediaGateway {
                     }
                     session.isProcessingTurn.set(true);
                     flushOutboundAudio(callId);
-                    log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes), processing AI turn for callId={}", userAudio.length, callId);
+                    log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes PCM @ 48kHz), processing AI turn for callId={}", userAudio.length, callId);
+
+                    // Wrap raw 16-bit LE PCM into a WAV container for Deepgram STT
+                    final byte[] wavAudio = buildWavHeader(userAudio, 48000, 1, 16);
 
                     CompletableFuture.runAsync(() -> {
                         try {
                             WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
-                                    voiceCallBridgeService.processCallTurn(session.tenantId, callId, userAudio, "audio/opus", null);
+                                    voiceCallBridgeService.processCallTurn(session.tenantId, callId, wavAudio, "audio/wav", null);
                             log.info("🤖 [WebRtcGateway] AI Response for callId={}: {}", callId, turn.aiResponseText());
                             if (turn.synthesizedAudio() != null && turn.synthesizedAudio().length > 0) {
                                 enqueueOutboundAudio(callId, turn.synthesizedAudio());
@@ -734,6 +739,18 @@ public class WhatsAppWebRtcMediaGateway {
                     }
 
                     if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
+                        // RFC 5761: distinguish RTP vs RTCP/SRTCP by payload type (byte 1)
+                        // RTCP packet types: 72-76 (reduced-size RTCP) or 200-204 (full RTCP SR/RR/SDES/BYE/APP)
+                        // RTP payload types used for Opus: 96-127 (dynamic), or 0-35 (standard)
+                        int pt = data[1] & 0xFF;
+                        boolean isRtcp = (pt >= 192)          // Full RTCP: SR=200, RR=201, SDES=202...
+                                      || (pt >= 72 && pt <= 76); // Reduced-size RTCP
+                        if (isRtcp) {
+                            // SRTCP has a different auth formula — silently skip,
+                            // we don't need RTCP processing for voice
+                            continue;
+                        }
+
                         session.inboundSrtpPacketsCount.incrementAndGet();
                         session.lastInboundPacketTime = System.currentTimeMillis();
 
@@ -742,16 +759,44 @@ public class WhatsAppWebRtcMediaGateway {
                             continue;
                         }
 
-                        byte[] plainRtp = data;
                         byte[] decrypted = session.receiverSrtpTransformer.decryptSrtp(data);
-                        if (decrypted != null) {
-                            plainRtp = decrypted;
+                        if (decrypted == null) {
+                            // BUG FIX: Drop packet — never buffer encrypted bytes as audio
+                            continue;
                         }
 
-                        if (plainRtp.length > 12) {
-                            byte[] payload = Arrays.copyOfRange(plainRtp, 12, plainRtp.length);
-                            synchronized (session.inboundPcmBuffer) {
-                                session.inboundPcmBuffer.write(payload);
+                        if (decrypted.length > 12) {
+                            // Strip 12-byte fixed RTP header (CC=0, no extension)
+                            // Handle CSRC list: lower 4 bits of byte 0 = CC count
+                            int cc = decrypted[0] & 0x0F;
+                            int headerLen = 12 + cc * 4;
+                            // Check for RTP extension bit (bit 4 of byte 0)
+                            if ((decrypted[0] & 0x10) != 0 && decrypted.length > headerLen + 4) {
+                                int extLen = ((decrypted[headerLen + 2] & 0xFF) << 8 | (decrypted[headerLen + 3] & 0xFF)) * 4;
+                                headerLen += 4 + extLen;
+                            }
+                            if (headerLen >= decrypted.length) continue;
+
+                            byte[] opusFrame = Arrays.copyOfRange(decrypted, headerLen, decrypted.length);
+
+                            // Decode Opus frame -> 16-bit PCM at 48kHz mono
+                            try {
+                                if (session.opusDecoder == null) continue;
+                                short[] pcmSamples = new short[960]; // 20ms @ 48kHz mono
+                                int samplesDecoded = session.opusDecoder.decode(opusFrame, 0, opusFrame.length,
+                                        pcmSamples, 0, 960, false);
+                                if (samplesDecoded > 0) {
+                                    byte[] pcmBytes = new byte[samplesDecoded * 2];
+                                    ByteBuffer pcmBuf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN);
+                                    for (int s = 0; s < samplesDecoded; s++) {
+                                        pcmBuf.putShort(pcmSamples[s]);
+                                    }
+                                    synchronized (session.inboundPcmBuffer) {
+                                        session.inboundPcmBuffer.write(pcmBytes);
+                                    }
+                                }
+                            } catch (Exception decodeEx) {
+                                log.trace("[WebRtcGateway] Opus decode error (packet dropped): {}", decodeEx.getMessage());
                             }
                         }
                     }
@@ -886,6 +931,32 @@ public class WhatsAppWebRtcMediaGateway {
         return m.find() ? m.group(1).trim() : defaultVal;
     }
 
+    /**
+     * Wraps raw 16-bit signed LE PCM bytes into a standard WAV container.
+     * Deepgram STT (Nova-2) accepts audio/wav natively with no extra query params.
+     */
+    private static byte[] buildWavHeader(byte[] pcmData, int sampleRate, int channels, int bitsPerSample) {
+        int byteRate = sampleRate * channels * bitsPerSample / 8;
+        int blockAlign = channels * bitsPerSample / 8;
+        int dataLen = pcmData.length;
+        ByteBuffer buf = ByteBuffer.allocate(44 + dataLen).order(ByteOrder.LITTLE_ENDIAN);
+        buf.put(new byte[]{'R','I','F','F'});
+        buf.putInt(36 + dataLen);       // ChunkSize
+        buf.put(new byte[]{'W','A','V','E'});
+        buf.put(new byte[]{'f','m','t',' '});
+        buf.putInt(16);                  // Subchunk1Size (PCM)
+        buf.putShort((short) 1);         // AudioFormat = PCM
+        buf.putShort((short) channels);
+        buf.putInt(sampleRate);
+        buf.putInt(byteRate);
+        buf.putShort((short) blockAlign);
+        buf.putShort((short) bitsPerSample);
+        buf.put(new byte[]{'d','a','t','a'});
+        buf.putInt(dataLen);
+        buf.put(pcmData);
+        return buf.array();
+    }
+
     public static class WebRtcMediaSession {
         final String callId;
         final UUID tenantId;
@@ -922,6 +993,7 @@ public class WhatsAppWebRtcMediaGateway {
         ScheduledFuture<?> outboundTask;
         ScheduledFuture<?> vadTask;
         ScheduledFuture<?> iceCheckTask;
+        final OpusDecoder opusDecoder;
 
         WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd, String remoteUfrag, String remotePwd, String remoteFingerprint, String localFingerprint, boolean iceControlling) {
             this.callId = callId;
@@ -939,6 +1011,14 @@ public class WhatsAppWebRtcMediaGateway {
             this.iceControlling = iceControlling;
             this.dtlsDiagnostics = new WebRtcDtlsHandler.DtlsDiagnostics();
             this.dtlsTransportAdapter = new WebRtcDtlsHandler.UdpDatagramTransport(socket, remoteAddress, dtlsDiagnostics);
+            OpusDecoder dec;
+            try {
+                dec = new OpusDecoder(48000, 1); // 48kHz, mono
+            } catch (Exception e) {
+                dec = null;
+                // Will be guarded by null check in RTP receive loop
+            }
+            this.opusDecoder = dec;
         }
 
         public byte[] buildNextRtpPacket() {
