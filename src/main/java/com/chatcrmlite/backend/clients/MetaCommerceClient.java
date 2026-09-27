@@ -125,12 +125,80 @@ public class MetaCommerceClient {
         return executePost(url, payload, accessToken);
     }
 
-    /**
-     * Create a new product in a Catalog.
-     */
     public JsonNode createProduct(String catalogId, Map<String, Object> productData, String accessToken) {
-        String url = String.format("%s/%s/products", getGraphBaseUrl(), catalogId);
-        return executePost(url, productData, accessToken);
+        String url = String.format("%s/%s/items_batch", getGraphBaseUrl(), catalogId);
+        
+        // Convert productData to items_batch format
+        Map<String, Object> requestItem = new java.util.HashMap<>();
+        requestItem.put("method", "CREATE");
+        
+        // Items_batch expects 'id' instead of 'retailer_id'
+        if (productData.containsKey("retailer_id")) {
+            productData.put("id", productData.remove("retailer_id"));
+        }
+        // Items_batch expects 'link' instead of 'url'
+        if (productData.containsKey("url")) {
+            productData.put("link", productData.remove("url"));
+        }
+        // Items_batch expects 'image_link' instead of 'image_url'
+        if (productData.containsKey("image_url")) {
+            productData.put("image_link", productData.remove("image_url"));
+        }
+        
+        // Ensure price strings are formatted correctly if they don't have currency suffix yet
+        String currency = (String) productData.get("currency");
+        if (currency != null) {
+            String priceStr = String.valueOf(productData.get("price"));
+            if (!priceStr.contains(" ") && !priceStr.contains(currency)) {
+                productData.put("price", priceStr + " " + currency);
+            }
+            if (productData.containsKey("sale_price") && productData.get("sale_price") != null) {
+                String salePriceStr = String.valueOf(productData.get("sale_price"));
+                if (!salePriceStr.contains(" ") && !salePriceStr.contains(currency)) {
+                    productData.put("sale_price", salePriceStr + " " + currency);
+                }
+            }
+        }
+        
+        requestItem.put("data", productData);
+        
+        org.springframework.util.MultiValueMap<String, String> formPayload = new org.springframework.util.LinkedMultiValueMap<>();
+        formPayload.add("item_type", "PRODUCT_ITEM");
+        
+        try {
+            formPayload.add("requests", objectMapper.writeValueAsString(java.util.Collections.singletonList(requestItem)));
+        } catch (Exception e) {
+            log.error("[Commerce] Error serializing requests", e);
+        }
+        
+        return executeFormPost(url, formPayload, accessToken);
+    }
+
+    private JsonNode executeFormPost(String url, org.springframework.util.MultiValueMap<String, String> payload, String accessToken) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
+        headers.setBearerAuth(accessToken);
+        HttpEntity<org.springframework.util.MultiValueMap<String, String>> request = new HttpEntity<>(payload, headers);
+        long start = System.currentTimeMillis();
+        
+        try {
+            log.info("[Commerce] Executing FORM POST to {}. Payload: {}", url, payload);
+        } catch (Exception e) {
+            log.warn("[Commerce] Could not serialize payload for logging", e);
+        }
+
+        try {
+            ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
+            return objectMapper.readTree(response.getBody());
+        } catch (org.springframework.web.client.HttpStatusCodeException e) {
+            long duration = System.currentTimeMillis() - start;
+            MetaCommerceError error = parseMetaCommerceError(e.getResponseBodyAsString());
+            log.error("[Commerce] operation=POST url={} durationMs={} errorCode={} errorSubcode={} fbtraceId={} userMsg={}",
+                    url, duration, error.code(), error.errorSubcode(), error.fbtraceId(), error.errorUserMsg());
+            throw new MetaCommerceApiException(error.errorUserMsg(), error);
+        } catch (Exception e) {
+            throw new RuntimeException("Meta API POST failed", e);
+        }
     }
 
     /**
@@ -224,6 +292,13 @@ public class MetaCommerceClient {
         headers.setBearerAuth(accessToken);
         HttpEntity<Map<String, Object>> request = new HttpEntity<>(payload, headers);
         long start = System.currentTimeMillis();
+        
+        try {
+            log.info("[Commerce] Executing POST to {}. Payload: {}", url, objectMapper.writeValueAsString(payload));
+        } catch (Exception e) {
+            log.warn("[Commerce] Could not serialize payload for logging", e);
+        }
+
         try {
             ResponseEntity<String> response = restTemplate.postForEntity(url, request, String.class);
             return objectMapper.readTree(response.getBody());

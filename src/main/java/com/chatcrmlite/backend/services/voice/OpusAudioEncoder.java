@@ -97,7 +97,7 @@ public class OpusAudioEncoder {
 
             // Encode 960-sample (20ms) blocks with Concentus OpusEncoder
             OpusEncoder encoder = new OpusEncoder(OPUS_SAMPLE_RATE, OPUS_CHANNELS, OpusApplication.OPUS_APPLICATION_VOIP);
-            encoder.setBitrate(24000);
+            encoder.setBitrate(24000); // 24kbps is perfect for mono voice
             encoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
 
             byte[] outPacket = new byte[1275];
@@ -121,6 +121,60 @@ public class OpusAudioEncoder {
             log.error("❌ [OpusEncoder] Failed to encode audio to Opus: {}", e.getMessage(), e);
         }
 
+        return frames;
+    }
+
+    /**
+     * Encodes raw 16-bit PCM bytes (already properly framed) directly to Opus without parsing WAV headers.
+     * The pcmBytes length should ideally be a multiple of 1920 (for 20ms @ 48kHz mono).
+     * If not, the last partial frame will be zero-padded.
+     */
+    public static List<byte[]> encodeRawPcmToOpusFrames(byte[] pcmBytes, int sampleRate, int channels) {
+        return encodeRawPcmToOpusFrames(pcmBytes, sampleRate, channels, null);
+    }
+
+    public static List<byte[]> encodeRawPcmToOpusFrames(byte[] pcmBytes, int sampleRate, int channels, OpusEncoder statefulEncoder) {
+        List<byte[]> frames = new ArrayList<>();
+        if (pcmBytes == null || pcmBytes.length == 0) return frames;
+
+        try {
+            int numInputSamples = pcmBytes.length / 2;
+            short[] inputSamples = new short[numInputSamples];
+            ByteBuffer pcmBuf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN);
+            for (int i = 0; i < numInputSamples; i++) {
+                inputSamples[i] = pcmBuf.getShort();
+            }
+
+            short[] resampledSamples;
+            if (sampleRate != OPUS_SAMPLE_RATE && sampleRate > 0) {
+                resampledSamples = resampleLinear(inputSamples, sampleRate, OPUS_SAMPLE_RATE);
+            } else {
+                resampledSamples = inputSamples;
+            }
+
+            OpusEncoder encoder = statefulEncoder;
+            if (encoder == null) {
+                encoder = new OpusEncoder(OPUS_SAMPLE_RATE, OPUS_CHANNELS, OpusApplication.OPUS_APPLICATION_VOIP);
+                encoder.setBitrate(24000);
+                encoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
+            }
+
+            byte[] outPacket = new byte[1275];
+            short[] frameBuffer = new short[FRAME_SIZE_SAMPLES];
+
+            for (int offset = 0; offset < resampledSamples.length; offset += FRAME_SIZE_SAMPLES) {
+                int samplesToCopy = Math.min(FRAME_SIZE_SAMPLES, resampledSamples.length - offset);
+                Arrays.fill(frameBuffer, (short) 0);
+                System.arraycopy(resampledSamples, offset, frameBuffer, 0, samplesToCopy);
+
+                int bytesEncoded = encoder.encode(frameBuffer, 0, FRAME_SIZE_SAMPLES, outPacket, 0, outPacket.length);
+                if (bytesEncoded > 0) {
+                    frames.add(Arrays.copyOf(outPacket, bytesEncoded));
+                }
+            }
+        } catch (Exception e) {
+            log.error("❌ [OpusEncoder] Failed to encode raw PCM: {}", e.getMessage(), e);
+        }
         return frames;
     }
 

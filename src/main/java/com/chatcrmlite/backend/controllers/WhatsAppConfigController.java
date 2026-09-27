@@ -227,6 +227,10 @@ public class WhatsAppConfigController {
             String connectionType = (String) body.get("connectionType");
             if (connectionType != null && !connectionType.isBlank()) config.setConnectionType(connectionType.trim());
         }
+        if (body.containsKey("datasetId")) {
+            String datasetId = (String) body.get("datasetId");
+            if (datasetId != null && !datasetId.isBlank()) config.setDatasetId(datasetId.trim());
+        }
         if (body.containsKey("embeddedBusinessId")) config.setEmbeddedBusinessId((String) body.get("embeddedBusinessId"));
         if (body.containsKey("embeddedWabaId")) config.setEmbeddedWabaId((String) body.get("embeddedWabaId"));
         if (body.containsKey("embeddedPhoneId")) config.setEmbeddedPhoneId((String) body.get("embeddedPhoneId"));
@@ -248,6 +252,21 @@ public class WhatsAppConfigController {
                 try {
                     config.setBotCooldownMinutes(Integer.parseInt(str.trim()));
                 } catch (Exception ignored) {}
+            }
+        }
+
+        // Auto-create Dataset if missing in legacy connection mode
+        if ((config.getDatasetId() == null || config.getDatasetId().isBlank())
+                && config.getWabaId() != null && !config.getWabaId().isBlank()
+                && config.getAccessToken() != null && !config.getAccessToken().isBlank()) {
+            
+            String tenantName = config.getTenant() != null && config.getTenant().getBusinessName() != null
+                    ? config.getTenant().getBusinessName()
+                    : "CRM";
+            
+            String createdDatasetId = metaOnboardingService.createConversionsDataset(config.getWabaId(), config.getAccessToken(), tenantName + " WhatsApp Conversions");
+            if (createdDatasetId != null) {
+                config.setDatasetId(createdDatasetId);
             }
         }
 
@@ -289,6 +308,44 @@ public class WhatsAppConfigController {
             return ResponseEntity.ok(result);
         } catch (Exception e) {
             return ResponseEntity.status(500).body(Map.of("error", "Embedded signup exchange failed: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping("/meta-dataset")
+    public ResponseEntity<?> createMetaDataset(
+            @AuthenticationPrincipal String email,
+            @RequestBody Map<String, String> body) {
+        
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(user.getTenant().getId())
+                .orElseThrow(() -> new RuntimeException("WhatsApp config not found. Please connect your account first."));
+        
+        if (config.getWabaId() == null || config.getWabaId().isBlank() || 
+            config.getAccessToken() == null || config.getAccessToken().isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "WABA ID and Access Token are required. Please save config first."));
+        }
+        
+        String datasetName = body.get("datasetName");
+        if (datasetName == null || datasetName.isBlank()) {
+            datasetName = user.getTenant().getBusinessName() != null ? user.getTenant().getBusinessName() + " WhatsApp Conversions" : "CRM WhatsApp Conversions";
+        }
+        
+        try {
+            String createdDatasetId = metaOnboardingService.createConversionsDataset(config.getWabaId(), config.getAccessToken(), datasetName);
+            if (createdDatasetId != null) {
+                config.setDatasetId(createdDatasetId);
+                whatsappConfigRepository.save(config);
+                return ResponseEntity.ok(Map.of(
+                    "message", "Dataset created/linked successfully",
+                    "datasetId", createdDatasetId
+                ));
+            } else {
+                return ResponseEntity.status(500).body(Map.of("error", "Failed to create or link dataset. Please check Meta API permissions."));
+            }
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body(Map.of("error", "Error creating dataset: " + e.getMessage()));
         }
     }
 

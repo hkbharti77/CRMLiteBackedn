@@ -19,6 +19,10 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashSet;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 @Slf4j
 @Service
@@ -93,6 +97,7 @@ public class ConversationOrchestrator {
         int currentHop = 0;
         StringBuilder finalResponse = new StringBuilder();
         boolean toolExecuted = false;
+        Set<String> executedToolsInThisTurn = new HashSet<>();
 
         while (currentHop < maxHops) {
             AiRequest request = AiRequest.builder()
@@ -111,29 +116,56 @@ public class ConversationOrchestrator {
             }
 
             // If there's text content, append it
-            if (response.getContent() != null && !response.getContent().isBlank()) {
-                finalResponse.append(response.getContent().trim()).append(" ");
+            String rawContent = response.getContent();
+            
+            // Check for raw XML tool calls hallucinated by model in text content
+            List<ToolExecutionRequest> parsedRequests = new ArrayList<>();
+            if (rawContent != null && rawContent.contains("<tool_call>")) {
+                Pattern pattern = Pattern.compile("<tool_call>(.*?)</tool_call>", Pattern.DOTALL);
+                Matcher matcher = pattern.matcher(rawContent);
+                while (matcher.find()) {
+                    String toolCallBody = matcher.group(1);
+                    String toolName = toolCallBody.split("\\r?\\n")[0].trim();
+                    // Just a basic parse to avoid crashing, but usually we rely on native tool calls.
+                    // For now, we will simply filter this out of the TTS response.
+                    log.warn("[Orchestrator] Detected raw XML tool call in text for tool: {}", toolName);
+                }
+                rawContent = matcher.replaceAll("").trim();
+            }
+
+            if (rawContent != null && !rawContent.isBlank()) {
+                finalResponse.append(rawContent).append(" ");
+            }
+
+            List<ToolExecutionRequest> toolRequests = response.getToolExecutionRequests();
+            if (toolRequests == null) {
+                toolRequests = new ArrayList<>();
             }
 
             // Check if tools were called
-            if (response.getToolExecutionRequests() != null && !response.getToolExecutionRequests().isEmpty()) {
+            if (!toolRequests.isEmpty()) {
                 toolExecuted = true;
 
-                // Add exact AiMessage using direct constructor to avoid LangChain4j null/blank text exception
                 AiMessage aiMessage;
-                String responseContent = (response.getContent() != null && !response.getContent().isBlank()) ? response.getContent().trim() : null;
-                if (responseContent != null) {
-                    aiMessage = new AiMessage(responseContent, response.getToolExecutionRequests());
+                if (rawContent != null && !rawContent.isBlank()) {
+                    aiMessage = new AiMessage(rawContent, toolRequests);
                 } else {
-                    aiMessage = new AiMessage(response.getToolExecutionRequests());
+                    aiMessage = new AiMessage(toolRequests);
                 }
                 messages.add(aiMessage);
 
-                for (ToolExecutionRequest toolReq : response.getToolExecutionRequests()) {
+                for (ToolExecutionRequest toolReq : toolRequests) {
+                    String toolKey = toolReq.name() + "-" + toolReq.arguments();
+                    if (executedToolsInThisTurn.contains(toolKey)) {
+                        log.warn("Skipping duplicate tool execution in same turn: {}", toolReq.name());
+                        messages.add(ToolExecutionResultMessage.from(toolReq.id(), toolReq.name(), "Duplicate tool execution prevented."));
+                        continue;
+                    }
+                    executedToolsInThisTurn.add(toolKey);
+                    
                     log.info("Executing tool: {}", toolReq.name());
                     ToolExecutionResult toolResult = toolRouter.execute(toolReq, context);
                     
-                    // Add ToolExecutionResultMessage to history
                     String resultString = String.format("Status: %s\nResult: %s\nErrorCode: %s", 
                             toolResult.status(), toolResult.result(), toolResult.errorCode());
                     
@@ -144,10 +176,8 @@ public class ConversationOrchestrator {
                     messages.add(ToolExecutionResultMessage.from(safeId, safeName, safeResult));
                 }
                 
-                // Hop again to let LLM read the tool result and respond
                 currentHop++;
             } else {
-                // No more tool calls, we are done
                 break;
             }
         }

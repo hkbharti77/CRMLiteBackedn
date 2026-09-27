@@ -14,11 +14,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolSpecification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.HashMap;
 import java.util.Map;
 
 @Service
+@Slf4j
 public class CreateLeadTool implements VoiceTool {
 
     private final ObjectMapper objectMapper;
@@ -56,7 +58,6 @@ public class CreateLeadTool implements VoiceTool {
     }
 
     @Override
-    @Transactional
     public ToolExecutionResult execute(String toolCallId, String jsonArguments, ToolExecutionContext context) {
         try {
             JsonNode args = objectMapper.readTree(jsonArguments);
@@ -64,16 +65,12 @@ public class CreateLeadTool implements VoiceTool {
             String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name", "visitor_name", "first_name");
             String email = extractFirstNonBlank(args, "customer_email", "email", "email_address", "mail");
             String details = extractFirstNonBlank(args, "enquiry_details", "details", "message", "enquiry", "notes", "requirements", "service", "query");
-
-            if (details == null || details.isBlank()) {
-                details = buildSummaryFromArgs(args);
+            
+            if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
+                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required field: customer_name. Please ask the user for their name.", "MISSING_FIELD");
             }
-
-            if (rawName == null || rawName.isBlank()) {
-                rawName = extractAnyString(args);
-                if (rawName == null || rawName.isBlank()) {
-                    rawName = "Voice Lead (" + (context.callerPhone() != null && !context.callerPhone().isBlank() ? context.callerPhone() : "Visitor") + ")";
-                }
+            if (details == null || details.trim().isEmpty() || details.equalsIgnoreCase("unknown")) {
+                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required field: enquiry_details. Please ask the user what their enquiry is about.", "MISSING_FIELD");
             }
 
             final String name = rawName;
@@ -129,18 +126,24 @@ public class CreateLeadTool implements VoiceTool {
             
             // Append enquiry
             Map<String, String> data = new HashMap<>();
-            data.put("phone", waId);
-            if (email != null) data.put("email", email);
+            
+            // Safely truncate phone to fit in 255 character limit
+            String safePhone = waId.length() > 250 ? waId.substring(0, 250) : waId;
+            data.put("phone", safePhone);
+            
+            if (email != null && !email.equalsIgnoreCase("unknown")) data.put("email", email);
             data.put("name", name);
             
             leadEnquiryService.appendEnquiry(savedLead, details, "VOICE_BOT", "voice-bot", data);
 
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Enquiry and details submitted successfully. Do not speak lead numbers to the user.", null);
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Lead created successfully.", null);
 
         } catch (com.chatcrmlite.backend.services.tenant.QuotaEnforcerService.QuotaExceededException e) {
+            log.warn("Quota exceeded in CreateLeadTool: {}", e.getMessage());
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Tenant lead quota exceeded.", "QUOTA_EXCEEDED");
         } catch (Exception e) {
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or internal error.", "INTERNAL_ERROR");
+            log.error("Exception in CreateLeadTool execute", e);
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or internal error: " + e.getMessage(), "INTERNAL_ERROR");
         }
     }
 

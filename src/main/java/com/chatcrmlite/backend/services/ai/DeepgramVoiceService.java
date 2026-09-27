@@ -21,7 +21,7 @@ import java.util.Map;
 
 /**
  * Enterprise-grade Direct Deepgram Voice Service for Speech-to-Text (Nova-2)
- * and Text-to-Speech (Aura).
+ * and Text-to-Speech (Aura) with streaming playback support.
  */
 @Slf4j
 @Service
@@ -112,6 +112,8 @@ public class DeepgramVoiceService {
             urlBuilder.append("&encoding=mulaw&sample_rate=8000");
         } else if (contentType.toLowerCase().contains("opus")) {
             urlBuilder.append("&encoding=opus&sample_rate=48000");
+        } else if (contentType.toLowerCase().contains("linear16")) {
+            urlBuilder.append("&encoding=linear16&sample_rate=48000");
         }
 
         String url = urlBuilder.toString();
@@ -205,6 +207,83 @@ public class DeepgramVoiceService {
 
     /**
      * Synthesize clean text to speech audio using Deepgram Aura.
+     *
+     * @param spokenText Normalized speech text
+     * @param customModel Optional custom Aura voice model (defaults to ttsModel)
+     * @param audioChunkCallback Callback invoked for every chunk of audio received (useful for streaming playback).
+     */
+    public void synthesizeSpeechStreaming(String spokenText, String customModel, java.util.function.Consumer<byte[]> audioChunkCallback) {
+        if (spokenText == null || spokenText.isBlank()) {
+            return;
+        }
+
+        long start = System.currentTimeMillis();
+        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-stella-en");
+        String safeKey = maskKey(apiKey);
+
+        // Request linear16 PCM (raw). container=none guarantees no WAV header.
+        String url = "https://api.deepgram.com/v1/speak?model=" + activeModel + "&encoding=linear16&sample_rate=48000&container=none";
+        log.info("[Deepgram-TTS] Streaming speech with model={} for text length={} (Key: {})",
+                activeModel, spokenText.length(), safeKey);
+
+        int attempts = 0;
+        Exception lastException = null;
+
+        while (attempts <= maxRetries) {
+            attempts++;
+            try {
+                restTemplate.execute(url, HttpMethod.POST, request -> {
+                    request.getHeaders().set("Authorization", "Token " + apiKey.trim());
+                    request.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                    request.getHeaders().setAccept(Collections.singletonList(MediaType.APPLICATION_OCTET_STREAM));
+                    request.getHeaders().set("User-Agent", "ChatCRMLite-DeepgramVoice/2.0");
+                    Map<String, String> body = new HashMap<>();
+                    body.put("text", spokenText);
+                    byte[] reqBody = objectMapper.writeValueAsBytes(body);
+                    request.getBody().write(reqBody);
+                }, response -> {
+                    if (response.getStatusCode().is2xxSuccessful()) {
+                        java.io.InputStream is = response.getBody();
+                        byte[] buffer = new byte[8192]; // 8KB chunks
+                        int bytesRead;
+                        boolean firstChunk = true;
+                        int totalBytes = 0;
+                        while ((bytesRead = is.read(buffer)) != -1) {
+                            if (firstChunk) {
+                                log.info("[Deepgram-TTS] First audio chunk received in {}ms", (System.currentTimeMillis() - start));
+                                firstChunk = false;
+                            }
+                            byte[] chunk = java.util.Arrays.copyOf(buffer, bytesRead);
+                            audioChunkCallback.accept(chunk);
+                            totalBytes += bytesRead;
+                        }
+                        // Signal End of Stream
+                        audioChunkCallback.accept(new byte[0]);
+                        log.info("[Deepgram-TTS] Streaming complete. Total {} bytes in {}ms", totalBytes, (System.currentTimeMillis() - start));
+                    } else {
+                        log.warn("[Deepgram-TTS] Streaming failed with status {}", response.getStatusCode());
+                    }
+                    return null;
+                });
+                return;
+            } catch (Exception e) {
+                lastException = e;
+                log.warn("[Deepgram-TTS] Transient error on attempt {}/{}: {}", attempts, maxRetries + 1, e.getMessage());
+                if (attempts <= maxRetries) {
+                    try {
+                        Thread.sleep(200L * attempts);
+                    } catch (InterruptedException ignored) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+            }
+        }
+        log.error("[Deepgram-TTS] All {} synthesis attempts failed. Last error: {}",
+                attempts, lastException != null ? lastException.getMessage() : "unknown");
+    }
+
+    /**
+     * Synthesize clean text to speech audio using Deepgram Aura (Blocking).
      *
      * @param spokenText Normalized speech text
      * @param customModel Optional custom Aura voice model (defaults to ttsModel)

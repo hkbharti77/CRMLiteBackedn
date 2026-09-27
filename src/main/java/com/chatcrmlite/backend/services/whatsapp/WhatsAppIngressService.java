@@ -45,6 +45,7 @@ public class WhatsAppIngressService {
     @org.springframework.beans.factory.annotation.Autowired private com.chatcrmlite.backend.services.team.AgentAssignmentService agentAssignmentService;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowSubmissionRepository flowSubmissionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowOutboxEventRepository flowOutboxEventRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.WhatsAppAttributionRepository whatsappAttributionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.flows.FlowSendSessionRepository flowSendSessionRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.UserRepository userRepository;
     @org.springframework.beans.factory.annotation.Autowired(required = false) private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
@@ -115,6 +116,24 @@ public class WhatsAppIngressService {
             String profileName = extractProfileName(contactsNode, effectivePhone, bsuid, parentBsuid);
             Contact contact = resolveContact(effectivePhone, bsuid, parentBsuid, profileName, owner, tenant);
             
+            // Extract CTWA Attribution
+            if (messageNode.has("referral") && whatsappAttributionRepository != null && context.getTenantId() != null) {
+                JsonNode referral = messageNode.path("referral");
+                String ctwaClid = referral.path("ctwa_clid").asText(null);
+                if (ctwaClid != null && !ctwaClid.isBlank()) {
+                    com.chatcrmlite.backend.models.WhatsAppAttribution attr = com.chatcrmlite.backend.models.WhatsAppAttribution.builder()
+                        .tenantId(context.getTenantId())
+                        .phoneNumberId(contact.getWaId())
+                        .ctwaClid(ctwaClid)
+                        .sourceType(referral.path("source_type").asText("ad"))
+                        .sourceId(referral.path("source_id").asText(null))
+                        .wabaId(config.getWabaId())
+                        .build();
+                    whatsappAttributionRepository.save(attr);
+                    log.info("🎯 [Attribution] Captured ctwa_clid for contact {}", contact.getWaId());
+                }
+            }
+
             String msgType = messageNode.path("type").asText("text");
             String text = "";
             boolean isFlowNfmReply = false;

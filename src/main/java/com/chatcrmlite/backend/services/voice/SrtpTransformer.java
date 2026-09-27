@@ -146,12 +146,15 @@ public class SrtpTransformer {
             Cipher ctrCipher = Cipher.getInstance("AES/CTR/NoPadding");
             ctrCipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(encKey, "AES"), new IvParameterSpec(iv));
 
-            int payloadLen = rtpPacket.length - 12;
-            byte[] encryptedPayload = ctrCipher.doFinal(rtpPacket, 12, payloadLen);
+            int headerLen = getRtpHeaderLength(rtpPacket);
+            int payloadLen = rtpPacket.length - headerLen;
+            if (payloadLen < 0) return rtpPacket;
+
+            byte[] encryptedPayload = ctrCipher.doFinal(rtpPacket, headerLen, payloadLen);
 
             byte[] srtpData = new byte[rtpPacket.length];
-            System.arraycopy(rtpPacket, 0, srtpData, 0, 12);
-            System.arraycopy(encryptedPayload, 0, srtpData, 12, payloadLen);
+            System.arraycopy(rtpPacket, 0, srtpData, 0, headerLen);
+            System.arraycopy(encryptedPayload, 0, srtpData, headerLen, payloadLen);
 
             byte[] tag = computeAuthTag(srtpData, currentRoc);
 
@@ -164,6 +167,21 @@ public class SrtpTransformer {
             log.error("❌ [SRTP] Failed to encrypt RTP packet: {}", e.getMessage());
             return rtpPacket;
         }
+    }
+
+    /**
+     * Extracts the actual unencrypted RTP header length (including CSRC and extensions).
+     * The SRTP payload (which is encrypted) starts immediately after this header.
+     */
+    private int getRtpHeaderLength(byte[] packet) {
+        if (packet == null || packet.length < 12) return 12;
+        int cc = packet[0] & 0x0F;
+        int headerLen = 12 + cc * 4;
+        if ((packet[0] & 0x10) != 0 && packet.length > headerLen + 4) {
+            int extLen = ((packet[headerLen + 2] & 0xFF) << 8 | (packet[headerLen + 3] & 0xFF)) * 4;
+            headerLen += 4 + extLen;
+        }
+        return Math.min(headerLen, packet.length);
     }
 
     /**
@@ -224,12 +242,15 @@ public class SrtpTransformer {
             Cipher ctrCipher = Cipher.getInstance("AES/CTR/NoPadding");
             ctrCipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(encKey, "AES"), new IvParameterSpec(iv));
 
-            int payloadLen = packetLen - 12;
-            byte[] decryptedPayload = ctrCipher.doFinal(srtpPacket, 12, payloadLen);
+            int headerLen = getRtpHeaderLength(srtpPacket);
+            int payloadLen = packetLen - headerLen;
+            if (payloadLen < 0) return null;
 
-            byte[] rtpBuf = new byte[12 + decryptedPayload.length];
-            System.arraycopy(srtpPacket, 0, rtpBuf, 0, 12);
-            System.arraycopy(decryptedPayload, 0, rtpBuf, 12, decryptedPayload.length);
+            byte[] decryptedPayload = ctrCipher.doFinal(srtpPacket, headerLen, payloadLen);
+
+            byte[] rtpBuf = new byte[headerLen + decryptedPayload.length];
+            System.arraycopy(srtpPacket, 0, rtpBuf, 0, headerLen);
+            System.arraycopy(decryptedPayload, 0, rtpBuf, headerLen, decryptedPayload.length);
             return rtpBuf;
 
         } catch (Exception e) {

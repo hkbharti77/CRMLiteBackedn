@@ -99,6 +99,19 @@ public class FlowSubmissionProcessor {
     @Autowired(required = false)
     private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.WhatsAppAttributionRepository attributionRepository;
+
+    private void publishLeadSubmittedForMeta(Lead lead, Contact contact, Tenant tenant) {
+        if (tenant == null || contact == null || lead == null) return;
+        com.chatcrmlite.backend.models.WhatsAppAttribution attr = null;
+        if (attributionRepository != null) {
+            attr = attributionRepository.findTopByTenantIdAndPhoneNumberIdOrderByCapturedAtDesc(
+                tenant.getId(), contact.getWaId()).orElse(null);
+        }
+        eventPublisher.publishEvent(new com.chatcrmlite.backend.event.LeadSubmittedEvent(this, lead, attr));
+    }
+
     private User resolveOwner(FlowSubmission submission, Contact contact) {
         if (contact != null && contact.getOwner() != null) return contact.getOwner();
         Tenant targetTenant = resolveTenant(submission, contact, null);
@@ -291,6 +304,7 @@ public class FlowSubmissionProcessor {
         String summary = buildHumanSummary(normalizedMap, "Appointment Booking Flow");
         leadService.appendEnquiryToLead(lead, summary, "FLOW", "WhatsApp Flow: " + flowDisplayName, normalizedMap);
         eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "WHATSAPP_FLOW"));
+        publishLeadSubmittedForMeta(lead, contact, tenant);
         evictLeadCaches();
 
         if (tenant != null && webSocketPublisher != null) {
@@ -345,6 +359,7 @@ public class FlowSubmissionProcessor {
         String summary = buildHumanSummary(normalizedMap, "Lead Generation Flow");
         leadService.appendEnquiryToLead(lead, summary, "FLOW", "WhatsApp Flow: " + flowDisplayName, normalizedMap);
         eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "WHATSAPP_FLOW"));
+        publishLeadSubmittedForMeta(lead, contact, tenant);
         evictLeadCaches();
 
         if (tenant != null && webSocketPublisher != null) {
@@ -438,6 +453,7 @@ public class FlowSubmissionProcessor {
 
         // Publish TicketCreatedEvent (sends ticket confirmation email with ticket number & SLA to customer + notification to owner)
         eventPublisher.publishEvent(new TicketCreatedEvent(this, savedTicket, "WHATSAPP_FLOW"));
+        publishLeadSubmittedForMeta(lead, contact, tenant);
         evictLeadCaches();
 
         log.info("🎫 [FlowProcessor] Created Support Ticket {} for contact {} via Flow and triggered ticket emails", savedTicket.getTicketNumber(), contact.getWaId());
@@ -486,6 +502,7 @@ public class FlowSubmissionProcessor {
         String summary = buildHumanSummary(normalizedMap, flowDisplayName);
         leadService.appendEnquiryToLead(lead, summary, "FLOW", "WhatsApp Flow: " + flowDisplayName, normalizedMap);
         eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "WHATSAPP_FLOW"));
+        publishLeadSubmittedForMeta(lead, contact, tenant);
         evictLeadCaches();
         log.info("ℹ️ [FlowProcessor] Processed general survey/inquiry for contact {}", contact.getWaId());
     }

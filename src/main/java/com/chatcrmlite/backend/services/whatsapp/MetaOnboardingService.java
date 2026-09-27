@@ -651,7 +651,60 @@ public class MetaOnboardingService {
             config.setVerifyToken("crm_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
         }
 
+        if (config.getDatasetId() == null || config.getDatasetId().isBlank()) {
+            String tenantName = config.getTenant() != null && config.getTenant().getBusinessName() != null
+                    ? config.getTenant().getBusinessName()
+                    : "CRM";
+            String datasetId = createConversionsDataset(config.getWabaId(), accessToken, tenantName + " WhatsApp Conversions");
+            if (datasetId != null) config.setDatasetId(datasetId);
+        }
+
         return whatsappConfigRepository.save(config);
+    }
+
+    /**
+     * Automatically creates a Meta Dataset for WhatsApp Business Messaging Conversions API.
+     */
+    public String createConversionsDataset(String wabaId, String accessToken, String datasetName) {
+        if (!StringUtils.hasText(wabaId) || !StringUtils.hasText(accessToken)) return null;
+
+        // 1. Try to fetch existing dataset linked to this WABA
+        try {
+            String getUrl = String.format("%s/%s?fields=dataset&access_token=%s", getGraphApiUrl(), wabaId, accessToken);
+            ResponseEntity<String> getResponse = restTemplate.getForEntity(getUrl, String.class);
+            JsonNode getRoot = objectMapper.readTree(getResponse.getBody());
+            if (getRoot.has("dataset") && getRoot.path("dataset").has("id")) {
+                String existingId = getRoot.path("dataset").path("id").asText();
+                log.info("[MetaOnboarding] Found existing Meta Dataset {} for WABA {}", existingId, wabaId);
+                return existingId;
+            }
+        } catch (Exception e) {
+            log.debug("[MetaOnboarding] No existing dataset found for WABA {}, proceeding to create...", wabaId);
+        }
+
+        // 2. Create new if not exists
+        try {
+            String url = String.format("%s/%s/dataset", getGraphApiUrl(), wabaId);
+            org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
+            headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
+            headers.setBearerAuth(accessToken);
+
+            Map<String, Object> req = new HashMap<>();
+            req.put("dataset_name", StringUtils.hasText(datasetName) ? datasetName : "WhatsApp Conversions");
+
+            org.springframework.http.HttpEntity<Map<String, Object>> entity = new org.springframework.http.HttpEntity<>(req, headers);
+
+            ResponseEntity<String> response = restTemplate.postForEntity(url, entity, String.class);
+            JsonNode root = objectMapper.readTree(response.getBody());
+            if (root.has("id")) {
+                String datasetId = root.path("id").asText();
+                log.info("[MetaOnboarding] Automatically created Meta Dataset {} for WABA {}", datasetId, wabaId);
+                return datasetId;
+            }
+        } catch (Exception e) {
+            log.warn("[MetaOnboarding] Failed to auto-create Dataset: {}", e.getMessage());
+        }
+        return null;
     }
 
     private String sanitizeMetaErrorMessage(String rawResponse) {

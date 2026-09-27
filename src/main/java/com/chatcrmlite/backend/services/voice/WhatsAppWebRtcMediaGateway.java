@@ -15,6 +15,7 @@ import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -181,7 +182,7 @@ public class WhatsAppWebRtcMediaGateway {
         sdp.append("a=rtcp-rsize\r\n");
         sdp.append("a=sendrecv\r\n");
         sdp.append("a=rtpmap:").append(opusPt).append(" opus/48000/2\r\n");
-        sdp.append("a=fmtp:").append(opusPt).append(" maxaveragebitrate=20000;maxplaybackrate=16000;minptime=20;sprop-maxcapturerate=16000;useinbandfec=1\r\n");
+        sdp.append("a=fmtp:").append(opusPt).append(" minptime=10;useinbandfec=1\r\n");
         sdp.append("a=ptime:20\r\n");
         sdp.append("a=maxptime:20\r\n");
         sdp.append("a=candidate:1 1 UDP 2130706431 ").append(effectiveIp).append(" ").append(localPort).append(" typ host\r\n");
@@ -471,15 +472,52 @@ public class WhatsAppWebRtcMediaGateway {
                     return;
                 }
 
-                byte[] plainRtp = session.buildNextRtpPacket();
-                byte[] srtpPacket = session.senderSrtpTransformer.encryptRtp(plainRtp);
+                // Advance the RTP timestamp by 960 (20ms @ 48kHz) EVERY tick, even if DTX skips sending.
+                // This keeps the RTP clock in sync with real wall-clock time and prevents massive distortion.
+                int currentTimestamp = (int) session.timestamp.getAndAdd(960);
+                long startMs = System.currentTimeMillis();
+                long totalTicks = session.dtxTickCount.incrementAndGet();
 
-                DatagramPacket packet = new DatagramPacket(srtpPacket, srtpPacket.length, session.remoteAddress);
-                session.socket.send(packet);
-                session.outboundSrtpPacketsCount.incrementAndGet();
+                byte[] plainRtp = session.buildNextRtpPacket(currentTimestamp);
+                
+                if (plainRtp != null) {
+                    byte[] srtpPacket = session.senderSrtpTransformer.encryptRtp(plainRtp);
+                    if (srtpPacket != null) {
+                        DatagramPacket packet = new DatagramPacket(srtpPacket, srtpPacket.length, session.remoteAddress);
+                        session.socket.send(packet);
+                        session.outboundSrtpPacketsCount.incrementAndGet();
 
-                if (session.sequenceNumber.get() % 50 == 0) {
+                        long currentWallClock = System.currentTimeMillis();
+                        long prevWallClock = session.lastRtpSendWallClockMs.getAndSet(currentWallClock);
+                        long delta = prevWallClock == 0 ? 0 : currentWallClock - prevWallClock;
+                        int currentSeq = session.sequenceNumber.get() - 1;
+                        log.info("📊 [RTP-METRIC] callId={} turnId={} seq={} ts={} deltaWallClock={}ms queueDepth={} bytes={}",
+                                callId, session.currentTtsTurnId, currentSeq, currentTimestamp, delta, session.outboundAudioQueue.size(), plainRtp.length);
+
+                        if (session.firstRtpSentMs.get() == 0 && session.userUtteranceEndMs.get() > 0) {
+                            long firstRtpTime = System.currentTimeMillis();
+                            session.firstRtpSentMs.set(firstRtpTime);
+                            long totalE2e = firstRtpTime - session.userUtteranceEndMs.get();
+                            log.info("📈 [LATENCY-METRIC] Metric D: TTS first audio to first RTP sent (usually 0ms).");
+                            log.info("📈 [LATENCY-METRIC] Metric E: User stopped speaking -> First RTP sent: {}ms", totalE2e);
+                        }
+                    }
+                }
+
+                // Send STUN ping every 50 ticks (1 second) regardless of audio to keep connection alive
+                if (totalTicks % 50 == 0) {
                     session.sendStunBindingPing(session.remoteAddress);
+                    if (plainRtp != null) {
+                        log.info("[RTP-OUT] seq={} timestamp={} wallClock={} queueDepth={} deltaMs={}",
+                                session.sequenceNumber.get(), currentTimestamp, startMs, session.outboundAudioQueue.size(), (System.currentTimeMillis() - session.lastRtpSendTime));
+                    } else {
+                        // Optional debug log for DTX keep-alives
+                        // log.debug("[RTP-OUT] DTX Silence | Sent STUN ping");
+                    }
+                }
+                
+                if (plainRtp != null) {
+                    session.lastRtpSendTime = startMs;
                 }
             } catch (Exception e) {
                 // Socket closed or network glitch
@@ -491,7 +529,9 @@ public class WhatsAppWebRtcMediaGateway {
                 if (!session.running.get() || session.state != CallMediaState.MEDIA_ACTIVE || session.isProcessingTurn.get()) return;
                 
                 int bufferSize = session.inboundPcmBuffer.size();
-                long silenceDuration = System.currentTimeMillis() - session.lastVoiceActivityTime;
+                long now = System.currentTimeMillis();
+                long silenceDuration = now - session.lastVoiceActivityTime;
+                long speechDuration = now - session.speechStartTime;
 
                 if (!session.hasSpokenInTurn) {
                     // Prevent memory bloat from continuous silence packets before the user speaks
@@ -503,7 +543,7 @@ public class WhatsAppWebRtcMediaGateway {
                     return;
                 }
 
-                if (silenceDuration >= 700 && session.lastVoiceActivityTime > 0) {
+                if ((silenceDuration >= 700 && session.lastVoiceActivityTime > 0) || speechDuration >= 15000) {
                     byte[] userAudio;
                     synchronized (session.inboundPcmBuffer) {
                         userAudio = session.inboundPcmBuffer.toByteArray();
@@ -511,24 +551,42 @@ public class WhatsAppWebRtcMediaGateway {
                     }
                     session.hasSpokenInTurn = false;
                     session.isProcessingTurn.set(true);
+                    
+                    final int currentTurnId = session.turnId.incrementAndGet();
+                    session.isSpeakingAI.set(false);
                     flushOutboundAudio(callId);
+                    
+                    long endMs = System.currentTimeMillis();
+                    session.userUtteranceEndMs.set(endMs);
+                    session.firstRtpSentMs.set(0);
+                    
                     log.info("🗣️ [WebRtcGateway] User utterance captured ({} bytes PCM @ 48kHz), processing AI turn for callId={}", userAudio.length, callId);
 
-                    // Wrap raw 16-bit LE PCM into a WAV container for Deepgram STT
-                    final byte[] wavAudio = buildWavHeader(userAudio, 48000, 1, 16);
-
+                    // Wrap raw 16-bit LE PCM in a standard WAV header for flawless STT processing
+                    byte[] wavAudio = com.chatcrmlite.backend.utils.WavHeaderUtil.addWavHeader(userAudio, 48000, 1);
+                    
                     CompletableFuture.runAsync(() -> {
                         try {
                             WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
-                                    voiceCallBridgeService.processCallTurn(session.tenantId, callId, wavAudio, "audio/wav", null);
-                            log.info("🤖 [WebRtcGateway] AI Response for callId={}: {}", callId, turn.aiResponseText());
-                            if (turn.synthesizedAudio() != null && turn.synthesizedAudio().length > 0) {
-                                enqueueOutboundAudio(callId, turn.synthesizedAudio());
+                                    voiceCallBridgeService.processCallTurn(session.tenantId, callId, wavAudio, "audio/wav", null, chunk -> {
+                                        enqueueOutboundAudio(callId, chunk, currentTurnId);
+                                    });
+                                    
+                            // Verify turn generation ID to prevent race conditions after barge-in or termination
+                            if (session.turnId.get() != currentTurnId || !session.running.get()) {
+                                log.info("🛑 [WebRtcGateway] Dropping stale AI response (Turn ID changed or terminated)");
+                                return;
                             }
+                            
+                            log.info("🤖 [WebRtcGateway] AI Response for callId={}: {}", callId, turn.aiResponseText());
+                            // Do NOT enqueue turn.synthesizedAudio() here because it was already streamed incrementally via the chunk callback!
+                            // Doing so would cause the bot to repeat its entire response twice.
                         } catch (Exception e) {
                             log.error("❌ [WebRtcGateway] Error processing user voice turn: {}", e.getMessage());
                         } finally {
-                            session.isProcessingTurn.set(false);
+                            if (session.turnId.get() == currentTurnId) {
+                                session.isProcessingTurn.set(false);
+                            }
                         }
                     });
                 }
@@ -541,28 +599,79 @@ public class WhatsAppWebRtcMediaGateway {
             try {
                 Thread.sleep(800);
                 if (session.state != CallMediaState.MEDIA_ACTIVE && session.state != CallMediaState.SRTP_READY) return;
+                final int welcomeTurnId = session.turnId.get();
                 WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
-                        voiceCallBridgeService.processCallTurn(session.tenantId, callId, new byte[0], "audio/wav", "Hello, I just connected");
+                        voiceCallBridgeService.processCallTurn(session.tenantId, callId, new byte[0], "audio/wav", "Hello, I just connected", chunk -> {
+                            enqueueOutboundAudio(callId, chunk, welcomeTurnId);
+                        });
                 log.info("🤖 [WebRtcGateway] Welcome AI Greeting for callId={}: {}", callId, turn.aiResponseText());
-                if (turn.synthesizedAudio() != null && turn.synthesizedAudio().length > 0) {
-                    enqueueOutboundAudio(callId, turn.synthesizedAudio());
-                }
+                // Do NOT enqueue turn.synthesizedAudio() here to prevent the bot from repeating the greeting twice!
             } catch (Exception e) {
                 log.error("❌ [WebRtcGateway] Error generating welcome turn: {}", e.getMessage());
             }
         });
     }
 
-    public void enqueueOutboundAudio(String callId, byte[] audioBytes) {
-        if (audioBytes == null || audioBytes.length == 0) return;
+    public void enqueueOutboundAudio(String callId, byte[] audioBytes, int targetTurnId) {
         WebRtcMediaSession session = activeSessions.get(callId);
         if (session == null || !session.running.get()) return;
 
-        List<byte[]> opusFrames = OpusAudioEncoder.encodeWavOrPcmToOpusFrames(audioBytes);
+        if (session.turnId.get() != targetTurnId) {
+            return;
+        }
+
+        List<byte[]> opusFrames = new ArrayList<>();
+        
+        synchronized (session.ttsPcmAccumulator) {
+            if (session.currentTtsTurnId != targetTurnId) {
+                // New turn! Clear accumulator
+                session.ttsPcmAccumulator.reset();
+                session.currentTtsTurnId = targetTurnId;
+            }
+
+            if (audioBytes == null || audioBytes.length == 0) {
+                // End of stream signal -> flush the remaining bytes (zero-padded automatically by encoder)
+                byte[] remainder = session.ttsPcmAccumulator.toByteArray();
+                if (remainder.length > 0) {
+                    opusFrames.addAll(OpusAudioEncoder.encodeRawPcmToOpusFrames(remainder, 48000, 1, session.opusEncoder));
+                    session.ttsPcmAccumulator.reset();
+                }
+            } else {
+                session.ttsPcmAccumulator.write(audioBytes, 0, audioBytes.length);
+
+                byte[] accumulated = session.ttsPcmAccumulator.toByteArray();
+                int bytesPerFrame = 1920; // 960 samples * 2 bytes/sample (20ms @ 48kHz mono)
+                int framesToEncode = accumulated.length / bytesPerFrame;
+                
+                if (framesToEncode > 0) {
+                    int bytesToConsume = framesToEncode * bytesPerFrame;
+                    byte[] toEncode = Arrays.copyOfRange(accumulated, 0, bytesToConsume);
+                    
+                    // Keep the remainder for the next chunk
+                    session.ttsPcmAccumulator.reset();
+                    session.ttsPcmAccumulator.write(accumulated, bytesToConsume, accumulated.length - bytesToConsume);
+                    
+                    opusFrames.addAll(OpusAudioEncoder.encodeRawPcmToOpusFrames(toEncode, 48000, 1, session.opusEncoder));
+                }
+            }
+        }
+        
+        // Double check turnId again after expensive encoding
+        if (session.turnId.get() != targetTurnId || !session.running.get()) {
+            if (!opusFrames.isEmpty()) {
+                log.info("🛑 [WebRtcGateway] Dropping {} encoded frames because turnId changed (barge-in)", opusFrames.size());
+            }
+            return;
+        }
+        
         for (byte[] frame : opusFrames) {
             session.outboundAudioQueue.offer(frame);
         }
-        log.info("🔊 [WebRtcGateway] Enqueued {} Opus audio frames for callId={}", opusFrames.size(), callId);
+        
+        if (!opusFrames.isEmpty()) {
+            session.isSpeakingAI.set(true);
+            log.info("🔊 [WebRtcGateway] Enqueued {} Opus frames for callId={} turnId={}", opusFrames.size(), callId, targetTurnId);
+        }
     }
 
     public void flushOutboundAudio(String callId) {
@@ -631,6 +740,8 @@ public class WhatsAppWebRtcMediaGateway {
             }
             lastMediaStates.put(callId, session.state);
             session.running.set(false);
+            session.turnId.incrementAndGet(); // Cancel any pending LLM/TTS
+            voiceCallBridgeService.terminateSession(callId);
             if (session.state != CallMediaState.FAILED) {
                 session.state = CallMediaState.TERMINATED;
             }
@@ -688,6 +799,7 @@ public class WhatsAppWebRtcMediaGateway {
                  "outboundDtlsPackets: {}\n" +
                  "inboundSrtpPackets: {}\n" +
                  "outboundSrtpPackets: {}\n" +
+                 "srtpDecryptFailures: {}\n" +
                  "==================================",
                 session.callId, session.state, session.failureReason.get(), session.remoteAddress,
                 d.advertisedLocalFingerprint.get(), d.actualCertificateFingerprint.get(),
@@ -701,7 +813,7 @@ public class WhatsAppWebRtcMediaGateway {
                 d.delegatedTasksExecuted.get(), d.dtlsWrapCalls.get(), d.dtlsUnwrapCalls.get(),
                 d.inboundStunPackets.get(), d.outboundStunPackets.get(),
                 d.inboundDtlsPackets.get(), d.outboundDtlsPackets.get(),
-                session.inboundSrtpPacketsCount.get(), session.outboundSrtpPacketsCount.get());
+                session.inboundSrtpPacketsCount.get(), session.outboundSrtpPacketsCount.get(), d.srtpDecryptFailures.get());
     }
 
     private void startInboundListener(WebRtcMediaSession session) {
@@ -751,12 +863,12 @@ public class WhatsAppWebRtcMediaGateway {
                     }
 
                     if (data.length > 12 && ((data[0] & 0xC0) == 0x80)) {
-                        // RFC 5761: distinguish RTP vs RTCP/SRTCP by payload type (byte 1)
-                        // RTCP packet types: 72-76 (reduced-size RTCP) or 200-204 (full RTCP SR/RR/SDES/BYE/APP)
-                        // RTP payload types used for Opus: 96-127 (dynamic), or 0-35 (standard)
+                        // RFC 5761 (Demultiplexing RTP and RTCP): 
+                        // If the 7-bit payload type is 64-95, it's RTCP.
+                        // If it's 0-63 or 96-127, it's RTP.
                         int pt = data[1] & 0xFF;
-                        boolean isRtcp = (pt >= 192)          // Full RTCP: SR=200, RR=201, SDES=202...
-                                      || (pt >= 72 && pt <= 76); // Reduced-size RTCP
+                        int pt7 = pt & 0x7F;
+                        boolean isRtcp = (pt7 >= 64 && pt7 <= 95);
                         if (isRtcp) {
                             // SRTCP has a different auth formula — silently skip,
                             // we don't need RTCP processing for voice
@@ -774,6 +886,10 @@ public class WhatsAppWebRtcMediaGateway {
                         byte[] decrypted = session.receiverSrtpTransformer.decryptSrtp(data);
                         if (decrypted == null) {
                             // BUG FIX: Drop packet — never buffer encrypted bytes as audio
+                            session.dtlsDiagnostics.srtpDecryptFailures.incrementAndGet(); // Assuming we can add this, or just log
+                            if (session.dtlsDiagnostics.srtpDecryptFailures.get() % 50 == 1) {
+                                log.warn("⚠️ [WebRtcGateway] SRTP Decrypt failed for packet (wrong key or corrupted)? pt={}", pt);
+                            }
                             continue;
                         }
 
@@ -790,13 +906,18 @@ public class WhatsAppWebRtcMediaGateway {
                             if (headerLen >= decrypted.length) continue;
 
                             byte[] opusFrame = Arrays.copyOfRange(decrypted, headerLen, decrypted.length);
+                            
+                            if (session.inboundSrtpPacketsCount.get() % 50 == 1) {
+                                log.info("🛠️ [WebRtcGateway] Pre-decode: pt={} headerLen={} opusLen={} cc={} X={}", 
+                                    (decrypted[1] & 0x7F), headerLen, opusFrame.length, cc, ((decrypted[0] & 0x10) != 0));
+                            }
 
                             // Decode Opus frame -> 16-bit PCM at 48kHz mono
                             try {
                                 if (session.opusDecoder == null) continue;
-                                short[] pcmSamples = new short[960]; // 20ms @ 48kHz mono
+                                short[] pcmSamples = new short[5760]; // Max possible Opus frame size (120ms @ 48kHz mono)
                                 int samplesDecoded = session.opusDecoder.decode(opusFrame, 0, opusFrame.length,
-                                        pcmSamples, 0, 960, false);
+                                        pcmSamples, 0, 5760, false);
                                 if (samplesDecoded > 0) {
                                     byte[] pcmBytes = new byte[samplesDecoded * 2];
                                     ByteBuffer pcmBuf = ByteBuffer.wrap(pcmBytes).order(ByteOrder.LITTLE_ENDIAN);
@@ -807,9 +928,44 @@ public class WhatsAppWebRtcMediaGateway {
                                     }
                                     
                                     double rms = Math.sqrt((double) sumSquares / samplesDecoded);
-                                    if (rms > 500) { // Typical silence is < 100, voice is > 1000
-                                        session.lastVoiceActivityTime = System.currentTimeMillis();
-                                        session.hasSpokenInTurn = true;
+                                    long now = System.currentTimeMillis();
+                                    
+                                    // VAD Adaptive Logic - Increased thresholds to prevent livelock where mic noise cancels AI
+                                    double startThreshold = Math.max(500.0, session.vadNoiseFloor * 4.0);
+                                    
+                                    if (rms > startThreshold) {
+                                        session.consecutiveSpeechFrames++;
+                                        session.consecutiveSilenceFrames = 0;
+                                        session.lastVoiceActivityTime = now;
+                                        
+                                        // Require 10 consecutive frames of speech to trigger barge-in (approx 200ms)
+                                        if (session.consecutiveSpeechFrames >= 10 && !session.hasSpokenInTurn) {
+                                            session.hasSpokenInTurn = true;
+                                            session.speechStartTime = now;
+                                            log.info("📢 [WebRtcGateway] BARGE-IN: User started speaking! RMS={} threshold={} noiseFloor={}", String.format("%.2f", rms), String.format("%.2f", startThreshold), String.format("%.2f", session.vadNoiseFloor));
+                                            
+                                            // BARGE-IN: Clear outbound audio.
+                                            session.outboundAudioQueue.clear();
+                                            
+                                            // Only cancel pending AI generation if the AI has already started speaking!
+                                            // If AI is just "thinking", let it finish so impatient users don't livelock the bot.
+                                            if (session.isSpeakingAI.get()) {
+                                                session.isProcessingTurn.set(false);
+                                                session.turnId.incrementAndGet();
+                                                session.isSpeakingAI.set(false);
+                                                log.info("🛑 [WebRtcGateway] Cancelled AI because it was already speaking.");
+                                            } else {
+                                                log.info("⏳ [WebRtcGateway] Did not cancel AI because it is still thinking (preventing livelock).");
+                                            }
+                                        }
+                                    } else {
+                                        session.consecutiveSpeechFrames = 0;
+                                        session.consecutiveSilenceFrames++;
+                                        
+                                        // Update noise floor slowly if it's relatively quiet
+                                        if (rms > 5 && !session.hasSpokenInTurn && session.consecutiveSilenceFrames > 10) {
+                                            session.vadNoiseFloor = (0.99 * session.vadNoiseFloor) + (0.01 * rms);
+                                        }
                                     }
 
                                     synchronized (session.inboundPcmBuffer) {
@@ -817,7 +973,7 @@ public class WhatsAppWebRtcMediaGateway {
                                     }
                                 }
                             } catch (Exception decodeEx) {
-                                log.trace("[WebRtcGateway] Opus decode error (packet dropped): {}", decodeEx.getMessage());
+                                log.error("❌ [WebRtcGateway] Opus decode error (packet dropped): {}", decodeEx.getMessage(), decodeEx);
                             }
                         }
                     }
@@ -1008,15 +1164,32 @@ public class WhatsAppWebRtcMediaGateway {
         final AtomicLong outboundSrtpPacketsCount = new AtomicLong(0);
         volatile long lastInboundPacketTime = 0;
         volatile long lastVoiceActivityTime = 0;
+        volatile long speechStartTime = 0;
+        volatile long lastRtpSendTime = 0;
         volatile boolean hasSpokenInTurn = false;
+        
+        // VAD State tracking
+        double vadNoiseFloor = 40.0;
+        int consecutiveSpeechFrames = 0;
+        int consecutiveSilenceFrames = 0;
+        
         final long ssrc = 850231558L;
         final ConcurrentLinkedQueue<byte[]> outboundAudioQueue = new ConcurrentLinkedQueue<>();
         final ByteArrayOutputStream inboundPcmBuffer = new ByteArrayOutputStream();
+        final ByteArrayOutputStream ttsPcmAccumulator = new ByteArrayOutputStream();
+        volatile int currentTtsTurnId = -1;
         final AtomicBoolean isProcessingTurn = new AtomicBoolean(false);
+        final AtomicBoolean isSpeakingAI = new AtomicBoolean(false);
+        final AtomicInteger turnId = new AtomicInteger(0);
+        final AtomicLong dtxTickCount = new AtomicLong(0);
+        final AtomicLong lastRtpSendWallClockMs = new AtomicLong(0);
+        final AtomicLong userUtteranceEndMs = new AtomicLong(0);
+        final AtomicLong firstRtpSentMs = new AtomicLong(0);
         ScheduledFuture<?> outboundTask;
         ScheduledFuture<?> vadTask;
         ScheduledFuture<?> iceCheckTask;
         final OpusDecoder opusDecoder;
+        final io.github.jaredmdobson.concentus.OpusEncoder opusEncoder;
 
         WebRtcMediaSession(String callId, UUID tenantId, String fromWaId, DatagramSocket socket, InetSocketAddress remoteAddress, int payloadType, String ufrag, String pwd, String remoteUfrag, String remotePwd, String remoteFingerprint, String localFingerprint, boolean iceControlling) {
             this.callId = callId;
@@ -1038,23 +1211,34 @@ public class WhatsAppWebRtcMediaGateway {
             try {
                 dec = new OpusDecoder(48000, 1); // 48kHz, mono
             } catch (Exception e) {
+                log.error("❌ [WebRtcGateway] Failed to initialize OpusDecoder: {}", e.getMessage(), e);
                 dec = null;
                 // Will be guarded by null check in RTP receive loop
             }
             this.opusDecoder = dec;
+
+            io.github.jaredmdobson.concentus.OpusEncoder enc = null;
+            try {
+                enc = new io.github.jaredmdobson.concentus.OpusEncoder(48000, 1, io.github.jaredmdobson.concentus.OpusApplication.OPUS_APPLICATION_VOIP);
+                enc.setBitrate(24000);
+                enc.setSignalType(io.github.jaredmdobson.concentus.OpusSignal.OPUS_SIGNAL_VOICE);
+            } catch (Exception e) {
+                log.error("❌ [WebRtcGateway] Failed to initialize OpusEncoder: {}", e.getMessage(), e);
+            }
+            this.opusEncoder = enc;
         }
 
-        public byte[] buildNextRtpPacket() {
+        public byte[] buildNextRtpPacket(int currentTimestamp) {
             byte[] payload = outboundAudioQueue.poll();
             if (payload == null) {
-                payload = new byte[]{(byte) 0xF8, (byte) 0xFF, (byte) 0xFE};
+                return null;
             }
 
             ByteBuffer buf = ByteBuffer.allocate(12 + payload.length);
             buf.put((byte) 0x80);
             buf.put((byte) (payloadType & 0x7F));
             buf.putShort((short) sequenceNumber.getAndIncrement());
-            buf.putInt((int) timestamp.getAndAdd(960));
+            buf.putInt(currentTimestamp);
             buf.putInt((int) ssrc);
             buf.put(payload);
             return buf.array();

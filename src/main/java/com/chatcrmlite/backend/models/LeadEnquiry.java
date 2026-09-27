@@ -62,7 +62,7 @@ public class LeadEnquiry implements Serializable {
     @Column(name = "email", length = 255)
     private String email;
 
-    @Column(name = "phone", length = 50)
+    @Column(name = "phone", length = 255)
     private String phone;
 
     @Column(name = "company", length = 255)

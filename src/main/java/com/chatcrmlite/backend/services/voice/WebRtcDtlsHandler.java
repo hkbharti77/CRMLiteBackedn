@@ -91,6 +91,7 @@ public class WebRtcDtlsHandler {
         final AtomicReference<String> certificateNotAfter = new AtomicReference<>(null);
         final AtomicReference<String> selectedSrtpProfileName = new AtomicReference<>(null);
         final AtomicReference<String> srtpKeyInitResult = new AtomicReference<>("NOT_STARTED");
+        public final AtomicLong srtpDecryptFailures = new AtomicLong();
 
         public void setHandshakeStatus(String status) {
             dtlsHandshakeStatus.set(status);

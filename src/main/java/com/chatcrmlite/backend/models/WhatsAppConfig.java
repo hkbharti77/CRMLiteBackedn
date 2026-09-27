@@ -30,6 +30,9 @@ public class WhatsAppConfig implements Serializable {
 
     private String wabaId;
 
+    @Column(name = "dataset_id")
+    private String datasetId;
+
     @Convert(converter = com.chatcrmlite.backend.utils.EncryptionConverter.class)
     @Column(length = 2000)
     private String accessToken;
@@ -231,11 +234,12 @@ public class WhatsAppConfig implements Serializable {
 
     public WhatsAppConfig() {}
 
-    public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String portfolioUrl, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showSosButton, Boolean showSupportFormButton) {
+    public WhatsAppConfig(UUID id, Tenant tenant, String phoneNumberId, String wabaId, String datasetId, String accessToken, String verifyToken, String appSecret, String interactiveMenuJson, String welcomeMessage, String returningMessage, String portfolioUrl, String sosNote, String thirdButtonType, String customSubMenusJson, String customMessagesJson, String flowCancelMenuJson, String flowCompletionMenuJson, String aiResponseMenuJson, String guardrailMessageAbuse, String guardrailMessageGibberish, Boolean showAboutContact, Boolean showSosButton, Boolean showSupportFormButton) {
         this.id = id;
         this.tenant = tenant;
         this.phoneNumberId = phoneNumberId;
         this.wabaId = wabaId;
+        this.datasetId = datasetId;
         this.accessToken = accessToken;
         this.verifyToken = verifyToken;
         this.appSecret = appSecret;
@@ -262,6 +266,7 @@ public class WhatsAppConfig implements Serializable {
     public Tenant getTenant() { return tenant; }
     public String getPhoneNumberId() { return phoneNumberId; }
     public String getWabaId() { return wabaId; }
+    public String getDatasetId() { return datasetId; }
     public String getAccessToken() { return accessToken; }
     public String getVerifyToken() { return verifyToken; }
     public String getAppSecret() { return appSecret; }
@@ -347,6 +352,7 @@ public class WhatsAppConfig implements Serializable {
     public void setTenant(Tenant tenant) { this.tenant = tenant; }
     public void setPhoneNumberId(String phoneNumberId) { this.phoneNumberId = phoneNumberId; }
     public void setWabaId(String wabaId) { this.wabaId = wabaId; }
+    public void setDatasetId(String datasetId) { this.datasetId = datasetId; }
     public void setAccessToken(String accessToken) { this.accessToken = accessToken; }
     public void setVerifyToken(String verifyToken) { this.verifyToken = verifyToken; }
     public void setAppSecret(String appSecret) { this.appSecret = appSecret; }
@@ -458,6 +464,7 @@ public class WhatsAppConfig implements Serializable {
         private User user;
         private String phoneNumberId;
         private String wabaId;
+        private String datasetId;
         private String accessToken;
         private String verifyToken;
         private String appSecret;
@@ -497,6 +504,7 @@ public class WhatsAppConfig implements Serializable {
         }
         public WhatsAppConfigBuilder phoneNumberId(String phoneNumberId) { this.phoneNumberId = phoneNumberId; return this; }
         public WhatsAppConfigBuilder wabaId(String wabaId) { this.wabaId = wabaId; return this; }
+        public WhatsAppConfigBuilder datasetId(String datasetId) { this.datasetId = datasetId; return this; }
         public WhatsAppConfigBuilder accessToken(String accessToken) { this.accessToken = accessToken; return this; }
         public WhatsAppConfigBuilder verifyToken(String verifyToken) { this.verifyToken = verifyToken; return this; }
         public WhatsAppConfigBuilder appSecret(String appSecret) { this.appSecret = appSecret; return this; }
@@ -519,7 +527,7 @@ public class WhatsAppConfig implements Serializable {
         public WhatsAppConfigBuilder showSupportFormButton(Boolean showSupportFormButton) { this.showSupportFormButton = showSupportFormButton; return this; }
 
         public WhatsAppConfig build() {
-            WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, portfolioUrl, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showSosButton, showSupportFormButton);
+            WhatsAppConfig config = new WhatsAppConfig(id, tenant, phoneNumberId, wabaId, datasetId, accessToken, verifyToken, appSecret, interactiveMenuJson, welcomeMessage, returningMessage, portfolioUrl, sosNote, thirdButtonType, customSubMenusJson, customMessagesJson, flowCancelMenuJson, flowCompletionMenuJson, aiResponseMenuJson, guardrailMessageAbuse, guardrailMessageGibberish, showAboutContact, showSosButton, showSupportFormButton);
             config.setFlowsRoutingConfigJson(flowsRoutingConfigJson);
             config.setLeadButtonLabel(leadButtonLabel);
             config.setAppointmentButtonLabel(appointmentButtonLabel);
