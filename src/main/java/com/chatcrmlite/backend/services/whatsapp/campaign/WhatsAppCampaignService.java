@@ -4,6 +4,7 @@ import com.chatcrmlite.backend.clients.WhatsAppClient;
 import com.chatcrmlite.backend.models.*;
 import com.chatcrmlite.backend.repositories.*;
 import com.chatcrmlite.backend.services.DistributedSchedulerService;
+import com.chatcrmlite.backend.services.whatsapp.WhatsAppTemplateService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
@@ -22,6 +23,7 @@ public class WhatsAppCampaignService {
 
     private final WhatsAppCampaignRepository campaignRepository;
     private final WhatsAppTemplateRepository templateRepository;
+    private final WhatsAppTemplateService templateService;
     private final WhatsAppTemplateSnapshotRepository templateSnapshotRepository;
     private final WhatsAppConfigRepository whatsAppConfigRepository;
     private final WhatsAppClient whatsappClient;
@@ -118,6 +120,50 @@ public class WhatsAppCampaignService {
             if (template == null) {
                 template = templateRepository.findFirstByMetaTemplateId(cleanName).orElse(null);
             }
+
+            // 3. If still not found, try auto-syncing templates from Meta Graph API
+            if (template == null && owner != null && owner.getTenant() != null) {
+                try {
+                    log.info("[WhatsAppCampaignService] Template '{}' not found in local DB. Attempting auto-sync from Meta...", cleanName);
+                    templateService.syncTemplatesFromMeta(owner);
+
+                    if (tenantId != null) {
+                        template = templateRepository.findByNameAndTenantId(cleanName, tenantId).orElse(null);
+                    }
+                    if (template == null) {
+                        template = templateRepository.findByNameAndOwner(cleanName, owner).orElse(null);
+                    }
+                    if (template == null) {
+                        template = templateRepository.findFirstByName(cleanName).orElse(null);
+                    }
+                    if (template == null) {
+                        template = templateRepository.findFirstByMetaTemplateId(cleanName).orElse(null);
+                    }
+                } catch (Exception e) {
+                    log.warn("[WhatsAppCampaignService] On-demand Meta template auto-sync attempt failed: {}", e.getMessage());
+                }
+            }
+
+            // 4. Auto-provision standard test/default fallback templates if requested
+            if (template == null && ("3p_direct_integration_test_template".equalsIgnoreCase(cleanName) 
+                    || "hello_world".equalsIgnoreCase(cleanName)
+                    || "utility_general".equalsIgnoreCase(cleanName))) {
+                log.info("[WhatsAppCampaignService] Auto-provisioning default WhatsApp template '{}' for owner {}", cleanName, owner.getEmail());
+                template = WhatsAppTemplate.builder()
+                        .name(cleanName.toLowerCase())
+                        .language("en_US")
+                        .category("UTILITY")
+                        .status("APPROVED")
+                        .bodyText("Welcome! This is a test message from the WhatsApp Business Platform. You have successfully configured your WhatsApp Business account and completed onboarding. You can now start sending messages to your customers.")
+                        .footerText("WhatsApp Business Platform")
+                        .owner(owner)
+                        .build();
+                if (owner.getTenant() != null) {
+                    template.setTenant(owner.getTenant());
+                }
+                template = templateRepository.save(template);
+            }
+
             if (template == null) {
                 throw new IllegalArgumentException("WhatsAppTemplate not found with ID or Name: " + cleanName);
             }

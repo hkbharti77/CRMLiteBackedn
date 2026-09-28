@@ -62,6 +62,15 @@ public class RagConfig {
     @Value("${ai.bedrock.base-url:https://bedrock-runtime.us-east-1.amazonaws.com}")
     private String bedrockBaseUrl;
 
+    @Value("${ai.zai.api-key:}")
+    private String zaiApiKey;
+
+    @Value("${ai.zai.model-name:glm-4.5-flash}")
+    private String zaiModelName;
+
+    @Value("${ai.zai.base-url:https://open.bigmodel.cn/api/paas/v4}")
+    private String zaiBaseUrl;
+
     /**
      * Local ONNX embedding model — no API key required.
      * Produces 384-dimensional vectors compatible with the document_chunks schema.
@@ -124,6 +133,22 @@ public class RagConfig {
                     .baseUrl(url)
                     .apiKey(openRouterApiKey)
                     .modelName(openRouterModelName)
+                    .timeout(java.time.Duration.ofSeconds(120))
+                    .maxRetries(1)
+                    .build();
+        }
+
+        if ("zai".equalsIgnoreCase(aiProvider)) {
+            if (zaiApiKey == null || zaiApiKey.isBlank()) {
+                return null;
+            }
+            String url = (zaiBaseUrl != null && !zaiBaseUrl.isBlank()) 
+                    ? zaiBaseUrl.trim() 
+                    : "https://open.bigmodel.cn/api/paas/v4";
+            return OpenAiChatModel.builder()
+                    .baseUrl(url)
+                    .apiKey(zaiApiKey)
+                    .modelName(zaiModelName)
                     .timeout(java.time.Duration.ofSeconds(120))
                     .maxRetries(1)
                     .build();

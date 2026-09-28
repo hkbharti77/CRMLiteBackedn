@@ -664,13 +664,30 @@ public class WhatsAppWebRtcMediaGateway {
             return;
         }
         
+        // ── Queue Depth Cap ──────────────────────────────────────────────────────
+        // At 50 fps (20ms/frame), 300 frames = 6 seconds of audio.
+        // If the queue is already this deep, the user can't hear us fast enough.
+        // Dropping new frames is far better than buffering 10+ seconds of audio
+        // that will arrive after the user has already spoken again (the "stuck" problem).
+        final int MAX_QUEUE_DEPTH = 300;
+        int dropped = 0;
         for (byte[] frame : opusFrames) {
-            session.outboundAudioQueue.offer(frame);
+            if (session.outboundAudioQueue.size() >= MAX_QUEUE_DEPTH) {
+                dropped++;
+            } else {
+                session.outboundAudioQueue.offer(frame);
+            }
         }
         
-        if (!opusFrames.isEmpty()) {
+        if (dropped > 0) {
+            log.warn("⚠️ [WebRtcGateway] Dropped {} TTS frames (queue full at {}) for callId={} turnId={} — preventing audio stall",
+                    dropped, MAX_QUEUE_DEPTH, callId, targetTurnId);
+        }
+
+        if (!opusFrames.isEmpty() && dropped < opusFrames.size()) {
             session.isSpeakingAI.set(true);
-            log.info("🔊 [WebRtcGateway] Enqueued {} Opus frames for callId={} turnId={}", opusFrames.size(), callId, targetTurnId);
+            log.info("🔊 [WebRtcGateway] Enqueued {} Opus frames for callId={} turnId={} (queueDepth={})",
+                    opusFrames.size() - dropped, callId, targetTurnId, session.outboundAudioQueue.size());
         }
     }
 

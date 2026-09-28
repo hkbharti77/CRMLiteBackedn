@@ -90,12 +90,19 @@ public class WhatsAppTemplateService {
 
         List<WhatsAppTemplateDto> dtos = new ArrayList<>();
         java.util.Set<String> activeMetaTemplateNames = new java.util.HashSet<>();
+        java.util.Set<String> activeMetaTemplateIds = new java.util.HashSet<>();
 
         if (dataNode.isArray()) {
             for (JsonNode tNode : dataNode) {
                 WhatsAppTemplateDto metaDto = templateMapper.fromMetaJson(tNode);
                 String name = metaDto.getName();
-                activeMetaTemplateNames.add(name);
+                if (name != null) {
+                    activeMetaTemplateNames.add(name);
+                    activeMetaTemplateNames.add(name.toLowerCase());
+                }
+                if (metaDto.getId() != null) {
+                    activeMetaTemplateIds.add(metaDto.getId());
+                }
 
                 Optional<WhatsAppTemplate> existingOpt = templateRepository.findByNameAndTenantId(name, tenantId);
                 WhatsAppTemplate template = existingOpt.orElseGet(() -> WhatsAppTemplate.builder()
@@ -113,11 +120,20 @@ public class WhatsAppTemplateService {
 
         // Clean up / prune stale templates that belonged to old credentials or were deleted on Meta
         List<WhatsAppTemplate> allLocal = templateRepository.findAllByTenantId(tenantId);
+        int deletedCount = 0;
         for (WhatsAppTemplate local : allLocal) {
-            if (!activeMetaTemplateNames.contains(local.getName())) {
-                log.info("[TemplateService] Pruning stale template '{}' no longer present in Meta WABA {}", local.getName(), config.getWabaId());
+            boolean matchesName = local.getName() != null && activeMetaTemplateNames.contains(local.getName());
+            boolean matchesMetaId = local.getMetaTemplateId() != null && activeMetaTemplateIds.contains(local.getMetaTemplateId());
+
+            if (!matchesName && !matchesMetaId) {
+                log.info("[TemplateService] Auto-cleaning/pruning stale DB template '{}' (metaId={}) no longer present in Meta WABA {}", 
+                         local.getName(), local.getMetaTemplateId(), config.getWabaId());
                 templateRepository.delete(local);
+                deletedCount++;
             }
+        }
+        if (deletedCount > 0) {
+            log.info("[TemplateService] Successfully auto-cleaned {} stale template(s) from database for tenant {}", deletedCount, tenantId);
         }
 
         return dtos;

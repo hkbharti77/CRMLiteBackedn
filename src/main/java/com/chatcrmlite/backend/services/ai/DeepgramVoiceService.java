@@ -244,7 +244,7 @@ public class DeepgramVoiceService {
                 }, response -> {
                     if (response.getStatusCode().is2xxSuccessful()) {
                         java.io.InputStream is = response.getBody();
-                        byte[] buffer = new byte[8192]; // 8KB chunks
+                        byte[] buffer = new byte[1920]; // 1920 bytes = exactly 1 Opus frame (20ms @ 48kHz mono 16-bit PCM)
                         int bytesRead;
                         boolean firstChunk = true;
                         int totalBytes = 0;

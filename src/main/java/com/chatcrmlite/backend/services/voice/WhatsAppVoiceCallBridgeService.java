@@ -153,7 +153,8 @@ public class WhatsAppVoiceCallBridgeService {
                 // Execute streaming TTS
                 final java.util.concurrent.atomic.AtomicBoolean firstChunkLogged = new java.util.concurrent.atomic.AtomicBoolean(false);
                 long ttsStartMs = System.currentTimeMillis();
-                deepgramVoiceService.synthesizeSpeechStreaming(aiAnswer, "aura-stella-en", chunk -> {
+                
+                deepgramVoiceService.synthesizeSpeechStreaming(aiAnswer, ttsVoiceId, chunk -> {
                     if (turnContext.isCancelled()) {
                         log.debug("🔇 [WhatsAppVoiceBridge] Dropping TTS chunk because turn {} is cancelled", currentTurnId);
                         return;
@@ -166,7 +167,7 @@ public class WhatsAppVoiceCallBridgeService {
                 });
             } else {
                 // Fallback blocking if no callback
-                byte[] synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, "aura-stella-en");
+                byte[] synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, ttsVoiceId);
                 if (turnContext.isCancelled()) {
                      return new WhatsAppVoiceTurnResult(callId, "", userTranscript, false, new byte[0]);
                 }
