@@ -44,6 +44,9 @@ public class EmailService {
     @Value("${platform.brand.name:GyanVaniAi}")
     private String platformBrandName;
 
+    @Value("${app.frontend.url}")
+    private String frontendUrl;
+
     private static final String BRAND = "GyanVaniAi Connect";
 
     private final Map<String, OtpEntry> otpStorage = new ConcurrentHashMap<>();
@@ -701,7 +704,7 @@ public class EmailService {
         ctx.setVariable("intro",         "Your account has been created by your business administrator for " + businessName + ". You have been registered as a " + role + ".");
         ctx.setVariable("footerNote",    "Please use your email address to log in. You will receive a secure 6-digit verification code (OTP) each time you log in.");
         ctx.setVariable("ctaLabel",      "Log In Now");
-        ctx.setVariable("ctaUrl",        System.getenv("FRONTEND_URL") != null ? System.getenv("FRONTEND_URL") : "http://localhost:8081"); 
+        ctx.setVariable("ctaUrl",        frontendUrl); 
         
         ctx.setVariable("businessName",  businessName);
         ctx.setVariable("role",          role);
@@ -816,7 +819,7 @@ public class EmailService {
         ctx.setVariable("intro", "Thank you for subscribing to " + planName + " on " + BRAND + "! Your invoice and active plan details are summarized below.");
         ctx.setVariable("footerNote", "Thank you for choosing " + BRAND + ". If you have billing questions, contact support anytime.");
 
-        String ctaUrl = System.getenv("FRONTEND_URL") != null ? System.getenv("FRONTEND_URL") + "/settings?tab=billing" : "http://localhost:5174/settings?tab=billing";
+        String ctaUrl = frontendUrl + "/settings?tab=billing";
         ctx.setVariable("ctaLabel", "Manage Subscription");
         ctx.setVariable("ctaUrl", ctaUrl);
 

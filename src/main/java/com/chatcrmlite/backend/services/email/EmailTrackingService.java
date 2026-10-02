@@ -22,7 +22,7 @@ public class EmailTrackingService {
     private final EmailTrackedLinkRepository trackedLinkRepository;
     private final EmailCampaignRecipientRepository recipientRepository;
 
-    @Value("${app.frontend.url:http://localhost:5174}")
+    @Value("${app.frontend.url}")
     private String baseUrl;
 
     public String generateTrackingToken() {
