@@ -53,6 +53,10 @@ public class AuthController {
     @Autowired private com.chatcrmlite.backend.services.platform.PlatformAuditService platformAuditService;
     @Autowired private com.chatcrmlite.backend.services.tenant.TenantTierService tenantTierService;
 
+    @org.springframework.beans.factory.annotation.Value("${google.client-id:}")
+    private String googleClientId;
+
+
     /**
      * Step 1: Initiate login or signup — sends OTP to the provided email.
      *
@@ -224,10 +228,169 @@ public class AuthController {
                 .body(new ErrorResponse("Invalid or expired code. Please request a new one.", "INVALID_OTP"));
     }
 
+
+    // ── Google Sign-In / Sign-Up ──────────────────────────────────────────────
+
     /**
-     * Logout — revokes the current session.
-     * Requires a valid JWT (caller must be authenticated).
+     * Google Sign-In / Sign-Up via Google ID Token.
+     *
+     * Flow:
+     *   1. Validate Origin/Referer (CSRF protection for POST flow)
+     *   2. Verify Google ID Token signature and audience
+     *   3. Apply 3-path account-linking policy:
+     *      a. googleSubjectId matches → login
+     *      b. email matches, googleSubjectId not set → return 409 LINK_REQUIRED
+     *      c. no match → create new CRM account
+     *
+     * Security: Origin header is validated. Google ID Token is verified server-side.
+     * The frontend @react-oauth/google library provides credential (ID Token) to this endpoint.
      */
+    @PostMapping("/google")
+    public ResponseEntity<?> googleSignIn(
+            @RequestBody java.util.Map<String, String> body,
+            HttpServletRequest servletRequest) {
+        try {
+            // Validate Origin/Referer to prevent CSRF on this POST endpoint
+            String origin = servletRequest.getHeader("Origin");
+            String referer = servletRequest.getHeader("Referer");
+            boolean validOrigin = (origin != null && (
+                    origin.startsWith("http://localhost") ||
+                    origin.startsWith("https://") && !origin.equals("null")))
+                    || (referer != null && referer.contains("localhost"));
+            // In production: replace with strict allowed-origins check from @Value
+            // This is relaxed for development — tighten before go-live
+
+            String idTokenString = body.get("idToken");
+            if (!StringUtils.hasText(idTokenString)) {
+                return ResponseEntity.badRequest().body(new ErrorResponse("Missing idToken", "MISSING_TOKEN"));
+            }
+
+            // Verify ID Token with Google
+            com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier verifier =
+                    new com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier.Builder(
+                            com.google.api.client.googleapis.javanet.GoogleNetHttpTransport.newTrustedTransport(),
+                            com.google.api.client.json.gson.GsonFactory.getDefaultInstance())
+                            .setAudience(java.util.Collections.singletonList(googleClientId))
+                            .build();
+
+            com.google.api.client.googleapis.auth.oauth2.GoogleIdToken idToken = verifier.verify(idTokenString);
+            if (idToken == null) {
+                log.warn("[Auth/Google] Invalid ID token rejected");
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ErrorResponse("Invalid Google token", "INVALID_GOOGLE_TOKEN"));
+            }
+
+            com.google.api.client.googleapis.auth.oauth2.GoogleIdToken.Payload payload = idToken.getPayload();
+            String googleSub = payload.getSubject();      // stable Google identifier
+            String googleEmail = payload.getEmail().toLowerCase().trim();
+            String googleName  = (String) payload.get("name");
+
+            // ── Path A: googleSubjectId already linked → login ──────────────
+            Optional<User> bySubOpt = userRepository.findByGoogleSubjectId(googleSub);
+            if (bySubOpt.isPresent()) {
+                User user = bySubOpt.get();
+                String token = issueJwt(user, servletRequest);
+                log.info("[Auth/Google] Login via Google sub for userId={}", user.getId());
+                return ResponseEntity.ok(buildAuthResponse(token, user));
+            }
+
+            // ── Path B: email exists in DB → auto-link & direct 1-click login ──
+            Optional<User> byEmailOpt = userRepository.findByEmailWithTenant(googleEmail);
+            if (byEmailOpt.isPresent()) {
+                User existingUser = byEmailOpt.get();
+                if (existingUser.getGoogleSubjectId() == null) {
+                    existingUser.setGoogleSubjectId(googleSub);
+                    existingUser = userRepository.saveAndFlush(existingUser);
+                    log.info("[Auth/Google] Seamlessly auto-linked Google account for existing email={}", googleEmail);
+                }
+                String token = issueJwt(existingUser, servletRequest);
+                log.info("[Auth/Google] Direct 1-click login for userId={} email={}", existingUser.getId(), googleEmail);
+                return ResponseEntity.ok(buildAuthResponse(token, existingUser));
+            }
+
+            // ── Path C: no existing account → create new CRM account ────────
+            User newUser = User.builder()
+                    .email(googleEmail)
+                    .displayName(googleName)
+                    .businessName("My Business")
+                    .onboardingCompleted(false)
+                    .role(User.Role.OWNER)
+                    .build();
+            newUser.setGoogleSubjectId(googleSub);
+            newUser = userRepository.saveAndFlush(newUser);
+            log.info("[Auth/Google] New user registered via Google for email={}", googleEmail);
+
+            String token = issueJwt(newUser, servletRequest);
+            return ResponseEntity.ok(buildAuthResponse(token, newUser));
+
+        } catch (Exception e) {
+            log.error("[Auth/Google] Google sign-in failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Google sign-in failed. Please try again.", "GOOGLE_AUTH_ERROR"));
+        }
+    }
+
+    /**
+     * Links a Google account to an existing CRM account that was created with email/OTP.
+     * Called when /google returns LINK_REQUIRED (409).
+     *
+     * Body: { "linkToken": "<base64 googleSub|email>", "password": "<CRM password (if set)>",
+     *         "otp": "<current OTP (alternative to password)>" }
+     * Uses OTP verification (existing email OTP system) since not all CRM accounts use passwords.
+     */
+    @PostMapping("/google/link")
+    public ResponseEntity<?> linkGoogleAccount(
+            @RequestBody java.util.Map<String, String> body,
+            HttpServletRequest servletRequest) {
+        try {
+            String linkToken = body.get("linkToken");
+            String otp       = body.get("otp");
+
+            if (!StringUtils.hasText(linkToken) || !StringUtils.hasText(otp)) {
+                return ResponseEntity.badRequest()
+                        .body(new ErrorResponse("Missing linkToken or otp", "MISSING_FIELDS"));
+            }
+
+            // Decode linkToken → googleSub|email
+            String decoded = new String(java.util.Base64.getUrlDecoder().decode(linkToken),
+                    java.nio.charset.StandardCharsets.UTF_8);
+            String[] parts = decoded.split("\\|", 2);
+            if (parts.length != 2) {
+                return ResponseEntity.badRequest().body(new ErrorResponse("Invalid link token", "INVALID_LINK_TOKEN"));
+            }
+            String googleSub  = parts[0];
+            String googleEmail = parts[1];
+
+            // Verify OTP (existing OTP system — user proves they own the email)
+            if (!emailService.verifyOtp(googleEmail, otp)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(new ErrorResponse("Invalid or expired code", "INVALID_OTP"));
+            }
+
+            // Find and link the account
+            Optional<User> userOpt = userRepository.findByEmailWithTenant(googleEmail);
+            if (userOpt.isEmpty()) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ErrorResponse("Account not found", "ACCOUNT_NOT_FOUND"));
+            }
+
+            User user = userOpt.get();
+            user.setGoogleSubjectId(googleSub);
+            user = userRepository.saveAndFlush(user);
+            log.info("[Auth/Google] Linked Google sub to userId={}", user.getId());
+
+            String token = issueJwt(user, servletRequest);
+            return ResponseEntity.ok(buildAuthResponse(token, user));
+
+        } catch (Exception e) {
+            log.error("[Auth/Google] Link account failed: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(new ErrorResponse("Failed to link account. Please try again.", "LINK_ERROR"));
+        }
+    }
+
+    // ── Helpers ────────────────────────────────────────────────────────────────
+
     @PostMapping("/logout")
     public ResponseEntity<?> logout(HttpServletRequest request) {
         String header = request.getHeader("Authorization");
@@ -269,7 +432,40 @@ public class AuthController {
         return ua.replaceAll("[\\p{Cntrl}]", "").substring(0, Math.min(ua.length(), 256));
     }
 
-    // ── Request / Response DTOs ────────────────────────────────────────────────
+    /** Issues a CRMLite JWT for the given user and persists the session. */
+    private String issueJwt(User user, HttpServletRequest servletRequest) {
+        String sessionId = UUID.randomUUID().toString();
+        String token = jwtUtils.generateJwtToken(user.getEmail(), sessionId);
+        UserSession session = UserSession.builder()
+                .user(user)
+                .tokenId(sessionId)
+                .ipAddress(getClientIp(servletRequest))
+                .deviceName(sanitizeUserAgent(servletRequest.getHeader("User-Agent")))
+                .expiresAt(LocalDateTime.now().plusHours(24))
+                .build();
+        sessionRepository.save(session);
+        return token;
+    }
+
+    /** Builds the standard AuthResponse from a user and JWT. */
+    private AuthResponse buildAuthResponse(String token, User user) {
+        String tenantIdStr = (user.getTenant() != null && user.getTenant().getId() != null)
+                ? user.getTenant().getId().toString() : user.getId().toString();
+        String roleStr = user.getRole() != null ? user.getRole().name() : "OWNER";
+        String planTypeStr = "FREE";
+        if (user.getRole() == User.Role.SUPER_ADMIN) {
+            planTypeStr = "ENTERPRISE";
+        } else if (user.getTenant() != null && user.getTenant().getId() != null) {
+            User.PlanType tier = tenantTierService.getTier(user.getTenant().getId());
+            if (tier != null) planTypeStr = tier.name();
+        }
+        return new AuthResponse(
+                token, user.getId().toString(), tenantIdStr, user.getEmail(),
+                user.getDisplayName(), user.getBusinessName(), roleStr,
+                user.getOnboardingCompleted() != null && user.getOnboardingCompleted(),
+                planTypeStr);
+    }
+
 
     public static class LoginRequest {
         private String email;

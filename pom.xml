@@ -283,6 +283,63 @@
       <artifactId>google-api-services-calendar</artifactId>
       <version>v3-rev20220715-2.0.0</version>
     </dependency>
+
+    <!-- Google ID Token verification — used by POST /api/v1/auth/google -->
+    <dependency>
+      <groupId>com.google.auth</groupId>
+      <artifactId>google-auth-library-oauth2-http</artifactId>
+      <version>1.23.0</version>
+    </dependency>
+
+    <!-- Gmail API — gmail.send scope (P7) -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-gmail</artifactId>
+      <version>v1-rev20220404-2.0.0</version>
+    </dependency>
+
+    <!-- Google People API (Contacts) — contacts.readonly scope (P8) -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-people</artifactId>
+      <version>v1-rev20251117-2.0.0</version>
+    </dependency>
+
+    <!-- Google Tasks API — tasks scope (P10) -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-tasks</artifactId>
+      <version>v1-rev20210709-2.0.0</version>
+    </dependency>
+
+    <!-- Google Drive API — drive.file scope (P11) -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-drive</artifactId>
+      <version>v3-rev20220815-2.0.0</version>
+    </dependency>
+
+    <!-- Google Sheets API — spreadsheets scope (P12) -->
+    <dependency>
+      <groupId>com.google.apis</groupId>
+      <artifactId>google-api-services-sheets</artifactId>
+      <version>v4-rev20220927-2.0.0</version>
+    </dependency>
+
+    <!-- Firebase Admin SDK — Push Notifications (P9) -->
+    <dependency>
+      <groupId>com.google.firebase</groupId>
+      <artifactId>firebase-admin</artifactId>
+      <version>9.2.0</version>
+    </dependency>
+
+    <!-- Gson JSON factory — required by Google API client -->
+    <dependency>
+      <groupId>com.google.http-client</groupId>
+      <artifactId>google-http-client-gson</artifactId>
+      <version>1.44.1</version>
+    </dependency>
+
     <dependency>
       <groupId>com.googlecode.libphonenumber</groupId>
       <artifactId>libphonenumber</artifactId>

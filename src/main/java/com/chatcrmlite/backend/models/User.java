@@ -83,14 +83,28 @@ public class User implements Serializable {
     @Transient
     private WhatsAppConfig whatsappConfig;
 
+    @Deprecated
     @com.fasterxml.jackson.annotation.JsonIgnore
     private String googleAccessToken;
 
+    @Deprecated
     @com.fasterxml.jackson.annotation.JsonIgnore
     private String googleRefreshToken;
 
+    @Deprecated
     @com.fasterxml.jackson.annotation.JsonIgnore
     private LocalDateTime googleTokenExpiry;
+
+    /**
+     * Google stable account identifier — the "sub" claim from Google ID Token.
+     * Immutable: does not change even if the user renames their Google account.
+     * Used to link this CRM user to their GoogleConnection row.
+     * NOTE: old googleAccessToken/googleRefreshToken/googleTokenExpiry fields above
+     * are kept for backward compatibility and will be removed after GoogleConnection migration.
+     */
+    @Column(name = "google_subject_id", unique = true)
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    private String googleSubjectId;
 
     private LocalDateTime createdAt;
 
@@ -244,6 +258,10 @@ public class User implements Serializable {
 
     public LocalDateTime getGoogleTokenExpiry() { return googleTokenExpiry; }
     public void setGoogleTokenExpiry(LocalDateTime googleTokenExpiry) { this.googleTokenExpiry = googleTokenExpiry; }
+
+    public String getGoogleSubjectId() { return googleSubjectId; }
+    public void setGoogleSubjectId(String googleSubjectId) { this.googleSubjectId = googleSubjectId; }
+
 
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

@@ -61,13 +61,14 @@ public class ConversationOrchestrator {
 
         if (tools != null && !tools.isEmpty()) {
             fullSystemPrompt.append("--- INSTRUCTIONS FOR TOOL USE & INTENT ROUTING ---\n")
-                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details (name, email, etc.) unless the user has clearly and explicitly expressed one of the specific intents below.\n\n")
-                    .append("TOOL TRIGGER — only activate a tool flow when the user EXPLICITLY:\n")
-                    .append("  - Wants to leave their details / request a callback / submit an enquiry → use create_lead\n")
-                    .append("  - Wants to book an appointment → use book_appointment\n")
-                    .append("  - Wants to make a reservation or booking → use create_booking\n")
-                    .append("  - Has a problem, complaint, or needs support → use submit_support_ticket\n\n")
-                    .append("WHEN a tool IS triggered:\n")
+                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details (name, email, etc.) unless the user has clearly and explicitly expressed an intent for one of the active tools below.\n\n")
+                    .append("ACTIVE TOOLS & INTENT TRIGGERS:\n");
+
+            for (ToolSpecification tool : tools) {
+                fullSystemPrompt.append("  - Tool '").append(tool.name()).append("': ").append(tool.description()).append("\n");
+            }
+
+            fullSystemPrompt.append("\nWHEN a tool IS triggered:\n")
                     .append("  - Look at that tool's required parameters and collect them conversationally (1-2 fields at a time).\n")
                     .append("  - Once ALL required fields are collected, call the tool immediately.\n")
                     .append("  - Confirm success to the caller in plain language; never read out IDs or reference numbers.\n\n")

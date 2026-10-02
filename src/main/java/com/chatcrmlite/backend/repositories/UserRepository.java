@@ -10,6 +10,10 @@ import java.util.UUID;
 
 public interface UserRepository extends JpaRepository<User, UUID> {
     Optional<User> findByEmail(String email);
+
+    /** Find user by their stable Google account identifier (the "sub" claim). */
+    Optional<User> findByGoogleSubjectId(String googleSubjectId);
+
     
     java.util.List<User> findAllByTenant(com.chatcrmlite.backend.models.Tenant tenant);
 

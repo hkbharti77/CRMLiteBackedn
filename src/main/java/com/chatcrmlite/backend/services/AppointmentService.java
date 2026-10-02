@@ -110,7 +110,7 @@ public class AppointmentService {
         String googleEventId = null;
 
         if (Boolean.TRUE.equals(req.getGenerateMeetLink())) {
-            if (owner.getGoogleAccessToken() == null || owner.getGoogleAccessToken().isBlank()) {
+            if (!googleCalendarService.isConnected(owner)) {
                 throw new IllegalStateException("Google Calendar is not connected. Please link your Google account in Settings.");
             }
             try {

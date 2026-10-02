@@ -438,6 +438,7 @@ public class WhatsAppWebRtcMediaGateway {
                 session.state = CallMediaState.ICE_CONNECTED;
                 log.info("✅ [WebRtcGateway] ICE_CONNECTED (STUN response received) before DTLS for callId={}",
                         session.callId);
+                try { Thread.sleep(300); } catch (InterruptedException ignored) {}
                 return;
             }
             try {

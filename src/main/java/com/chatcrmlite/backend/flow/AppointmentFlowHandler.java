@@ -95,7 +95,7 @@ public class AppointmentFlowHandler implements FlowHandler {
             // Auto-generate Google Meet link if owner has connected Google Calendar
             String meetLink = null;
             User owner = context.getOwner();
-            if (owner != null && owner.getGoogleAccessToken() != null && !owner.getGoogleAccessToken().isBlank()) {
+            if (owner != null && googleCalendarService.isConnected(owner)) {
                 try {
                     String clientEmail = context.getContact() != null ? context.getContact().getEmail() : data.get("email");
                     String[] meetRes = googleCalendarService.createMeetLink(
