@@ -42,6 +42,9 @@ public class Contact extends BaseTenantEntity {
     @com.fasterxml.jackson.annotation.JsonIgnore
     private User owner;
 
+    @Column(name = "bot_paused", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean botPaused = false;
+
     @Column(name = "bot_paused_until")
     private java.time.Instant botPausedUntil;
 
@@ -99,6 +102,7 @@ public class Contact extends BaseTenantEntity {
         this.tags = (tags != null) ? tags : new ArrayList<>();
         this.source = source;
         this.owner = owner;
+        this.botPaused = botPaused;
         if (botPaused) {
             this.botPausedUntil = java.time.Instant.now().plus(15, java.time.temporal.ChronoUnit.MINUTES);
             this.botPauseReason = "MANUAL_TOGGLE";
@@ -125,7 +129,10 @@ public class Contact extends BaseTenantEntity {
     public void setOwner(User owner) { this.owner = owner; }
 
     public boolean isBotPaused() {
-        return botPausedUntil != null && java.time.Instant.now().isBefore(botPausedUntil);
+        if (botPausedUntil != null) {
+            return java.time.Instant.now().isBefore(botPausedUntil);
+        }
+        return botPaused;
     }
 
     public void setBotPaused(boolean paused) {
@@ -133,6 +140,7 @@ public class Contact extends BaseTenantEntity {
     }
 
     public void setBotPaused(boolean paused, int minutes) {
+        this.botPaused = paused;
         if (paused) {
             int duration = minutes > 0 ? minutes : 15;
             this.botPausedUntil = java.time.Instant.now().plus(duration, java.time.temporal.ChronoUnit.MINUTES);
@@ -202,6 +210,9 @@ public class Contact extends BaseTenantEntity {
     @Override
     protected void populateTenant() {
         super.populateTenant();
+        if (this.botPausedUntil != null) {
+            this.botPaused = java.time.Instant.now().isBefore(this.botPausedUntil);
+        }
         if (this.displayId == null) {
             String prefix = "CON";
             if (this.getTenant() != null && this.getTenant().getBusinessName() != null) {

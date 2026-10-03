@@ -205,6 +205,9 @@ public class GoogleContactsService {
                 if (user.getTenant() != null) {
                     contact.setTenant(user.getTenant());
                 }
+                if (isNew) {
+                    contact.setBotPaused(false);
+                }
 
                 Contact savedContact = contactRepository.save(contact);
 
