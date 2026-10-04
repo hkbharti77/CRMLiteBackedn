@@ -2,25 +2,18 @@
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /workspace
 
-# Tune Maven JVM: tier-1 JIT stops early compilation = faster startup of mvn itself
-# Not the app runtime — just the build tooling
-ENV MAVEN_OPTS="-XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx512m -Xms256m"
+# Maven heap tuned for 2GB EC2: 768m prevents GC thrashing without hitting OOM
+ENV MAVEN_OPTS="-XX:+TieredCompilation -XX:TieredStopAtLevel=1 -Xmx768m -Xms256m"
 
 # Cache Maven dependencies separately from source code
-# This layer only re-runs when pom.xml changes
 COPY pom.xml .
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml dependency:go-offline -B -q -T 1C
+    mvn -f pom.xml dependency:go-offline -B -q
 
 COPY src ./src
-# -T 1C = 1 thread per CPU core (parallel module compilation)
-# Note: -o (offline) removed — dependency:go-offline misses some transitive artifacts
-#       causing build failures. Cache mount already avoids redundant downloads.
+# Build fat JAR without tests; avoid unpacking thousands of files to save EBS I/O
 RUN --mount=type=cache,target=/root/.m2 \
-    mvn -f pom.xml package -Dmaven.test.skip=true -B -q -T 1C && \
-    mkdir -p target/dependency && \
-    cd target/dependency && \
-    jar -xf ../*.jar
+    mvn -f pom.xml package -Dmaven.test.skip=true -DskipTests -B -q
 
 # ── Stage 2: Runtime ──────────────────────────────────────────────────────────
 FROM eclipse-temurin:17-jre-jammy AS runtime
@@ -31,19 +24,11 @@ USER crmlite
 
 WORKDIR /app
 
-ARG DEPENDENCY=/workspace/target/dependency
-
-COPY --from=builder ${DEPENDENCY}/BOOT-INF/lib     ./lib
-COPY --from=builder ${DEPENDENCY}/META-INF          ./META-INF
-COPY --from=builder ${DEPENDENCY}/BOOT-INF/classes  .
-
-# Removed Docker HEALTHCHECK because Render does its own TCP health checks,
-# and Docker's healthcheck was killing the container before it could finish booting on 0.1 CPU.
+# Copy the single compiled JAR (saves 2+ minutes of layer exporting on EBS)
+COPY --from=builder /workspace/target/*.jar ./app.jar
 
 EXPOSE 8080 50000-50100/udp
 
-# JVM flags optimized for containers:
-#   UseSerialGC: uses minimal memory footprint compared to G1GC
-#   MaxMetaspaceSize: class metadata memory (Spring Boot 3 requires ~150MB)
-#   Xss256k: thread stack size
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms128m", "-Xmx350m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=192m", "-XX:ReservedCodeCacheSize=64m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-cp", ".:lib/*", "com.chatcrmlite.backend.ChatCrmBackendApplication"]
+# JVM flags optimized for 2GB total RAM budget:
+# Heap (350m) + Metaspace (192m) + CodeCache (64m) = ~606m max footprint
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms128m", "-Xmx350m", "-XX:+UseSerialGC", "-XX:MaxMetaspaceSize=192m", "-XX:ReservedCodeCacheSize=64m", "-Xss256k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
