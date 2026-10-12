@@ -91,6 +91,11 @@ public class PermissionSecurityService {
             return false;
         }
 
+        // Platform Super Admins have unrestricted administrative capabilities
+        if (currentUser.getRole() == User.Role.SUPER_ADMIN) {
+            return true;
+        }
+
         // Pipeline Step 5: Subscription Plan Entitlement Composite Check
         EffectiveEntitlementsDTO entitlements = entitlementResolverService.getEffectiveEntitlements(currentUser.getTenant().getId());
         if (entitlements == null) {

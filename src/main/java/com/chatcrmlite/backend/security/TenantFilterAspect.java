@@ -28,19 +28,20 @@ public class TenantFilterAspect {
 
     @Before("repositoryMethods()")
     public void enableTenantFilter() {
+        Session session = entityManager.unwrap(Session.class);
         if (TenantContext.isAdminMode()) {
+            session.disableFilter("tenantFilter");
             log.debug("Tenant filter bypassed (Admin Mode)");
             return;
         }
 
         UUID tenantId = TenantContext.getTenantId();
         if (tenantId != null) {
-            Session session = entityManager.unwrap(Session.class);
             session.enableFilter("tenantFilter").setParameter("tenantId", tenantId);
             log.trace("Tenant filter enabled for ID: {}", tenantId);
         } else {
+            session.disableFilter("tenantFilter");
             log.debug("No tenant ID found in context for repository operation!");
-
         }
     }
 }

@@ -248,12 +248,17 @@ public class SmsCrossTenantSecurityTest {
                 .andExpect(jsonPath("$.name", is("Malicious Tenant A Campaign")));
 
         // Verify in DB that the campaign was created under Tenant A, NOT Tenant B
-        List<SmsCampaign> bCampaigns = smsCampaignRepository.findByTenant_Id(tenantB.getId());
-        assertEquals(1, bCampaigns.size());
-        assertEquals("Tenant B SMS Campaign", bCampaigns.get(0).getName());
+        TenantContext.setAdminMode(true);
+        try {
+            List<SmsCampaign> bCampaigns = smsCampaignRepository.findByTenant_Id(tenantB.getId());
+            assertEquals(1, bCampaigns.size());
+            assertEquals("Tenant B SMS Campaign", bCampaigns.get(0).getName());
 
-        List<SmsCampaign> aCampaigns = smsCampaignRepository.findByTenant_Id(tenantA.getId());
-        assertEquals(2, aCampaigns.size());
+            List<SmsCampaign> aCampaigns = smsCampaignRepository.findByTenant_Id(tenantA.getId());
+            assertEquals(2, aCampaigns.size());
+        } finally {
+            TenantContext.clear();
+        }
     }
 
     @Test
@@ -271,7 +276,7 @@ public class SmsCrossTenantSecurityTest {
     @DisplayName("7. Unauthorized agent without MODULE_CAMPAIGNS permission receives 403 Forbidden")
     void testAgentWithoutPermissionForbidden() throws Exception {
         mockMvc.perform(get("/api/v1/sms/campaigns")
-                        .header("Authorization", "Bearer " + tokenAAdmin.replace(tenantAAdmin.getEmail(), tenantAAgentNoPerm.getEmail())))
+                        .header("Authorization", "Bearer " + tokenAAgentNoPerm))
                 .andExpect(status().isForbidden());
     }
 

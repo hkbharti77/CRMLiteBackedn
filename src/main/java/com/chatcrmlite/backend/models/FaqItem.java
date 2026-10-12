@@ -6,14 +6,11 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "faq_items")
-public class FaqItem {
+public class FaqItem extends BaseTenantEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
-
-    @Column(name = "tenant_id", nullable = false)
-    private UUID tenantId;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String question;
@@ -47,7 +44,9 @@ public class FaqItem {
 
     public FaqItem(UUID id, UUID tenantId, String question, String answer, String category, String keywords, String embedding, Boolean isActive, Long hitCount, OffsetDateTime createdAt, OffsetDateTime updatedAt) {
         this.id = id;
-        this.tenantId = tenantId;
+        if (tenantId != null) {
+            setTenantId(tenantId);
+        }
         this.question = question;
         this.answer = answer;
         this.category = category != null ? category : "General";
@@ -61,6 +60,7 @@ public class FaqItem {
 
     @PrePersist
     protected void onCreate() {
+        populateTenant();
         this.updatedAt = OffsetDateTime.now();
         if (this.hitCount == null) this.hitCount = 0L;
         if (this.isActive == null) this.isActive = true;
@@ -69,15 +69,13 @@ public class FaqItem {
 
     @PreUpdate
     protected void onUpdate() {
+        populateTenant();
         this.updatedAt = OffsetDateTime.now();
     }
 
     // Getters and Setters
     public UUID getId() { return id; }
     public void setId(UUID id) { this.id = id; }
-
-    public UUID getTenantId() { return tenantId; }
-    public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
 
     public String getQuestion() { return question; }
     public void setQuestion(String question) { this.question = question; }

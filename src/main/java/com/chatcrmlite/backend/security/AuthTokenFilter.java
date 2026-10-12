@@ -22,6 +22,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * JWT authentication filter — runs once per request.
@@ -60,7 +61,24 @@ public class AuthTokenFilter extends OncePerRequestFilter {
                 if (userOpt.isPresent()) {
                     User user = userOpt.get();
 
-                    if (user.getTenant() != null && user.getTenant().getId() != null) {
+                    if (user.getRole() == User.Role.SUPER_ADMIN) {
+                        String targetTenantHeader = request.getHeader("X-Tenant-ID");
+                        if (targetTenantHeader != null && !targetTenantHeader.isBlank() && !"default".equalsIgnoreCase(targetTenantHeader)) {
+                            try {
+                                UUID targetUuid = UUID.fromString(targetTenantHeader.trim());
+                                TenantContext.setTenantId(targetUuid);
+                                MDC.put("tenantId", targetUuid.toString());
+                            } catch (Exception ignored) {
+                                TenantContext.setAdminMode(true);
+                            }
+                        } else {
+                            TenantContext.setAdminMode(true);
+                            if (user.getTenant() != null && user.getTenant().getId() != null) {
+                                TenantContext.setTenantId(user.getTenant().getId());
+                                MDC.put("tenantId", user.getTenant().getId().toString());
+                            }
+                        }
+                    } else if (user.getTenant() != null && user.getTenant().getId() != null) {
                         TenantContext.setTenantId(user.getTenant().getId());
                         MDC.put("tenantId", user.getTenant().getId().toString());
                     }

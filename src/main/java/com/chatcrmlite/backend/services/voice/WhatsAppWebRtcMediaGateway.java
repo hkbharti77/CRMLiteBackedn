@@ -318,16 +318,14 @@ public class WhatsAppWebRtcMediaGateway {
             sdp.append("a=candidate:1 1 udp 1853817087 ").append(mediaIp).append(" ").append(mediaPort)
                .append(" typ relay raddr ").append(localHostIp).append(" rport ").append(localPort).append("\r\n");
         } else {
-            if (srflxCandidate != null) {
-                sdp.append("a=candidate:").append(candIndex++).append(" 1 udp 2130706433 ").append(srflxCandidate.getHostString()).append(" ").append(srflxCandidate.getPort())
-                   .append(" typ srflx raddr ").append(localHostIp).append(" rport ").append(localPort).append("\r\n");
-            } else if (!mediaIp.equals(localHostIp)) {
-                sdp.append("a=candidate:").append(candIndex++).append(" 1 udp 2130706433 ").append(mediaIp).append(" ").append(mediaPort)
-                   .append(" typ srflx raddr ").append(localHostIp).append(" rport ").append(localPort).append("\r\n");
-            }
-            sdp.append("a=candidate:").append(candIndex++).append(" 1 udp 2130706431 ").append(localHostIp).append(" ").append(localPort).append(" typ host\r\n");
-            if (localHostIpv6 != null) {
-                sdp.append("a=candidate:").append(candIndex++).append(" 1 udp 2130706429 ").append(localHostIpv6).append(" ").append(localPort).append(" typ host\r\n");
+            // When hosted on Cloud/VPS with a public IP (e.g. AWS EC2 13.211.146.210),
+            // Meta ICE-lite REQUIRES the reachable public IP to be advertised as 'typ host'!
+            // Advertising internal docker IP (172.18.0.x) or 'typ srflx' with private raddr causes Meta
+            // to drop the candidate or attempt routing to the unroutable 172.18.0.x IP.
+            long candPriority = 2130706431L; // 0x7EFE00FF host candidate priority
+            sdp.append("a=candidate:1 1 udp ").append(candPriority).append(" ").append(mediaIp).append(" ").append(mediaPort).append(" typ host\r\n");
+            if (!mediaIp.equals(localHostIp) && !isPrivateOrLoopback(localHostIp)) {
+                sdp.append("a=candidate:2 1 udp 2130706429 ").append(localHostIp).append(" ").append(localPort).append(" typ host\r\n");
             }
         }
 
@@ -1497,6 +1495,16 @@ public class WhatsAppWebRtcMediaGateway {
         }
     }
 
+    private static boolean isPrivateOrLoopback(String ip) {
+        if (ip == null || ip.isBlank() || ip.startsWith("127.") || ip.equals("localhost")) return true;
+        try {
+            InetAddress addr = InetAddress.getByName(ip);
+            return addr.isLoopbackAddress() || addr.isSiteLocalAddress() || addr.isLinkLocalAddress() || addr.isAnyLocalAddress();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     private List<InetSocketAddress> parseAllRemoteCandidates(String sdpOffer) {
         List<InetSocketAddress> list = new ArrayList<>();
         if (sdpOffer == null) return list;
@@ -1708,10 +1716,13 @@ public class WhatsAppWebRtcMediaGateway {
                     for (int i = 0; i < pad; i++) attrStream.write(0);
                 }
 
+                long candPriority = (turnSession != null) ? 1853817087L : 2130706431L;
                 attrStream.write(0x00); attrStream.write(0x24);
                 attrStream.write(0x00); attrStream.write(0x04);
-                attrStream.write(0x6E); attrStream.write(0x7F);
-                attrStream.write(0x00); attrStream.write((byte) 0xFF);
+                attrStream.write((byte) ((candPriority >> 24) & 0xFF));
+                attrStream.write((byte) ((candPriority >> 16) & 0xFF));
+                attrStream.write((byte) ((candPriority >> 8) & 0xFF));
+                attrStream.write((byte) (candPriority & 0xFF));
 
                 attrStream.write(0x00); attrStream.write(0x25);
                 attrStream.write(0x00); attrStream.write(0x00);

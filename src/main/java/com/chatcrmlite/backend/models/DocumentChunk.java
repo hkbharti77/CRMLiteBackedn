@@ -8,7 +8,7 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "document_chunks")
-public class DocumentChunk {
+public class DocumentChunk extends BaseTenantEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
@@ -16,13 +16,6 @@ public class DocumentChunk {
 
     @Column(name = "document_id", nullable = false)
     private UUID documentId;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "tenant_id", referencedColumnName = "id", insertable = false, updatable = false)
-    private Tenant tenant;
-
-    @Column(name = "tenant_id", nullable = false)
-    private UUID tenantId;
 
     @Column(columnDefinition = "TEXT", nullable = false)
     private String content;
@@ -43,8 +36,11 @@ public class DocumentChunk {
     public DocumentChunk(UUID id, UUID documentId, Tenant tenant, UUID tenantId, String content, String contentHash, String embedding, Map<String, Object> metadata) {
         this.id = id;
         this.documentId = documentId;
-        this.tenant = tenant;
-        this.tenantId = tenantId;
+        if (tenant != null) {
+            setTenant(tenant);
+        } else if (tenantId != null) {
+            setTenantId(tenantId);
+        }
         this.content = content;
         this.contentHash = contentHash;
         this.embedding = embedding;
@@ -55,11 +51,6 @@ public class DocumentChunk {
     public void setId(UUID id) { this.id = id; }
     public UUID getDocumentId() { return documentId; }
     public void setDocumentId(UUID documentId) { this.documentId = documentId; }
-    @com.fasterxml.jackson.annotation.JsonIgnore
-    public Tenant getTenant() { return tenant; }
-    public void setTenant(Tenant tenant) { this.tenant = tenant; }
-    public UUID getTenantId() { return tenantId; }
-    public void setTenantId(UUID tenantId) { this.tenantId = tenantId; }
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
     public String getContentHash() { return contentHash; }
