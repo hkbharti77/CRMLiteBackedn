@@ -7,22 +7,35 @@ import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Repository
 public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UUID> {
 
-    List<DocumentChunk> findByTenantId(UUID tenantId);
+    @Override
+    @Query("SELECT d FROM DocumentChunk d WHERE d.id = :id")
+    Optional<DocumentChunk> findById(@Param("id") UUID id);
+
+    @Query("SELECT d FROM DocumentChunk d WHERE d.tenant.id = :tenantId")
+    List<DocumentChunk> findByTenantId(@Param("tenantId") UUID tenantId);
     
-    org.springframework.data.domain.Page<DocumentChunk> findByTenantId(UUID tenantId, org.springframework.data.domain.Pageable pageable);
+    @Query("SELECT d FROM DocumentChunk d WHERE d.tenant.id = :tenantId")
+    org.springframework.data.domain.Page<DocumentChunk> findByTenantId(@Param("tenantId") UUID tenantId, org.springframework.data.domain.Pageable pageable);
     
-    long countByTenantId(UUID tenantId);
+    @Query("SELECT COUNT(d) FROM DocumentChunk d WHERE d.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
 
-    boolean existsByTenantIdAndContentHash(UUID tenantId, String contentHash);
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM DocumentChunk d WHERE d.tenant.id = :tenantId AND d.contentHash = :contentHash")
+    boolean existsByTenantIdAndContentHash(@Param("tenantId") UUID tenantId, @Param("contentHash") String contentHash);
 
-    List<DocumentChunk> findByDocumentIdAndTenantId(UUID documentId, UUID tenantId);
+    @Query("SELECT d FROM DocumentChunk d WHERE d.documentId = :documentId AND d.tenant.id = :tenantId")
+    List<DocumentChunk> findByDocumentIdAndTenantId(@Param("documentId") UUID documentId, @Param("tenantId") UUID tenantId);
 
-    void deleteByDocumentIdAndTenantId(UUID documentId, UUID tenantId);
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("DELETE FROM DocumentChunk d WHERE d.documentId = :documentId AND d.tenant.id = :tenantId")
+    void deleteByDocumentIdAndTenantId(@Param("documentId") UUID documentId, @Param("tenantId") UUID tenantId);
 
     /**
      * Hybrid Search: Vector Similarity + Trigram Similarity (Keyword)

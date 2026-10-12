@@ -15,15 +15,26 @@ import java.util.UUID;
 @Repository
 public interface FaqItemRepository extends JpaRepository<FaqItem, UUID> {
 
-    List<FaqItem> findByTenantId(UUID tenantId);
+    @Override
+    @Query("SELECT f FROM FaqItem f WHERE f.id = :id")
+    Optional<FaqItem> findById(@Param("id") UUID id);
 
-    List<FaqItem> findByTenantIdAndIsActiveTrue(UUID tenantId);
+    @Query("SELECT f FROM FaqItem f WHERE f.tenant.id = :tenantId")
+    List<FaqItem> findByTenantId(@Param("tenantId") UUID tenantId);
 
-    Optional<FaqItem> findByIdAndTenantId(UUID id, UUID tenantId);
+    @Query("SELECT f FROM FaqItem f WHERE f.tenant.id = :tenantId AND f.isActive = true")
+    List<FaqItem> findByTenantIdAndIsActiveTrue(@Param("tenantId") UUID tenantId);
 
-    long countByTenantId(UUID tenantId);
+    @Query("SELECT f FROM FaqItem f WHERE f.id = :id AND f.tenant.id = :tenantId")
+    Optional<FaqItem> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
-    void deleteByIdAndTenantId(UUID id, UUID tenantId);
+    @Query("SELECT COUNT(f) FROM FaqItem f WHERE f.tenant.id = :tenantId")
+    long countByTenantId(@Param("tenantId") UUID tenantId);
+
+    @Modifying
+    @Transactional
+    @Query("DELETE FROM FaqItem f WHERE f.id = :id AND f.tenant.id = :tenantId")
+    void deleteByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
     @Modifying
     @Transactional
