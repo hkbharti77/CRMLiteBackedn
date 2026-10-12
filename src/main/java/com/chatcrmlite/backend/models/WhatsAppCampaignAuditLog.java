@@ -27,7 +27,9 @@ public class WhatsAppCampaignAuditLog extends BaseTenantEntity {
         RESUMED,
         CANCELLED,
         COMPLETED,
-        FAILED
+        FAILED,
+        RESCHEDULED,
+        UPDATED
     }
 
     @Id

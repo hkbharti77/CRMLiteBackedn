@@ -78,11 +78,28 @@ public class DistributedSchedulerService {
         }
     }
 
-    public void cancelJob(String jobName, String groupName) {
+    public boolean cancelJob(String jobName) {
+        return cancelJob(jobName, "distributed-jobs");
+    }
+
+    public boolean cancelJob(String jobName, String groupName) {
         try {
-            scheduler.deleteJob(new JobKey(jobName, groupName));
+            JobKey jobKey = new JobKey(jobName, groupName);
+            boolean deleted = false;
+            if (scheduler.checkExists(jobKey)) {
+                deleted = scheduler.deleteJob(jobKey);
+                log.info("Cancelled distributed job {} in group {}: {}", jobName, groupName, deleted);
+            }
+            TriggerKey triggerKey = new TriggerKey(jobName + "-trigger", "distributed-triggers");
+            if (scheduler.checkExists(triggerKey)) {
+                scheduler.unscheduleJob(triggerKey);
+                log.info("Unscheduled trigger {} in group distributed-triggers", triggerKey);
+                deleted = true;
+            }
+            return deleted;
         } catch (SchedulerException e) {
             log.warn("Failed to cancel job {}: {}", jobName, e.getMessage());
+            return false;
         }
     }
 }

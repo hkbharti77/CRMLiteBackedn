@@ -137,6 +137,15 @@ public class WhatsAppCampaignController {
         return ResponseEntity.ok(campaignService.cancelCampaign(id, user));
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<WhatsAppCampaign> updateCampaign(
+            @PathVariable UUID id,
+            @RequestBody com.chatcrmlite.backend.dtos.UpdateCampaignRequestDto request,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        return ResponseEntity.ok(campaignService.updateScheduledCampaign(id, request, user));
+    }
+
     @DeleteMapping("/{id}")
     public ResponseEntity<Map<String, Object>> deleteCampaign(
             @PathVariable UUID id,

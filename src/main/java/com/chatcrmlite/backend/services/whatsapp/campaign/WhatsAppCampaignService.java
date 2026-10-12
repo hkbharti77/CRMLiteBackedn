@@ -317,9 +317,105 @@ public class WhatsAppCampaignService {
     @Transactional
     public WhatsAppCampaign cancelCampaign(UUID campaignId, User actor) {
         WhatsAppCampaign campaign = getCampaign(campaignId, actor);
+        boolean jobCancelled = false;
+        if (campaign.getStatus() == WhatsAppCampaign.Status.SCHEDULED) {
+            jobCancelled = distributedSchedulerService.cancelJob("campaign-job-" + campaign.getId());
+            log.info("Cancelled Quartz job for scheduled WhatsApp campaign {}: {}", campaign.getId(), jobCancelled);
+        }
         campaign.setStatus(WhatsAppCampaign.Status.CANCELLED);
         WhatsAppCampaign saved = campaignRepository.save(campaign);
-        auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.CANCELLED, "{}");
+        auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.CANCELLED, "{\"quartzJobCancelled\": " + jobCancelled + "}");
+        return saved;
+    }
+
+    @Transactional
+    public WhatsAppCampaign updateScheduledCampaign(UUID campaignId, com.chatcrmlite.backend.dtos.UpdateCampaignRequestDto dto, User actor) {
+        WhatsAppCampaign campaign = getCampaign(campaignId, actor);
+
+        if (campaign.getStatus() != WhatsAppCampaign.Status.DRAFT && campaign.getStatus() != WhatsAppCampaign.Status.SCHEDULED) {
+            throw new org.springframework.web.server.ResponseStatusException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "Only DRAFT or SCHEDULED campaigns can be modified. Current status: " + campaign.getStatus());
+        }
+
+        if (dto.getName() != null && !dto.getName().isBlank()) {
+            campaign.setName(dto.getName().trim());
+        }
+        if (dto.getTemplateId() != null && !dto.getTemplateId().isBlank()) {
+            WhatsAppTemplate template = null;
+            String templateIdOrName = dto.getTemplateId().trim();
+            if (templateIdOrName.length() == 36 && templateIdOrName.contains("-")) {
+                try {
+                    UUID uuid = UUID.fromString(templateIdOrName);
+                    template = templateRepository.findById(uuid).orElse(null);
+                } catch (IllegalArgumentException ignored) {}
+            }
+            if (template == null) {
+                UUID tenantId = (actor.getTenant() != null) ? actor.getTenant().getId() : null;
+                if (tenantId != null) {
+                    template = templateRepository.findByNameAndTenantId(templateIdOrName, tenantId).orElse(null);
+                }
+                if (template == null) {
+                    template = templateRepository.findByNameAndOwner(templateIdOrName, actor).orElse(null);
+                }
+                if (template == null) {
+                    template = templateRepository.findFirstByName(templateIdOrName).orElse(null);
+                }
+                if (template == null) {
+                    template = templateRepository.findFirstByMetaTemplateId(templateIdOrName).orElse(null);
+                }
+            }
+            if (template != null) {
+                WhatsAppTemplateSnapshot snapshot = createTemplateSnapshot(template);
+                campaign.setTemplateSnapshot(snapshot);
+            }
+        }
+        if (dto.getVariableMappingJson() != null) {
+            campaign.setVariableMappingJson(dto.getVariableMappingJson());
+        }
+
+        if (dto.getScheduledAt() != null) {
+            if (dto.getScheduledAt().isBefore(LocalDateTime.now())) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Scheduled time must be in the future");
+            }
+            if (dto.getScheduledAt().isBefore(LocalDateTime.now().plusSeconds(60))) {
+                throw new org.springframework.web.server.ResponseStatusException(
+                        org.springframework.http.HttpStatus.BAD_REQUEST, "Scheduled time must be at least 1 minute in the future");
+            }
+
+            LocalDateTime oldScheduledAt = campaign.getScheduledAt();
+            campaign.setScheduledAt(dto.getScheduledAt());
+
+            // If campaign is SCHEDULED, update Quartz trigger atomically
+            if (campaign.getStatus() == WhatsAppCampaign.Status.SCHEDULED) {
+                distributedSchedulerService.cancelJob("campaign-job-" + campaign.getId());
+
+                String tenantTz = (actor.getTenant() != null && actor.getTenant().getTimezone() != null)
+                        ? actor.getTenant().getTimezone()
+                        : "Asia/Kolkata";
+                ZoneId zoneId;
+                try {
+                    zoneId = ZoneId.of(tenantTz);
+                } catch (Exception e) {
+                    zoneId = ZoneId.of("Asia/Kolkata");
+                }
+
+                Date startDate = Date.from(dto.getScheduledAt().atZone(zoneId).toInstant());
+                distributedSchedulerService.scheduleOneTimeJob(
+                        "campaign-job-" + campaign.getId(),
+                        com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppCampaignJob.class,
+                        startDate,
+                        Map.of("campaignId", campaign.getId().toString())
+                );
+
+                auditService.logAction(campaign, actor, WhatsAppCampaignAuditLog.Action.RESCHEDULED,
+                        "{\"oldScheduledAt\": \"" + oldScheduledAt + "\", \"newScheduledAt\": \"" + dto.getScheduledAt() + "\"}");
+            }
+        }
+
+        WhatsAppCampaign saved = campaignRepository.save(campaign);
+        auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.UPDATED, "{\"action\": \"SCHEDULED_CAMPAIGN_UPDATED\"}");
         return saved;
     }
 
