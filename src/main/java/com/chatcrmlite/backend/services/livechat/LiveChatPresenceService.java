@@ -18,17 +18,21 @@ public class LiveChatPresenceService {
     @Autowired
     private UserRepository userRepository;
 
+    @Transactional
     public void updateHeartbeat(User user) {
-        if (user == null) return;
-        user.setLastSeenAt(LocalDateTime.now());
-        userRepository.save(user);
+        if (user == null || user.getId() == null) return;
+        LocalDateTime now = LocalDateTime.now();
+        user.setLastSeenAt(now);
+        userRepository.updateLastSeenAt(user.getId(), now);
     }
 
+    @Transactional
     public void updateAvailabilityStatus(User user, User.AvailabilityStatus status) {
-        if (user == null || status == null) return;
+        if (user == null || status == null || user.getId() == null) return;
+        LocalDateTime now = LocalDateTime.now();
         user.setAvailabilityStatus(status);
-        user.setLastSeenAt(LocalDateTime.now());
-        userRepository.save(user);
+        user.setLastSeenAt(now);
+        userRepository.updateAvailabilityAndLastSeen(user.getId(), status, now);
         log.info("User {} availability status updated to {}", user.getEmail(), status);
     }
 

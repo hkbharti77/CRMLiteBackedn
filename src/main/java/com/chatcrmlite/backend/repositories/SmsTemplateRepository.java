@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface SmsTemplateRepository extends JpaRepository<SmsTemplate, UUID> {
     List<SmsTemplate> findByBusinessId(String businessId);
     Optional<SmsTemplate> findByIdAndBusinessId(UUID id, String businessId);
+    List<SmsTemplate> findByTenant_Id(UUID tenantId);
+    Optional<SmsTemplate> findByIdAndTenant_Id(UUID id, UUID tenantId);
 }

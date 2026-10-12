@@ -68,6 +68,7 @@ public class DataSourceConfig {
      * Migrations must finish before Hibernate touches the schema.
      */
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public org.flywaydb.core.Flyway flyway(
             @org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource) {
         return org.flywaydb.core.Flyway.configure()
@@ -81,6 +82,7 @@ public class DataSourceConfig {
 
     /** Runs Flyway.migrate() during context init, before JPA (see depends-on post-processor below). */
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public FlywayMigrationInitializer flywayInitializer(org.flywaydb.core.Flyway flyway) {
         return new FlywayMigrationInitializer(flyway);
     }
@@ -90,6 +92,7 @@ public class DataSourceConfig {
      * never creates tables (ddl-auto) before migrations that seed those tables.
      */
     @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public static BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
         return beanFactory -> {
             for (String beanName : new String[]{"entityManagerFactory", "entityManagerFactoryBuilder"}) {

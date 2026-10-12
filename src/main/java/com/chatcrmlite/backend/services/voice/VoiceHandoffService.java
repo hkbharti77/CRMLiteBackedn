@@ -33,7 +33,8 @@ public class VoiceHandoffService {
                 || text.contains("angry") || text.contains("bad service");
 
         if (explicitHumanRequest || frustrationDetected) {
-            log.info("🚨 [VoiceHandoff] Human escalation requested: transcript='{}'", userTranscript);
+            log.info("🚨 [VoiceHandoff] Human escalation requested: explicitRequest={} frustrationDetected={}", explicitHumanRequest, frustrationDetected);
+            log.debug("🚨 [VoiceHandoff] Human escalation transcript (debug): '{}'", userTranscript);
             return true;
         }
 

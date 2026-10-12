@@ -11,4 +11,6 @@ import java.util.UUID;
 public interface SmsSuppressionRepository extends JpaRepository<SmsSuppression, UUID> {
     Optional<SmsSuppression> findByBusinessIdAndPhoneNumber(String businessId, String phoneNumber);
     boolean existsByBusinessIdAndPhoneNumber(String businessId, String phoneNumber);
+    Optional<SmsSuppression> findByTenant_IdAndPhoneNumber(UUID tenantId, String phoneNumber);
+    boolean existsByTenant_IdAndPhoneNumber(UUID tenantId, String phoneNumber);
 }

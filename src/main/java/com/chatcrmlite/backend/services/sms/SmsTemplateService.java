@@ -2,7 +2,6 @@ package com.chatcrmlite.backend.services.sms;
 
 import com.chatcrmlite.backend.models.sms.SmsTemplate;
 import com.chatcrmlite.backend.repositories.SmsTemplateRepository;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,16 +27,34 @@ public class SmsTemplateService {
     );
 
     public List<SmsTemplate> getTemplatesByBusiness(String businessId) {
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            List<SmsTemplate> list = templateRepository.findByTenant_Id(tenantId);
+            if (!list.isEmpty()) {
+                return list;
+            }
+        }
         return templateRepository.findByBusinessId(businessId);
     }
 
     public Optional<SmsTemplate> getTemplateById(UUID id, String businessId) {
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            Optional<SmsTemplate> opt = templateRepository.findByIdAndTenant_Id(id, tenantId);
+            if (opt.isPresent()) {
+                return opt;
+            }
+        }
         return templateRepository.findByIdAndBusinessId(id, businessId);
     }
 
     @Transactional
     public SmsTemplate saveTemplate(String businessId, SmsTemplate template) {
         template.setBusinessId(businessId);
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            template.setTenantId(tenantId);
+        }
 
         // Extract and validate variables from template content
         Set<String> extractedVars = extractVariables(template.getContent());
@@ -52,8 +69,7 @@ public class SmsTemplateService {
 
     @Transactional
     public void deleteTemplate(UUID id, String businessId) {
-        templateRepository.findByIdAndBusinessId(id, businessId)
-                .ifPresent(templateRepository::delete);
+        getTemplateById(id, businessId).ifPresent(templateRepository::delete);
     }
 
     public Set<String> extractVariables(String content) {
@@ -77,5 +93,14 @@ public class SmsTemplateService {
             rendered = rendered.replace(placeholder, value);
         }
         return rendered;
+    }
+
+    private UUID tryParseUuid(String val) {
+        if (val == null || val.isBlank()) return null;
+        try {
+            return UUID.fromString(val.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

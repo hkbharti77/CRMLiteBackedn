@@ -510,6 +510,106 @@ public class CloudinaryStorageService {
         }
     }
 
+    public record AudioUploadResult(
+            String secureUrl,
+            String publicId,
+            String format,
+            Integer durationSeconds,
+            Long sizeBytes
+    ) {}
+
+    /**
+     * Uploads a WhatsApp call MP3 recording scoped to the tenant's isolated directory.
+     * Cloudinary stores and streams audio as resource_type: "video".
+     */
+    public AudioUploadResult uploadCallRecording(java.util.UUID tenantId, String callId, byte[] mp3Bytes) throws Exception {
+        if (!isConfigured()) {
+            throw new IllegalStateException("Cloudinary client is not configured.");
+        }
+        if (mp3Bytes == null || mp3Bytes.length == 0) {
+            throw new IllegalArgumentException("MP3 recording bytes cannot be empty.");
+        }
+
+        String safeCallId = (callId != null && !callId.isBlank()) 
+                ? callId.replaceAll("[^a-zA-Z0-9._-]", "_") 
+                : "call_" + System.currentTimeMillis();
+        String folder = "tenants/" + (tenantId != null ? tenantId.toString() : "default") + "/whatsapp_recordings";
+        String publicId = folder + "/" + safeCallId;
+
+        Map<String, Object> params = new HashMap<>();
+        params.put("resource_type", "video");
+        params.put("public_id", publicId);
+        params.put("overwrite", true);
+
+        Map<?, ?> uploadResult = cloudinary.uploader().upload(mp3Bytes, params);
+        String secureUrl = (String) uploadResult.get("secure_url");
+        if (secureUrl == null) {
+            secureUrl = (String) uploadResult.get("url");
+        }
+        String finalPublicId = (String) uploadResult.get("public_id");
+        String format = (String) uploadResult.get("format");
+        if (format == null || format.isBlank()) {
+            format = "mp3";
+        }
+
+        Integer durationSeconds = null;
+        Object durObj = uploadResult.get("duration");
+        if (durObj instanceof Number) {
+            durationSeconds = (int) Math.round(((Number) durObj).doubleValue());
+        }
+
+        Long bytesLength = (long) mp3Bytes.length;
+        Object bytesObj = uploadResult.get("bytes");
+        if (bytesObj instanceof Number) {
+            bytesLength = ((Number) bytesObj).longValue();
+        }
+
+        log.info("Successfully uploaded call recording to Cloudinary: publicId={}, secureUrl={}, duration={}s, bytes={}",
+                finalPublicId, secureUrl, durationSeconds, bytesLength);
+        return new AudioUploadResult(secureUrl, finalPublicId, format, durationSeconds, bytesLength);
+    }
+
+    /**
+     * Generates a signed Cloudinary playback URL for an audio asset (resource_type: video).
+     */
+    public String getSignedAudioPlaybackUrl(String publicId) {
+        if (!isConfigured() || publicId == null || publicId.isBlank()) return "";
+        try {
+            return cloudinary.url()
+                    .secure(true)
+                    .signed(true)
+                    .resourceType("video")
+                    .generate(publicId);
+        } catch (Exception e) {
+            log.warn("Failed to generate signed audio playback URL for {}: {}", publicId, e.getMessage());
+            return getPublicUrl(publicId);
+        }
+    }
+
+    /**
+     * Generates a signed Cloudinary attachment download URL for an audio asset.
+     */
+    public String getSignedAudioDownloadUrl(String publicId, String filename) {
+        if (!isConfigured() || publicId == null || publicId.isBlank()) return "";
+        try {
+            Transformation transformation = new Transformation();
+            if (filename != null && !filename.isBlank()) {
+                transformation.flags("attachment:" + filename.replaceAll("[^a-zA-Z0-9._-]", "_"));
+            } else {
+                transformation.flags("attachment");
+            }
+            return cloudinary.url()
+                    .secure(true)
+                    .signed(true)
+                    .resourceType("video")
+                    .transformation(transformation)
+                    .generate(publicId);
+        } catch (Exception e) {
+            log.warn("Failed to generate signed audio download URL for {}: {}", publicId, e.getMessage());
+            return getSignedAudioPlaybackUrl(publicId);
+        }
+    }
+
     public String getCloudName() {
         return (cloudinary != null && cloudinary.config.cloudName != null) ? cloudinary.config.cloudName : "";
     }

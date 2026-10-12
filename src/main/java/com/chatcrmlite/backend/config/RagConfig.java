@@ -254,37 +254,39 @@ public class RagConfig {
             Response<AiMessage> response = null;
             try {
                 if (request.getTools() != null && !request.getTools().isEmpty()) {
-                    response = chatLanguageModel.generate(messages, request.getTools());
+                    try {
+                        response = chatLanguageModel.generate(messages, request.getTools());
+                    } catch (Exception toolEx) {
+                        org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
+                                .warn("[AiProvider] Generation with tools failed ({}: {}). Retrying without tools...",
+                                        toolEx.getClass().getSimpleName(), toolEx.getMessage());
+                        response = chatLanguageModel.generate(messages);
+                    }
                 } else {
                     response = chatLanguageModel.generate(messages);
                 }
-            } catch (IllegalArgumentException e) {
-                org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
-                        .warn("[AiProvider] LangChain4j validation error ({}). Retrying without tools...", e.getMessage());
-                try {
-                    response = chatLanguageModel.generate(messages);
-                } catch (Exception ex) {
-                    org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
-                            .error("[AiProvider] Fallback generation failed: {}", ex.getMessage());
-                    return AiResponse.builder()
-                            .content("Thank you! I have processed your request.")
-                            .tokensUsed(0)
-                            .latencyMs(System.currentTimeMillis() - start)
-                            .provider(aiProvider)
-                            .build();
-                }
             } catch (Exception e) {
                 org.slf4j.LoggerFactory.getLogger(ChatLanguageModelAiProvider.class)
-                        .error("[AiProvider] Generation exception: {}", e.getMessage(), e);
-                throw e;
+                        .warn("[AiProvider] Direct LLM generation failed ({}: {}). Returning conversational fallback.",
+                                e.getClass().getSimpleName(), e.getMessage());
+                return AiResponse.builder()
+                        .content("Hello, I can hear you clearly. How can I assist you today?")
+                        .tokensUsed(0)
+                        .latencyMs(System.currentTimeMillis() - start)
+                        .provider(aiProvider)
+                        .build();
             }
-            
+
             long duration = System.currentTimeMillis() - start;
             int tokens = (response != null && response.tokenUsage() != null) ? response.tokenUsage().totalTokenCount() : 0;
-            
+
             AiMessage aiMessage = (response != null) ? response.content() : null;
             String textContent = (aiMessage != null && aiMessage.text() != null) ? aiMessage.text() : "";
-            
+
+            if (textContent.isBlank() && (aiMessage == null || !aiMessage.hasToolExecutionRequests())) {
+                textContent = "Hello, I am listening. How can I help you today?";
+            }
+
             return AiResponse.builder()
                     .content(textContent)
                     .toolExecutionRequests(aiMessage != null ? aiMessage.toolExecutionRequests() : null)

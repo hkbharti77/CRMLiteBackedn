@@ -30,16 +30,34 @@ public class SmsCampaignService {
     private final SmsService smsService;
 
     public List<SmsCampaign> getCampaignsByBusiness(String businessId) {
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            List<SmsCampaign> list = campaignRepository.findByTenant_Id(tenantId);
+            if (!list.isEmpty()) {
+                return list;
+            }
+        }
         return campaignRepository.findByBusinessId(businessId);
     }
 
     public Optional<SmsCampaign> getCampaignById(UUID id, String businessId) {
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            Optional<SmsCampaign> opt = campaignRepository.findByIdAndTenant_Id(id, tenantId);
+            if (opt.isPresent()) {
+                return opt;
+            }
+        }
         return campaignRepository.findByIdAndBusinessId(id, businessId);
     }
 
     @Transactional
     public SmsCampaign createCampaign(String businessId, SmsCampaign campaign, List<String> phoneNumbers) {
         campaign.setBusinessId(businessId);
+        UUID tenantId = tryParseUuid(businessId);
+        if (tenantId != null) {
+            campaign.setTenantId(tenantId);
+        }
         campaign.setStatus("DRAFT");
         if (phoneNumbers != null) {
             campaign.setTotalRecipients(phoneNumbers.size());
@@ -61,8 +79,11 @@ public class SmsCampaignService {
     @Async
     @Transactional
     public void executeCampaignAsync(UUID campaignId, String businessId) {
-        Optional<SmsCampaign> campaignOpt = campaignRepository.findByIdAndBusinessId(campaignId, businessId);
-        if (campaignOpt.isEmpty()) return;
+        Optional<SmsCampaign> campaignOpt = getCampaignById(campaignId, businessId);
+        if (campaignOpt.isEmpty()) {
+            log.warn("Cannot execute campaign {}: Not found or unauthorized for businessId {}", campaignId, businessId);
+            return;
+        }
 
         SmsCampaign campaign = campaignOpt.get();
         campaign.setStatus("PROCESSING");
@@ -126,5 +147,14 @@ public class SmsCampaignService {
         campaign.setFailedCount(failed);
         campaignRepository.save(campaign);
         log.info("Finished SMS Campaign {} with {} delivered, {} failed", campaignId, delivered, failed);
+    }
+
+    private UUID tryParseUuid(String val) {
+        if (val == null || val.isBlank()) return null;
+        try {
+            return UUID.fromString(val.trim());
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 }

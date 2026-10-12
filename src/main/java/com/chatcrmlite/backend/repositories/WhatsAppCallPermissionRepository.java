@@ -24,4 +24,11 @@ public interface WhatsAppCallPermissionRepository extends JpaRepository<WhatsApp
         @Param("phoneNumberId") String phoneNumberId,
         @Param("userWaId") String userWaId
     );
+
+    @Query("SELECT p FROM WhatsAppCallPermission p WHERE p.tenant.id = :tenantId AND p.userWaId = :userWaId ORDER BY p.updatedAt DESC")
+    java.util.List<WhatsAppCallPermission> findByTenantIdAndUserWaId(
+        @Param("tenantId") UUID tenantId,
+        @Param("userWaId") String userWaId
+    );
 }
+

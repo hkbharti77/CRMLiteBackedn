@@ -48,8 +48,11 @@ public class DeepgramVoiceService {
     @Value("${deepgram.connect-timeout-ms:2500}")
     private int connectTimeoutMs;
 
-    @Value("${deepgram.read-timeout-ms:4000}")
+    @Value("${deepgram.read-timeout-ms:25000}")
     private int readTimeoutMs;
+
+    @Value("${deepgram.stt.streaming.enabled:true}")
+    private boolean streamingSttEnabled;
 
     @Value("${deepgram.max-retries:0}")
     private int maxRetries;
@@ -57,10 +60,14 @@ public class DeepgramVoiceService {
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
-    public DeepgramVoiceService(RestTemplateBuilder builder) {
+    public DeepgramVoiceService(RestTemplateBuilder builder,
+                                @Value("${deepgram.connect-timeout-ms:2500}") int connectTimeoutMs,
+                                @Value("${deepgram.read-timeout-ms:25000}") int readTimeoutMs) {
+        this.connectTimeoutMs = connectTimeoutMs;
+        this.readTimeoutMs = readTimeoutMs;
         this.restTemplate = builder
-                .setConnectTimeout(Duration.ofMillis(2500))
-                .setReadTimeout(Duration.ofMillis(4000))
+                .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
+                .setReadTimeout(Duration.ofMillis(readTimeoutMs))
                 .build();
         this.objectMapper = new ObjectMapper();
     }
@@ -205,6 +212,30 @@ public class DeepgramVoiceService {
                 .build();
     }
 
+    public boolean isStreamingSttEnabled() {
+        return streamingSttEnabled;
+    }
+
+    /**
+     * Creates a real-time bi-directional WebSocket streaming STT session.
+     *
+     * @param callId Unique identifier for the call session
+     * @param preferredLang Target language (defaults to "en-IN")
+     * @return An active DeepgramLiveSttSession connected via WebSocket
+     */
+    public DeepgramLiveSttSession createLiveStreamingSession(String callId, String preferredLang) {
+        String lang = (preferredLang != null && !preferredLang.isBlank()) ? preferredLang : "en-IN";
+        return new DeepgramLiveSttSession(
+                apiKey,
+                sttModel,
+                smartFormat,
+                punctuate,
+                lang,
+                callId,
+                objectMapper
+        );
+    }
+
     /**
      * Synthesize clean text to speech audio using Deepgram Aura.
      *
@@ -244,7 +275,7 @@ public class DeepgramVoiceService {
                 }, response -> {
                     if (response.getStatusCode().is2xxSuccessful()) {
                         java.io.InputStream is = response.getBody();
-                        byte[] buffer = new byte[1920]; // 1920 bytes = exactly 1 Opus frame (20ms @ 48kHz mono 16-bit PCM)
+                        byte[] buffer = new byte[7680]; // 7680 bytes = 4 Opus frames (80ms @ 48kHz mono 16-bit PCM)
                         int bytesRead;
                         boolean firstChunk = true;
                         int totalBytes = 0;

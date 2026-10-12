@@ -46,22 +46,26 @@ public class OutboundCallPermissionService {
         eventRepository.save(event);
 
         // Redis sliding window updates
-        String nowStr = String.valueOf(System.currentTimeMillis());
-        if ("CALL_INITIATED".equalsIgnoreCase(eventType)) {
-            String key = "wa:calling:" + phoneNumberId + ":initiation:24h";
-            redisTemplate.opsForList().rightPush(key, nowStr);
-            redisTemplate.expire(key, Duration.ofHours(24));
-        } else if ("CALL_CONNECTED".equalsIgnoreCase(eventType)) {
-            String key = "wa:calling:" + phoneNumberId + ":connected:24h";
-            redisTemplate.opsForList().rightPush(key, nowStr);
-            redisTemplate.expire(key, Duration.ofHours(24));
-        } else if ("PERMISSION_REQUEST".equalsIgnoreCase(eventType) && userWaId != null) {
-            String key24h = "wa:permission:" + phoneNumberId + ":" + userWaId + ":requests:24h";
-            String key7d = "wa:permission:" + phoneNumberId + ":" + userWaId + ":requests:7d";
-            redisTemplate.opsForList().rightPush(key24h, nowStr);
-            redisTemplate.expire(key24h, Duration.ofHours(24));
-            redisTemplate.opsForList().rightPush(key7d, nowStr);
-            redisTemplate.expire(key7d, Duration.ofDays(7));
+        try {
+            String nowStr = String.valueOf(System.currentTimeMillis());
+            if ("CALL_INITIATED".equalsIgnoreCase(eventType)) {
+                String key = "wa:calling:" + phoneNumberId + ":initiation:24h";
+                redisTemplate.opsForList().rightPush(key, nowStr);
+                redisTemplate.expire(key, Duration.ofHours(24));
+            } else if ("CALL_CONNECTED".equalsIgnoreCase(eventType)) {
+                String key = "wa:calling:" + phoneNumberId + ":connected:24h";
+                redisTemplate.opsForList().rightPush(key, nowStr);
+                redisTemplate.expire(key, Duration.ofHours(24));
+            } else if ("PERMISSION_REQUEST".equalsIgnoreCase(eventType) && userWaId != null) {
+                String key24h = "wa:permission:" + phoneNumberId + ":" + userWaId + ":requests:24h";
+                String key7d = "wa:permission:" + phoneNumberId + ":" + userWaId + ":requests:7d";
+                redisTemplate.opsForList().rightPush(key24h, nowStr);
+                redisTemplate.expire(key24h, Duration.ofHours(24));
+                redisTemplate.opsForList().rightPush(key7d, nowStr);
+                redisTemplate.expire(key7d, Duration.ofDays(7));
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [OutboundCallPermission] Redis sliding window update failed: {}", e.getMessage());
         }
     }
 
@@ -110,9 +114,14 @@ public class OutboundCallPermissionService {
             return false;
         }
 
-        if (perm.getExpiresAt() != null && perm.getExpiresAt().isBefore(Instant.now())) {
-            log.info("⌛ [OutboundCallPermission] Permission expired for userWaId={}", userWaId);
-            return false;
+        if ("GRANTED_TEMPORARY".equalsIgnoreCase(status)) {
+            if (perm.getExpiresAt() != null && perm.getExpiresAt().isBefore(Instant.now())) {
+                log.info("⌛ [OutboundCallPermission] Permission expired for userWaId={}", userWaId);
+                return false;
+            } else if (perm.getExpiresAt() == null && perm.getGrantedAt() != null && perm.getGrantedAt().plus(Duration.ofHours(72)).isBefore(Instant.now())) {
+                log.info("⌛ [OutboundCallPermission] Temporary permission expired (>72h from grant) for userWaId={}", userWaId);
+                return false;
+            }
         }
 
         return true;
@@ -147,10 +156,14 @@ public class OutboundCallPermissionService {
         if (permissionType != null) perm.setPermissionType(permissionType);
         if (isPermanent != null) perm.setIsPermanent(isPermanent);
         if (responseSource != null) perm.setResponseSource(responseSource);
-        if (expiresAt != null) perm.setExpiresAt(expiresAt);
 
-        if ("GRANTED_TEMPORARY".equalsIgnoreCase(newStatus) || "GRANTED_PERMANENT".equalsIgnoreCase(newStatus)) {
+        if ("GRANTED_TEMPORARY".equalsIgnoreCase(newStatus)) {
+            Instant now = Instant.now();
+            perm.setGrantedAt(now);
+            perm.setExpiresAt(expiresAt != null ? expiresAt : now.plus(Duration.ofHours(72)));
+        } else if ("GRANTED_PERMANENT".equalsIgnoreCase(newStatus)) {
             perm.setGrantedAt(Instant.now());
+            if (expiresAt != null) perm.setExpiresAt(expiresAt);
         } else if ("REVOKED".equalsIgnoreCase(newStatus) || "DENIED".equalsIgnoreCase(newStatus)) {
             perm.setRevokedAt(Instant.now());
         }
@@ -158,9 +171,13 @@ public class OutboundCallPermissionService {
 
         permissionRepository.save(perm);
 
-        // Evict Redis permission cache
-        String cacheKey = "wa:permission:cache:" + phoneNumberId + ":" + userWaId;
-        redisTemplate.delete(cacheKey);
+        // Evict Redis permission cache safely
+        try {
+            String cacheKey = "wa:permission:cache:" + phoneNumberId + ":" + userWaId;
+            redisTemplate.delete(cacheKey);
+        } catch (Exception e) {
+            log.warn("⚠️ [OutboundCallPermission] Failed to evict Redis permission cache: {}", e.getMessage());
+        }
 
         log.info("✅ [OutboundCallPermission] Reconciled permission for userWaId={} status='{}'", userWaId, newStatus);
     }

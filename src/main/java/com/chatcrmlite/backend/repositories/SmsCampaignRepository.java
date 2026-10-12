@@ -12,4 +12,6 @@ import java.util.UUID;
 public interface SmsCampaignRepository extends JpaRepository<SmsCampaign, UUID> {
     List<SmsCampaign> findByBusinessId(String businessId);
     Optional<SmsCampaign> findByIdAndBusinessId(UUID id, String businessId);
+    List<SmsCampaign> findByTenant_Id(UUID tenantId);
+    Optional<SmsCampaign> findByIdAndTenant_Id(UUID id, UUID tenantId);
 }

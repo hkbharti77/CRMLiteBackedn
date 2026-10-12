@@ -1,8 +1,10 @@
 package com.chatcrmlite.backend.models.sms;
 
+import com.chatcrmlite.backend.models.BaseTenantEntity;
 import com.chatcrmlite.backend.utils.EncryptionConverter;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
@@ -11,13 +13,14 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "sms_providers")
 @Data
-public class SmsProvider {
+@EqualsAndHashCode(callSuper = true)
+public class SmsProvider extends BaseTenantEntity {
 
     @Id
     @Column(length = 50)
     private String id;
 
-    @Column(name = "business_id", length = 50, nullable = false)
+    @Column(name = "business_id", length = 50)
     private String businessId;
 
     @Column(name = "provider_type", length = 50, nullable = false)
@@ -49,4 +52,14 @@ public class SmsProvider {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+    @PrePersist
+    @PreUpdate
+    @Override
+    protected void populateTenant() {
+        super.populateTenant();
+        if (this.businessId == null && getTenantId() != null) {
+            this.businessId = getTenantId().toString();
+        }
+    }
 }

@@ -20,11 +20,15 @@ public class CallingErrorMapper {
             case 138005 -> new CallingErrorDetails("CALL_RATE_LIMIT", true, "Call initiation rate limit exceeded for this 24-hour window");
             case 138006 -> new CallingErrorDetails("CALL_PERMISSION_DENIED", false, "No approved call permission exists for this business-initiated call");
             case 138007 -> new CallingErrorDetails("CONNECT_TIMEOUT", true, "Connect or SDP offer/answer negotiation timed out");
+            case 138008 -> new CallingErrorDetails("USER_BUSY", true, "User is currently busy or on another call");
             case 138009 -> new CallingErrorDetails("PERMISSION_REQUEST_LIMIT", true, "Call permission request rate limit reached (1/24h or 2/7d)");
+            case 138010 -> new CallingErrorDetails("CALL_REJECTED", false, "User rejected or declined the call");
+            case 138011 -> new CallingErrorDetails("CALL_IGNORED", true, "User did not answer the call within the ringing timeout");
             case 138012 -> new CallingErrorDetails("BIC_CONNECTED_CALL_LIMIT", true, "24-hour business-initiated connected call limit reached");
             case 138013 -> new CallingErrorDetails("BIC_UNAVAILABLE", false, "Business-initiated calling unavailable for this business number country");
             case 138014 -> new CallingErrorDetails("CALLING_TEMPORARILY_DISABLED", true, "Calling temporarily disabled due to low quality rating");
             case 138015 -> new CallingErrorDetails("CALLING_CANNOT_BE_ENABLED", false, "Phone number does not satisfy prerequisites to enable calling");
+            case 138016 -> new CallingErrorDetails("CALL_CAPABILITY_RESTRICTED", false, "Calling capability restricted on this account");
             case 138017 -> new CallingErrorDetails("PERMANENT_PERMISSION_EXISTS", false, "Permanent call permission already exists for this user");
             case 138018 -> new CallingErrorDetails("CALLING_PREREQUISITES_NOT_MET", false, "Calling prerequisites (messaging tier, 2FA, verified name) not met");
             case 138019 -> new CallingErrorDetails("CALL_SETUP_FAILED", true, "Call setup failed during media/signaling negotiation");

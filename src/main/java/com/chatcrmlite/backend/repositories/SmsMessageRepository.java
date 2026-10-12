@@ -14,4 +14,6 @@ public interface SmsMessageRepository extends JpaRepository<SmsMessage, UUID> {
     List<SmsMessage> findByBusinessIdAndContactId(String businessId, UUID contactId);
     List<SmsMessage> findByCampaignId(UUID campaignId);
     Optional<SmsMessage> findByProviderTypeAndProviderMessageId(String providerType, String providerMessageId);
+    List<SmsMessage> findByTenant_Id(UUID tenantId);
+    List<SmsMessage> findByTenant_IdAndContactId(UUID tenantId, UUID contactId);
 }

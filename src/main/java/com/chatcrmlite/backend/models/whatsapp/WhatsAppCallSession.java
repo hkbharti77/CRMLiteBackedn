@@ -116,6 +116,26 @@ public class WhatsAppCallSession extends BaseTenantEntity {
     @Column(name = "ai_session_id")
     private UUID aiSessionId;
 
+    @Column(name = "recording_url")
+    private String recordingUrl;
+
+    @Column(name = "recording_public_id", length = 256)
+    private String recordingPublicId;
+
+    @Builder.Default
+    @Column(name = "recording_format", length = 16)
+    private String recordingFormat = "mp3";
+
+    @Column(name = "recording_duration_seconds")
+    private Integer recordingDurationSeconds;
+
+    @Builder.Default
+    @Column(name = "recording_status", length = 32)
+    private String recordingStatus = "NOT_AVAILABLE";
+
+    @Column(name = "recording_size_bytes")
+    private Long recordingSizeBytes;
+
     @Builder.Default
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();

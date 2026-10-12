@@ -4,7 +4,6 @@ import com.chatcrmlite.backend.utils.EncryptionConverter;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.http.HttpHeaders;
@@ -15,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import java.util.List;
 import java.util.Map;
 
-@SpringBootApplication
 public class TestTokens implements CommandLineRunner {
 
     @Autowired
@@ -25,7 +23,7 @@ public class TestTokens implements CommandLineRunner {
     private EncryptionConverter encryptionConverter;
 
     public static void main(String[] args) {
-        SpringApplication.run(TestTokens.class, args).close();
+        SpringApplication.run(ChatCrmBackendApplication.class, args).close();
     }
 
     @Override
@@ -58,8 +56,6 @@ public class TestTokens implements CommandLineRunner {
             } catch (Exception e) {
                 System.out.println("STATUS: FAILED -> " + e.getMessage());
             }
-            System.out.println("------------------------------------");
         }
-        System.out.println("\n====================================\n");
     }
 }

@@ -66,6 +66,9 @@ public class VoiceSession implements Serializable {
     @Column(name = "created_at", updatable = false)
     private LocalDateTime createdAt;
 
+    @Column(name = "recording_url")
+    private String recordingUrl;
+
     @OneToMany(mappedBy = "session", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private List<VoiceTurn> turns = new ArrayList<>();
 

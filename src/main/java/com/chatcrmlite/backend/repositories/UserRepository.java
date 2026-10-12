@@ -79,4 +79,14 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @org.springframework.data.jpa.repository.Query("SELECT u FROM User u WHERE u.id = :id")
     @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
     Optional<User> findByIdWithPessimisticWriteLock(@org.springframework.data.repository.query.Param("id") UUID id);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.lastSeenAt = :lastSeenAt WHERE u.id = :id")
+    int updateLastSeenAt(@Param("id") UUID id, @Param("lastSeenAt") java.time.LocalDateTime lastSeenAt);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.transaction.annotation.Transactional
+    @Query("UPDATE User u SET u.availabilityStatus = :status, u.lastSeenAt = :lastSeenAt WHERE u.id = :id")
+    int updateAvailabilityAndLastSeen(@Param("id") UUID id, @Param("status") User.AvailabilityStatus status, @Param("lastSeenAt") java.time.LocalDateTime lastSeenAt);
 }

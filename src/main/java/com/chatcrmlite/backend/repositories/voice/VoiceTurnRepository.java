@@ -11,6 +11,9 @@ import java.util.UUID;
 public interface VoiceTurnRepository extends JpaRepository<VoiceTurn, UUID> {
     List<VoiceTurn> findBySessionIdOrderByTurnNumberAsc(UUID sessionId);
     
+    org.springframework.data.domain.Page<VoiceTurn> findBySessionIdOrderByTurnNumberAsc(UUID sessionId, org.springframework.data.domain.Pageable pageable);
+
     // For Conversation Memory (Recent Turns)
     List<VoiceTurn> findTop50BySessionIdOrderByTurnNumberDesc(UUID sessionId);
 }
+

@@ -489,6 +489,12 @@ public class WebRtcDtlsHandler {
             this.diagnostics = diagnostics != null ? diagnostics : new DtlsDiagnostics();
         }
 
+        private volatile java.util.function.Consumer<byte[]> packetSender = null;
+
+        public void setPacketSender(java.util.function.Consumer<byte[]> sender) {
+            this.packetSender = sender;
+        }
+
         public void setRemoteAddress(InetSocketAddress remoteAddress) {
             this.remoteAddress = remoteAddress;
         }
@@ -552,11 +558,22 @@ public class WebRtcDtlsHandler {
             }
             byte[] toSend = new byte[len];
             System.arraycopy(buf, off, toSend, 0, len);
-            DatagramPacket packet = new DatagramPacket(toSend, len, remoteAddress);
-            socket.send(packet);
+            // When a custom sender is set (TURN relay), it owns the wire path —
+            // do NOT also send raw UDP (Meta only knows the relay candidate from SDP).
+            if (packetSender != null) {
+                try {
+                    packetSender.accept(toSend);
+                } catch (Exception e) {
+                    throw new IOException("DTLS packetSender failed: " + e.getMessage(), e);
+                }
+            } else {
+                DatagramPacket packet = new DatagramPacket(toSend, len, remoteAddress);
+                socket.send(packet);
+            }
             diagnostics.outboundDtlsPackets.incrementAndGet();
-            log.info("DTLS_TX: length={} destination={} {} handshakeStatus={}",
-                    len, remoteAddress, describeDtlsRecord(toSend), diagnostics.dtlsHandshakeStatus.get());
+            log.info("DTLS_TX: length={} destination={} via={} {} handshakeStatus={}",
+                    len, remoteAddress, packetSender != null ? "packetSender" : "udp",
+                    describeDtlsRecord(toSend), diagnostics.dtlsHandshakeStatus.get());
         }
 
         private static String describeDtlsRecord(byte[] pkt) {

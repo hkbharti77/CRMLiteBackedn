@@ -1,4 +1,4 @@
-package com.chatcrmlite.backend.services.voice;
+ package com.chatcrmlite.backend.services.voice;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -46,5 +46,30 @@ public class SentenceChunker {
         }
         buffer.setLength(0);
         return chunks;
+    }
+
+    /**
+     * Splits full conversational text into discrete natural sentences for progressive TTS pipelining.
+     */
+    public static List<String> chunkText(String text) {
+        if (text == null || text.isBlank()) return List.of();
+        SentenceChunker chunker = new SentenceChunker();
+        List<String> chunks = new ArrayList<>(chunker.accept(text));
+        chunks.addAll(chunker.flush());
+        return chunks;
+    }
+
+    /**
+     * Cleans raw LLM markdown and formatting so voice synthesis sounds natural and conversational.
+     */
+    public static String cleanForVoice(String text) {
+        if (text == null || text.isBlank()) return "";
+        return text.replaceAll("\\*\\*(.*?)\\*\\*", "$1")
+                   .replaceAll("\\*(.*?)\\*", "$1")
+                   .replaceAll("(?m)^\\s*[-*•]\\s+", "")
+                   .replaceAll("(?m)^\\s*#+\\s+", "")
+                   .replaceAll("https?://\\S+", "the link")
+                   .replaceAll("\\s+", " ")
+                   .trim();
     }
 }

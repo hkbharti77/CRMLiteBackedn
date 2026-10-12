@@ -93,3 +93,6 @@ temp/
 *.tmp
 *.hprof
 .cache/
+scratch/
+data/
+*.wav

@@ -1,7 +1,9 @@
 package com.chatcrmlite.backend.models.sms;
 
+import com.chatcrmlite.backend.models.BaseTenantEntity;
 import jakarta.persistence.*;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
@@ -12,13 +14,14 @@ import java.util.UUID;
     @UniqueConstraint(name = "uq_sms_suppression", columnNames = {"business_id", "phone_number"})
 })
 @Data
-public class SmsSuppression {
+@EqualsAndHashCode(callSuper = true)
+public class SmsSuppression extends BaseTenantEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "business_id", length = 50, nullable = false)
+    @Column(name = "business_id", length = 50)
     private String businessId;
 
     @Column(name = "contact_id")
@@ -36,4 +39,14 @@ public class SmsSuppression {
     @CreationTimestamp
     @Column(name = "suppressed_at", updatable = false)
     private LocalDateTime suppressedAt;
+
+    @PrePersist
+    @PreUpdate
+    @Override
+    protected void populateTenant() {
+        super.populateTenant();
+        if (this.businessId == null && getTenantId() != null) {
+            this.businessId = getTenantId().toString();
+        }
+    }
 }
