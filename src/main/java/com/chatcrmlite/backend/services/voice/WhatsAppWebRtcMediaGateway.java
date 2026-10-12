@@ -208,6 +208,11 @@ public class WhatsAppWebRtcMediaGateway {
         String localHostIpv6 = getLocalHostIpv6();
 
         List<InetSocketAddress> allRemoteCandidates = parseAllRemoteCandidates(sdpOffer);
+        if (localHostIpv6 == null) {
+            allRemoteCandidates = allRemoteCandidates.stream()
+                    .filter(c -> c.getAddress() instanceof Inet4Address)
+                    .toList();
+        }
         // Default target to Meta's primary IPv4 candidate (matching IPv4 TURN relay)
         InetSocketAddress remoteMetaAddress = null;
         for (InetSocketAddress c : allRemoteCandidates) {
@@ -1445,15 +1450,14 @@ public class WhatsAppWebRtcMediaGateway {
                 buf.putShort((short) 20);
                 buf.put(integrity);
 
-                // RFC 5389 §15.5 (FINGERPRINT): Header length MUST be hmacLength (excluding FINGERPRINT) during CRC
+                // RFC 5389 §15.5 (FINGERPRINT): Header length MUST be totalAttrLen (including FINGERPRINT) during CRC
+                forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
+                forHmac[3] = (byte) (totalAttrLen & 0xFF);
+
                 int crc = computeStunFingerprint(forHmac, 20 + rawAttrs.length + 24);
                 buf.putShort((short) 0x8028);
                 buf.putShort((short) 4);
                 buf.putInt(crc);
-
-                // AFTER CRC computation, update header length to totalAttrLen (including FINGERPRINT)
-                forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
-                forHmac[3] = (byte) (totalAttrLen & 0xFF);
             }
 
             byte[] responseBytes = buf.array();
@@ -1762,15 +1766,14 @@ public class WhatsAppWebRtcMediaGateway {
                     buf.putShort((short) 20);
                     buf.put(integrity);
 
-                    // RFC 5389 §15.5 (FINGERPRINT): Header length MUST be hmacLength (excluding FINGERPRINT) during CRC
+                    // RFC 5389 §15.5 (FINGERPRINT): Header length MUST be totalAttrLen (including FINGERPRINT) during CRC
+                    forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
+                    forHmac[3] = (byte) (totalAttrLen & 0xFF);
+
                     int crc = computeStunFingerprint(forHmac, 20 + rawAttrs.length + 24);
                     buf.putShort((short) 0x8028);
                     buf.putShort((short) 4);
                     buf.putInt(crc);
-
-                    // AFTER CRC computation, update header length to totalAttrLen (including FINGERPRINT)
-                    forHmac[2] = (byte) ((totalAttrLen >> 8) & 0xFF);
-                    forHmac[3] = (byte) (totalAttrLen & 0xFF);
                 }
 
                 return buf.array();
