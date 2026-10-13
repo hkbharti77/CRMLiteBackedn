@@ -18,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.HashSet;
 import java.util.Set;
@@ -50,18 +51,33 @@ public class ConversationOrchestrator {
             return "I'm sorry, the AI assistant is not available right now. Please try again later.";
         }
         
-        // ── Dynamic specs from FlowConfigService (same as WhatsApp/chat bots) ──
-        List<ToolSpecification> tools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId());
-        log.debug("[Orchestrator] Turn for tenant={} with {} dynamic tools", context.tenantId(), tools.size());
+        // ── Fast-path check for phatic greetings and conversational acknowledgments ──
+        String safeTranscript = (userTranscript != null && !userTranscript.isBlank()) ? userTranscript.trim() : "Hello";
+        boolean isSimpleGreeting = isPhaticOrGreeting(safeTranscript);
+
+        // ── Dynamic specs from FlowConfigService (only attach tools if turn is actionable) ──
+        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId());
+        List<ToolSpecification> tools = (isSimpleGreeting || availableTools == null) 
+                ? Collections.emptyList() 
+                : availableTools;
+
+        log.debug("[Orchestrator] Turn for tenant={} isSimpleGreeting={} activeTools={}", 
+                context.tenantId(), isSimpleGreeting, tools.size());
 
         StringBuilder fullSystemPrompt = new StringBuilder();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             fullSystemPrompt.append(systemPrompt.trim()).append("\n\n");
         }
 
+        fullSystemPrompt.append("--- MANDATORY VOICE CALL RULES ---\n")
+                .append("1. Keep replies extremely brief (maximum 1 to 2 spoken sentences, under 25 words).\n")
+                .append("2. Speak naturally and politely as on a real telephone call.\n")
+                .append("3. NEVER use bullet points, markdown symbols, asterisks, or numbered lists.\n")
+                .append("4. If the caller is just greeting or saying hello, respond with a short 1-sentence friendly greeting and ask how to help.\n\n");
+
         if (tools != null && !tools.isEmpty()) {
             fullSystemPrompt.append("--- INSTRUCTIONS FOR TOOL USE & INTENT ROUTING ---\n")
-                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details (name, email, etc.) unless the user has clearly and explicitly expressed an intent for one of the active tools below.\n\n")
+                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details unless explicitly required for an active tool below.\n\n")
                     .append("ACTIVE TOOLS & INTENT TRIGGERS:\n");
 
             for (ToolSpecification tool : tools) {
@@ -69,12 +85,9 @@ public class ConversationOrchestrator {
             }
 
             fullSystemPrompt.append("\nWHEN a tool IS triggered:\n")
-                    .append("  - Look at that tool's required parameters and collect them conversationally (1-2 fields at a time).\n")
-                    .append("  - Once ALL required fields are collected, call the tool immediately.\n")
-                    .append("  - Confirm success to the caller in plain language; never read out IDs or reference numbers.\n\n")
-                    .append("WHEN no tool intent is detected:\n")
-                    .append("  - Simply answer the user's question conversationally. Do not ask for their name, email, or any personal details.\n")
-                    .append("  - Keep replies short and voice-friendly.\n");
+                    .append("  - Collect required fields conversationally (1 field at a time).\n")
+                    .append("  - Once collected, call the tool immediately.\n")
+                    .append("  - Confirm in plain voice language; never read out raw IDs or technical errors.\n\n");
         }
 
         List<ChatMessage> messages = new ArrayList<>();
@@ -91,10 +104,9 @@ public class ConversationOrchestrator {
             }
         }
 
-        String safeTranscript = (userTranscript != null && !userTranscript.isBlank()) ? userTranscript.trim() : "Hello";
         messages.add(UserMessage.from(safeTranscript));
 
-        int maxHops = 3;
+        int maxHops = 2;
         int currentHop = 0;
         StringBuilder finalResponse = new StringBuilder();
         boolean toolExecuted = false;
@@ -103,11 +115,11 @@ public class ConversationOrchestrator {
         while (currentHop < maxHops) {
             AiRequest request = AiRequest.builder()
                     .messages(new ArrayList<>(messages))
-                    .tools(tools)
+                    .tools(tools.isEmpty() ? null : tools)
                     .tenantId(context.tenantId())
                     .complexity(AiRequest.TaskComplexity.LOW)
-                    .maxTokens(300)
-                    .temperature(0.4)
+                    .maxTokens(55)
+                    .temperature(0.3)
                     .build();
 
             AiResponse response = aiOrchestrator.execute(request);
@@ -191,5 +203,41 @@ public class ConversationOrchestrator {
         }
 
         return finalResponse.toString().trim();
+    }
+
+    /**
+     * Determines whether the user transcript is a pure greeting, connection event, or phatic acknowledgement.
+     * For such turns, tool schemas are stripped to allow free LLMs to respond in < 400ms without stalling.
+     */
+    private boolean isPhaticOrGreeting(String transcript) {
+        if (transcript == null || transcript.isBlank()) {
+            return true;
+        }
+        String clean = transcript.trim().toLowerCase().replaceAll("[^a-z0-9\\s]", " ").replaceAll("\\s+", " ").trim();
+        if (clean.isEmpty()) {
+            return true;
+        }
+
+        // Common greetings and short connection phrases
+        if (clean.matches("^(hello|hi|hey|hola|namaste|good morning|good afternoon|good evening|hello i just connected|i just connected|can you hear me|am i audible|yes|no|yeah|yep|nope|okay|ok|sure|thanks|thank you|hello hello|hello hello hello)$")) {
+            return true;
+        }
+
+        // Single or two-word repetitions of hello/hi
+        String[] words = clean.split("\\s+");
+        if (words.length <= 3) {
+            boolean allPhatic = true;
+            for (String w : words) {
+                if (!w.equals("hello") && !w.equals("hi") && !w.equals("hey") && !w.equals("there") && !w.equals("yes") && !w.equals("ok") && !w.equals("okay")) {
+                    allPhatic = false;
+                    break;
+                }
+            }
+            if (allPhatic) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

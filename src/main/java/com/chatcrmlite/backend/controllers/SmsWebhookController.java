@@ -30,6 +30,7 @@ public class SmsWebhookController {
     private final SmsSuppressionRepository suppressionRepository;
     private final SmsProviderResolver providerResolver;
     private final ObjectMapper objectMapper;
+    private final com.chatcrmlite.backend.services.sms.SmsInboundMessageService inboundMessageService;
 
     @PostMapping("/{provider}")
     @Transactional
@@ -87,9 +88,11 @@ public class SmsWebhookController {
             log.info("Updated SMS delivery status for msgId={} to {}", messageId, mappedStatus);
         }
 
-        // 4. Handle Inbound Opt-Out STOP / UNSUBSCRIBE keywords
+        // 4. Handle Inbound SMS (Opt-out or CRM Message Threading)
         String bodyText = (String) body.get("Body");
         String fromPhone = (String) body.get("From");
+        String toPhone = (String) body.getOrDefault("To", body.get("destination"));
+
         if (bodyText != null && fromPhone != null) {
             String trimmedUpper = bodyText.trim().toUpperCase();
             if ("STOP".equals(trimmedUpper) || "UNSUBSCRIBE".equals(trimmedUpper) || "CANCEL".equals(trimmedUpper)) {
@@ -102,6 +105,9 @@ public class SmsWebhookController {
                     suppressionRepository.save(suppression);
                     log.info("Registered SMS opt-out suppression for number {}", fromPhone);
                 }
+            } else {
+                // Thread inbound reply into CRM Contact & Inbox timeline
+                inboundMessageService.processInboundSms(providerType, fromPhone, toPhone, messageId, bodyText);
             }
         }
 

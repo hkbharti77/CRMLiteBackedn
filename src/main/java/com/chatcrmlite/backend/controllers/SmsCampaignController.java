@@ -68,6 +68,32 @@ public class SmsCampaignController {
         return ResponseEntity.ok(created);
     }
 
+    @Data
+    public static class ScheduleCampaignRequest {
+        private java.time.LocalDateTime scheduleTime;
+    }
+
+    @PostMapping("/{id}/schedule")
+    public ResponseEntity<SmsCampaign> scheduleCampaign(
+            @PathVariable("id") UUID id,
+            @RequestHeader(name = "X-Tenant-ID", required = false) String xTenantId,
+            @RequestParam(name = "businessId", required = false) String businessIdParam,
+            @RequestBody ScheduleCampaignRequest request) {
+        String businessId = tenantResolver.resolveBusinessId(xTenantId, businessIdParam);
+        SmsCampaign scheduled = campaignService.scheduleCampaign(id, request.getScheduleTime(), businessId);
+        return ResponseEntity.ok(scheduled);
+    }
+
+    @PostMapping("/{id}/cancel")
+    public ResponseEntity<SmsCampaign> cancelCampaign(
+            @PathVariable("id") UUID id,
+            @RequestHeader(name = "X-Tenant-ID", required = false) String xTenantId,
+            @RequestParam(name = "businessId", required = false) String businessIdParam) {
+        String businessId = tenantResolver.resolveBusinessId(xTenantId, businessIdParam);
+        SmsCampaign cancelled = campaignService.cancelCampaign(id, businessId);
+        return ResponseEntity.ok(cancelled);
+    }
+
     @PostMapping("/{id}/trigger")
     public ResponseEntity<String> triggerCampaign(
             @PathVariable("id") UUID id,

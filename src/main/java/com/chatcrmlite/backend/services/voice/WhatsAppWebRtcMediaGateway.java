@@ -1661,7 +1661,7 @@ public class WhatsAppWebRtcMediaGateway {
         }
 
         private static final byte[] OPUS_SILENCE_FRAME = new byte[] { (byte) 0xF8, (byte) 0xFF, (byte) 0xFE };
-        public static final int PRE_ROLL_MIN_FRAMES = 12; // ~240ms pre-roll jitter buffer
+        public static final int PRE_ROLL_MIN_FRAMES = 5; // ~100ms pre-roll jitter buffer (responsive WebRTC playback)
 
         public static class OutboundRtpFrame {
             public final byte[] packetData;

@@ -220,44 +220,53 @@ public class WhatsAppVoiceCallBridgeService {
                 final java.util.concurrent.atomic.AtomicBoolean firstChunkLogged = new java.util.concurrent.atomic.AtomicBoolean(false);
                 
                 String voiceCleanedAnswer = SentenceChunker.cleanForVoice(aiAnswer);
-                List<String> sentences = SentenceChunker.chunkText(voiceCleanedAnswer);
-                if (sentences.isEmpty() && !voiceCleanedAnswer.isBlank()) {
-                    sentences = List.of(voiceCleanedAnswer);
+                // For typical voice turns (<= 250 chars), stream as a single continuous speech unit to prevent inter-sentence dead pauses.
+                List<String> units;
+                if (voiceCleanedAnswer.length() <= 250) {
+                    units = List.of(voiceCleanedAnswer);
+                } else {
+                    units = SentenceChunker.chunkText(voiceCleanedAnswer);
+                    if (units.isEmpty()) {
+                        units = List.of(voiceCleanedAnswer);
+                    }
                 }
 
-                log.info("🗣️ [WhatsAppVoiceBridge] Pipeline streaming {} sentence(s) to TTS for callId={} turnId={}",
-                        sentences.size(), callId, currentTurnId);
+                log.info("🗣️ [WhatsAppVoiceBridge] Pipeline streaming {} audio unit(s) to TTS for callId={} turnId={}",
+                        units.size(), callId, currentTurnId);
 
                 try {
-                    for (int sIdx = 0; sIdx < sentences.size(); sIdx++) {
-                        String sentence = sentences.get(sIdx);
-                        if (sentence.isBlank()) continue;
+                    for (int sIdx = 0; sIdx < units.size(); sIdx++) {
+                        String textUnit = units.get(sIdx);
+                        if (textUnit.isBlank()) continue;
 
                         if (turnContext.isCancelled()) {
-                            log.info("⏹️ [WhatsAppVoiceBridge] Turn {} cancelled before synthesizing sentence {}/{} for callId={}",
-                                    currentTurnId, (sIdx + 1), sentences.size(), callId);
+                            log.info("⏹️ [WhatsAppVoiceBridge] Turn {} cancelled before synthesizing unit {}/{} for callId={}",
+                                    currentTurnId, (sIdx + 1), units.size(), callId);
                             break;
                         }
 
-                        final int sentenceNum = sIdx + 1;
-                        final int totalSentences = sentences.size();
+                        final int unitNum = sIdx + 1;
+                        final int totalUnits = units.size();
 
-                        deepgramVoiceService.synthesizeSpeechStreaming(sentence, ttsVoiceId, chunk -> {
+                        deepgramVoiceService.synthesizeSpeechStreaming(textUnit, ttsVoiceId, chunk -> {
                             if (turnContext.isCancelled()) {
                                 log.debug("🔇 [WhatsAppVoiceBridge] Dropping TTS chunk because turn {} is cancelled", currentTurnId);
                                 return;
                             }
-                            if (chunk != null && chunk.length > 0 && !firstChunkLogged.getAndSet(true)) {
-                                long ttsFirstChunkTime = System.currentTimeMillis();
-                                ttsFirstChunkMs.set(ttsFirstChunkTime);
-                                log.info("📈 [LATENCY-METRIC] Metric C: LLM response -> TTS first audio: {}ms (Sentence {}/{})",
-                                        (ttsFirstChunkTime - ttsStartMs), sentenceNum, totalSentences);
+                            // Only pass actual audio data during the turn; suppress intermediate EOFs so gateway never starves
+                            if (chunk != null && chunk.length > 0) {
+                                if (!firstChunkLogged.getAndSet(true)) {
+                                    long ttsFirstChunkTime = System.currentTimeMillis();
+                                    ttsFirstChunkMs.set(ttsFirstChunkTime);
+                                    log.info("📈 [LATENCY-METRIC] Metric C: LLM response -> TTS first audio: {}ms (Unit {}/{})",
+                                            (ttsFirstChunkTime - ttsStartMs), unitNum, totalUnits);
+                                }
+                                ttsChunkCallback.accept(chunk);
                             }
-                            ttsChunkCallback.accept(chunk);
                         });
                     }
                 } finally {
-                    // Always guarantee EOF signal so gateway finishes playback and resets isSpeakingAI cleanly
+                    // Send the single definitive EOF signal to the WebRTC Gateway once ALL speech has been synthesized
                     ttsChunkCallback.accept(new byte[0]);
                 }
             } else {
