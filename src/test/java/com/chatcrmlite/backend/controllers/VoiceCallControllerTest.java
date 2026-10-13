@@ -17,7 +17,6 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -49,7 +48,7 @@ class VoiceCallControllerTest {
     @DisplayName("listCalls should return paginated list of call sessions for authenticated tenant")
     void testListCallsSuccess() {
         WhatsAppCallSummaryDTO summary = WhatsAppCallSummaryDTO.builder()
-                .id(UUID.randomUUID().toString())
+                .id(UUID.randomUUID())
                 .callId("wa-call-12345")
                 .fromWaId("+919876543210")
                 .toWaId("+919123456789")
@@ -79,7 +78,7 @@ class VoiceCallControllerTest {
     void testGetCallDetailsSuccess() {
         String callId = "wa-call-99999";
         WhatsAppCallDetailDTO detail = WhatsAppCallDetailDTO.builder()
-                .id(UUID.randomUUID().toString())
+                .id(UUID.randomUUID())
                 .callId(callId)
                 .state("COMPLETED")
                 .durationSeconds(85)
@@ -100,7 +99,7 @@ class VoiceCallControllerTest {
     void testGetCallTurnsSuccess() {
         String callId = "wa-call-turns-001";
         WhatsAppCallTurnDTO turn1 = WhatsAppCallTurnDTO.builder()
-                .turnId(UUID.randomUUID().toString())
+                .turnId(UUID.randomUUID())
                 .turnNumber(1)
                 .speaker("USER")
                 .transcript("Hello, I need assistance")
@@ -133,7 +132,7 @@ class VoiceCallControllerTest {
                 .outboundCalls(10)
                 .answeredCalls(22)
                 .totalDurationSeconds(3600)
-                .avgDurationSeconds(144.0)
+                .averageDurationSeconds(144.0)
                 .build();
 
         when(callingApiService.getAnalytics(eq(tenantId), isNull(), isNull(), isNull()))
@@ -158,7 +157,7 @@ class VoiceCallControllerTest {
 
         WhatsAppCallResponse callResponse = WhatsAppCallResponse.builder()
                 .callId("wa-test-call-101")
-                .state("INITIATED")
+                .status("INITIATED")
                 .build();
 
         when(callingApiService.initiateOutboundCall(eq(tenantId), any(InitiateWhatsAppCallRequest.class), isNull()))

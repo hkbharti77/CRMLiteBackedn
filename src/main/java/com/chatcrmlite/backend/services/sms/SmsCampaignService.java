@@ -17,6 +17,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import com.chatcrmlite.backend.services.DistributedSchedulerService;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.time.ZoneId;
+import java.util.Date;
+import java.util.Map;
 import java.util.UUID;
 
 @Slf4j
@@ -28,6 +35,7 @@ public class SmsCampaignService {
     private final SmsCampaignRecipientRepository recipientRepository;
     private final SmsTemplateRepository templateRepository;
     private final SmsService smsService;
+    private final DistributedSchedulerService distributedSchedulerService;
 
     public List<SmsCampaign> getCampaignsByBusiness(String businessId) {
         UUID tenantId = tryParseUuid(businessId);
@@ -76,6 +84,65 @@ public class SmsCampaignService {
         return savedCampaign;
     }
 
+    @Transactional
+    public SmsCampaign scheduleCampaign(UUID campaignId, LocalDateTime scheduleTime, String businessId) {
+        Optional<SmsCampaign> campaignOpt = getCampaignById(campaignId, businessId);
+        if (campaignOpt.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SMS Campaign not found or access denied");
+        }
+
+        SmsCampaign campaign = campaignOpt.get();
+        String currentStatus = campaign.getStatus() != null ? campaign.getStatus().toUpperCase() : "DRAFT";
+        if ("PROCESSING".equals(currentStatus) || "COMPLETED".equals(currentStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot schedule a campaign that is " + currentStatus);
+        }
+
+        if (scheduleTime == null || scheduleTime.isBefore(LocalDateTime.now().plusSeconds(60))) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Schedule time must be at least 1 minute in the future");
+        }
+
+        // Deschedule previous Quartz job if re-scheduling
+        distributedSchedulerService.cancelJob("sms-campaign-job-" + campaignId);
+
+        campaign.setScheduledAt(scheduleTime);
+        campaign.setStatus("SCHEDULED");
+        SmsCampaign saved = campaignRepository.save(campaign);
+
+        Date startDate = Date.from(scheduleTime.atZone(ZoneId.systemDefault()).toInstant());
+        distributedSchedulerService.scheduleOneTimeJob(
+                "sms-campaign-job-" + campaignId,
+                SmsCampaignJob.class,
+                startDate,
+                Map.of("campaignId", campaignId.toString(), "businessId", businessId)
+        );
+
+        log.info("Scheduled SMS Campaign {} for {} via Quartz", campaignId, scheduleTime);
+        return saved;
+    }
+
+    @Transactional
+    public SmsCampaign cancelCampaign(UUID campaignId, String businessId) {
+        Optional<SmsCampaign> campaignOpt = getCampaignById(campaignId, businessId);
+        if (campaignOpt.isEmpty()) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "SMS Campaign not found or access denied");
+        }
+
+        SmsCampaign campaign = campaignOpt.get();
+        String currentStatus = campaign.getStatus() != null ? campaign.getStatus().toUpperCase() : "DRAFT";
+        if ("PROCESSING".equals(currentStatus) || "COMPLETED".equals(currentStatus)) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cannot cancel a campaign that is " + currentStatus);
+        }
+
+        // Cancel Quartz trigger if scheduled
+        distributedSchedulerService.cancelJob("sms-campaign-job-" + campaignId);
+
+        campaign.setStatus("CANCELLED");
+        campaign.setCancelledAt(LocalDateTime.now());
+        SmsCampaign saved = campaignRepository.save(campaign);
+        log.info("Cancelled SMS Campaign {} and unscheduled Quartz trigger", campaignId);
+        return saved;
+    }
+
     @Async
     @Transactional
     public void executeCampaignAsync(UUID campaignId, String businessId) {
@@ -87,6 +154,7 @@ public class SmsCampaignService {
 
         SmsCampaign campaign = campaignOpt.get();
         campaign.setStatus("PROCESSING");
+        campaign.setStartedAt(LocalDateTime.now());
         campaignRepository.save(campaign);
 
         Optional<SmsTemplate> templateOpt = campaign.getTemplateId() != null
@@ -125,16 +193,34 @@ public class SmsCampaignService {
                     r.setSentAt(LocalDateTime.now());
                     delivered++;
                 } else {
-                    r.setStatus("FAILED");
+                    int currentRetries = r.getRetryCount() != null ? r.getRetryCount() : 0;
+                    if (currentRetries < 3) {
+                        r.setRetryCount(currentRetries + 1);
+                        int delaySec = currentRetries == 0 ? 5 : (currentRetries == 1 ? 30 : 120);
+                        r.setNextAttemptAt(LocalDateTime.now().plusSeconds(delaySec));
+                        r.setStatus("RETRYING");
+                        log.warn("SMS send transient error for {}, scheduled retry {} in {}s",
+                                r.getPhoneNumber(), r.getRetryCount(), delaySec);
+                    } else {
+                        r.setStatus("FAILED");
+                        failed++;
+                    }
                     r.setErrorCode(result.getErrorCode());
                     r.setErrorMessage(result.getErrorMessage());
-                    failed++;
                 }
             } catch (Exception e) {
                 log.error("Campaign execution error for recipient {}", r.getPhoneNumber(), e);
-                r.setStatus("FAILED");
+                int currentRetries = r.getRetryCount() != null ? r.getRetryCount() : 0;
+                if (currentRetries < 3) {
+                    r.setRetryCount(currentRetries + 1);
+                    int delaySec = currentRetries == 0 ? 5 : (currentRetries == 1 ? 30 : 120);
+                    r.setNextAttemptAt(LocalDateTime.now().plusSeconds(delaySec));
+                    r.setStatus("RETRYING");
+                } else {
+                    r.setStatus("FAILED");
+                    failed++;
+                }
                 r.setErrorMessage(e.getMessage());
-                failed++;
             }
             recipientRepository.save(r);
 
@@ -143,6 +229,7 @@ public class SmsCampaignService {
         }
 
         campaign.setStatus("COMPLETED");
+        campaign.setCompletedAt(LocalDateTime.now());
         campaign.setDeliveredCount(delivered);
         campaign.setFailedCount(failed);
         campaignRepository.save(campaign);

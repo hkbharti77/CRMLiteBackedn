@@ -39,6 +39,12 @@ public class SmsCampaignRecipient {
     @Column(name = "error_message", columnDefinition = "TEXT")
     private String errorMessage;
 
+    @Column(name = "retry_count")
+    private Integer retryCount = 0;
+
+    @Column(name = "next_attempt_at")
+    private LocalDateTime nextAttemptAt;
+
     private Integer segments = 1;
 
     @Column(name = "unit_cost", precision = 12, scale = 6)

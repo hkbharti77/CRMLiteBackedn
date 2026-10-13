@@ -440,7 +440,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.5.2</version>
         <configuration>
-          <argLine>-Xmx2048m -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError</argLine>
+          <argLine>-Xmx1024m -XX:+UseG1GC -XX:+HeapDumpOnOutOfMemoryError</argLine>
           <forkCount>1</forkCount>
           <reuseForks>false</reuseForks>
           <systemPropertyVariables>
@@ -453,8 +453,8 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>com.chatcrmlite.backend.ChatCrmBackendApplication</mainClass>
-          <!-- Java 21+ silence Tomcat native-access warnings -->
-          <jvmArguments>--enable-native-access=ALL-UNNAMED</jvmArguments>
+          <!-- Java 21+ silence Tomcat native-access warnings and bound dev heap to prevent Windows pagefile exhaustion -->
+          <jvmArguments>--enable-native-access=ALL-UNNAMED -Xmx512m -Xms128m</jvmArguments>
           <excludes>
             <exclude>
               <groupId>org.projectlombok</groupId>
