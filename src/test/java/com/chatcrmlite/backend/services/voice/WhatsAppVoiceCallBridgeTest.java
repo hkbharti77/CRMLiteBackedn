@@ -15,6 +15,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.util.Optional;
 import java.util.UUID;
+import java.util.List;
+import java.util.ArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -250,5 +252,51 @@ class WhatsAppVoiceCallBridgeTest {
         voiceBridge.terminateSession(callId);
 
         assertNull(voiceBridge.getCallContext(callId));
+    }
+
+    @Test
+    @DisplayName("Sarvam TTS: Stream synthesized audio through callback when provider is sarvam")
+    void testSarvamTtsStreamingPipeline() {
+        voiceBridge.setTtsProvider("sarvam");
+        voiceBridge.setSarvamSpeaker("simran");
+        voiceBridge.setSarvamLanguage("hi-IN");
+
+        when(voiceHandoffService.evaluateHandoffRequired(anyString(), any(), anyInt())).thenReturn(false);
+        when(conversationOrchestrator.executeTurn(anyString(), eq("Namaste"), anyList(), any()))
+                .thenReturn("Namaste! Mai aapki kya sahayata kar sakti hu?");
+
+        // Mock Sarvam returning raw WAV audio (e.g. 44 bytes header + PCM)
+        byte[] mockWav = new byte[100];
+        mockWav[0] = 'R'; mockWav[1] = 'I'; mockWav[2] = 'F'; mockWav[3] = 'F';
+        when(sarvamVoiceService.synthesizeSpeech(anyString(), eq("hi-IN"), eq("simran"))).thenReturn(mockWav);
+
+        List<byte[]> receivedChunks = new ArrayList<>();
+        var result = voiceBridge.processCallTurn(tenantId, callId, null, null, "Namaste", receivedChunks::add);
+
+        assertNotNull(result);
+        verify(sarvamVoiceService, atLeastOnce()).synthesizeSpeech(anyString(), eq("hi-IN"), eq("simran"));
+        verify(deepgramVoiceService, never()).synthesizeSpeechStreaming(anyString(), any(), any());
+        assertFalse(receivedChunks.isEmpty());
+        // Last chunk is EOF (length 0)
+        assertEquals(0, receivedChunks.get(receivedChunks.size() - 1).length);
+    }
+
+    @Test
+    @DisplayName("Sarvam TTS Fallback: Falls back to Deepgram if Sarvam synthesis returns empty")
+    void testSarvamTtsFallbackToDeepgram() {
+        voiceBridge.setTtsProvider("sarvam");
+        when(voiceHandoffService.evaluateHandoffRequired(anyString(), any(), anyInt())).thenReturn(false);
+        when(conversationOrchestrator.executeTurn(anyString(), eq("Hello"), anyList(), any()))
+                .thenReturn("Hello! How can I help you?");
+
+        // Sarvam fails / returns empty
+        when(sarvamVoiceService.synthesizeSpeech(anyString(), anyString(), anyString())).thenReturn(new byte[0]);
+
+        List<byte[]> receivedChunks = new ArrayList<>();
+        var result = voiceBridge.processCallTurn(tenantId, callId, null, null, "Hello", receivedChunks::add);
+
+        assertNotNull(result);
+        verify(sarvamVoiceService, atLeastOnce()).synthesizeSpeech(anyString(), anyString(), anyString());
+        verify(deepgramVoiceService, atLeastOnce()).synthesizeSpeechStreaming(anyString(), any(), any());
     }
 }

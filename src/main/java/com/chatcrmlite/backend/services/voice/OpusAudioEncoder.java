@@ -29,31 +29,44 @@ public class OpusAudioEncoder {
      * Converts raw WAV or PCM bytes from TTS (e.g., Sarvam) into a list of Opus packet frames (20ms each).
      */
     public static List<byte[]> encodeWavOrPcmToOpusFrames(byte[] audioBytes) {
-        List<byte[]> frames = new ArrayList<>();
         if (audioBytes == null || audioBytes.length == 0) {
-            return frames;
+            return new ArrayList<>();
+        }
+        byte[] pcm48k = convertWavOrPcmTo48kPcm(audioBytes);
+        return encodeRawPcmToOpusFrames(pcm48k, OPUS_SAMPLE_RATE, 1, null);
+    }
+
+    /**
+     * Converts raw WAV or PCM bytes (at any sample rate, mono or stereo) into 48kHz 16-bit mono PCM bytes.
+     * Strips WAV RIFF header cleanly to prevent audible clicks/pops and fast playback.
+     */
+    public static byte[] convertWavOrPcmTo48kPcm(byte[] audioBytes) {
+        if (audioBytes == null || audioBytes.length == 0) {
+            return new byte[0];
         }
 
         try {
-            int inputSampleRate = 22050; // Default Sarvam sample rate
+            int inputSampleRate = 48000;
             int dataOffset = 0;
             int dataLen = audioBytes.length;
+            int channels = 1;
 
             // Check for WAV header ("RIFF")
             if (audioBytes.length > 12 && audioBytes[0] == 'R' && audioBytes[1] == 'I' && audioBytes[2] == 'F' && audioBytes[3] == 'F') {
+                inputSampleRate = 22050; // Default fallback for Sarvam
                 ByteBuffer header = ByteBuffer.wrap(audioBytes).order(ByteOrder.LITTLE_ENDIAN);
-                
+
                 // Parse format chunk to get sample rate
                 int offset = 12; // Skip RIFF, size, WAVE
                 while (offset + 8 < audioBytes.length) {
                     String chunkId = new String(audioBytes, offset, 4);
                     int chunkSize = header.getInt(offset + 4);
-                    
+
                     if ("fmt ".equals(chunkId)) {
-                        int channels = header.getShort(offset + 10) & 0xFFFF;
+                        channels = header.getShort(offset + 10) & 0xFFFF;
                         inputSampleRate = header.getInt(offset + 12);
                         int bitsPerSample = header.getShort(offset + 22) & 0xFFFF;
-                        log.info("🎵 [OpusEncoder] Parsed WAV fmt: sampleRate={}Hz channels={} bitsPerSample={}", 
+                        log.debug("🎵 [OpusEncoder] Parsed WAV fmt: sampleRate={}Hz channels={} bitsPerSample={}",
                                 inputSampleRate, channels, bitsPerSample);
                     } else if ("data".equals(chunkId)) {
                         dataOffset = offset + 8;
@@ -66,62 +79,56 @@ public class OpusAudioEncoder {
                     offset += 8 + chunkSize;
                 }
                 if (dataOffset == 0) {
-                    // Fallback if data chunk not found
+                    // Fallback if data chunk not explicitly found
                     dataOffset = 44;
                     dataLen = audioBytes.length - 44;
                 }
-            } else {
-                // Not a WAV file! Log first 10 bytes to see what it is (Base64 JSON? MP3?)
-                StringBuilder hex = new StringBuilder();
-                for(int i=0; i<Math.min(10, audioBytes.length); i++) {
-                    hex.append(String.format("%02X ", audioBytes[i]));
-                }
-                log.warn("⚠️ [OpusEncoder] Audio is NOT a WAV file (No RIFF header). First bytes: {}", hex.toString());
+            }
+
+            if (dataLen <= 0 || dataOffset >= audioBytes.length) {
+                return new byte[0];
+            }
+
+            // Fast path: if already 48000Hz mono PCM without WAV header, return as-is
+            if (dataOffset == 0 && inputSampleRate == OPUS_SAMPLE_RATE && channels == 1) {
+                return audioBytes;
             }
 
             // Convert 16-bit PCM bytes to short[] samples
-            int numInputSamples = dataLen / 2;
-            short[] inputSamples = new short[numInputSamples];
+            int numInputSamples = dataLen / (2 * (channels > 0 ? channels : 1));
+            short[] monoSamples = new short[numInputSamples];
             ByteBuffer pcmBuf = ByteBuffer.wrap(audioBytes, dataOffset, dataLen).order(ByteOrder.LITTLE_ENDIAN);
-            for (int i = 0; i < numInputSamples; i++) {
-                inputSamples[i] = pcmBuf.getShort();
+
+            if (channels == 2) {
+                for (int i = 0; i < numInputSamples; i++) {
+                    short left = pcmBuf.getShort();
+                    short right = pcmBuf.getShort();
+                    monoSamples[i] = (short) ((left + right) / 2);
+                }
+            } else {
+                for (int i = 0; i < numInputSamples; i++) {
+                    monoSamples[i] = pcmBuf.getShort();
+                }
             }
 
             // Resample to 48000 Hz if necessary
             short[] resampledSamples;
             if (inputSampleRate != OPUS_SAMPLE_RATE && inputSampleRate > 0) {
-                resampledSamples = resampleLinear(inputSamples, inputSampleRate, OPUS_SAMPLE_RATE);
+                resampledSamples = resampleLinear(monoSamples, inputSampleRate, OPUS_SAMPLE_RATE);
             } else {
-                resampledSamples = inputSamples;
+                resampledSamples = monoSamples;
             }
 
-            // Encode 960-sample (20ms) blocks with Concentus OpusEncoder
-            OpusEncoder encoder = new OpusEncoder(OPUS_SAMPLE_RATE, OPUS_CHANNELS, OpusApplication.OPUS_APPLICATION_VOIP);
-            encoder.setBitrate(24000); // 24kbps is perfect for mono voice
-            encoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
-
-            byte[] outPacket = new byte[1275];
-            short[] frameBuffer = new short[FRAME_SIZE_SAMPLES];
-
-            for (int offset = 0; offset < resampledSamples.length; offset += FRAME_SIZE_SAMPLES) {
-                int samplesToCopy = Math.min(FRAME_SIZE_SAMPLES, resampledSamples.length - offset);
-                Arrays.fill(frameBuffer, (short) 0);
-                System.arraycopy(resampledSamples, offset, frameBuffer, 0, samplesToCopy);
-
-                int bytesEncoded = encoder.encode(frameBuffer, 0, FRAME_SIZE_SAMPLES, outPacket, 0, outPacket.length);
-                if (bytesEncoded > 0) {
-                    frames.add(Arrays.copyOf(outPacket, bytesEncoded));
-                }
+            byte[] outBytes = new byte[resampledSamples.length * 2];
+            ByteBuffer outBuf = ByteBuffer.wrap(outBytes).order(ByteOrder.LITTLE_ENDIAN);
+            for (short s : resampledSamples) {
+                outBuf.putShort(s);
             }
-
-            log.info("🎵 [OpusEncoder] Encoded {} input bytes ({}Hz) into {} Opus frames (20ms each @ 48kHz)",
-                    audioBytes.length, inputSampleRate, frames.size());
-
+            return outBytes;
         } catch (Exception e) {
-            log.error("❌ [OpusEncoder] Failed to encode audio to Opus: {}", e.getMessage(), e);
+            log.error("❌ [OpusEncoder] Error converting WAV/PCM to 48k PCM: {}", e.getMessage(), e);
+            return new byte[0];
         }
-
-        return frames;
     }
 
     /**

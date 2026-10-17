@@ -20,6 +20,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicLong;
@@ -33,6 +34,15 @@ import com.chatcrmlite.backend.services.voice.state.TurnContext;
 @Slf4j
 @Service
 public class WhatsAppVoiceCallBridgeService {
+
+    @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
+    private String ttsProvider = "deepgram";
+
+    @org.springframework.beans.factory.annotation.Value("${sarvam.tts.speaker:simran}")
+    private String sarvamSpeaker = "simran";
+
+    @org.springframework.beans.factory.annotation.Value("${sarvam.tts.language:hi-IN}")
+    private String sarvamLanguage = "hi-IN";
 
     private final VoiceSessionService voiceSessionService;
     private final ConversationOrchestrator conversationOrchestrator;
@@ -50,6 +60,18 @@ public class WhatsAppVoiceCallBridgeService {
     
     // Call-scoped state machine
     private final ConcurrentHashMap<String, CallSessionContext> activeCalls = new ConcurrentHashMap<>();
+
+    public void setTtsProvider(String ttsProvider) {
+        this.ttsProvider = ttsProvider;
+    }
+
+    public void setSarvamSpeaker(String sarvamSpeaker) {
+        this.sarvamSpeaker = sarvamSpeaker;
+    }
+
+    public void setSarvamLanguage(String sarvamLanguage) {
+        this.sarvamLanguage = sarvamLanguage;
+    }
 
     @org.springframework.beans.factory.annotation.Autowired
     public WhatsAppVoiceCallBridgeService(
@@ -221,19 +243,19 @@ public class WhatsAppVoiceCallBridgeService {
                 final java.util.concurrent.atomic.AtomicBoolean firstChunkLogged = new java.util.concurrent.atomic.AtomicBoolean(false);
                 
                 String voiceCleanedAnswer = SentenceChunker.cleanForVoice(aiAnswer);
-                // For typical voice turns (<= 250 chars), stream as a single continuous speech unit to prevent inter-sentence dead pauses.
-                List<String> units;
-                if (voiceCleanedAnswer.length() <= 250) {
+                List<String> units = SentenceChunker.chunkText(voiceCleanedAnswer);
+                if (units.isEmpty() && !voiceCleanedAnswer.isBlank()) {
                     units = List.of(voiceCleanedAnswer);
-                } else {
-                    units = SentenceChunker.chunkText(voiceCleanedAnswer);
-                    if (units.isEmpty()) {
-                        units = List.of(voiceCleanedAnswer);
-                    }
                 }
 
                 log.info("🗣️ [WhatsAppVoiceBridge] Pipeline streaming {} audio unit(s) to TTS for callId={} turnId={}",
                         units.size(), callId, currentTurnId);
+
+                boolean useSarvam = "sarvam".equalsIgnoreCase(ttsProvider);
+                String activeSarvamSpeaker = (ttsVoiceId != null && !ttsVoiceId.isBlank() && !ttsVoiceId.startsWith("aura-"))
+                        ? ttsVoiceId
+                        : (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran");
+                String targetLangCode = (sarvamLanguage != null && !sarvamLanguage.isBlank()) ? sarvamLanguage : "hi-IN";
 
                 try {
                     for (int sIdx = 0; sIdx < units.size(); sIdx++) {
@@ -248,6 +270,37 @@ public class WhatsAppVoiceCallBridgeService {
 
                         final int unitNum = sIdx + 1;
                         final int totalUnits = units.size();
+
+                        if (useSarvam) {
+                            byte[] wavBytes = null;
+                            try {
+                                wavBytes = sarvamVoiceService.synthesizeSpeech(textUnit, targetLangCode, activeSarvamSpeaker);
+                            } catch (Exception sarvamEx) {
+                                log.error("❌ [WhatsAppVoiceBridge] Sarvam synthesis error on unit {}/{}: {}", unitNum, totalUnits, sarvamEx.getMessage());
+                            }
+
+                            if (wavBytes != null && wavBytes.length > 0) {
+                                byte[] pcm48k = OpusAudioEncoder.convertWavOrPcmTo48kPcm(wavBytes);
+                                if (pcm48k.length > 0) {
+                                    if (!firstChunkLogged.getAndSet(true)) {
+                                        long ttsFirstChunkTime = System.currentTimeMillis();
+                                        ttsFirstChunkMs.set(ttsFirstChunkTime);
+                                        log.info("📈 [LATENCY-METRIC] Metric C (Sarvam): LLM response -> TTS first audio: {}ms (Unit {}/{})",
+                                                (ttsFirstChunkTime - ttsStartMs), unitNum, totalUnits);
+                                    }
+                                    int chunkSize = 7680; // 80ms @ 48kHz mono 16-bit PCM (4 Opus frames)
+                                    for (int offset = 0; offset < pcm48k.length; offset += chunkSize) {
+                                        if (turnContext.isCancelled()) break;
+                                        int len = Math.min(chunkSize, pcm48k.length - offset);
+                                        ttsChunkCallback.accept(Arrays.copyOfRange(pcm48k, offset, offset + len));
+                                    }
+                                    continue;
+                                }
+                            }
+
+                            // Fallback to Deepgram if Sarvam synthesis returned empty
+                            log.warn("⚠️ [WhatsAppVoiceBridge] Sarvam returned empty for unit {}/{}. Falling back to Deepgram.", unitNum, totalUnits);
+                        }
 
                         deepgramVoiceService.synthesizeSpeechStreaming(textUnit, ttsVoiceId, chunk -> {
                             if (turnContext.isCancelled()) {
@@ -273,10 +326,31 @@ public class WhatsAppVoiceCallBridgeService {
             } else {
                 // Fallback blocking if no callback
                 byte[] synthesizedAudio = null;
+                boolean useSarvam = "sarvam".equalsIgnoreCase(ttsProvider);
+                String activeSarvamSpeaker = (ttsVoiceId != null && !ttsVoiceId.isBlank() && !ttsVoiceId.startsWith("aura-"))
+                        ? ttsVoiceId
+                        : (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran");
+                String targetLangCode = (sarvamLanguage != null && !sarvamLanguage.isBlank()) ? sarvamLanguage : "hi-IN";
+
                 try {
-                    synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, ttsVoiceId);
+                    if (useSarvam) {
+                        byte[] wavBytes = sarvamVoiceService.synthesizeSpeech(aiAnswer, targetLangCode, activeSarvamSpeaker);
+                        if (wavBytes != null && wavBytes.length > 0) {
+                            synthesizedAudio = OpusAudioEncoder.convertWavOrPcmTo48kPcm(wavBytes);
+                        } else {
+                            log.warn("⚠️ [WhatsAppVoiceBridge] Sarvam blocking TTS returned empty, falling back to Deepgram");
+                            synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, ttsVoiceId);
+                        }
+                    } else {
+                        synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, ttsVoiceId);
+                    }
                 } catch (Exception ttsEx) {
                     log.error("❌ [WhatsAppVoiceBridge] Blocking TTS synthesis error: {}", ttsEx.getMessage());
+                    if (useSarvam) {
+                        try {
+                            synthesizedAudio = deepgramVoiceService.synthesizeSpeech(aiAnswer, ttsVoiceId);
+                        } catch (Exception ignored) {}
+                    }
                 }
                 ttsFirstChunkMs.set(System.currentTimeMillis());
                 if (turnContext.isCancelled()) {
@@ -382,9 +456,10 @@ public class WhatsAppVoiceCallBridgeService {
         vs.setBusiness(businessUser);
         vs.setTenant(callSession.getTenant());
         vs.setVisitorId(callSession.getFromWaId() != null ? callSession.getFromWaId() : "whatsapp_" + callSession.getCallId());
-        vs.setStatus(VoiceSession.VoiceSessionStatus.ACTIVE);
-        vs.setVoiceId(ttsVoiceId != null ? ttsVoiceId : "deepgram/aura");
-        vs.setStartedAt(LocalDateTime.now());
+        String defaultVoiceId = "sarvam".equalsIgnoreCase(ttsProvider)
+                ? (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran")
+                : "deepgram/aura";
+        vs.setVoiceId(ttsVoiceId != null ? ttsVoiceId : defaultVoiceId);
         vs.setTotalTurns(0);
         vs = voiceSessionRepository.save(vs);
 

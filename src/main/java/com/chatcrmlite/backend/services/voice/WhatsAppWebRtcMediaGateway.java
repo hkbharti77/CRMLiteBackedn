@@ -661,8 +661,10 @@ public class WhatsAppWebRtcMediaGateway {
                             long prevWallClock = session.lastRtpSendWallClockMs.getAndSet(currentWallClock);
                             long delta = prevWallClock == 0 ? 0 : currentWallClock - prevWallClock;
                             int currentSeq = session.sequenceNumber.get() - 1;
-                            log.info("📊 [RTP-METRIC] callId={} turnId={} seq={} ts={} deltaWallClock={}ms queueDepth={} bytes={}",
-                                    callId, session.currentTtsTurnId, currentSeq, currentTimestamp, delta, session.outboundAudioQueue.size(), frame.packetData.length);
+                            if (currentSeq % 25 == 0 || delta > 35) {
+                                log.info("📊 [RTP-METRIC] callId={} turnId={} seq={} ts={} deltaWallClock={}ms queueDepth={} bytes={}",
+                                        callId, session.currentTtsTurnId, currentSeq, currentTimestamp, delta, session.outboundAudioQueue.size(), frame.packetData.length);
+                            }
 
                             if (session.firstRtpSentMs.get() == 0 && session.userUtteranceEndMs.get() > 0) {
                                 long firstRtpTime = System.currentTimeMillis();
@@ -837,6 +839,11 @@ public class WhatsAppWebRtcMediaGateway {
             return;
         }
 
+        // Defensive normalization: if caller passed raw WAV (e.g. Sarvam WAV), convert cleanly to 48kHz PCM
+        if (audioBytes != null && audioBytes.length > 12 && audioBytes[0] == 'R' && audioBytes[1] == 'I' && audioBytes[2] == 'F' && audioBytes[3] == 'F') {
+            audioBytes = OpusAudioEncoder.convertWavOrPcmTo48kPcm(audioBytes);
+        }
+
         if (audioBytes != null && audioBytes.length > 0) {
             synchronized (session.recordedConversationAudio) {
                 try {
@@ -894,9 +901,9 @@ public class WhatsAppWebRtcMediaGateway {
         }
         
         // ── Queue Depth Cap ──────────────────────────────────────────────────────
-        // At 50 fps (20ms/frame), 300 frames = 6 seconds of audio.
-        // If the queue is already this deep, the user can't hear us fast enough.
-        final int MAX_QUEUE_DEPTH = 300;
+        // At 50 fps (20ms/frame), 2000 frames = 40 seconds of audio.
+        // Deepgram streams audio faster than real time; 2000 frames ensures full responses are never truncated.
+        final int MAX_QUEUE_DEPTH = 2000;
         int dropped = 0;
         for (byte[] frame : opusFrames) {
             if (session.outboundAudioQueue.size() >= MAX_QUEUE_DEPTH) {
@@ -1145,10 +1152,12 @@ public class WhatsAppWebRtcMediaGateway {
         // Do not let public STUN server responses (port 19302 or port 80) overwrite Meta remoteAddress
         boolean isPublicStunServer = sender != null && (sender.getPort() == 19302 || sender.getPort() == 80);
         if (sender != null && !isPublicStunServer) {
-            log.info("📦 [WebRtcGateway] INBOUND PACKET len={} from={} b0=0x{} b1=0x{}",
-                    data.length, sender,
-                    data.length > 0 ? Integer.toHexString(data[0] & 0xFF) : "0",
-                    data.length > 1 ? Integer.toHexString(data[1] & 0xFF) : "0");
+            if (log.isDebugEnabled()) {
+                log.debug("📦 [WebRtcGateway] INBOUND PACKET len={} from={} b0=0x{} b1=0x{}",
+                        data.length, sender,
+                        data.length > 0 ? Integer.toHexString(data[0] & 0xFF) : "0",
+                        data.length > 1 ? Integer.toHexString(data[1] & 0xFF) : "0");
+            }
 
             if (session.remoteAddress == null) {
                 session.remoteAddress = sender;
@@ -1661,7 +1670,7 @@ public class WhatsAppWebRtcMediaGateway {
         }
 
         private static final byte[] OPUS_SILENCE_FRAME = new byte[] { (byte) 0xF8, (byte) 0xFF, (byte) 0xFE };
-        public static final int PRE_ROLL_MIN_FRAMES = 5; // ~100ms pre-roll jitter buffer (responsive WebRTC playback)
+        public static final int PRE_ROLL_MIN_FRAMES = 12; // ~240ms pre-roll jitter buffer (smooth WebRTC playback without network underrun)
 
         public static class OutboundRtpFrame {
             public final byte[] packetData;
@@ -1686,6 +1695,10 @@ public class WhatsAppWebRtcMediaGateway {
                 // AND the outbound queue has been completely drained
                 if (isTtsStreamCompleted.get() && outboundAudioQueue.isEmpty()) {
                     isSpeakingAI.set(false);
+                    isTtsPlaybackReady.set(false);
+                } else if (!isTtsStreamCompleted.get()) {
+                    // Mid-stream jitter gap: temporarily reset ready flag so the queue re-buffers
+                    // incoming frames before resuming playback, preventing high-frequency 20ms stutter/glitching
                     isTtsPlaybackReady.set(false);
                 }
             } else {

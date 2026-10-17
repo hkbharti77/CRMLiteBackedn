@@ -31,10 +31,10 @@ public class SarvamVoiceService {
     @Value("${sarvam.tts.model:bulbul:v3}")
     private String defaultModel;
 
-    @Value("${sarvam.connect-timeout-ms:2500}")
+    @Value("${sarvam.connect-timeout-ms:3000}")
     private int connectTimeoutMs;
 
-    @Value("${sarvam.read-timeout-ms:5000}")
+    @Value("${sarvam.read-timeout-ms:10000}")
     private int readTimeoutMs;
 
     @Value("${sarvam.max-retries:1}")
@@ -44,8 +44,8 @@ public class SarvamVoiceService {
 
     public SarvamVoiceService(RestTemplateBuilder builder) {
         this.restTemplate = builder
-                .setConnectTimeout(Duration.ofMillis(2500))
-                .setReadTimeout(Duration.ofMillis(5000))
+                .setConnectTimeout(Duration.ofMillis(3000))
+                .setReadTimeout(Duration.ofMillis(10000))
                 .build();
     }
 
@@ -71,7 +71,7 @@ public class SarvamVoiceService {
         String langCode = (targetLanguageCode != null && !targetLanguageCode.isBlank()) ? targetLanguageCode : "hi-IN";
         String safeKey = maskKey(apiKey);
 
-        String url = "https://api.sarvam.ai/text-to-speech/stream";
+        String url = "https://api.sarvam.ai/text-to-speech";
         log.info("[Sarvam-TTS] Synthesizing speech with speaker={}, model={} for text length={} (Key: {})",
                 activeSpeaker, defaultModel, spokenText.length(), safeKey);
 
@@ -85,7 +85,6 @@ public class SarvamVoiceService {
                 headers.set("api-subscription-key", apiKey.trim());
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 headers.setAccept(java.util.Arrays.asList(
-                        MediaType.valueOf("audio/mpeg"),
                         MediaType.valueOf("audio/wav"),
                         MediaType.APPLICATION_OCTET_STREAM,
                         MediaType.APPLICATION_JSON
@@ -95,9 +94,10 @@ public class SarvamVoiceService {
 
                 Map<String, Object> body = new HashMap<>();
                 body.put("text", spokenText);
+                body.put("inputs", Collections.singletonList(spokenText));
                 body.put("target_language_code", langCode);
                 body.put("speaker", activeSpeaker);
-                body.put("model", defaultModel);
+                body.put("model", defaultModel != null && !defaultModel.isBlank() ? defaultModel : "bulbul:v3");
                 body.put("pace", 1.0);
                 body.put("speech_sample_rate", 22050);
 
