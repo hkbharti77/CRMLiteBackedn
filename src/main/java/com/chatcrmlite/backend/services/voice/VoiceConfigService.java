@@ -43,14 +43,20 @@ public class VoiceConfigService {
             throw new ObjectOptimisticLockingFailureException(VoiceAssistantConfig.class, config.getId());
         }
 
-        if (dto.getAssistantName() != null) {
-            config.setAssistantName(sanitize(dto.getAssistantName()));
+        if (dto.getAssistantName() != null && !dto.getAssistantName().isBlank()) {
+            String cleanName = sanitize(dto.getAssistantName());
+            if (Character.isLowerCase(cleanName.charAt(0))) {
+                cleanName = Character.toUpperCase(cleanName.charAt(0)) + cleanName.substring(1);
+            }
+            config.setAssistantName(cleanName);
         }
         if (dto.getGreetingText() != null) {
             config.setGreetingText(sanitize(dto.getGreetingText()));
         }
         if (dto.getPersonaPrompt() != null) {
-            config.setPersonaPrompt(sanitize(dto.getPersonaPrompt()));
+            String sanitizedPrompt = sanitize(dto.getPersonaPrompt());
+            String harmonized = PersonaPromptHarmonizer.harmonize(sanitizedPrompt, config.getAssistantName(), tenant.getBusinessName());
+            config.setPersonaPrompt(harmonized);
         }
         if (dto.getTtsVoiceId() != null && !dto.getTtsVoiceId().isBlank()) {
             String voiceId = sanitize(dto.getTtsVoiceId());

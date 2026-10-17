@@ -6,6 +6,7 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.services.FlowConfigService;
 import com.chatcrmlite.backend.services.ReferenceNumberService;
 import com.chatcrmlite.backend.services.lead.LeadEnquiryService;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
@@ -43,13 +44,15 @@ class CreateLeadToolTest {
     private ReferenceNumberService referenceNumberService;
     @Mock
     private LeadEnquiryService leadEnquiryService;
+    @Mock
+    private FlowConfigService flowConfigService;
 
     private ObjectMapper objectMapper = new ObjectMapper();
     private CreateLeadTool createLeadTool;
 
     @BeforeEach
     void setUp() {
-        createLeadTool = new CreateLeadTool(objectMapper, userRepository, contactRepository, leadRepository, quotaEnforcerService, referenceNumberService, leadEnquiryService);
+        createLeadTool = new CreateLeadTool(objectMapper, userRepository, contactRepository, leadRepository, quotaEnforcerService, referenceNumberService, leadEnquiryService, flowConfigService);
     }
 
     private ToolExecutionContext createMockContext() {

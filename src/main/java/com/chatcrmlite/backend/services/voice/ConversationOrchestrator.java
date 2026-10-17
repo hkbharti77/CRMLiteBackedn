@@ -76,18 +76,22 @@ public class ConversationOrchestrator {
                 .append("4. If the caller is just greeting or saying hello, respond with a short 1-sentence friendly greeting and ask how to help.\n\n");
 
         if (tools != null && !tools.isEmpty()) {
-            fullSystemPrompt.append("--- INSTRUCTIONS FOR TOOL USE & INTENT ROUTING ---\n")
-                    .append("GENERAL RULE: Your primary job is to ANSWER the user's question naturally and helpfully. Do NOT ask for personal details unless explicitly required for an active tool below.\n\n")
-                    .append("ACTIVE TOOLS & INTENT TRIGGERS:\n");
+            fullSystemPrompt.append("--- INSTRUCTIONS FOR DYNAMIC FORM TOOLS & INTENT ROUTING ---\n")
+                    .append("You have access to dynamic business tools representing forms configured by the tenant admin.\n")
+                    .append("When a caller expresses intent to enquire, book, request a callback, or file an issue:\n")
+                    .append("1. Greet and transition warmly, then ask the required form questions ONE QUESTION AT A TIME.\n")
+                    .append("2. DO NOT call the tool prematurely on the first turn! First collect the required fields from the caller.\n")
+                    .append("3. Once the caller has answered all mandatory questions, invoke the corresponding tool with the collected details.\n")
+                    .append("4. If a tool execution returns VALIDATION_FAILED, immediately ask the caller the specific missing question mentioned in the result.\n")
+                    .append("5. After tool success, confirm politely and naturally in 1 short spoken sentence.\n\n")
+                    .append("ACTIVE BUSINESS TOOLS & DYNAMIC QUESTIONS:\n");
 
             for (ToolSpecification tool : tools) {
-                fullSystemPrompt.append("  - Tool '").append(tool.name()).append("': ").append(tool.description()).append("\n");
+                fullSystemPrompt.append("========================================\n")
+                        .append("TOOL: ").append(tool.name()).append("\n")
+                        .append(tool.description()).append("\n")
+                        .append("========================================\n\n");
             }
-
-            fullSystemPrompt.append("\nWHEN a tool IS triggered:\n")
-                    .append("  - Collect required fields conversationally (1 field at a time).\n")
-                    .append("  - Once collected, call the tool immediately.\n")
-                    .append("  - Confirm in plain voice language; never read out raw IDs or technical errors.\n\n");
         }
 
         List<ChatMessage> messages = new ArrayList<>();

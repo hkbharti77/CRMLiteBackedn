@@ -6,27 +6,33 @@ import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.BookingService;
+import com.chatcrmlite.backend.services.FlowConfigService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.langchain4j.agent.tool.ToolSpecification;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.HashMap;
+import java.util.Map;
 
 @Service
+@Slf4j
 public class CreateBookingTool implements VoiceTool {
 
     private final ObjectMapper objectMapper;
     private final UserRepository userRepository;
     private final ContactRepository contactRepository;
     private final BookingService bookingService;
+    private final FlowConfigService flowConfigService;
 
-    public CreateBookingTool(ObjectMapper objectMapper, UserRepository userRepository, ContactRepository contactRepository, BookingService bookingService) {
+    public CreateBookingTool(ObjectMapper objectMapper, UserRepository userRepository, ContactRepository contactRepository, BookingService bookingService, FlowConfigService flowConfigService) {
         this.objectMapper = objectMapper;
         this.userRepository = userRepository;
         this.contactRepository = contactRepository;
         this.bookingService = bookingService;
+        this.flowConfigService = flowConfigService;
     }
 
     @Override
@@ -50,28 +56,83 @@ public class CreateBookingTool implements VoiceTool {
     public ToolExecutionResult execute(String toolCallId, String jsonArguments, ToolExecutionContext context) {
         try {
             JsonNode args = objectMapper.readTree(jsonArguments);
-            
-            if (!args.has("customer_name") || !args.has("service") || !args.has("preferred_slot")) {
-                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required fields: customer_name, service, preferred_slot.", "VALIDATION_FAILED");
+
+            User owner = null;
+            if (context.userId() != null) {
+                owner = userRepository.findById(context.userId()).orElse(null);
+            }
+            if (owner == null && context.tenantId() != null) {
+                owner = userRepository.findFirstByTenantIdAndRole(context.tenantId(), User.Role.ADMIN)
+                        .or(() -> userRepository.findFirstUserIdByTenantId(context.tenantId()).flatMap(userRepository::findById))
+                        .orElse(null);
+            }
+            if (owner == null) {
+                owner = userRepository.findAll().stream().findFirst().orElse(null);
             }
 
-            String name = args.get("customer_name").asText();
-            String service = args.get("service").asText();
-            String preferredSlot = args.get("preferred_slot").asText();
-
-            User owner = userRepository.findById(context.userId()).orElse(null);
             if (owner == null) {
                 return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Owner user not found.", "SYSTEM_ERROR");
             }
+            final User finalOwner = owner;
 
-            String waId = context.callerPhone();
-            Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
+            // 1. Dynamic validation against tenant-configured flow steps
+            if (flowConfigService != null) {
+                try {
+                    com.chatcrmlite.backend.dto.FlowConfigDTO flowConfig = flowConfigService.getFlowConfig(finalOwner, "booking");
+                    if (flowConfig != null && flowConfig.getSteps() != null) {
+                        for (com.chatcrmlite.backend.dto.FlowStepDTO step : flowConfig.getSteps()) {
+                            if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
+                            String key = step.getDataKey().trim();
+                            if ("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) continue;
+
+                            if (step.isRequired()) {
+                                String val = extractFirstNonBlank(args, key, key.replace("_", ""), key.toLowerCase());
+                                if (key.contains("name")) {
+                                    val = extractFirstNonBlank(args, key, "customer_name", "name", "full_name", "caller_name");
+                                } else if (key.contains("service") || key.contains("item") || key.contains("package")) {
+                                    val = extractFirstNonBlank(args, key, "service", "item", "package");
+                                } else if (key.contains("slot") || key.contains("time") || key.contains("date")) {
+                                    val = extractFirstNonBlank(args, key, "preferred_slot", "slot", "date", "time", "preferred_date");
+                                }
+
+                                if (val == null || val.trim().isEmpty() || val.equalsIgnoreCase("unknown")) {
+                                    String question = (step.getQuestion() != null && !step.getQuestion().isBlank())
+                                            ? step.getQuestion()
+                                            : "Could you please specify your " + key.replace("_", " ") + "?";
+                                    return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED,
+                                            "Missing required field '" + key + "'. Please ask the caller: " + question, "MISSING_FIELD");
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[CreateBookingTool] Dynamic flow validation skipped due to: {}", ex.getMessage());
+                }
+            }
+            
+            String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name");
+            String service = extractFirstNonBlank(args, "service", "service_name", "item", "package", "type");
+            String preferredSlot = extractFirstNonBlank(args, "preferred_slot", "slot", "date", "time", "date_time", "preferred_date");
+
+            if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
+                rawName = "Voice Caller (" + (context.callerPhone() != null ? context.callerPhone() : "Web") + ")";
+            }
+            if (service == null || service.trim().isEmpty() || service.equalsIgnoreCase("unknown")) {
+                service = "General Booking";
+            }
+            if (preferredSlot == null || preferredSlot.trim().isEmpty() || preferredSlot.equalsIgnoreCase("unknown")) {
+                preferredSlot = "As soon as possible";
+            }
+
+            final String name = rawName;
+            String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
+            Contact contact = contactRepository.findByWaIdAndOwner(waId, finalOwner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
                                 .waId(waId)
                                 .name(name)
                                 .source("VOICE_BOT")
-                                .owner(owner)
+                                .owner(finalOwner)
                                 .build();
                         return contactRepository.save(newContact);
                     });
@@ -81,13 +142,40 @@ public class CreateBookingTool implements VoiceTool {
                 contact = contactRepository.save(contact);
             }
 
-            Booking booking = bookingService.bookFromFlow(contact, owner, service, preferredSlot, new HashMap<>(), "VOICE_BOT");
+            // Collect all dynamic fields from LLM arguments
+            Map<String, String> flowData = new HashMap<>();
+            java.util.Iterator<String> fieldNames = args.fieldNames();
+            while (fieldNames.hasNext()) {
+                String f = fieldNames.next();
+                JsonNode node = args.get(f);
+                if (node != null && !node.isNull() && !node.asText().isBlank() && !node.asText().equalsIgnoreCase("unknown")) {
+                    flowData.put(f, node.asText().trim());
+                }
+            }
+            flowData.put("name", name);
+            flowData.put("service", service);
+            flowData.put("preferred_slot", preferredSlot);
+            flowData.put("phone", waId);
 
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Booking created successfully.", null);
+            Booking booking = bookingService.bookFromFlow(contact, finalOwner, service, preferredSlot, flowData, "VOICE_BOT");
+
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.SUCCESS, "Booking created successfully. Reference: " + booking.getReferenceNumber(), null);
         } catch (com.chatcrmlite.backend.services.tenant.QuotaEnforcerService.QuotaExceededException e) {
+            log.warn("Quota exceeded in CreateBookingTool: {}", e.getMessage());
             return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Tenant booking quota exceeded.", "QUOTA_EXCEEDED");
         } catch (Exception e) {
-            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or execute booking.", "INTERNAL_ERROR");
+            log.error("Exception in CreateBookingTool execute", e);
+            return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.UNKNOWN, "Failed to parse arguments or execute booking: " + e.getMessage(), "INTERNAL_ERROR");
         }
+    }
+
+    private String extractFirstNonBlank(JsonNode args, String... keys) {
+        if (args == null) return null;
+        for (String k : keys) {
+            if (args.has(k) && !args.get(k).isNull() && !args.get(k).asText().isBlank()) {
+                return args.get(k).asText().trim();
+            }
+        }
+        return null;
     }
 }

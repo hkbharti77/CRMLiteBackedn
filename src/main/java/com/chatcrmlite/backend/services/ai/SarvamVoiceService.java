@@ -84,7 +84,12 @@ public class SarvamVoiceService {
                 HttpHeaders headers = new HttpHeaders();
                 headers.set("api-subscription-key", apiKey.trim());
                 headers.setContentType(MediaType.APPLICATION_JSON);
-                headers.setAccept(Collections.singletonList(MediaType.APPLICATION_JSON));
+                headers.setAccept(java.util.Arrays.asList(
+                        MediaType.valueOf("audio/mpeg"),
+                        MediaType.valueOf("audio/wav"),
+                        MediaType.APPLICATION_OCTET_STREAM,
+                        MediaType.APPLICATION_JSON
+                ));
                 headers.set("Accept-Encoding", "identity");
                 headers.set("User-Agent", "ChatCRMLite-SarvamVoice/1.0");
 
@@ -97,14 +102,26 @@ public class SarvamVoiceService {
                 body.put("speech_sample_rate", 22050);
 
                 HttpEntity<Map<String, Object>> requestEntity = new HttpEntity<>(body, headers);
-                ResponseEntity<String> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, String.class);
+                ResponseEntity<byte[]> response = restTemplate.exchange(url, HttpMethod.POST, requestEntity, byte[].class);
 
                 int latency = (int) (System.currentTimeMillis() - start);
 
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
-                    String jsonString = response.getBody();
-                    
+                    byte[] responseBytes = response.getBody();
+                    MediaType contentType = response.getHeaders().getContentType();
+
+                    boolean isAudioContentType = contentType != null && contentType.getType().equalsIgnoreCase("audio");
+                    boolean isMp3Magic = responseBytes.length >= 2 && (responseBytes[0] == (byte) 0xFF && (responseBytes[1] & 0xE0) == (byte) 0xE0);
+                    boolean isWavMagic = responseBytes.length >= 4 && responseBytes[0] == 'R' && responseBytes[1] == 'I' && responseBytes[2] == 'F' && responseBytes[3] == 'F';
+
+                    if (isAudioContentType || isMp3Magic || isWavMagic) {
+                        log.info("[Sarvam-TTS] Success in {}ms ({} audio bytes received)", latency, responseBytes.length);
+                        return responseBytes;
+                    }
+
+                    // Fallback in case endpoint returns JSON with {"audios": ["..."]}
                     try {
+                        String jsonString = new String(responseBytes, java.nio.charset.StandardCharsets.UTF_8);
                         com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(jsonString);
                         if (root.has("audios") && root.get("audios").isArray() && root.get("audios").size() > 0) {
                             String base64Audio = root.get("audios").get(0).asText();
@@ -112,10 +129,11 @@ public class SarvamVoiceService {
                             log.info("[Sarvam-TTS] Success in {}ms ({} audio bytes decoded from JSON)", latency, decodedWav.length);
                             return decodedWav;
                         } else {
-                            log.warn("[Sarvam-TTS] Missing 'audios' array in response: {}", jsonString.substring(0, Math.min(100, jsonString.length())));
+                            log.warn("[Sarvam-TTS] Response was neither audio stream nor valid 'audios' JSON: {}",
+                                    jsonString.substring(0, Math.min(100, jsonString.length())));
                         }
                     } catch (Exception parseEx) {
-                        log.warn("[Sarvam-TTS] Failed to parse JSON response: {}", parseEx.getMessage());
+                        log.warn("[Sarvam-TTS] Failed to parse response: {}", parseEx.getMessage());
                     }
                     return new byte[0];
                 } else {

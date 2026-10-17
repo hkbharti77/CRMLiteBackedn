@@ -135,14 +135,31 @@ public class VoiceFormConfigAdapter {
                 desc.append(toolDescription).append("\n\n");
             }
             if (flowConfig.getTriggerExamples() != null && !flowConfig.getTriggerExamples().isEmpty()) {
-                desc.append("Trigger Examples:\n");
+                desc.append("Trigger Examples / Sample Caller Utterances:\n");
                 for (String ex : flowConfig.getTriggerExamples()) {
                     if (ex != null && !ex.isBlank()) {
                         desc.append("- ").append(ex.trim()).append("\n");
                     }
                 }
+                desc.append("\n");
             }
-            desc.append("Use this tool when the user wants to submit details for this form flow.");
+            desc.append("FORM QUESTIONS TO ASK THE CALLER (ask one at a time conversationally):\n");
+            for (FlowStepDTO step : steps) {
+                if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
+                if ("phone".equals(step.getDataKey()) || "mobile".equals(step.getDataKey())
+                        || "whatsapp".equals(step.getDataKey())) {
+                    continue;
+                }
+                desc.append("  - Field '").append(step.getDataKey()).append("': \"")
+                    .append(buildParamDescription(step)).append("\"");
+                if (step.isRequired()) {
+                    desc.append(" [REQUIRED]");
+                } else {
+                    desc.append(" [OPTIONAL]");
+                }
+                desc.append("\n");
+            }
+            desc.append("\nCRITICAL RULE: When the caller's query matches this intent, DO NOT call this tool immediately! First ask the caller the required questions one by one conversationally. Only invoke this tool once the caller provides the required information.");
             builder.description(desc.toString().trim());
 
             for (FlowStepDTO step : steps) {
@@ -157,13 +174,14 @@ public class VoiceFormConfigAdapter {
                 String paramName = step.getDataKey();
                 String description = buildParamDescription(step);
 
-                // Mark optional vs required in the description for LLM guidance
                 if (!step.isRequired()) {
                     description += " (optional)";
+                    builder.addOptionalParameter(paramName, JsonSchemaProperty.STRING,
+                            JsonSchemaProperty.description(description));
+                } else {
+                    builder.addParameter(paramName, JsonSchemaProperty.STRING,
+                            JsonSchemaProperty.description(description));
                 }
-
-                builder.addParameter(paramName, JsonSchemaProperty.STRING,
-                        JsonSchemaProperty.description(description));
             }
 
         } catch (Exception e) {

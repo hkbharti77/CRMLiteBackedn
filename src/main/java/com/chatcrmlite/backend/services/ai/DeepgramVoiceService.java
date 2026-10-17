@@ -45,7 +45,7 @@ public class DeepgramVoiceService {
     @Value("${deepgram.tts.model:aura-stella-en}")
     private String ttsModel;
 
-    @Value("${deepgram.connect-timeout-ms:2500}")
+    @Value("${deepgram.connect-timeout-ms:8000}")
     private int connectTimeoutMs;
 
     @Value("${deepgram.read-timeout-ms:25000}")
@@ -54,14 +54,14 @@ public class DeepgramVoiceService {
     @Value("${deepgram.stt.streaming.enabled:true}")
     private boolean streamingSttEnabled;
 
-    @Value("${deepgram.max-retries:0}")
+    @Value("${deepgram.max-retries:2}")
     private int maxRetries;
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
 
     public DeepgramVoiceService(RestTemplateBuilder builder,
-                                @Value("${deepgram.connect-timeout-ms:2500}") int connectTimeoutMs,
+                                @Value("${deepgram.connect-timeout-ms:8000}") int connectTimeoutMs,
                                 @Value("${deepgram.read-timeout-ms:25000}") int readTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
         this.readTimeoutMs = readTimeoutMs;

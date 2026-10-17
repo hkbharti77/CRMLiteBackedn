@@ -10,10 +10,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Service
+@Transactional
 @RequiredArgsConstructor
 @Slf4j
 public class QuotaEnforcerService {
@@ -128,12 +130,16 @@ public class QuotaEnforcerService {
      * Checks if tenant can add more leads using Effective Entitlements.
      */
     public void verifyLeadQuota(UUID tenantId) {
-        TenantSubscription sub = getActiveSubscription(tenantId);
-        com.chatcrmlite.backend.models.Tenant tenant = sub.getTenant();
+        getActiveSubscription(tenantId);
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        Tenant.PrimaryResource primaryResource = (tenant != null && tenant.getPrimaryResource() != null)
+                ? tenant.getPrimaryResource()
+                : Tenant.PrimaryResource.LEAD;
+
         com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO entitlements = entitlementResolverService.getEffectiveEntitlements(tenantId);
         long leadCount = leadRepository.countByTenantId(tenantId);
 
-        int limit = (tenant.getPrimaryResource() == com.chatcrmlite.backend.models.Tenant.PrimaryResource.LEAD) ? 
+        int limit = (primaryResource == Tenant.PrimaryResource.LEAD) ? 
                 entitlements.getLimits().getPrimaryResourceLimit() : 
                 entitlements.getLimits().getSecondaryResourceLimit();
 
@@ -147,16 +153,20 @@ public class QuotaEnforcerService {
      * Checks if tenant can schedule another booking/appointment using Effective Entitlements.
      */
     public void verifyBookingQuota(UUID tenantId) {
-        TenantSubscription sub = getActiveSubscription(tenantId);
-        com.chatcrmlite.backend.models.Tenant tenant = sub.getTenant();
+        getActiveSubscription(tenantId);
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(null);
+        Tenant.PrimaryResource primaryResource = (tenant != null && tenant.getPrimaryResource() != null)
+                ? tenant.getPrimaryResource()
+                : Tenant.PrimaryResource.BOOKING;
+
         com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO entitlements = entitlementResolverService.getEffectiveEntitlements(tenantId);
         
         long bookingCount = bookingRepository.countByTenantId(tenantId);
         long appointmentCount = appointmentRepository.countByTenantId(tenantId);
         long totalSchedules = bookingCount + appointmentCount;
 
-        int limit = (tenant.getPrimaryResource() == com.chatcrmlite.backend.models.Tenant.PrimaryResource.BOOKING || 
-                     tenant.getPrimaryResource() == com.chatcrmlite.backend.models.Tenant.PrimaryResource.APPOINTMENT) ? 
+        int limit = (primaryResource == Tenant.PrimaryResource.BOOKING || 
+                     primaryResource == Tenant.PrimaryResource.APPOINTMENT) ? 
                 entitlements.getLimits().getPrimaryResourceLimit() : 
                 entitlements.getLimits().getSecondaryResourceLimit();
 

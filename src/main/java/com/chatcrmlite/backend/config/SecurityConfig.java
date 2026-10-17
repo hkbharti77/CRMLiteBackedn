@@ -120,7 +120,8 @@ public class SecurityConfig {
                     "/api/v1/public/**",
                     "/api/v1/integrations/google/callback", // Google OAuth callback — no JWT available
                     "/api/v1/integrations/meta/gateway/**", // Meta WhatsApp Gateway launcher & callbacks
-                    "/api/v1/integrations/meta/data-deletion", // Meta Compliance Data Deletion (HMAC verified)
+                    "/api/v1/integrations/meta/data-deletion/**", // Meta Compliance Data Deletion (HMAC verified) & status page
+                    "/api/v1/integrations/meta/deauthorize", // Meta Compliance Deauthorize Callback (HMAC verified)
                     "/api/v1/business-categories/**",
                     "/api/v1/categories/**",
                     "/api/v1/webhooks/**",

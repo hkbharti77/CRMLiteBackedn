@@ -81,6 +81,9 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "embedded_phone_id")
     private String embeddedPhoneId;
 
+    @Column(name = "meta_user_id", length = 100)
+    private String metaUserId;
+
     @Column(name = "verified_name")
     private String verifiedName;
 
@@ -362,6 +365,8 @@ public class WhatsAppConfig implements Serializable {
     public void setEmbeddedBusinessId(String embeddedBusinessId) { this.embeddedBusinessId = embeddedBusinessId; }
     public void setEmbeddedWabaId(String embeddedWabaId) { this.embeddedWabaId = embeddedWabaId; }
     public void setEmbeddedPhoneId(String embeddedPhoneId) { this.embeddedPhoneId = embeddedPhoneId; }
+    public String getMetaUserId() { return metaUserId; }
+    public void setMetaUserId(String metaUserId) { this.metaUserId = metaUserId; }
     public void setVerifiedName(String verifiedName) { this.verifiedName = verifiedName; }
     public void setTokenExpiry(java.time.LocalDateTime tokenExpiry) { this.tokenExpiry = tokenExpiry; }
     public void setQualityRating(String qualityRating) { this.qualityRating = qualityRating; }

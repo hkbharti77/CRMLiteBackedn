@@ -104,10 +104,11 @@ public class WhatsAppVoiceCallBridgeService {
         // 0. Load Tenant-Specific AI Voice Assistant Configuration
         var voiceConfigOpt = voiceConfigRepository.findByTenantId(tenantId);
         String assistantName = voiceConfigOpt.map(c -> c.getAssistantName()).filter(s -> !s.isBlank()).orElse("AI Assistant");
-        String personaPrompt = voiceConfigOpt.map(c -> c.getPersonaPrompt()).filter(s -> !s.isBlank()).orElse(
+        String rawPrompt = voiceConfigOpt.map(c -> c.getPersonaPrompt()).filter(s -> !s.isBlank()).orElse(
                 "You are " + assistantName + ", a helpful, polite and professional AI voice assistant for WhatsApp Business calls. " +
                 "Keep answers brief, conversational, and natural for speech. Do not use markdown bullet points or special formatting in spoken output."
         );
+        String personaPrompt = PersonaPromptHarmonizer.harmonize(rawPrompt, assistantName, "WhatsApp Business");
         String ttsVoiceId = voiceConfigOpt.map(c -> c.getTtsVoiceId()).filter(s -> !s.isBlank()).orElse(null);
 
         CallSessionContext callContext = activeCalls.computeIfAbsent(callId, k -> new CallSessionContext(callId));

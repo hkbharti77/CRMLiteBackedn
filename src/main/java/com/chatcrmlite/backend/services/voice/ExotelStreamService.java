@@ -211,9 +211,12 @@ public class ExotelStreamService {
                 if (cancelToken.get()) return;
                 session.setLlmFirstTokenMs(System.currentTimeMillis());
                 
-                // Resolve active tenant ID
+                // Resolve active tenant ID and owner user ID
                 Tenant tenant = tenantRepository.findAll().stream().findFirst().orElse(null);
                 UUID businessId = tenant != null ? tenant.getId() : UUID.randomUUID();
+                UUID ownerUserId = (tenant != null)
+                        ? userRepository.findFirstUserIdByTenantId(tenant.getId()).orElse(businessId)
+                        : businessId;
                 String callerPhone = (session.getPhoneNumber() != null && !session.getPhoneNumber().isBlank())
                         ? session.getPhoneNumber()
                         : "+919999999999";
@@ -242,7 +245,7 @@ public class ExotelStreamService {
 
                 com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext toolContext = 
                     new com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext(
-                        businessId, businessId, UUID.randomUUID(), session.getStreamId(), 
+                        businessId, ownerUserId, UUID.randomUUID(), session.getStreamId(), 
                         session.getStreamId(), session.getStreamId(), callerPhone
                     );
 

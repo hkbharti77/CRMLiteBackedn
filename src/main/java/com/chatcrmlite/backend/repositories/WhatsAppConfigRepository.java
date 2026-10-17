@@ -50,6 +50,12 @@ public interface WhatsAppConfigRepository extends JpaRepository<WhatsAppConfig, 
 
     Optional<WhatsAppConfig> findByWabaId(String wabaId);
 
+    Optional<WhatsAppConfig> findByMetaUserId(String metaUserId);
+
+    java.util.List<WhatsAppConfig> findAllByMetaUserId(String metaUserId);
+
+    java.util.List<WhatsAppConfig> findAllByBusinessId(String businessId);
+
     @Cacheable(value = "whatsapp_waba_exists", key = "#wabaId")
     boolean existsByWabaId(String wabaId);
 

@@ -219,10 +219,12 @@ public class VoiceSessionService {
             String assistantName = (voiceConfig != null && voiceConfig.getAssistantName() != null && !voiceConfig.getAssistantName().isBlank())
                     ? voiceConfig.getAssistantName()
                     : "Assistant";
-                    
-            String systemPrompt = "CRITICAL INSTRUCTION: Your true name is " + assistantName + ". Ignore any other names that might appear in the chat history.\n"
+            
+            String harmonizedPrompt = PersonaPromptHarmonizer.harmonize(basePrompt, assistantName, business.getDisplayName());
+
+            String systemPrompt = "CRITICAL INSTRUCTION: Your true name is " + assistantName + ". Whenever introducing yourself or asked your name, you MUST ONLY state your name as " + assistantName + ". Ignore any other names that might appear in the chat history.\n"
                     + "CRITICAL INSTRUCTION: Do NOT use exclamation marks (!) or complex formatting symbols. Keep the text clean for text-to-speech synthesis.\n\n"
-                    + basePrompt;
+                    + harmonizedPrompt;
 
             List<ChatMessage> previousMessages = new ArrayList<>();
             try {

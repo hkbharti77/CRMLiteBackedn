@@ -7,6 +7,7 @@ import com.chatcrmlite.backend.repositories.ContactRepository;
 import com.chatcrmlite.backend.repositories.LeadRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
 import com.chatcrmlite.backend.services.ReferenceNumberService;
+import com.chatcrmlite.backend.services.FlowConfigService;
 import com.chatcrmlite.backend.services.lead.LeadEnquiryService;
 import com.chatcrmlite.backend.services.tenant.QuotaEnforcerService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -30,8 +31,9 @@ public class CreateLeadTool implements VoiceTool {
     private final QuotaEnforcerService quotaEnforcerService;
     private final ReferenceNumberService referenceNumberService;
     private final LeadEnquiryService leadEnquiryService;
+    private final FlowConfigService flowConfigService;
 
-    public CreateLeadTool(ObjectMapper objectMapper, UserRepository userRepository, ContactRepository contactRepository, LeadRepository leadRepository, QuotaEnforcerService quotaEnforcerService, ReferenceNumberService referenceNumberService, LeadEnquiryService leadEnquiryService) {
+    public CreateLeadTool(ObjectMapper objectMapper, UserRepository userRepository, ContactRepository contactRepository, LeadRepository leadRepository, QuotaEnforcerService quotaEnforcerService, ReferenceNumberService referenceNumberService, LeadEnquiryService leadEnquiryService, FlowConfigService flowConfigService) {
         this.objectMapper = objectMapper;
         this.userRepository = userRepository;
         this.contactRepository = contactRepository;
@@ -39,6 +41,7 @@ public class CreateLeadTool implements VoiceTool {
         this.quotaEnforcerService = quotaEnforcerService;
         this.referenceNumberService = referenceNumberService;
         this.leadEnquiryService = leadEnquiryService;
+        this.flowConfigService = flowConfigService;
     }
 
     @Override
@@ -58,41 +61,87 @@ public class CreateLeadTool implements VoiceTool {
     }
 
     @Override
+    @Transactional
     public ToolExecutionResult execute(String toolCallId, String jsonArguments, ToolExecutionContext context) {
         try {
             JsonNode args = objectMapper.readTree(jsonArguments);
-            
-            String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name", "visitor_name", "first_name");
-            String email = extractFirstNonBlank(args, "customer_email", "email", "email_address", "mail");
-            String details = extractFirstNonBlank(args, "enquiry_details", "details", "message", "enquiry", "notes", "requirements", "service", "query");
-            
-            if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
-                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required field: customer_name. Please ask the user for their name.", "MISSING_FIELD");
-            }
-            if (details == null || details.trim().isEmpty() || details.equalsIgnoreCase("unknown")) {
-                return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED, "Missing required field: enquiry_details. Please ask the user what their enquiry is about.", "MISSING_FIELD");
-            }
 
-            final String name = rawName;
-
-            User owner = userRepository.findById(context.userId())
-                    .or(() -> userRepository.findFirstByTenantIdAndRole(context.tenantId(), User.Role.ADMIN))
-                    .orElseGet(() -> userRepository.findAll().stream().findFirst().orElse(null));
+            User owner = null;
+            if (context.userId() != null) {
+                owner = userRepository.findById(context.userId()).orElse(null);
+            }
+            if (owner == null && context.tenantId() != null) {
+                owner = userRepository.findFirstByTenantIdAndRole(context.tenantId(), User.Role.ADMIN)
+                        .or(() -> userRepository.findFirstUserIdByTenantId(context.tenantId()).flatMap(userRepository::findById))
+                        .orElse(null);
+            }
+            if (owner == null) {
+                owner = userRepository.findAll().stream().findFirst().orElse(null);
+            }
 
             if (owner == null) {
                 return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.FAILED, "Owner user not found.", "SYSTEM_ERROR");
             }
+            final User finalOwner = owner;
+
+            // 1. Validate required dynamic steps configured by tenant in DB
+            if (flowConfigService != null) {
+                try {
+                    com.chatcrmlite.backend.dto.FlowConfigDTO flowConfig = flowConfigService.getFlowConfig(finalOwner, "lead");
+                    if (flowConfig != null && flowConfig.getSteps() != null) {
+                        for (com.chatcrmlite.backend.dto.FlowStepDTO step : flowConfig.getSteps()) {
+                            if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
+                            String key = step.getDataKey().trim();
+                            if ("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) continue;
+
+                            if (step.isRequired()) {
+                                String val = extractFirstNonBlank(args, key, key.replace("_", ""), key.toLowerCase());
+                                if (key.contains("name")) {
+                                    val = extractFirstNonBlank(args, key, "customer_name", "name", "full_name", "caller_name");
+                                } else if (key.contains("email")) {
+                                    val = extractFirstNonBlank(args, key, "customer_email", "email");
+                                } else if (key.contains("enquiry") || key.contains("detail") || key.contains("requirement") || key.contains("message")) {
+                                    val = extractFirstNonBlank(args, key, "enquiry_details", "details", "message", "enquiry", "specific_requirement");
+                                }
+
+                                if (val == null || val.trim().isEmpty() || val.equalsIgnoreCase("unknown")) {
+                                    String question = (step.getQuestion() != null && !step.getQuestion().isBlank())
+                                            ? step.getQuestion()
+                                            : "Could you please provide your " + key.replace("_", " ") + "?";
+                                    return new ToolExecutionResult(getName(), toolCallId, ToolExecutionStatus.VALIDATION_FAILED,
+                                            "Missing required field '" + key + "'. Please ask the caller: " + question, "MISSING_FIELD");
+                                }
+                            }
+                        }
+                    }
+                } catch (Exception ex) {
+                    log.warn("[CreateLeadTool] Dynamic flow validation skipped due to: {}", ex.getMessage());
+                }
+            }
+            
+            String rawName = extractFirstNonBlank(args, "customer_name", "name", "full_name", "caller_name", "visitor_name", "first_name");
+            String email = extractFirstNonBlank(args, "customer_email", "email", "email_address", "mail");
+            String details = extractFirstNonBlank(args, "enquiry_details", "details", "message", "enquiry", "notes", "requirements", "service", "query", "specific_requirement");
+            
+            if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
+                rawName = "Voice Caller (" + (context.callerPhone() != null ? context.callerPhone() : "Web") + ")";
+            }
+            if (details == null || details.trim().isEmpty() || details.equalsIgnoreCase("unknown")) {
+                details = "Voice Lead Enquiry";
+            }
+
+            final String name = rawName;
 
             // Find or create contact based on caller phone
             String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
-            Contact contact = contactRepository.findByWaIdAndOwner(waId, owner)
+            Contact contact = contactRepository.findByWaIdAndOwner(waId, finalOwner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
                                 .waId(waId)
                                 .email(email)
                                 .name(name)
                                 .source("VOICE_BOT")
-                                .owner(owner)
+                                .owner(finalOwner)
                                 .build();
                         return contactRepository.save(newContact);
                     });
@@ -113,26 +162,33 @@ public class CreateLeadTool implements VoiceTool {
 
             // Create lead
             quotaEnforcerService.verifyLeadQuota(context.tenantId());
-            String leadNumber = referenceNumberService.generate(owner, ReferenceNumberService.EntityType.LEAD);
+            String leadNumber = referenceNumberService.generate(finalOwner, ReferenceNumberService.EntityType.LEAD);
 
             Lead lead = Lead.builder()
                     .leadNumber(leadNumber)
                     .contact(contact)
-                    .owner(owner)
+                    .owner(finalOwner)
                     .status(Lead.LeadStatus.NEW)
                     .build();
 
             Lead savedLead = leadRepository.save(lead);
             
-            // Append enquiry
+            // Append enquiry with all collected dynamic fields
             Map<String, String> data = new HashMap<>();
-            
+            java.util.Iterator<String> fieldNames = args.fieldNames();
+            while (fieldNames.hasNext()) {
+                String f = fieldNames.next();
+                JsonNode node = args.get(f);
+                if (node != null && !node.isNull() && !node.asText().isBlank() && !node.asText().equalsIgnoreCase("unknown")) {
+                    data.put(f, node.asText().trim());
+                }
+            }
+
             // Safely truncate phone to fit in 255 character limit
             String safePhone = waId.length() > 250 ? waId.substring(0, 250) : waId;
             data.put("phone", safePhone);
-            
             if (email != null && !email.equalsIgnoreCase("unknown")) data.put("email", email);
-            data.put("name", name);
+            if (name != null) data.put("name", name);
             
             leadEnquiryService.appendEnquiry(savedLead, details, "VOICE_BOT", "voice-bot", data);
 

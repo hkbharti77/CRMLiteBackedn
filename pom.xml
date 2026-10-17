@@ -19,7 +19,7 @@
     <java.version>17</java.version>
     <!-- Skip broken tests by default so application can run -->
     <maven.test.skip>true</maven.test.skip>
-    <lombok.version>1.18.46</lombok.version>
+    <lombok.version>1.18.36</lombok.version>
     <!-- PG 18 support (Boot 3.4.3 manages 10.20.1 which only lists up to PG 17) -->
     <flyway.version>11.14.1</flyway.version>
   </properties>

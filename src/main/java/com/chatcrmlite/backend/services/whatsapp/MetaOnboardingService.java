@@ -95,6 +95,7 @@ public class MetaOnboardingService {
         private boolean isValid;
         private String businessId;
         private String wabaId;
+        private String metaUserId;
         private LocalDateTime tokenExpiry;
         private List<String> scopes;
     }
@@ -253,6 +254,7 @@ public class MetaOnboardingService {
                     tokenExpiry,
                     businessId,
                     wabaId,
+                    debugResult.getMetaUserId(),
                     phoneDetails,
                     webhookResult
             );
@@ -366,10 +368,13 @@ public class MetaOnboardingService {
                 }
             }
 
+            String metaUserId = data.has("user_id") ? data.path("user_id").asText() : null;
+
             return TokenDebugResult.builder()
                     .isValid(isValid)
                     .businessId(businessId)
                     .wabaId(wabaId)
+                    .metaUserId(metaUserId)
                     .tokenExpiry(expiry)
                     .scopes(scopes)
                     .build();
@@ -606,6 +611,20 @@ public class MetaOnboardingService {
             String wabaId,
             PhoneDetailsResult phoneDetails,
             WebhookSubscriptionResult webhookResult) {
+        return saveProvisionedConfig(tenantId, user, accessToken, tokenExpiry, businessId, wabaId, null, phoneDetails, webhookResult);
+    }
+
+    @Transactional
+    public WhatsAppConfig saveProvisionedConfig(
+            UUID tenantId,
+            User user,
+            String accessToken,
+            LocalDateTime tokenExpiry,
+            String businessId,
+            String wabaId,
+            String metaUserId,
+            PhoneDetailsResult phoneDetails,
+            WebhookSubscriptionResult webhookResult) {
 
         WhatsAppConfig config = whatsappConfigRepository.findByTenantId(tenantId)
                 .orElseGet(() -> {
@@ -624,6 +643,9 @@ public class MetaOnboardingService {
         config.setTokenExpiry(tokenExpiry);
         config.setBusinessId(businessId);
         config.setWabaId(wabaId);
+        if (StringUtils.hasText(metaUserId)) {
+            config.setMetaUserId(metaUserId);
+        }
 
         if (phoneDetails != null) {
             config.setPhoneNumberId(phoneDetails.getPhoneNumberId());

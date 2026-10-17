@@ -14,6 +14,7 @@ import java.util.UUID;
 public interface SecurityNotificationOutboxRepository extends JpaRepository<SecurityNotificationOutbox, UUID> {
     List<SecurityNotificationOutbox> findTop50ByStatusOrderByCreatedAtAsc(String status);
     List<SecurityNotificationOutbox> findTop50ByStatusInOrderByCreatedAtAsc(List<String> statuses);
+    List<SecurityNotificationOutbox> findAllByMetaUserId(String metaUserId);
 
     @Query("SELECT COUNT(s) > 0 FROM SecurityNotificationOutbox s WHERE s.tenant.id = :tenantId AND s.eventType = :eventType AND (:phoneNumberId IS NULL OR s.phoneNumberId = :phoneNumberId) AND s.sourceEventId = :sourceEventId")
     boolean existsByTenantIdAndEventTypeAndPhoneNumberIdAndSourceEventId(
