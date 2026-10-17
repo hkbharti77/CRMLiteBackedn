@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import com.chatcrmlite.backend.models.ConversationState;
+import com.chatcrmlite.backend.repositories.TenantFlowConfigRepository;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -21,13 +23,19 @@ public class ToolRegistry {
     private final Map<String, VoiceTool> tools;
     private final TenantRepository tenantRepository;
     private final com.chatcrmlite.backend.repositories.UserRepository userRepository;
+    private final TenantFlowConfigRepository tenantFlowConfigRepository;
     private final VoiceFormConfigAdapter voiceFormConfigAdapter;
 
-    public ToolRegistry(List<VoiceTool> toolBeans, TenantRepository tenantRepository, com.chatcrmlite.backend.repositories.UserRepository userRepository, VoiceFormConfigAdapter voiceFormConfigAdapter) {
+    public ToolRegistry(List<VoiceTool> toolBeans,
+                        TenantRepository tenantRepository,
+                        com.chatcrmlite.backend.repositories.UserRepository userRepository,
+                        TenantFlowConfigRepository tenantFlowConfigRepository,
+                        VoiceFormConfigAdapter voiceFormConfigAdapter) {
         this.tools = toolBeans.stream()
                 .collect(Collectors.toMap(VoiceTool::getName, tool -> tool));
         this.tenantRepository = tenantRepository;
         this.userRepository = userRepository;
+        this.tenantFlowConfigRepository = tenantFlowConfigRepository;
         this.voiceFormConfigAdapter = voiceFormConfigAdapter;
     }
 
@@ -63,32 +71,33 @@ public class ToolRegistry {
         UUID effectiveTenantId = tenant.getId();
         List<ToolSpecification> specs = new ArrayList<>();
 
-        if (!Boolean.FALSE.equals(tenant.getForceShowLeads())) {
+        if (isToolEnabled("create_lead", tenant)) {
             try {
                 specs.add(voiceFormConfigAdapter.buildLeadToolSpec(effectiveTenantId));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build lead tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
-        if (!Boolean.FALSE.equals(tenant.getForceShowAppointment())) {
+        if (isToolEnabled("book_appointment", tenant)) {
             try {
                 specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(effectiveTenantId));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build appointment tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
-        if (!Boolean.FALSE.equals(tenant.getForceShowBooking())) {
+        if (isToolEnabled("create_booking", tenant)) {
             try {
                 specs.add(voiceFormConfigAdapter.buildBookingToolSpec(effectiveTenantId));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build booking tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
-        // Support tickets always available
-        try {
-            specs.add(voiceFormConfigAdapter.buildSupportToolSpec(effectiveTenantId));
-        } catch (Exception e) {
-            log.error("[ToolRegistry] Failed to build support tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
+        if (isToolEnabled("submit_support_ticket", tenant)) {
+            try {
+                specs.add(voiceFormConfigAdapter.buildSupportToolSpec(effectiveTenantId));
+            } catch (Exception e) {
+                log.error("[ToolRegistry] Failed to build support tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
+            }
         }
 
         log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={}", specs.size(), effectiveTenantId);
@@ -121,13 +130,32 @@ public class ToolRegistry {
             case "create_lead":
                 return !Boolean.FALSE.equals(tenant.getForceShowLeads());
             case "book_appointment":
-                return !Boolean.FALSE.equals(tenant.getForceShowAppointment());
+                if (!Boolean.FALSE.equals(tenant.getForceShowAppointment())) return true;
+                return hasFlowConfig(tenant, ConversationState.FlowType.APPOINTMENT);
             case "create_booking":
-                return !Boolean.FALSE.equals(tenant.getForceShowBooking());
+                if (!Boolean.FALSE.equals(tenant.getForceShowBooking())) return true;
+                return hasFlowConfig(tenant, ConversationState.FlowType.BOOKING);
             case "submit_support_ticket":
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private boolean hasFlowConfig(Tenant tenant, ConversationState.FlowType flowType) {
+        if (tenant == null || tenantFlowConfigRepository == null) return false;
+        try {
+            User owner = userRepository.findById(tenant.getId())
+                    .or(() -> userRepository.findFirstByTenantIdAndRole(tenant.getId(), User.Role.ADMIN))
+                    .orElseGet(() -> {
+                        var users = userRepository.findUserIdsByTenantId(tenant.getId(), org.springframework.data.domain.PageRequest.of(0, 1));
+                        return (users != null && !users.isEmpty()) ? userRepository.findById(users.get(0)).orElse(null) : null;
+                    });
+            if (owner == null) return false;
+            return tenantFlowConfigRepository.findByTenantAndFlowType(owner, flowType).isPresent();
+        } catch (Exception e) {
+            log.warn("[ToolRegistry] Error checking flow config for flowType={}: {}", flowType, e.getMessage());
+            return false;
         }
     }
 }
