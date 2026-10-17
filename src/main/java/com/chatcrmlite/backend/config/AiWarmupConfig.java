@@ -39,6 +39,9 @@ public class AiWarmupConfig {
             jdbcTemplate.execute("ALTER TABLE leads DROP CONSTRAINT IF EXISTS leads_status_check");
             jdbcTemplate.execute("ALTER TABLE leads ADD COLUMN IF NOT EXISTS lost_reason TEXT");
             jdbcTemplate.execute("ALTER TABLE faq_items ALTER COLUMN category TYPE TEXT");
+            jdbcTemplate.execute("ALTER TABLE whatsapp_configs ADD COLUMN IF NOT EXISTS meta_user_id VARCHAR(100)");
+            jdbcTemplate.execute("CREATE INDEX IF NOT EXISTS idx_whatsapp_configs_meta_user_id ON whatsapp_configs(meta_user_id)");
+            jdbcTemplate.execute("ALTER TABLE security_notification_outbox ADD COLUMN IF NOT EXISTS meta_user_id VARCHAR(100)");
 
             // Ensure document_chunks.embedding is converted from jsonb/text to vector(384)
             try {

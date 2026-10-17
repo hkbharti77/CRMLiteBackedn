@@ -40,6 +40,28 @@ public class TenantDataRepairRunner implements ApplicationRunner {
         try {
             log.info("🛠️ [DataRepair] Running tenant and lead integrity check on startup...");
 
+            // 0. Ensure Meta Compliance columns & tables exist (Fallback if Flyway is disabled/bypassed)
+            executeSqlSafely("ALTER TABLE whatsapp_configs ADD COLUMN IF NOT EXISTS meta_user_id VARCHAR(100)", "whatsapp_configs.meta_user_id");
+            executeSqlSafely("CREATE INDEX IF NOT EXISTS idx_whatsapp_configs_meta_user_id ON whatsapp_configs(meta_user_id)", "whatsapp_configs.meta_user_id_idx");
+            executeSqlSafely("ALTER TABLE security_notification_outbox ADD COLUMN IF NOT EXISTS meta_user_id VARCHAR(100)", "security_notification_outbox.meta_user_id");
+            executeSqlSafely(
+                "CREATE TABLE IF NOT EXISTS meta_data_deletion_requests (" +
+                "    id UUID PRIMARY KEY, " +
+                "    confirmation_code VARCHAR(64) NOT NULL UNIQUE, " +
+                "    meta_user_id VARCHAR(100) NOT NULL, " +
+                "    tenant_id UUID REFERENCES tenants(id) ON DELETE SET NULL, " +
+                "    status VARCHAR(50) NOT NULL DEFAULT 'PENDING', " +
+                "    requested_at TIMESTAMPTZ NOT NULL DEFAULT NOW(), " +
+                "    completed_at TIMESTAMPTZ, " +
+                "    data_summary TEXT, " +
+                "    error_message TEXT" +
+                ")",
+                "meta_data_deletion_requests table"
+            );
+            executeSqlSafely("CREATE INDEX IF NOT EXISTS idx_meta_deletion_code ON meta_data_deletion_requests(confirmation_code)", "idx_meta_deletion_code");
+            executeSqlSafely("CREATE INDEX IF NOT EXISTS idx_meta_deletion_user ON meta_data_deletion_requests(meta_user_id)", "idx_meta_deletion_user");
+            executeSqlSafely("CREATE INDEX IF NOT EXISTS idx_meta_deletion_status ON meta_data_deletion_requests(status)", "idx_meta_deletion_status");
+
             // 1. Backfill tenant_id safely by deriving it from owner_id (Intra-tenant repair)
             executeSqlSafely("UPDATE contacts SET tenant_id = (SELECT tenant_id FROM app_users WHERE app_users.id = contacts.owner_id) WHERE tenant_id IS NULL AND owner_id IS NOT NULL", "contacts.tenant_id");
             executeSqlSafely("UPDATE leads SET tenant_id = (SELECT tenant_id FROM app_users WHERE app_users.id = leads.owner_id) WHERE tenant_id IS NULL AND owner_id IS NOT NULL", "leads.tenant_id");
