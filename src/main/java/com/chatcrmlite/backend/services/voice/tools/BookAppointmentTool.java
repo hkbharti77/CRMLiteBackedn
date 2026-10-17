@@ -113,7 +113,11 @@ public class BookAppointmentTool implements VoiceTool {
                                 } else if (key.contains("time")) {
                                     val = extractFirstNonBlank(args, key, "time", "appointment_time", "preferred_time", "slot");
                                 } else if (key.contains("service") || key.contains("reason") || key.contains("title")) {
-                                    val = extractFirstNonBlank(args, key, "service", "reason", "title");
+                                    val = extractFirstNonBlank(args, key, "service", "reason", "title", "service_category");
+                                } else if (key.contains("custom") || key.contains("meeting") || key.contains("mode")) {
+                                    val = extractFirstNonBlank(args, key, "meeting_type", "meeting_mode", "online_offline", "mode");
+                                } else if (key.contains("requirement") || key.contains("detail") || key.contains("discuss")) {
+                                    val = extractFirstNonBlank(args, key, "specific_requirement", "requirement", "details", "topic");
                                 }
 
                                 if (val == null || val.trim().isEmpty() || val.equalsIgnoreCase("unknown")) {

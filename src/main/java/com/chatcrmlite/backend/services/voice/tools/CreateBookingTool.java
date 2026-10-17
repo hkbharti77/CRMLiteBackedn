@@ -100,12 +100,18 @@ public class CreateBookingTool implements VoiceTool {
                                 String val = extractFirstNonBlank(args, key, key.replace("_", ""), key.toLowerCase());
                                 if (key.contains("name")) {
                                     val = extractFirstNonBlank(args, key, "customer_name", "name", "full_name", "caller_name");
-                                } else if (key.contains("phone") || key.contains("mobile") || key.contains("contact")) {
+                                } else if (key.contains("phone") || key.contains("mobile")) {
                                     val = (phoneFromArgs != null && !phoneFromArgs.isBlank()) ? phoneFromArgs : (hasTelephonyPhone ? context.callerPhone() : null);
                                 } else if (key.contains("service") || key.contains("item") || key.contains("package")) {
-                                    val = extractFirstNonBlank(args, key, "service", "item", "package");
-                                } else if (key.contains("slot") || key.contains("time") || key.contains("date")) {
-                                    val = extractFirstNonBlank(args, key, "preferred_slot", "slot", "date", "time", "preferred_date");
+                                    val = extractFirstNonBlank(args, key, "service", "item", "package", "service_category");
+                                } else if (key.contains("date") && !key.contains("time")) {
+                                    val = extractFirstNonBlank(args, key, "preferred_date", "date", "service_date");
+                                } else if (key.contains("time") || key.contains("slot")) {
+                                    val = extractFirstNonBlank(args, key, "preferred_contact_time", "preferred_time", "time", "slot", "preferred_slot");
+                                } else if (key.contains("city") || key.contains("address") || key.contains("location")) {
+                                    val = extractFirstNonBlank(args, key, "city", "location", "address");
+                                } else if (key.contains("requirement") || key.contains("detail") || key.contains("enquiry")) {
+                                    val = extractFirstNonBlank(args, key, "specific_requirement", "requirement", "details");
                                 }
 
                                 if (val == null || val.trim().isEmpty() || val.equalsIgnoreCase("unknown")) {
