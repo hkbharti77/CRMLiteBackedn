@@ -84,6 +84,14 @@ public class CreateLeadTool implements VoiceTool {
             }
             final User finalOwner = owner;
 
+            boolean hasTelephonyPhone = context != null 
+                    && context.callerPhone() != null 
+                    && !context.callerPhone().isBlank() 
+                    && !context.callerPhone().contains("9999999999") 
+                    && !context.callerPhone().startsWith("web_");
+
+            String phoneFromArgs = extractFirstNonBlank(args, "phone", "mobile", "whatsapp", "contact_number", "phone_number", "contact");
+
             // 1. Validate required dynamic steps configured by tenant in DB
             if (flowConfigService != null) {
                 try {
@@ -92,12 +100,17 @@ public class CreateLeadTool implements VoiceTool {
                         for (com.chatcrmlite.backend.dto.FlowStepDTO step : flowConfig.getSteps()) {
                             if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
                             String key = step.getDataKey().trim();
-                            if ("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) continue;
+                            // If phone is already captured via Exotel or WhatsApp Caller ID, skip phone validation
+                            if (("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) && hasTelephonyPhone) {
+                                continue;
+                            }
 
                             if (step.isRequired()) {
                                 String val = extractFirstNonBlank(args, key, key.replace("_", ""), key.toLowerCase());
                                 if (key.contains("name")) {
                                     val = extractFirstNonBlank(args, key, "customer_name", "name", "full_name", "caller_name");
+                                } else if (key.contains("phone") || key.contains("mobile") || key.contains("contact")) {
+                                    val = (phoneFromArgs != null && !phoneFromArgs.isBlank()) ? phoneFromArgs : (hasTelephonyPhone ? context.callerPhone() : null);
                                 } else if (key.contains("email")) {
                                     val = extractFirstNonBlank(args, key, "customer_email", "email");
                                 } else if (key.contains("enquiry") || key.contains("detail") || key.contains("requirement") || key.contains("message")) {
@@ -123,8 +136,12 @@ public class CreateLeadTool implements VoiceTool {
             String email = extractFirstNonBlank(args, "customer_email", "email", "email_address", "mail");
             String details = extractFirstNonBlank(args, "enquiry_details", "details", "message", "enquiry", "notes", "requirements", "service", "query", "specific_requirement");
             
+            String effectivePhone = hasTelephonyPhone 
+                    ? context.callerPhone() 
+                    : (phoneFromArgs != null && !phoneFromArgs.isBlank() ? phoneFromArgs : null);
+
             if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
-                rawName = "Voice Caller (" + (context.callerPhone() != null ? context.callerPhone() : "Web") + ")";
+                rawName = "Voice Caller (" + (effectivePhone != null ? effectivePhone : "Web") + ")";
             }
             if (details == null || details.trim().isEmpty() || details.equalsIgnoreCase("unknown")) {
                 details = "Voice Lead Enquiry";
@@ -132,15 +149,15 @@ public class CreateLeadTool implements VoiceTool {
 
             final String name = rawName;
 
-            // Find or create contact based on caller phone
-            String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
+            // Find or create contact based on effective phone
+            String waId = effectivePhone != null ? effectivePhone : "web_voice_" + context.callId();
             Contact contact = contactRepository.findByWaIdAndOwner(waId, finalOwner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
                                 .waId(waId)
                                 .email(email)
                                 .name(name)
-                                .source("VOICE_BOT")
+                                .source(hasTelephonyPhone ? "VOICE_BOT" : "WEBSITE_VOICE_BOT")
                                 .owner(finalOwner)
                                 .build();
                         return contactRepository.save(newContact);
@@ -148,7 +165,7 @@ public class CreateLeadTool implements VoiceTool {
 
             // If existing contact, update email/name if missing
             boolean contactUpdated = false;
-            if ((contact.getName() == null || contact.getName().equals(waId)) && name != null) {
+            if ((contact.getName() == null || contact.getName().equals(waId) || contact.getName().startsWith("Voice Caller")) && name != null) {
                 contact.setName(name);
                 contactUpdated = true;
             }

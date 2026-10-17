@@ -41,11 +41,16 @@ public class VoiceFormConfigAdapter {
      * the tenant's configured LEAD_CAPTURE flow fields from the DB.
      */
     public ToolSpecification buildLeadToolSpec(UUID tenantId) {
+        return buildLeadToolSpec(tenantId, false);
+    }
+
+    public ToolSpecification buildLeadToolSpec(UUID tenantId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
                 "create_lead",
                 "Creates a new lead for a prospective customer. Use when the caller wants to enquire, leave their details, or request a callback.",
-                "lead"
+                "lead",
+                includePhone
         );
     }
 
@@ -53,11 +58,16 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the appointment booking form.
      */
     public ToolSpecification buildAppointmentToolSpec(UUID tenantId) {
+        return buildAppointmentToolSpec(tenantId, false);
+    }
+
+    public ToolSpecification buildAppointmentToolSpec(UUID tenantId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
                 "book_appointment",
                 "Books an appointment for the caller at a specific date and time.",
-                "appointment"
+                "appointment",
+                includePhone
         );
     }
 
@@ -65,11 +75,16 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the booking form (classes/events/demos).
      */
     public ToolSpecification buildBookingToolSpec(UUID tenantId) {
+        return buildBookingToolSpec(tenantId, false);
+    }
+
+    public ToolSpecification buildBookingToolSpec(UUID tenantId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
                 "create_booking",
                 "Creates a booking for a demo, service, event, class, or reservation. Use this whenever the caller asks to book a demo, reserve a slot, book a service, or schedule a session.",
-                "booking"
+                "booking",
+                includePhone
         );
     }
 
@@ -77,11 +92,16 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the support ticket form.
      */
     public ToolSpecification buildSupportToolSpec(UUID tenantId) {
+        return buildSupportToolSpec(tenantId, false);
+    }
+
+    public ToolSpecification buildSupportToolSpec(UUID tenantId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
                 "submit_support_ticket",
                 "Submits a support ticket or records an issue raised by the caller.",
-                "support"
+                "support",
+                includePhone
         );
     }
 
@@ -91,6 +111,10 @@ public class VoiceFormConfigAdapter {
      * and maps each enabled FlowStepDTO into a ToolSpecification parameter.
      */
     private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType) {
+        return buildSpecForFlow(tenantId, toolName, toolDescription, flowType, false);
+    }
+
+    private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType, boolean includePhone) {
         User owner = userRepository.findById(tenantId)
                 .or(() -> userRepository.findFirstByTenantIdAndRole(tenantId, User.Role.ADMIN))
                 .orElseGet(() -> {
@@ -109,10 +133,13 @@ public class VoiceFormConfigAdapter {
         if (owner == null) {
             log.warn("[VoiceFormAdapter] Owner not found for tenantId={}, returning bare spec for tool={}", tenantId, toolName);
             // Return a minimal fallback spec with just customer_name
-            return builder
-                    .addParameter("customer_name", JsonSchemaProperty.STRING,
-                            JsonSchemaProperty.description("The name of the caller."))
-                    .build();
+            builder.addParameter("customer_name", JsonSchemaProperty.STRING,
+                    JsonSchemaProperty.description("The name of the caller."));
+            if (includePhone) {
+                builder.addParameter("phone", JsonSchemaProperty.STRING,
+                        JsonSchemaProperty.description("The phone or contact number of the website visitor."));
+            }
+            return builder.build();
         }
 
         try {
@@ -125,8 +152,8 @@ public class VoiceFormConfigAdapter {
             }
 
             List<FlowStepDTO> steps = flowConfig.getSteps();
-            log.info("[VoiceFormAdapter] Building voice ToolSpec for tool={} with {} fields from DB for tenant={}",
-                    toolName, steps.size(), tenantId);
+            log.info("[VoiceFormAdapter] Building voice ToolSpec for tool={} with {} fields from DB for tenant={} (includePhone={})",
+                    toolName, steps.size(), tenantId, includePhone);
 
             StringBuilder desc = new StringBuilder();
             if (flowConfig.getIntentDescription() != null && !flowConfig.getIntentDescription().isBlank()) {
@@ -146,8 +173,8 @@ public class VoiceFormConfigAdapter {
             desc.append("FORM QUESTIONS TO ASK THE CALLER (ask one at a time conversationally):\n");
             for (FlowStepDTO step : steps) {
                 if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
-                if ("phone".equals(step.getDataKey()) || "mobile".equals(step.getDataKey())
-                        || "whatsapp".equals(step.getDataKey())) {
+                if (!includePhone && ("phone".equals(step.getDataKey()) || "mobile".equals(step.getDataKey())
+                        || "whatsapp".equals(step.getDataKey()))) {
                     continue;
                 }
                 desc.append("  - Field '").append(step.getDataKey()).append("': \"")
@@ -165,9 +192,9 @@ public class VoiceFormConfigAdapter {
             for (FlowStepDTO step : steps) {
                 if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
 
-                // Skip phone — it is auto-captured from the Exotel call metadata
-                if ("phone".equals(step.getDataKey()) || "mobile".equals(step.getDataKey())
-                        || "whatsapp".equals(step.getDataKey())) {
+                // Skip phone only if includePhone is false (telephony / whatsapp auto-captures phone)
+                if (!includePhone && ("phone".equals(step.getDataKey()) || "mobile".equals(step.getDataKey())
+                        || "whatsapp".equals(step.getDataKey()))) {
                     continue;
                 }
 

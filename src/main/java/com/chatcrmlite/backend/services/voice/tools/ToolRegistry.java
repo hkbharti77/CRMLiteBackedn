@@ -63,6 +63,10 @@ public class ToolRegistry {
      * No hardcoded questions — all driven by admin panel settings.
      */
     public List<ToolSpecification> getEnabledToolSpecsForTenant(UUID tenantId) {
+        return getEnabledToolSpecsForTenant(tenantId, false);
+    }
+
+    public List<ToolSpecification> getEnabledToolSpecsForTenant(UUID tenantId, boolean includePhone) {
         Tenant tenant = resolveTenant(tenantId);
         if (tenant == null) {
             log.warn("[ToolRegistry] Tenant not found for id={}, returning empty tool specs", tenantId);
@@ -73,34 +77,34 @@ public class ToolRegistry {
 
         if (isToolEnabled("create_lead", tenant)) {
             try {
-                specs.add(voiceFormConfigAdapter.buildLeadToolSpec(effectiveTenantId));
+                specs.add(voiceFormConfigAdapter.buildLeadToolSpec(effectiveTenantId, includePhone));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build lead tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         if (isToolEnabled("book_appointment", tenant)) {
             try {
-                specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(effectiveTenantId));
+                specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(effectiveTenantId, includePhone));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build appointment tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         if (isToolEnabled("create_booking", tenant)) {
             try {
-                specs.add(voiceFormConfigAdapter.buildBookingToolSpec(effectiveTenantId));
+                specs.add(voiceFormConfigAdapter.buildBookingToolSpec(effectiveTenantId, includePhone));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build booking tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
         if (isToolEnabled("submit_support_ticket", tenant)) {
             try {
-                specs.add(voiceFormConfigAdapter.buildSupportToolSpec(effectiveTenantId));
+                specs.add(voiceFormConfigAdapter.buildSupportToolSpec(effectiveTenantId, includePhone));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build support tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
 
-        log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={}", specs.size(), effectiveTenantId);
+        log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={} (includePhone={})", specs.size(), effectiveTenantId, includePhone);
         return specs;
     }
 

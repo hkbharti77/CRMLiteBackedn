@@ -75,6 +75,14 @@ public class CreateBookingTool implements VoiceTool {
             }
             final User finalOwner = owner;
 
+            boolean hasTelephonyPhone = context != null 
+                    && context.callerPhone() != null 
+                    && !context.callerPhone().isBlank() 
+                    && !context.callerPhone().contains("9999999999") 
+                    && !context.callerPhone().startsWith("web_");
+
+            String phoneFromArgs = extractFirstNonBlank(args, "phone", "mobile", "whatsapp", "contact_number", "phone_number", "contact");
+
             // 1. Dynamic validation against tenant-configured flow steps
             if (flowConfigService != null) {
                 try {
@@ -83,12 +91,17 @@ public class CreateBookingTool implements VoiceTool {
                         for (com.chatcrmlite.backend.dto.FlowStepDTO step : flowConfig.getSteps()) {
                             if (step.getDataKey() == null || step.getDataKey().isBlank()) continue;
                             String key = step.getDataKey().trim();
-                            if ("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) continue;
+                            // If phone is already captured via Exotel or WhatsApp Caller ID, skip phone validation
+                            if (("phone".equals(key) || "mobile".equals(key) || "whatsapp".equals(key)) && hasTelephonyPhone) {
+                                continue;
+                            }
 
                             if (step.isRequired()) {
                                 String val = extractFirstNonBlank(args, key, key.replace("_", ""), key.toLowerCase());
                                 if (key.contains("name")) {
                                     val = extractFirstNonBlank(args, key, "customer_name", "name", "full_name", "caller_name");
+                                } else if (key.contains("phone") || key.contains("mobile") || key.contains("contact")) {
+                                    val = (phoneFromArgs != null && !phoneFromArgs.isBlank()) ? phoneFromArgs : (hasTelephonyPhone ? context.callerPhone() : null);
                                 } else if (key.contains("service") || key.contains("item") || key.contains("package")) {
                                     val = extractFirstNonBlank(args, key, "service", "item", "package");
                                 } else if (key.contains("slot") || key.contains("time") || key.contains("date")) {
@@ -114,8 +127,12 @@ public class CreateBookingTool implements VoiceTool {
             String service = extractFirstNonBlank(args, "service", "service_name", "item", "package", "type");
             String preferredSlot = extractFirstNonBlank(args, "preferred_slot", "slot", "date", "time", "date_time", "preferred_date");
 
+            String effectivePhone = hasTelephonyPhone 
+                    ? context.callerPhone() 
+                    : (phoneFromArgs != null && !phoneFromArgs.isBlank() ? phoneFromArgs : null);
+
             if (rawName == null || rawName.trim().isEmpty() || rawName.equalsIgnoreCase("unknown")) {
-                rawName = "Voice Caller (" + (context.callerPhone() != null ? context.callerPhone() : "Web") + ")";
+                rawName = "Voice Caller (" + (effectivePhone != null ? effectivePhone : "Web") + ")";
             }
             if (service == null || service.trim().isEmpty() || service.equalsIgnoreCase("unknown")) {
                 service = "General Booking";
@@ -125,19 +142,19 @@ public class CreateBookingTool implements VoiceTool {
             }
 
             final String name = rawName;
-            String waId = context.callerPhone() != null ? context.callerPhone() : "web_voice_" + context.callId();
+            String waId = effectivePhone != null ? effectivePhone : "web_voice_" + context.callId();
             Contact contact = contactRepository.findByWaIdAndOwner(waId, finalOwner)
                     .orElseGet(() -> {
                         Contact newContact = Contact.builder()
                                 .waId(waId)
                                 .name(name)
-                                .source("VOICE_BOT")
+                                .source(hasTelephonyPhone ? "VOICE_BOT" : "WEBSITE_VOICE_BOT")
                                 .owner(finalOwner)
                                 .build();
                         return contactRepository.save(newContact);
                     });
 
-            if (contact.getName() == null || contact.getName().equals(waId)) {
+            if (contact.getName() == null || contact.getName().equals(waId) || contact.getName().startsWith("Voice Caller")) {
                 contact.setName(name);
                 contact = contactRepository.save(contact);
             }

@@ -206,7 +206,7 @@ public class VoiceSessionService {
             com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext toolContext = 
                 new com.chatcrmlite.backend.services.voice.tools.ToolExecutionContext(
                     business.getTenant().getId(), businessId, session.getId(), session.getId().toString(), 
-                    session.getId().toString(), visitorId, "+919999999999"
+                    session.getId().toString(), visitorId, null
                 );
 
             com.chatcrmlite.backend.models.voice.VoiceAssistantConfig voiceConfig = (business.getTenant() != null)

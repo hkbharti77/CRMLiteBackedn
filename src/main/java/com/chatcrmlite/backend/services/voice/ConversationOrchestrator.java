@@ -55,14 +55,22 @@ public class ConversationOrchestrator {
         String safeTranscript = (userTranscript != null && !userTranscript.isBlank()) ? userTranscript.trim() : "Hello";
         boolean isSimpleGreeting = isPhaticOrGreeting(safeTranscript);
 
+        // Check if caller's phone is already known from Exotel or WhatsApp Caller ID
+        boolean isTelephonyOrWhatsApp = context != null 
+                && context.callerPhone() != null 
+                && !context.callerPhone().isBlank() 
+                && !context.callerPhone().contains("9999999999") 
+                && !context.callerPhone().startsWith("web_");
+        boolean includePhone = !isTelephonyOrWhatsApp; // Must ask phone on Website Voice Assistant!
+
         // ── Dynamic specs from FlowConfigService (only attach tools if turn is actionable) ──
-        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId());
+        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId(), includePhone);
         List<ToolSpecification> tools = (isSimpleGreeting || availableTools == null) 
                 ? Collections.emptyList() 
                 : availableTools;
 
-        log.debug("[Orchestrator] Turn for tenant={} isSimpleGreeting={} activeTools={}", 
-                context.tenantId(), isSimpleGreeting, tools.size());
+        log.debug("[Orchestrator] Turn for tenant={} isSimpleGreeting={} activeTools={} includePhone={}", 
+                context.tenantId(), isSimpleGreeting, tools.size(), includePhone);
 
         StringBuilder fullSystemPrompt = new StringBuilder();
         if (systemPrompt != null && !systemPrompt.isBlank()) {
@@ -73,7 +81,13 @@ public class ConversationOrchestrator {
                 .append("1. Keep replies extremely brief (maximum 1 to 2 spoken sentences, under 25 words).\n")
                 .append("2. Speak naturally and politely as on a real telephone call.\n")
                 .append("3. NEVER use bullet points, markdown symbols, asterisks, or numbered lists.\n")
-                .append("4. If the caller is just greeting or saying hello, respond with a short 1-sentence friendly greeting and ask how to help.\n\n");
+                .append("4. If the caller is just greeting or saying hello, respond with a short 1-sentence friendly greeting and ask how to help.\n");
+
+        if (includePhone) {
+            fullSystemPrompt.append("5. CHANNEL NOTICE (WEBSITE VOICE ASSISTANT): The user is speaking via a browser widget on the website. Their phone number is NOT known yet. You MUST ask the user for their phone number / contact details during the form questions!\n\n");
+        } else {
+            fullSystemPrompt.append("5. CHANNEL NOTICE (TELEPHONY / WHATSAPP CALL): The user is calling directly from their phone. Their phone number is ALREADY verified and captured via Caller ID. DO NOT ask the caller for their phone number.\n\n");
+        }
 
         if (tools != null && !tools.isEmpty()) {
             fullSystemPrompt.append("--- INSTRUCTIONS FOR DYNAMIC FORM TOOLS & INTENT ROUTING ---\n")
