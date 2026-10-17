@@ -64,7 +64,11 @@ public class ConversationOrchestrator {
         boolean includePhone = !isTelephonyOrWhatsApp; // Must ask phone on Website Voice Assistant!
 
         // ── Dynamic specs from FlowConfigService (only attach tools if turn is actionable) ──
-        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(context.tenantId(), includePhone);
+        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(
+                context != null ? context.tenantId() : null, 
+                context != null ? context.userId() : null, 
+                includePhone
+        );
         List<ToolSpecification> tools = (isSimpleGreeting || availableTools == null) 
                 ? Collections.emptyList() 
                 : availableTools;

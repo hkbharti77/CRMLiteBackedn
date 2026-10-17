@@ -41,12 +41,17 @@ public class VoiceFormConfigAdapter {
      * the tenant's configured LEAD_CAPTURE flow fields from the DB.
      */
     public ToolSpecification buildLeadToolSpec(UUID tenantId) {
-        return buildLeadToolSpec(tenantId, false);
+        return buildLeadToolSpec(tenantId, null, false);
     }
 
     public ToolSpecification buildLeadToolSpec(UUID tenantId, boolean includePhone) {
+        return buildLeadToolSpec(tenantId, null, includePhone);
+    }
+
+    public ToolSpecification buildLeadToolSpec(UUID tenantId, UUID userId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
+                userId,
                 "create_lead",
                 "Creates a new lead for a prospective customer. Use when the caller wants to enquire, leave their details, or request a callback.",
                 "lead",
@@ -58,12 +63,17 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the appointment booking form.
      */
     public ToolSpecification buildAppointmentToolSpec(UUID tenantId) {
-        return buildAppointmentToolSpec(tenantId, false);
+        return buildAppointmentToolSpec(tenantId, null, false);
     }
 
     public ToolSpecification buildAppointmentToolSpec(UUID tenantId, boolean includePhone) {
+        return buildAppointmentToolSpec(tenantId, null, includePhone);
+    }
+
+    public ToolSpecification buildAppointmentToolSpec(UUID tenantId, UUID userId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
+                userId,
                 "book_appointment",
                 "Books an appointment for the caller at a specific date and time.",
                 "appointment",
@@ -75,12 +85,17 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the booking form (classes/events/demos).
      */
     public ToolSpecification buildBookingToolSpec(UUID tenantId) {
-        return buildBookingToolSpec(tenantId, false);
+        return buildBookingToolSpec(tenantId, null, false);
     }
 
     public ToolSpecification buildBookingToolSpec(UUID tenantId, boolean includePhone) {
+        return buildBookingToolSpec(tenantId, null, includePhone);
+    }
+
+    public ToolSpecification buildBookingToolSpec(UUID tenantId, UUID userId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
+                userId,
                 "create_booking",
                 "Creates a booking for a demo, service, event, class, or reservation. Use this whenever the caller asks to book a demo, reserve a slot, book a service, or schedule a session.",
                 "booking",
@@ -92,12 +107,17 @@ public class VoiceFormConfigAdapter {
      * Builds a ToolSpecification for the support ticket form.
      */
     public ToolSpecification buildSupportToolSpec(UUID tenantId) {
-        return buildSupportToolSpec(tenantId, false);
+        return buildSupportToolSpec(tenantId, null, false);
     }
 
     public ToolSpecification buildSupportToolSpec(UUID tenantId, boolean includePhone) {
+        return buildSupportToolSpec(tenantId, null, includePhone);
+    }
+
+    public ToolSpecification buildSupportToolSpec(UUID tenantId, UUID userId, boolean includePhone) {
         return buildSpecForFlow(
                 tenantId,
+                userId,
                 "submit_support_ticket",
                 "Submits a support ticket or records an issue raised by the caller.",
                 "support",
@@ -110,21 +130,27 @@ public class VoiceFormConfigAdapter {
      * from FlowConfigService (same source used by WhatsApp/chat bots),
      * and maps each enabled FlowStepDTO into a ToolSpecification parameter.
      */
-    private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType) {
-        return buildSpecForFlow(tenantId, toolName, toolDescription, flowType, false);
+    private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType, boolean includePhone) {
+        return buildSpecForFlow(tenantId, null, toolName, toolDescription, flowType, includePhone);
     }
 
-    private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDescription, String flowType, boolean includePhone) {
-        User owner = userRepository.findById(tenantId)
-                .or(() -> userRepository.findFirstByTenantIdAndRole(tenantId, User.Role.ADMIN))
-                .orElseGet(() -> {
-                    try {
-                        var users = userRepository.findUserIdsByTenantId(tenantId, org.springframework.data.domain.PageRequest.of(0, 1));
-                        return (users != null && !users.isEmpty()) ? userRepository.findById(users.get(0)).orElse(null) : null;
-                    } catch (Exception e) {
-                        return null;
-                    }
-                });
+    private ToolSpecification buildSpecForFlow(UUID tenantId, UUID userId, String toolName, String toolDescription, String flowType, boolean includePhone) {
+        User owner = null;
+        if (userId != null) {
+            owner = userRepository.findById(userId).orElse(null);
+        }
+        if (owner == null && tenantId != null) {
+            owner = userRepository.findById(tenantId)
+                    .or(() -> userRepository.findFirstByTenantIdAndRole(tenantId, User.Role.ADMIN))
+                    .orElseGet(() -> {
+                        try {
+                            var users = userRepository.findUserIdsByTenantId(tenantId, org.springframework.data.domain.PageRequest.of(0, 1));
+                            return (users != null && !users.isEmpty()) ? userRepository.findById(users.get(0)).orElse(null) : null;
+                        } catch (Exception e) {
+                            return null;
+                        }
+                    });
+        }
 
         ToolSpecification.Builder builder = ToolSpecification.builder()
                 .name(toolName)
@@ -244,7 +270,7 @@ public class VoiceFormConfigAdapter {
      * This matches the previous hardcoded behaviour but only fires as a last resort.
      */
     private ToolSpecification buildSpecForFlow(UUID tenantId, String toolName, String toolDesc) {
-        return buildSpecForFlow(tenantId, toolName, toolDesc, "lead");
+        return buildSpecForFlow(tenantId, null, toolName, toolDesc, "lead", false);
     }
 
     private ToolSpecification buildFallbackSpec(ToolSpecification.Builder builder, String flowType) {
