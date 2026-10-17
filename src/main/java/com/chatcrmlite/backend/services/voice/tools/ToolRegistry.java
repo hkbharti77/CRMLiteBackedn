@@ -70,14 +70,14 @@ public class ToolRegistry {
                 log.error("[ToolRegistry] Failed to build lead tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
-        if (Boolean.TRUE.equals(tenant.getForceShowAppointment())) {
+        if (!Boolean.FALSE.equals(tenant.getForceShowAppointment())) {
             try {
                 specs.add(voiceFormConfigAdapter.buildAppointmentToolSpec(effectiveTenantId));
             } catch (Exception e) {
                 log.error("[ToolRegistry] Failed to build appointment tool spec for tenant={}: {}", effectiveTenantId, e.getMessage());
             }
         }
-        if (Boolean.TRUE.equals(tenant.getForceShowBooking())) {
+        if (!Boolean.FALSE.equals(tenant.getForceShowBooking())) {
             try {
                 specs.add(voiceFormConfigAdapter.buildBookingToolSpec(effectiveTenantId));
             } catch (Exception e) {
@@ -121,9 +121,9 @@ public class ToolRegistry {
             case "create_lead":
                 return !Boolean.FALSE.equals(tenant.getForceShowLeads());
             case "book_appointment":
-                return Boolean.TRUE.equals(tenant.getForceShowAppointment());
+                return !Boolean.FALSE.equals(tenant.getForceShowAppointment());
             case "create_booking":
-                return Boolean.TRUE.equals(tenant.getForceShowBooking());
+                return !Boolean.FALSE.equals(tenant.getForceShowBooking());
             case "submit_support_ticket":
                 return true;
             default:

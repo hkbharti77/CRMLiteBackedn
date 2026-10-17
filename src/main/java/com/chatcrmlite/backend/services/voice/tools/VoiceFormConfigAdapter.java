@@ -62,13 +62,13 @@ public class VoiceFormConfigAdapter {
     }
 
     /**
-     * Builds a ToolSpecification for the booking form (classes/events).
+     * Builds a ToolSpecification for the booking form (classes/events/demos).
      */
     public ToolSpecification buildBookingToolSpec(UUID tenantId) {
         return buildSpecForFlow(
                 tenantId,
                 "create_booking",
-                "Creates a booking for an event, class, or service for the caller.",
+                "Creates a booking for a demo, service, event, class, or reservation. Use this whenever the caller asks to book a demo, reserve a slot, book a service, or schedule a session.",
                 "booking"
         );
     }
@@ -159,7 +159,7 @@ public class VoiceFormConfigAdapter {
                 }
                 desc.append("\n");
             }
-            desc.append("\nCRITICAL RULE: When the caller's query matches this intent, DO NOT call this tool immediately! First ask the caller the required questions one by one conversationally. Only invoke this tool once the caller provides the required information.");
+            desc.append("\nCRITICAL RULE: When the caller's query matches this intent, DO NOT call this tool immediately! First ask the caller the form questions one by one conversationally (covering both required and optional fields). Only invoke this tool once the caller has provided the details.");
             builder.description(desc.toString().trim());
 
             for (FlowStepDTO step : steps) {

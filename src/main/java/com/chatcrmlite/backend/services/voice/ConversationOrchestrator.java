@@ -77,13 +77,20 @@ public class ConversationOrchestrator {
 
         if (tools != null && !tools.isEmpty()) {
             fullSystemPrompt.append("--- INSTRUCTIONS FOR DYNAMIC FORM TOOLS & INTENT ROUTING ---\n")
-                    .append("You have access to dynamic business tools representing forms configured by the tenant admin.\n")
-                    .append("When a caller expresses intent to enquire, book, request a callback, or file an issue:\n")
-                    .append("1. Greet and transition warmly, then ask the required form questions ONE QUESTION AT A TIME.\n")
-                    .append("2. DO NOT call the tool prematurely on the first turn! First collect the required fields from the caller.\n")
-                    .append("3. Once the caller has answered all mandatory questions, invoke the corresponding tool with the collected details.\n")
-                    .append("4. If a tool execution returns VALIDATION_FAILED, immediately ask the caller the specific missing question mentioned in the result.\n")
-                    .append("5. After tool success, confirm politely and naturally in 1 short spoken sentence.\n\n")
+                    .append("You have access to dynamic business tools representing forms configured by the tenant admin in the database.\n\n")
+                    .append("INTENT ROUTING GUIDELINES:\n")
+                    .append("- If caller wants to book a demo, service, event, reservation, or slot ➔ match and use 'create_booking'.\n")
+                    .append("- If caller wants to schedule a meeting/consultation for a specific date and time ➔ match and use 'book_appointment'.\n")
+                    .append("- If caller has an enquiry, general question, or asks for a callback ➔ match and use 'create_lead'.\n")
+                    .append("- If caller reports a technical issue or complaint ➔ match and use 'submit_support_ticket'.\n\n")
+                    .append("CONVERSATIONAL QUESTIONING WORKFLOW (CRITICAL):\n")
+                    .append("1. Greet and transition warmly, acknowledging the caller's specific need.\n")
+                    .append("2. Ask the form questions ONE QUESTION AT A TIME in conversational spoken language.\n")
+                    .append("3. DO NOT execute the tool prematurely! You MUST ask ALL configured questions (both [REQUIRED] and [OPTIONAL] questions like specific requirements, preferred dates/times, or budget) so that complete information is captured.\n")
+                    .append("4. If the caller answers multiple fields in a single sentence (e.g. 'I am Rahul and I need a CRM demo in Delhi'), acknowledge both and ask the NEXT remaining question.\n")
+                    .append("5. Only invoke the tool AFTER all applicable questions have been asked and answered (or if the caller explicitly says they don't know / want to skip an optional question).\n")
+                    .append("6. If a tool execution returns VALIDATION_FAILED, immediately ask the caller the specific missing question mentioned in the result.\n")
+                    .append("7. After tool execution succeeds, confirm politely in 1 short spoken sentence with the reference number.\n\n")
                     .append("ACTIVE BUSINESS TOOLS & DYNAMIC QUESTIONS:\n");
 
             for (ToolSpecification tool : tools) {
