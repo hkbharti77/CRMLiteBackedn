@@ -239,22 +239,28 @@ export function createUIController({
                             <div class="dot"></div><div class="dot"></div><div class="dot"></div>
                         </div>
                     </div>
-                    <div class="chat-input-container">
-                        <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
-                        <div class="chat-composer">
-                            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Type your message..." autocomplete="off" disabled aria-label="Message"></textarea>
-                            <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input">
-                                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                                    <line x1="12" y1="19" x2="12" y2="22"></line>
-                                    <line x1="8" y1="22" x2="16" y2="22"></line>
-                                </svg>
-                            </button>
-                            <button type="button" id="chat-send" class="send-btn" title="Send message" disabled aria-label="Send">${icons.send}</button>
+                    <div class="chat-bottom-wrapper">
+                        <div class="chat-input-container">
+                            <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
+                            <div class="chat-composer">
+                                <textarea id="chat-input" class="chat-input" rows="1" placeholder="Type your message..." autocomplete="off" disabled aria-label="Message"></textarea>
+                                <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input">
+                                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
+                                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                        <line x1="12" y1="19" x2="12" y2="22"></line>
+                                        <line x1="8" y1="22" x2="16" y2="22"></line>
+                                    </svg>
+                                </button>
+                                <button type="button" id="chat-send" class="send-btn" title="Send message" disabled aria-label="Send">${icons.send}</button>
+                            </div>
+                        </div>
+                        <div class="chat-widget-footer" id="chat-widget-footer">
+                            <div class="crm-widget-footer-content">
+                                <span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.online" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>
+                            </div>
                         </div>
                     </div>
-                    <div class="chat-widget-footer" id="chat-widget-footer"></div>
                     <!-- Voice Full-Duplex Live Overlay -->
                     <div class="chat-voice-overlay" id="chat-voice-overlay" style="display: none;">
                         <div class="voice-modal-card">
@@ -346,6 +352,7 @@ export function createUIController({
             };
 
             this.bindEvents();
+            this.renderFooter(activeTheme);
             return elements;
         },
 
