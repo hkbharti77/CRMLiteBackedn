@@ -61,7 +61,10 @@ public class WhatsAppVoiceCallBridgeService {
     // Call-scoped state machine
     private final ConcurrentHashMap<String, CallSessionContext> activeCalls = new ConcurrentHashMap<>();
 
+    private String explicitTtsProvider = null;
+
     public void setTtsProvider(String ttsProvider) {
+        this.explicitTtsProvider = ttsProvider;
         this.ttsProvider = ttsProvider;
     }
 
@@ -71,6 +74,37 @@ public class WhatsAppVoiceCallBridgeService {
 
     public void setSarvamLanguage(String sarvamLanguage) {
         this.sarvamLanguage = sarvamLanguage;
+    }
+
+    public String getEffectiveTtsProvider() {
+        // Priority 1: Explicitly set (e.g. in tests)
+        if (this.explicitTtsProvider != null && !this.explicitTtsProvider.isBlank()) {
+            return this.explicitTtsProvider.trim().toLowerCase();
+        }
+
+        // Priority 2: DotenvLoader (.env file or System env / JVM property)
+        String envProvider = com.chatcrmlite.backend.utils.DotenvLoader.get("VOICE_TTS_PROVIDER");
+        if (envProvider != null && !envProvider.isBlank()) {
+            return envProvider.trim().toLowerCase();
+        }
+
+        // Priority 3: Injected @Value("${voice.tts.provider:deepgram}")
+        if (this.ttsProvider != null && !this.ttsProvider.isBlank()) {
+            return this.ttsProvider.trim().toLowerCase();
+        }
+
+        return "deepgram";
+    }
+
+    public String getEffectiveSarvamSpeaker() {
+        String envSpeaker = com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_SPEAKER");
+        if (envSpeaker != null && !envSpeaker.isBlank()) {
+            return envSpeaker.trim();
+        }
+        if (this.sarvamSpeaker != null && !this.sarvamSpeaker.isBlank()) {
+            return this.sarvamSpeaker.trim();
+        }
+        return "simran";
     }
 
     @org.springframework.beans.factory.annotation.Autowired
@@ -251,11 +285,16 @@ public class WhatsAppVoiceCallBridgeService {
                 log.info("🗣️ [WhatsAppVoiceBridge] Pipeline streaming {} audio unit(s) to TTS for callId={} turnId={}",
                         units.size(), callId, currentTurnId);
 
-                boolean useSarvam = "sarvam".equalsIgnoreCase(ttsProvider);
+                String effectiveProvider = getEffectiveTtsProvider();
+                boolean useSarvam = "sarvam".equalsIgnoreCase(effectiveProvider);
+                String effectiveSpeaker = getEffectiveSarvamSpeaker();
                 String activeSarvamSpeaker = (ttsVoiceId != null && !ttsVoiceId.isBlank() && !ttsVoiceId.startsWith("aura-"))
                         ? ttsVoiceId
-                        : (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran");
+                        : effectiveSpeaker;
                 String targetLangCode = (sarvamLanguage != null && !sarvamLanguage.isBlank()) ? sarvamLanguage : "hi-IN";
+
+                log.info("🗣️ [WhatsAppVoiceBridge] Turn {} TTS config: Provider='{}' (useSarvam={}), Speaker='{}', Lang='{}', CallId='{}'",
+                        currentTurnId, effectiveProvider, useSarvam, (useSarvam ? activeSarvamSpeaker : ttsVoiceId), targetLangCode, callId);
 
                 try {
                     for (int sIdx = 0; sIdx < units.size(); sIdx++) {
@@ -326,10 +365,12 @@ public class WhatsAppVoiceCallBridgeService {
             } else {
                 // Fallback blocking if no callback
                 byte[] synthesizedAudio = null;
-                boolean useSarvam = "sarvam".equalsIgnoreCase(ttsProvider);
+                String effectiveProvider = getEffectiveTtsProvider();
+                boolean useSarvam = "sarvam".equalsIgnoreCase(effectiveProvider);
+                String effectiveSpeaker = getEffectiveSarvamSpeaker();
                 String activeSarvamSpeaker = (ttsVoiceId != null && !ttsVoiceId.isBlank() && !ttsVoiceId.startsWith("aura-"))
                         ? ttsVoiceId
-                        : (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran");
+                        : effectiveSpeaker;
                 String targetLangCode = (sarvamLanguage != null && !sarvamLanguage.isBlank()) ? sarvamLanguage : "hi-IN";
 
                 try {
@@ -456,8 +497,8 @@ public class WhatsAppVoiceCallBridgeService {
         vs.setBusiness(businessUser);
         vs.setTenant(callSession.getTenant());
         vs.setVisitorId(callSession.getFromWaId() != null ? callSession.getFromWaId() : "whatsapp_" + callSession.getCallId());
-        String defaultVoiceId = "sarvam".equalsIgnoreCase(ttsProvider)
-                ? (sarvamSpeaker != null && !sarvamSpeaker.isBlank() ? sarvamSpeaker : "simran")
+        String defaultVoiceId = "sarvam".equalsIgnoreCase(getEffectiveTtsProvider())
+                ? getEffectiveSarvamSpeaker()
                 : "deepgram/aura";
         vs.setVoiceId(ttsVoiceId != null ? ttsVoiceId : defaultVoiceId);
         vs.setTotalTurns(0);

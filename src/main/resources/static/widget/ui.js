@@ -257,7 +257,9 @@ export function createUIController({
                         </div>
                         <div class="chat-widget-footer" id="chat-widget-footer">
                             <div class="crm-widget-footer-content">
-                                <span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.online" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>
+                                <a href="https://www.gyanvaniai.com/privacy" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a>
+                                <span class="crm-widget-footer-sep">|</span>
+                                <span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.com" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>
                             </div>
                         </div>
                     </div>
@@ -540,6 +542,14 @@ export function createUIController({
                 `;
                 menuBody.appendChild(privacyFooter);
             }
+
+            // Powered by GyanVani AI in menu footer
+            if (activeTheme.showWatermark !== false) {
+                const brandMenuFooter = document.createElement('div');
+                brandMenuFooter.className = 'menu-brand-footer';
+                brandMenuFooter.innerHTML = `Powered by <a href="https://www.gyanvaniai.com" target="_blank" rel="noopener noreferrer" class="menu-brand-link">GyanVani AI</a>`;
+                menuBody.appendChild(brandMenuFooter);
+            }
         },
 
         applyTheme(nextTheme, apiBase) {
@@ -633,15 +643,15 @@ export function createUIController({
             const pUrl = (cfg.privacyPolicyUrl || '').trim();
             const showWatermark = cfg.showWatermark !== false;
 
+            const privacyTargetUrl = pUrl || 'https://www.gyanvaniai.online/privacy';
+            const privacyLinkHtml = `<a href="${escapeHtml(privacyTargetUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a>`;
             const brandLinkHtml = `<span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.online" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>`;
 
             let contentHtml = '';
-            if (pUrl && showWatermark) {
-                contentHtml = `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a><span class="crm-widget-footer-sep">|</span>${brandLinkHtml}`;
-            } else if (pUrl && !showWatermark) {
-                contentHtml = `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a>`;
+            if (showWatermark) {
+                contentHtml = `${privacyLinkHtml}<span class="crm-widget-footer-sep">|</span>${brandLinkHtml}`;
             } else {
-                contentHtml = brandLinkHtml;
+                contentHtml = privacyLinkHtml;
             }
 
             footer.innerHTML = `

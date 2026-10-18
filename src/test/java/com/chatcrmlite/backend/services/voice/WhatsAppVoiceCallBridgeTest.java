@@ -64,6 +64,7 @@ class WhatsAppVoiceCallBridgeTest {
                 sarvamVoiceService,
                 voiceConfigRepository
         );
+        voiceBridge.setTtsProvider("deepgram");
 
         session = WhatsAppCallSession.builder()
                 .callId(callId)

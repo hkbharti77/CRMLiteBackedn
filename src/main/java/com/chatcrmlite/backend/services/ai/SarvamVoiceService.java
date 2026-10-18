@@ -61,19 +61,31 @@ public class SarvamVoiceService {
         if (spokenText == null || spokenText.isBlank()) {
             return new byte[0];
         }
-        if (apiKey == null || apiKey.isBlank()) {
-            log.error("[Sarvam-TTS] Cannot synthesize speech: SARVAM_API_KEY is not configured.");
+        String effectiveApiKey = (apiKey != null && !apiKey.isBlank())
+                ? apiKey.trim()
+                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_API_KEY", "").trim();
+
+        if (effectiveApiKey.isBlank()) {
+            log.error("[Sarvam-TTS] Cannot synthesize speech: SARVAM_API_KEY is not configured in properties or .env.");
             return new byte[0];
         }
 
         long start = System.currentTimeMillis();
-        String activeSpeaker = (customSpeaker != null && !customSpeaker.isBlank()) ? customSpeaker : defaultSpeaker;
-        String langCode = (targetLanguageCode != null && !targetLanguageCode.isBlank()) ? targetLanguageCode : "hi-IN";
-        String safeKey = maskKey(apiKey);
+        String effectiveDefaultSpeaker = (defaultSpeaker != null && !defaultSpeaker.isBlank())
+                ? defaultSpeaker.trim()
+                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_SPEAKER", "simran").trim();
+        String activeSpeaker = (customSpeaker != null && !customSpeaker.isBlank()) ? customSpeaker.trim() : effectiveDefaultSpeaker;
+
+        String effectiveModel = (defaultModel != null && !defaultModel.isBlank())
+                ? defaultModel.trim()
+                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_MODEL", "bulbul:v3").trim();
+
+        String langCode = (targetLanguageCode != null && !targetLanguageCode.isBlank()) ? targetLanguageCode.trim() : "hi-IN";
+        String safeKey = maskKey(effectiveApiKey);
 
         String url = "https://api.sarvam.ai/text-to-speech";
         log.info("[Sarvam-TTS] Synthesizing speech with speaker={}, model={} for text length={} (Key: {})",
-                activeSpeaker, defaultModel, spokenText.length(), safeKey);
+                activeSpeaker, effectiveModel, spokenText.length(), safeKey);
 
         int attempts = 0;
         Exception lastException = null;
@@ -82,7 +94,7 @@ public class SarvamVoiceService {
             attempts++;
             try {
                 HttpHeaders headers = new HttpHeaders();
-                headers.set("api-subscription-key", apiKey.trim());
+                headers.set("api-subscription-key", effectiveApiKey);
                 headers.setContentType(MediaType.APPLICATION_JSON);
                 headers.setAccept(java.util.Arrays.asList(
                         MediaType.valueOf("audio/wav"),
@@ -97,7 +109,7 @@ public class SarvamVoiceService {
                 body.put("inputs", Collections.singletonList(spokenText));
                 body.put("target_language_code", langCode);
                 body.put("speaker", activeSpeaker);
-                body.put("model", defaultModel != null && !defaultModel.isBlank() ? defaultModel : "bulbul:v3");
+                body.put("model", effectiveModel);
                 body.put("pace", 1.0);
                 body.put("speech_sample_rate", 22050);
 

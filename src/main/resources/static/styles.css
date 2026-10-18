@@ -2567,3 +2567,22 @@ a.crm-dpdp-link:hover {
     text-decoration: underline;
 }
 
+.menu-brand-footer {
+    text-align: center;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px dashed #e2e8f0;
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.menu-brand-link {
+    color: var(--primary-color, #2563eb);
+    text-decoration: none;
+    font-weight: 600;
+}
+
+.menu-brand-link:hover {
+    text-decoration: underline;
+}
+

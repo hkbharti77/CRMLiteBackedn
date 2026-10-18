@@ -61,6 +61,17 @@ public class VoiceSessionService {
     @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
     private String ttsProvider;
 
+    public String getEffectiveTtsProvider() {
+        String envProvider = com.chatcrmlite.backend.utils.DotenvLoader.get("VOICE_TTS_PROVIDER");
+        if (envProvider != null && !envProvider.isBlank()) {
+            return envProvider.trim().toLowerCase();
+        }
+        if (this.ttsProvider != null && !this.ttsProvider.isBlank()) {
+            return this.ttsProvider.trim().toLowerCase();
+        }
+        return "deepgram";
+    }
+
     @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
 
@@ -272,7 +283,8 @@ public class VoiceSessionService {
         long ttsStart = System.currentTimeMillis();
         byte[] speechAudio;
 
-        if ("sarvam".equalsIgnoreCase(ttsProvider)) {
+        String effectiveProvider = getEffectiveTtsProvider();
+        if ("sarvam".equalsIgnoreCase(effectiveProvider)) {
             // Use Sarvam AI TTS (Map detected language to Sarvam code)
             // Use the exact configured Sarvam speaker ID
             String targetLangCode = "en-IN";
