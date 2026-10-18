@@ -645,13 +645,13 @@ export function createUIController({
 
             const privacyTargetUrl = pUrl || 'https://www.gyanvaniai.online/privacy';
             const privacyLinkHtml = `<a href="${escapeHtml(privacyTargetUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a>`;
-            const brandLinkHtml = `<span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.online" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>`;
+            const brandLinkHtml = `<span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.com" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>`;
 
             let contentHtml = '';
             if (showWatermark) {
                 contentHtml = `${privacyLinkHtml}<span class="crm-widget-footer-sep">|</span>${brandLinkHtml}`;
             } else {
-                contentHtml = privacyLinkHtml;
+                contentHtml = brandLinkHtml;
             }
 
             footer.innerHTML = `
