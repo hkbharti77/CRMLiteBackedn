@@ -38,7 +38,7 @@ public class OutboxEventWorker {
     /**
      * Polls pending Transactional Outbox events every 3 seconds.
      */
-    @Scheduled(fixedDelay = 7000)
+    @Scheduled(fixedDelayString = "${flow.outbox.poll-interval-ms:10000}")
     public void processOutboxEvents() {
         com.chatcrmlite.backend.security.TenantContext.setAdminMode(true);
         try {

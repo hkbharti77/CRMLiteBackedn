@@ -38,11 +38,14 @@ public class DataSourceConfig {
         HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
         ds.setPoolName("HikariPool-Writer");
         ds.setConnectionTestQuery("SELECT 1");
-        ds.setKeepaliveTime(30000);
-        ds.setMaxLifetime(180000);
-        ds.setIdleTimeout(60000);
-        ds.setValidationTimeout(5000);
+        ds.setKeepaliveTime(15000);
+        ds.setMaxLifetime(90000);
+        ds.setIdleTimeout(45000);
+        ds.setValidationTimeout(3000);
         ds.setConnectionTimeout(30000);
+        ds.setMaximumPoolSize(25);
+        ds.setMinimumIdle(5);
+        ds.setLeakDetectionThreshold(60000);
         org.springframework.boot.context.properties.bind.Binder.get(env)
                 .bind("spring.datasource.writer.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
         return ds;
@@ -54,11 +57,14 @@ public class DataSourceConfig {
         HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
         ds.setPoolName("HikariPool-Reader");
         ds.setConnectionTestQuery("SELECT 1");
-        ds.setKeepaliveTime(30000);
-        ds.setMaxLifetime(180000);
-        ds.setIdleTimeout(60000);
-        ds.setValidationTimeout(5000);
+        ds.setKeepaliveTime(15000);
+        ds.setMaxLifetime(90000);
+        ds.setIdleTimeout(45000);
+        ds.setValidationTimeout(3000);
         ds.setConnectionTimeout(30000);
+        ds.setMaximumPoolSize(15);
+        ds.setMinimumIdle(3);
+        ds.setLeakDetectionThreshold(60000);
         org.springframework.boot.context.properties.bind.Binder.get(env)
                 .bind("spring.datasource.reader.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
         return ds;

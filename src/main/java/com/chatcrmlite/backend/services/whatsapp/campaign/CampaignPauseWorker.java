@@ -24,7 +24,7 @@ public class CampaignPauseWorker {
     private final WhatsAppCampaignRepository campaignRepository;
     private final CampaignAuditService auditService;
 
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelayString = "${campaign.pause.poll-interval-ms:10000}")
     public void processOutbox() {
         List<CampaignPauseOutbox> pending = outboxRepository.findTop50ByStatusOrderByCreatedAtAsc("PENDING");
         if (pending.isEmpty()) return;

@@ -51,7 +51,7 @@ public class OutboxPublisherService {
     /**
      * Scheduled worker task to process pending outbox events using SKIP LOCKED.
      */
-    @Scheduled(fixedDelay = 2000)
+    @Scheduled(fixedDelayString = "${journey.outbox.poll-interval-ms:5000}")
     public void processOutboxEvents() {
         ZonedDateTime now = ZonedDateTime.now();
         List<JourneyOutboxEvent> claimableEvents = outboxEventRepository.claimPendingEvents(now, 50);

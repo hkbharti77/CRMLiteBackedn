@@ -27,7 +27,7 @@ public class SecurityNotificationWorker {
     private final EmailService emailService;
     private final DistributedWebSocketPublisher webSocketPublisher;
 
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelayString = "${security.notification.poll-interval-ms:10000}")
     public void processSecurityNotifications() {
         List<SecurityNotificationOutbox> pending = securityNotificationOutboxRepository
                 .findTop50ByStatusInOrderByCreatedAtAsc(List.of("PENDING", "FAILED"));

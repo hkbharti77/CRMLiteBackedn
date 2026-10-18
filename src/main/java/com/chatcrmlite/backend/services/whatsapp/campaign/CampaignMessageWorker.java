@@ -39,7 +39,7 @@ public class CampaignMessageWorker {
      * Scheduled task that polls for active RUNNING campaigns and dispatches messages
      * using Weighted Fair Scheduling (6:3:1 ratio for HIGH:MEDIUM:LOW) with anti-starvation aging.
      */
-    @Scheduled(fixedDelay = 2000)
+    @Scheduled(fixedDelayString = "${campaign.message.poll-interval-ms:5000}")
     public void processRunningCampaigns() {
         // DB-level filter: only RUNNING campaigns are loaded — avoids full-table scan every 2s.
         List<WhatsAppCampaign> runningCampaigns = campaignRepository

@@ -140,7 +140,7 @@ public class JourneyExecutionEngine {
     /**
      * Scheduled Worker Poller — Processes Pending / Scheduled Node Executions using SKIP LOCKED.
      */
-    @Scheduled(fixedDelay = 3000)
+    @Scheduled(fixedDelayString = "${journey.engine.poll-interval-ms:5000}")
     public void processPendingNodeExecutions() {
         ZonedDateTime now = ZonedDateTime.now();
         List<JourneyNodeExecution> pendingExecutions = nodeExecutionRepository.claimPendingNodeExecutions(now, 50);

@@ -56,7 +56,7 @@ public class FlowPublishWorker {
     /**
      * Polls and processes pending publish jobs every 5 seconds.
      */
-    @Scheduled(fixedDelay = 5000)
+    @Scheduled(fixedDelayString = "${flow.publish.poll-interval-ms:10000}")
     public void processPendingPublishJobs() {
         List<FlowPublishJob> dueJobs = jobRepository.findDueJobs(LocalDateTime.now());
         if (dueJobs.isEmpty()) return;
