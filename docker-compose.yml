@@ -1,27 +1,27 @@
 services:
-  # ── PostgreSQL Database with pgvector (Max ~150MB) ──
-  db:
-    image: pgvector/pgvector:pg17
-    container_name: chatcrm_db
-    restart: unless-stopped
-    command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=25", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=16MB"]
-    mem_limit: 80m
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-chatcrmdb}
-      POSTGRES_USER: ${DB_USERNAME:-root}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-root} -d ${POSTGRES_DB:-chatcrmdb}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - crmlite-network
+  # ── PostgreSQL Database with pgvector (Offloaded to Cloud DB) ──
+  # db:
+  #   image: pgvector/pgvector:pg17
+  #   container_name: chatcrm_db
+  #   restart: unless-stopped
+  #   command: ["postgres", "-c", "shared_buffers=32MB", "-c", "max_connections=25", "-c", "work_mem=2MB", "-c", "maintenance_work_mem=16MB"]
+  #   mem_limit: 80m
+  #   environment:
+  #     POSTGRES_DB: ${POSTGRES_DB:-chatcrmdb}
+  #     POSTGRES_USER: ${DB_USERNAME:-root}
+  #     POSTGRES_PASSWORD: ${DB_PASSWORD:-root}
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-root} -d ${POSTGRES_DB:-chatcrmdb}"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - crmlite-network
 
   # ── Neo4j (optional Graph RAG; not required for VECTOR mode) ──
   neo4j:
@@ -47,63 +47,60 @@ services:
     profiles:
       - graph
 
-  # ── Redis Cache & PubSub (Max ~45MB) ──
-  redis:
-    image: redis:7-alpine
-    container_name: chatcrm_redis
-    restart: unless-stopped
-    command: ["redis-server", "--maxmemory", "10mb", "--maxmemory-policy", "allkeys-lru"]
-    mem_limit: 14m
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - crmlite-network
+  # ── Redis Cache & PubSub (Offloaded to Cloud Redis) ──
+  # redis:
+  #   image: redis:7-alpine
+  #   container_name: chatcrm_redis
+  #   restart: unless-stopped
+  #   command: ["redis-server", "--maxmemory", "10mb", "--maxmemory-policy", "allkeys-lru"]
+  #   mem_limit: 14m
+  #   ports:
+  #     - "6379:6379"
+  #   volumes:
+  #     - redis_data:/data
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 5
+  #   networks:
+  #     - crmlite-network
 
-  # ── Spring Boot Backend (Max ~750MB) ──
+  # ── Spring Boot Backend (Optimized for 1GB RAM Single Server Profile) ──
   backend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: chatcrm_backend
     restart: unless-stopped
-    mem_limit: 750m
+    mem_limit: 720m
+    mem_reservation: 256m
     ports:
       - "8080:8080"
       - "50000-50100:50000-50100/udp"
     env_file:
       - .env
     environment:
-      # Heap(350m) + Metaspace(192m) + CodeCache(64m) + JVM overhead ~= 660m < 750m limit
-      JAVA_TOOL_OPTIONS: "-XX:MaxMetaspaceSize=192m -XX:ReservedCodeCacheSize=64m -Xmx350m -Xms128m"
+      # 1GB Server Profile: Heap(380m) + Metaspace(160m) + CodeCache(48m) + SerialGC overhead ~= 640m < 720m limit
+      JAVA_TOOL_OPTIONS: "-XX:MaxMetaspaceSize=160m -XX:ReservedCodeCacheSize=48m -Xmx380m -Xms128m -XX:+UseSerialGC"
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
-      SPRING_DATASOURCE_URL: jdbc:postgresql://db:5432/${POSTGRES_DB:-chatcrmdb}
-      DB_USERNAME: ${DB_USERNAME:-root}
-      DB_PASSWORD: ${DB_PASSWORD:-root}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
+      # Database and Redis are now loaded directly from .env (Cloud DB + Cloud Redis)
       NEO4J_URI: ${NEO4J_URI:-}
       NEO4J_USERNAME: ${NEO4J_USERNAME:-}
       NEO4J_PASSWORD: ${NEO4J_PASSWORD:-}
       NEO4J_DATABASE: ${NEO4J_DATABASE:-neo4j}
       RAG_MODE: ${RAG_MODE:-VECTOR}
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    # depends_on:
+    #   db:
+    #     condition: service_healthy
+    #   redis:
+    #     condition: service_healthy
     networks:
       - crmlite-network
 
 volumes:
-  postgres_data:
-  redis_data:
+  # postgres_data:
+  # redis_data:
   neo4j_data:
 
 networks:
