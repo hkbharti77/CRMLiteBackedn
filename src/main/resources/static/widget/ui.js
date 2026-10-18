@@ -242,7 +242,7 @@ export function createUIController({
                     <div class="chat-input-container">
                         <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
                         <div class="chat-composer">
-                            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Loading..." autocomplete="off" disabled aria-label="Message"></textarea>
+                            <textarea id="chat-input" class="chat-input" rows="1" placeholder="Type your message..." autocomplete="off" disabled aria-label="Message"></textarea>
                             <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input">
                                 <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                     <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
@@ -254,6 +254,7 @@ export function createUIController({
                             <button type="button" id="chat-send" class="send-btn" title="Send message" disabled aria-label="Send">${icons.send}</button>
                         </div>
                     </div>
+                    <div class="chat-widget-footer" id="chat-widget-footer"></div>
                     <!-- Voice Full-Duplex Live Overlay -->
                     <div class="chat-voice-overlay" id="chat-voice-overlay" style="display: none;">
                         <div class="voice-modal-card">
@@ -340,7 +341,8 @@ export function createUIController({
                 menuCloseBtn: document.getElementById('chat-menu-close'),
                 confirmOverlay: document.getElementById('chat-confirm-overlay'),
                 confirmCancelBtn: document.getElementById('chat-confirm-cancel'),
-                confirmOkBtn: document.getElementById('chat-confirm-ok')
+                confirmOkBtn: document.getElementById('chat-confirm-ok'),
+                footer: document.getElementById('chat-widget-footer')
             };
 
             this.bindEvents();
@@ -613,19 +615,34 @@ export function createUIController({
             }
 
             this.renderMenuOverlay(t);
+            this.renderFooter(t);
+        },
 
-            if (t.showWatermark && widgetWrap) {
-                const existing = widgetWrap.querySelector('.crm-watermark');
-                if (!existing) {
-                    const watermark = document.createElement('div');
-                    watermark.className = 'crm-watermark';
-                    watermark.textContent = 'Powered by CRMLite';
-                    const inputContainer = widgetWrap.querySelector('.chat-input-container');
-                    if (inputContainer) {
-                        inputContainer.insertAdjacentElement('afterend', watermark);
-                    }
-                }
+        renderFooter(t) {
+            const footer = elements.footer || (elements.panel && elements.panel.querySelector('#chat-widget-footer'));
+            if (!footer) return;
+
+            const cfg = t || activeTheme || {};
+            const pUrl = (cfg.privacyPolicyUrl || '').trim();
+            const showWatermark = cfg.showWatermark !== false;
+
+            const brandLinkHtml = `<span class="crm-widget-footer-powered">Powered by <a href="https://www.gyanvaniai.online" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-brand">GyanVani AI</a></span>`;
+
+            let contentHtml = '';
+            if (pUrl && showWatermark) {
+                contentHtml = `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a><span class="crm-widget-footer-sep">|</span>${brandLinkHtml}`;
+            } else if (pUrl && !showWatermark) {
+                contentHtml = `<a href="${escapeHtml(pUrl)}" target="_blank" rel="noopener noreferrer" class="crm-widget-footer-link">Privacy & Policy</a>`;
+            } else {
+                contentHtml = brandLinkHtml;
             }
+
+            footer.innerHTML = `
+                <div class="crm-widget-footer-content">
+                    ${contentHtml}
+                </div>
+            `;
+            footer.style.display = 'flex';
         },
 
         renderMessageBubble(entry, containerEl) {
@@ -1092,7 +1109,11 @@ export function createUIController({
             const { input, sendBtn } = elements;
             if (input) {
                 input.disabled = !enabled;
-                if (placeholder !== null) input.placeholder = placeholder;
+                if (placeholder !== null) {
+                    input.placeholder = (placeholder === 'Ask me anything...' || !placeholder)
+                        ? 'Type your message...'
+                        : placeholder;
+                }
             }
             if (sendBtn) {
                 sendBtn.disabled = !enabled;

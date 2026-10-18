@@ -451,12 +451,12 @@ export async function initWidget({ businessId, apiBase } = {}) {
             flowEngine.addBotBubbleWithCTAs(wm);
         }
 
-        ui.setInputEnabled(true, 'Ask me anything...');
+        ui.setInputEnabled(true, 'Type your message...');
         resetInactivityTimer();
     } catch (e) {
         console.error('CRM Chat: Bootstrap failed', e);
         flowEngine.addBotBubble("System offline. Please refresh.");
-        ui.setInputEnabled(true, 'Ask me anything...');
+        ui.setInputEnabled(true, 'Type your message...');
     }
 }
 
