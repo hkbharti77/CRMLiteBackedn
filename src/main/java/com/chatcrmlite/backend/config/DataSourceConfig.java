@@ -18,6 +18,8 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 
+import com.zaxxer.hikari.HikariDataSource;
+
 /**
  * Multi-Region Database Routing Configuration
  * 
@@ -32,14 +34,34 @@ public class DataSourceConfig {
 
     @Bean
     @ConfigurationProperties(prefix = "spring.datasource.writer")
-    public DataSource writerDataSource() {
-        return DataSourceBuilder.create().build();
+    public HikariDataSource writerDataSource(org.springframework.core.env.Environment env) {
+        HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
+        ds.setPoolName("HikariPool-Writer");
+        ds.setConnectionTestQuery("SELECT 1");
+        ds.setKeepaliveTime(30000);
+        ds.setMaxLifetime(180000);
+        ds.setIdleTimeout(60000);
+        ds.setValidationTimeout(5000);
+        ds.setConnectionTimeout(30000);
+        org.springframework.boot.context.properties.bind.Binder.get(env)
+                .bind("spring.datasource.writer.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
+        return ds;
     }
 
     @Bean
     @ConfigurationProperties(prefix = "spring.datasource.reader")
-    public DataSource readerDataSource() {
-        return DataSourceBuilder.create().build();
+    public HikariDataSource readerDataSource(org.springframework.core.env.Environment env) {
+        HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
+        ds.setPoolName("HikariPool-Reader");
+        ds.setConnectionTestQuery("SELECT 1");
+        ds.setKeepaliveTime(30000);
+        ds.setMaxLifetime(180000);
+        ds.setIdleTimeout(60000);
+        ds.setValidationTimeout(5000);
+        ds.setConnectionTimeout(30000);
+        org.springframework.boot.context.properties.bind.Binder.get(env)
+                .bind("spring.datasource.reader.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
+        return ds;
     }
 
     @Bean
