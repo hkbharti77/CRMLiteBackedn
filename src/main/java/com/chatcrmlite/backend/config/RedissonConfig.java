@@ -24,7 +24,7 @@ public class RedissonConfig {
     @Value("${spring.data.redis.password:#{null}}")
     private String redisPassword;
 
-    @Value("${spring.data.redis.ssl:false}")
+    @Value("${spring.data.redis.ssl.enabled:${REDIS_SSL:false}}")
     private boolean ssl;
 
     @Bean(destroyMethod = "shutdown")

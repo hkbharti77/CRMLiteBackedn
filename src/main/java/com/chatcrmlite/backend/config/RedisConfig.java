@@ -42,7 +42,7 @@ public class RedisConfig {
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.max-active:25}") int maxActive,
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.max-idle:10}") int maxIdle,
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.min-idle:2}") int minIdle,
-            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.ssl:false}") boolean ssl) {
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.ssl.enabled:${REDIS_SSL:false}}") boolean ssl) {
 
         org.springframework.data.redis.connection.RedisStandaloneConfiguration redisConfig =
                 new org.springframework.data.redis.connection.RedisStandaloneConfiguration(host, port);
