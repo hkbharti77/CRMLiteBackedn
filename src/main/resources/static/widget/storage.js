@@ -6,6 +6,7 @@ export function createStorageManager(businessId) {
     const HISTORY_KEY = `crm_chat_history_${businessId}`;
     const SESSION_KEY = `crm_chat_session_${businessId}`;
     const THEME_KEY = `crm_chat_theme_${businessId}`;
+    const CONSENT_KEY = `crm_chat_dpdp_consent_${businessId}`;
 
     return {
         loadTheme() {
@@ -58,6 +59,39 @@ export function createStorageManager(businessId) {
                 localStorage.removeItem(HISTORY_KEY);
             } catch (e) {
                 console.warn('CRM Chat: Could not clear history', e);
+            }
+        },
+
+        // DPDP Right to Erasure - Wipe conversation, session and consent
+        clearAllUserData() {
+            try {
+                localStorage.removeItem(HISTORY_KEY);
+                localStorage.removeItem(SESSION_KEY);
+                localStorage.removeItem(CONSENT_KEY);
+            } catch (e) {
+                console.warn('CRM Chat: Could not clear all user data', e);
+            }
+        },
+
+        loadConsent() {
+            try {
+                const raw = localStorage.getItem(CONSENT_KEY);
+                return raw ? JSON.parse(raw) : null;
+            } catch (e) {
+                return null;
+            }
+        },
+
+        saveConsent(consentData) {
+            try {
+                localStorage.setItem(CONSENT_KEY, JSON.stringify({
+                    granted: true,
+                    timestamp: new Date().toISOString(),
+                    version: "1.0",
+                    ...(consentData || {})
+                }));
+            } catch (e) {
+                console.warn('CRM Chat: Could not save consent', e);
             }
         },
 

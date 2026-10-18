@@ -44,11 +44,14 @@ public class PublicSubmissionService {
     private com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
     @Autowired
     private ReferenceNumberService referenceNumberService;
+    @Autowired(required = false)
+    private ContactConsentService contactConsentService;
 
     @Transactional
     public void submitLead(User owner, Map<String, String> data) {
         Map<String, String> clean = sanitize(data);
         Contact contact = findOrCreateContact(owner, clean);
+        recordDpdpConsentIfPresent(owner, contact, clean);
         Lead lead = createLeadRecord(contact, owner, clean, Lead.LeadStatus.NEW);
         eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "WEB_WIDGET"));
         log.info("[PublicSubmission] Lead created for contact={} owner={}", contact.getId(), owner.getId());
@@ -58,6 +61,7 @@ public class PublicSubmissionService {
     public void submitEnquiry(User owner, Map<String, String> data) {
         Map<String, String> clean = sanitize(data);
         Contact contact = findOrCreateContact(owner, clean);
+        recordDpdpConsentIfPresent(owner, contact, clean);
         Lead lead = createLeadRecord(contact, owner, clean, Lead.LeadStatus.FOLLOW_UP);
         eventPublisher.publishEvent(new LeadCreatedEvent(this, lead, "WEB_WIDGET"));
         log.info("[PublicSubmission] Enquiry created for contact={} owner={}", contact.getId(), owner.getId());
@@ -67,6 +71,7 @@ public class PublicSubmissionService {
     public void submitAppointment(User owner, Map<String, String> data) {
         Map<String, String> clean = sanitize(data);
         Contact contact = findOrCreateContact(owner, clean);
+        recordDpdpConsentIfPresent(owner, contact, clean);
 
         String title = firstNonBlank(clean, "treatment", "service", "consultation_type");
         if (title == null)
@@ -82,6 +87,7 @@ public class PublicSubmissionService {
     public void submitBooking(User owner, Map<String, String> data) {
         Map<String, String> clean = sanitize(data);
         Contact contact = findOrCreateContact(owner, clean);
+        recordDpdpConsentIfPresent(owner, contact, clean);
 
         String service = firstNonBlank(clean, "service", "occasion", "shoot_type", "class_type", "goal");
         if (service == null)
@@ -161,5 +167,32 @@ public class PublicSubmissionService {
 
     private LocalDateTime parseDateTime(String raw) {
         return com.chatcrmlite.backend.util.DateTimeParser.parse(raw);
+    }
+
+    private void recordDpdpConsentIfPresent(User owner, Contact contact, Map<String, String> data) {
+        if (data == null || contact == null || owner == null || contactConsentService == null) return;
+        String consent = data.get("dpdp_consent");
+        if ("GRANTED".equalsIgnoreCase(consent) || "true".equalsIgnoreCase(consent)) {
+            try {
+                java.util.UUID tenantId = owner.getTenant() != null ? owner.getTenant().getId() : owner.getId();
+                com.chatcrmlite.backend.dto.UpdateConsentRequestDTO request = com.chatcrmlite.backend.dto.UpdateConsentRequestDTO.builder()
+                        .channel("ALL")
+                        .status("OPTED_IN")
+                        .source("WEB_WIDGET")
+                        .reason("DPDP Consent granted via Web Form")
+                        .build();
+                contactConsentService.updateConsent(
+                        tenantId,
+                        contact.getId(),
+                        request,
+                        "WEB_USER",
+                        data.getOrDefault("ip_address", "client-web"),
+                        data.getOrDefault("user_agent", "web-widget")
+                );
+                log.info("[PublicSubmission] Recorded DPDP consent audit log for contact={}", contact.getId());
+            } catch (Exception e) {
+                log.warn("[PublicSubmission] Consent audit logging skipped: {}", e.getMessage());
+            }
+        }
     }
 }

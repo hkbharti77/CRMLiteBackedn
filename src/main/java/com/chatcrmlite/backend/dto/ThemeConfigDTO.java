@@ -25,6 +25,10 @@ public class ThemeConfigDTO {
     private String guardrailMessageAbuse;
     private String guardrailMessageGibberish;
     private String webFlowsRoutingConfigJson;
+    private String privacyPolicyUrl;
+    private String termsUrl;
+    private String grievanceEmail;
+    private String consentNoticeText;
 
     public ThemeConfigDTO() {}
 
@@ -93,6 +97,14 @@ public class ThemeConfigDTO {
     public void setGuardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; }
     public String getWebFlowsRoutingConfigJson() { return webFlowsRoutingConfigJson; }
     public void setWebFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; }
+    public String getPrivacyPolicyUrl() { return privacyPolicyUrl; }
+    public void setPrivacyPolicyUrl(String privacyPolicyUrl) { this.privacyPolicyUrl = privacyPolicyUrl; }
+    public String getTermsUrl() { return termsUrl; }
+    public void setTermsUrl(String termsUrl) { this.termsUrl = termsUrl; }
+    public String getGrievanceEmail() { return grievanceEmail; }
+    public void setGrievanceEmail(String grievanceEmail) { this.grievanceEmail = grievanceEmail; }
+    public String getConsentNoticeText() { return consentNoticeText; }
+    public void setConsentNoticeText(String consentNoticeText) { this.consentNoticeText = consentNoticeText; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -121,6 +133,10 @@ public class ThemeConfigDTO {
         private String guardrailMessageAbuse;
         private String guardrailMessageGibberish;
         private String webFlowsRoutingConfigJson;
+        private String privacyPolicyUrl;
+        private String termsUrl;
+        private String grievanceEmail;
+        private String consentNoticeText;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -144,6 +160,10 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder guardrailMessageAbuse(String guardrailMessageAbuse) { this.guardrailMessageAbuse = guardrailMessageAbuse; return this; }
         public ThemeConfigDTOBuilder guardrailMessageGibberish(String guardrailMessageGibberish) { this.guardrailMessageGibberish = guardrailMessageGibberish; return this; }
         public ThemeConfigDTOBuilder webFlowsRoutingConfigJson(String webFlowsRoutingConfigJson) { this.webFlowsRoutingConfigJson = webFlowsRoutingConfigJson; return this; }
+        public ThemeConfigDTOBuilder privacyPolicyUrl(String privacyPolicyUrl) { this.privacyPolicyUrl = privacyPolicyUrl; return this; }
+        public ThemeConfigDTOBuilder termsUrl(String termsUrl) { this.termsUrl = termsUrl; return this; }
+        public ThemeConfigDTOBuilder grievanceEmail(String grievanceEmail) { this.grievanceEmail = grievanceEmail; return this; }
+        public ThemeConfigDTOBuilder consentNoticeText(String consentNoticeText) { this.consentNoticeText = consentNoticeText; return this; }
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
@@ -151,6 +171,10 @@ public class ThemeConfigDTO {
             dto.setGuardrailMessageAbuse(this.guardrailMessageAbuse);
             dto.setGuardrailMessageGibberish(this.guardrailMessageGibberish);
             dto.setWebFlowsRoutingConfigJson(this.webFlowsRoutingConfigJson);
+            dto.setPrivacyPolicyUrl(this.privacyPolicyUrl);
+            dto.setTermsUrl(this.termsUrl);
+            dto.setGrievanceEmail(this.grievanceEmail);
+            dto.setConsentNoticeText(this.consentNoticeText);
             return dto;
         }
     }

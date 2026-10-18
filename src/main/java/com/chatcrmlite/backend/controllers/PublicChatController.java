@@ -123,6 +123,27 @@ public class PublicChatController {
                 .orElse(ResponseEntity.notFound().build());
     }
 
+    /**
+     * DPDP Right to Erasure: Erases user chat session and transcript from backend DB.
+     */
+    @PostMapping("/chat/{businessId}/erasure")
+    public ResponseEntity<Map<String, Object>> handleDataErasure(
+            @PathVariable UUID businessId,
+            @RequestBody Map<String, String> request) {
+        User owner = userRepository.findById(businessId).orElse(null);
+        if (owner == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String sessionId = request != null ? request.get("sessionId") : null;
+        if (sessionId != null && !sessionId.isBlank()) {
+            webChatService.eraseSessionData(owner, sessionId);
+        }
+        return ResponseEntity.ok(Map.of(
+            "success", true,
+            "message", "User session and conversation transcripts erased successfully under DPDP Right to Erasure."
+        ));
+    }
+
     @PostMapping("/chat/{businessId}")
     public ResponseEntity<Map<String, Object>> handlePublicChat(
             @PathVariable UUID businessId,

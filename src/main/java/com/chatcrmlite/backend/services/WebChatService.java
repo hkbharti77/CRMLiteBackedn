@@ -116,4 +116,20 @@ public class WebChatService {
         }
         return false;
     }
+
+    /**
+     * DPDP Right to Erasure: Erase all messages and session data for this client session ID.
+     */
+    @Transactional
+    public boolean eraseSessionData(User owner, String sessionId) {
+        if (owner == null || sessionId == null || sessionId.isBlank()) return false;
+        Optional<WebChatSession> optSession = sessionRepository.findByOwnerAndSessionId(owner, sessionId);
+        if (optSession.isPresent()) {
+            WebChatSession session = optSession.get();
+            messageRepository.deleteBySession(session);
+            sessionRepository.delete(session);
+            return true;
+        }
+        return false;
+    }
 }

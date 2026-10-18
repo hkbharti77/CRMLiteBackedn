@@ -185,6 +185,21 @@ export function createApiClient(apiBase, businessId) {
             } catch (e) {
                 return null;
             }
+        },
+
+        // DPDP Right to Erasure
+        async requestDataErasure(sessionId) {
+            try {
+                const res = await fetch(`${base}/chat/${businessId}/erasure`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ sessionId })
+                });
+                return res.ok;
+            } catch (e) {
+                console.warn('CRM Chat: Erasure request failed', e);
+                return false;
+            }
         }
     };
 }

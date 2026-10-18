@@ -289,11 +289,11 @@ export function createUIController({
                     </div>
                     <div class="chat-confirm-overlay" id="chat-confirm-overlay">
                         <div class="chat-confirm-box" role="alertdialog" aria-labelledby="chat-confirm-title" aria-describedby="chat-confirm-desc">
-                            <h4 id="chat-confirm-title">Restart conversation</h4>
-                            <p id="chat-confirm-desc">Are you sure you want to start a new conversation? This will clear current messages.</p>
+                            <h4 id="chat-confirm-title">Clear conversation & data</h4>
+                            <p id="chat-confirm-desc">Under your DPDP Right to Erasure, this will permanently wipe your chat transcripts and active session from your device and the server.</p>
                             <div class="chat-confirm-actions">
                                 <button type="button" id="chat-confirm-cancel" class="flow-btn flow-btn--muted">Cancel</button>
-                                <button type="button" id="chat-confirm-ok" class="flow-btn flow-btn--danger">Start new</button>
+                                <button type="button" id="chat-confirm-ok" class="flow-btn flow-btn--danger">Erase & Restart</button>
                             </div>
                         </div>
                     </div>
@@ -508,6 +508,28 @@ export function createUIController({
                 });
             } else {
                 menuBody.innerHTML = '<div class="menu-empty">No additional options available.</div>';
+            }
+
+            // DPDP Compliance & Grievance Redressal Footer in Menu (Only if tenant provided links)
+            const pUrl = (activeTheme.privacyPolicyUrl || '').trim();
+            const tUrl = (activeTheme.termsUrl || '').trim();
+            const grievance = (activeTheme.grievanceEmail || '').trim();
+
+            if (pUrl || tUrl || grievance) {
+                const privacyFooter = document.createElement('div');
+                privacyFooter.className = 'menu-privacy-footer';
+                let linksArr = [];
+                if (pUrl) linksArr.push(`<a href="${pUrl}" target="_blank" rel="noopener noreferrer" class="menu-privacy-link">Privacy Policy</a>`);
+                if (tUrl) linksArr.push(`<a href="${tUrl}" target="_blank" rel="noopener noreferrer" class="menu-privacy-link">Terms</a>`);
+
+                privacyFooter.innerHTML = `
+                    <div class="menu-privacy-header">
+                        <span class="menu-privacy-badge">DPDP Compliant</span>
+                        ${linksArr.join('<span style="color:#cbd5e1;margin:0 4px;">•</span>')}
+                    </div>
+                    ${grievance ? `<div class="menu-privacy-grievance">Grievance Officer: <a href="mailto:${grievance}">${escapeHtml(grievance)}</a></div>` : ''}
+                `;
+                menuBody.appendChild(privacyFooter);
             }
         },
 
@@ -1613,6 +1635,46 @@ export function createUIController({
                     bodyContainer.appendChild(fieldWrap);
                 });
 
+                // DPDP Act Explicit Opt-in Checkbox (Rendered on final submission screen)
+                if (screenIdx === totalScreens - 1) {
+                    const consentWrap = document.createElement('div');
+                    consentWrap.className = 'crm-webflow-field crm-dpdp-field';
+                    consentWrap.dataset.dataKey = 'dpdp_consent';
+
+                    const bName = activeTheme.businessName ? escapeHtml(activeTheme.businessName) : '';
+                    const pUrl = (activeTheme.privacyPolicyUrl || '').trim();
+                    const tUrl = (activeTheme.termsUrl || '').trim();
+
+                    const privacyLink = pUrl
+                        ? `<a href="${pUrl}" target="_blank" rel="noopener noreferrer" class="crm-dpdp-link">Privacy Policy</a>`
+                        : `<span class="crm-dpdp-link">Privacy Policy</span>`;
+
+                    const termsLink = tUrl
+                        ? `<a href="${tUrl}" target="_blank" rel="noopener noreferrer" class="crm-dpdp-link">Terms</a>`
+                        : `<span class="crm-dpdp-link">Terms</span>`;
+
+                    const textHtml = bName
+                        ? `I agree to the ${bName} ${privacyLink} and ${termsLink} <span class="crm-dpdp-star">*</span>`
+                        : `I agree to the ${privacyLink} and ${termsLink} <span class="crm-dpdp-star">*</span>`;
+
+                    const consentId = `crm-dpdp-consent-${++fieldIdCounter}`;
+                    consentWrap.innerHTML = `
+                        <label class="crm-dpdp-checkbox-label" for="${consentId}">
+                            <input type="checkbox" id="${consentId}" class="crm-dpdp-checkbox" ${formData.dpdp_consent === 'GRANTED' ? 'checked' : ''} />
+                            <span class="crm-dpdp-text">${textHtml}</span>
+                        </label>
+                    `;
+
+                    const chk = consentWrap.querySelector('.crm-dpdp-checkbox');
+                    chk.onchange = () => {
+                        formData.dpdp_consent = chk.checked ? 'GRANTED' : '';
+                        const err = consentWrap.querySelector('.crm-webflow-field-error');
+                        if (err) err.remove();
+                    };
+
+                    bodyContainer.appendChild(consentWrap);
+                }
+
                 nextSubmitBtn.onclick = () => {
                     let hasErrors = false;
                     screenSteps.forEach(step => {
@@ -1650,6 +1712,27 @@ export function createUIController({
                             fieldWrap.appendChild(errDiv);
                         }
                     });
+
+                    // Validate DPDP consent on final step
+                    if (screenIdx === totalScreens - 1) {
+                        const consentField = bodyContainer.querySelector('.crm-dpdp-field');
+                        const consentChk = bodyContainer.querySelector('.crm-dpdp-checkbox');
+                        if (consentField && (!consentChk || !consentChk.checked)) {
+                            hasErrors = true;
+                            const oldErr = consentField.querySelector('.crm-webflow-field-error');
+                            if (!oldErr) {
+                                const errDiv = document.createElement('div');
+                                errDiv.className = 'crm-webflow-field-error';
+                                errDiv.setAttribute('role', 'alert');
+                                errDiv.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg><span>Please agree to the privacy consent to proceed.</span>`;
+                                consentField.appendChild(errDiv);
+                            }
+                        } else if (consentChk && consentChk.checked) {
+                            formData.dpdp_consent = 'GRANTED';
+                            formData.dpdp_consented_at = new Date().toISOString();
+                            formData.dpdp_notice_version = '1.0';
+                        }
+                    }
 
                     if (hasErrors) return;
 

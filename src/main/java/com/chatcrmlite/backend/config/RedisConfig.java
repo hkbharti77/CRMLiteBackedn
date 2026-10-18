@@ -37,10 +37,18 @@ public class RedisConfig {
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.host:localhost}") String host,
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.port:6379}") int port,
             @org.springframework.beans.factory.annotation.Value("${spring.data.redis.password:}") String password,
-            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.timeout:10000}") long timeout) {
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.username:}") String username,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.timeout:10000}") long timeout,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.max-active:25}") int maxActive,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.max-idle:10}") int maxIdle,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.lettuce.pool.min-idle:2}") int minIdle,
+            @org.springframework.beans.factory.annotation.Value("${spring.data.redis.ssl:false}") boolean ssl) {
 
         org.springframework.data.redis.connection.RedisStandaloneConfiguration redisConfig =
                 new org.springframework.data.redis.connection.RedisStandaloneConfiguration(host, port);
+        if (username != null && !username.trim().isEmpty()) {
+            redisConfig.setUsername(username.trim());
+        }
         if (password != null && !password.trim().isEmpty()) {
             redisConfig.setPassword(org.springframework.data.redis.connection.RedisPassword.of(password));
         }
@@ -62,19 +70,25 @@ public class RedisConfig {
                 .build();
 
         org.apache.commons.pool2.impl.GenericObjectPoolConfig<?> poolConfig = new org.apache.commons.pool2.impl.GenericObjectPoolConfig<>();
-        poolConfig.setMaxTotal(50);
-        poolConfig.setMaxIdle(25);
-        poolConfig.setMinIdle(5);
+        // Cap maxActive so total connections (workers + pubsub + pool) never breach 50 conns limit
+        poolConfig.setMaxTotal(Math.min(maxActive, 30));
+        poolConfig.setMaxIdle(Math.min(maxIdle, 15));
+        poolConfig.setMinIdle(Math.max(minIdle, 1));
         poolConfig.setMaxWait(Duration.ofMillis(5000));
         poolConfig.setTestOnBorrow(true);
         poolConfig.setTestWhileIdle(true);
 
-        org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration clientConfig =
+        org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration.LettucePoolingClientConfigurationBuilder clientConfigBuilder =
                 org.springframework.data.redis.connection.lettuce.LettucePoolingClientConfiguration.builder()
                         .clientOptions(clientOptions)
                         .commandTimeout(Duration.ofMillis(timeout))
-                        .poolConfig(poolConfig)
-                        .build();
+                        .poolConfig(poolConfig);
+
+        if (ssl) {
+            clientConfigBuilder.useSsl();
+        }
+
+        org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration clientConfig = clientConfigBuilder.build();
 
         org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory factory =
                 new org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory(redisConfig, clientConfig);

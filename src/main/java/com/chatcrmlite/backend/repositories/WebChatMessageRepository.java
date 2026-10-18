@@ -17,4 +17,7 @@ public interface WebChatMessageRepository extends JpaRepository<WebChatMessage, 
     
     // For Conversation Memory (Recent Turns)
     List<WebChatMessage> findTop50BySessionOrderByCreatedAtDesc(WebChatSession session);
+
+    // DPDP Right to Erasure
+    void deleteBySession(WebChatSession session);
 }

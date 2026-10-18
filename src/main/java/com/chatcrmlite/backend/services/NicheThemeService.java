@@ -152,6 +152,24 @@ public class NicheThemeService {
 
         List<MenuSectionDTO> menuSections = buildMenuSections(user, slug, hasAppointment, hasBooking, hasLead, config);
 
+        String privacyUrl = null;
+        String termsUrl = null;
+        if (user.getWebFlowsRoutingConfigJson() != null && !user.getWebFlowsRoutingConfigJson().isBlank()) {
+            try {
+                com.fasterxml.jackson.databind.JsonNode root = new com.fasterxml.jackson.databind.ObjectMapper().readTree(user.getWebFlowsRoutingConfigJson());
+                if (root.has("privacyPolicyUrl") && !root.get("privacyPolicyUrl").asText().isBlank()) {
+                    privacyUrl = root.get("privacyPolicyUrl").asText().trim();
+                }
+                if (root.has("termsUrl") && !root.get("termsUrl").asText().isBlank()) {
+                    termsUrl = root.get("termsUrl").asText().trim();
+                }
+            } catch (Exception ignored) {}
+        }
+
+        String shortNotice = (user.getBusinessName() != null && !user.getBusinessName().isBlank())
+                ? "I agree to share my details with " + user.getBusinessName().trim() + "."
+                : "I agree to share my contact details.";
+
         return ThemeConfigDTO.builder()
                 .primaryColor(finalPrimary)
                 .secondaryColor(finalSecondary)
@@ -175,6 +193,10 @@ public class NicheThemeService {
                 .guardrailMessageAbuse(config != null ? config.getGuardrailMessageAbuse() : null)
                 .guardrailMessageGibberish(config != null ? config.getGuardrailMessageGibberish() : null)
                 .webFlowsRoutingConfigJson(user.getWebFlowsRoutingConfigJson())
+                .privacyPolicyUrl(privacyUrl)
+                .termsUrl(termsUrl)
+                .grievanceEmail(user.getEmail() != null && !user.getEmail().isBlank() ? user.getEmail() : null)
+                .consentNoticeText(shortNotice)
                 .build();
     }
 

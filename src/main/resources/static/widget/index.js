@@ -157,7 +157,18 @@ export async function initWidget({ businessId, apiBase } = {}) {
         parseMarkdown,
         resolveImageUrl,
         onSendMessage: sendMessage,
-        onRestartConfirm: () => flowEngine.restart(),
+        onRestartConfirm: async () => {
+            const currentSessionId = storage.getSessionId();
+            if (currentSessionId) {
+                try {
+                    await apiClient.requestDataErasure(currentSessionId);
+                } catch (e) {
+                    console.warn('CRM Chat: Erasure API call error', e);
+                }
+            }
+            storage.clearAllUserData();
+            flowEngine.restart();
+        },
         onZoomToggle: () => {},
         onMenuCardClick: (card) => {
             const action = normalizeMenuActionType(card.actionType);
