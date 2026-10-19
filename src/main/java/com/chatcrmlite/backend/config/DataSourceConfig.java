@@ -88,7 +88,40 @@ public class DataSourceConfig {
     @Bean
     @QuartzDataSource
     public DataSource quartzDataSource(@org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource) {
+        ensureQuartzTablesExist(writerDataSource);
         return writerDataSource;
+    }
+
+    private void ensureQuartzTablesExist(DataSource dataSource) {
+        try (java.sql.Connection conn = dataSource.getConnection()) {
+            boolean tableExists = false;
+            try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                    "SELECT 1 FROM information_schema.tables WHERE table_name = 'qrtz_scheduler_state'")) {
+                try (java.sql.ResultSet rs = ps.executeQuery()) {
+                    if (rs.next()) {
+                        tableExists = true;
+                    }
+                }
+            }
+            if (!tableExists) {
+                org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
+                        .info("Quartz scheduler state table not found; executing schema.sql to ensure Quartz tables exist...");
+                org.springframework.core.io.ClassPathResource resource =
+                        new org.springframework.core.io.ClassPathResource("schema.sql");
+                if (resource.exists()) {
+                    org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator =
+                            new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(resource);
+                    populator.setContinueOnError(true);
+                    populator.setIgnoreFailedDrops(true);
+                    populator.execute(dataSource);
+                    org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
+                            .info("Successfully verified and initialized Quartz tables on writerDataSource.");
+                }
+            }
+        } catch (Exception e) {
+            org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
+                    .warn("Pre-startup check for Quartz tables encountered a non-fatal warning: {}", e.getMessage());
+        }
     }
 
     /**
