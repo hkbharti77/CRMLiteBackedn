@@ -454,10 +454,28 @@ public class WhatsAppMenuService {
             try {
                 String about = owner.getAboutUs();
                 if (about == null || about.isBlank()) about = "Welcome to " + (owner.getBusinessName() != null ? owner.getBusinessName() : "our business") + "!";
-                String phone = owner.getPhone() != null ? "\nPhone: " + owner.getPhone() : "";
-                String email = owner.getEmail() != null ? "\nEmail: " + owner.getEmail() : "";
-                String address = owner.getAddress() != null ? "\nAddress: " + owner.getAddress() : "";
-                outboundService.sendText(contact, about + "\n" + phone + email + address, config, owner);
+                String phone = (owner.getPhone() != null && !owner.getPhone().isBlank()) ? "\n📞 Phone: " + owner.getPhone() : "";
+                String email = (owner.getEmail() != null && !owner.getEmail().isBlank()) ? "\n✉️ Email: " + owner.getEmail() : "";
+                String address = (owner.getAddress() != null && !owner.getAddress().isBlank()) ? "\n📍 Address: " + owner.getAddress() : "";
+                
+                Double lat = owner.getLatitude();
+                Double lng = owner.getLongitude();
+                String mapsLink = "";
+                if (lat != null && lng != null) {
+                    mapsLink = "\n🗺️ Google Maps: https://www.google.com/maps?q=" + lat + "," + lng;
+                }
+
+                outboundService.sendText(contact, about + "\n" + phone + email + address + mapsLink, config, owner);
+
+                if (lat != null && lng != null) {
+                    try {
+                        String locName = owner.getBusinessName() != null && !owner.getBusinessName().isBlank() ? owner.getBusinessName() : "Our Location";
+                        String locAddress = owner.getAddress() != null ? owner.getAddress() : "";
+                        outboundService.sendLocation(contact, lat, lng, locName, locAddress, config, owner);
+                    } catch (Exception locEx) {
+                        log.warn("[WhatsAppMenuService] Failed to send native WhatsApp location card, text link was already sent: {}", locEx.getMessage());
+                    }
+                }
             } catch (Exception e) {
                 log.error("Failed to send about message", e);
             }

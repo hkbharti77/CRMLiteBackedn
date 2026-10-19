@@ -29,6 +29,12 @@ public class ThemeConfigDTO {
     private String termsUrl;
     private String grievanceEmail;
     private String consentNoticeText;
+    private String address;
+    private Double latitude;
+    private Double longitude;
+    private String phone;
+    private String email;
+    private String googleMapsUrl;
 
     public ThemeConfigDTO() {}
 
@@ -105,6 +111,18 @@ public class ThemeConfigDTO {
     public void setGrievanceEmail(String grievanceEmail) { this.grievanceEmail = grievanceEmail; }
     public String getConsentNoticeText() { return consentNoticeText; }
     public void setConsentNoticeText(String consentNoticeText) { this.consentNoticeText = consentNoticeText; }
+    public String getAddress() { return address; }
+    public void setAddress(String address) { this.address = address; }
+    public Double getLatitude() { return latitude; }
+    public void setLatitude(Double latitude) { this.latitude = latitude; }
+    public Double getLongitude() { return longitude; }
+    public void setLongitude(Double longitude) { this.longitude = longitude; }
+    public String getPhone() { return phone; }
+    public void setPhone(String phone) { this.phone = phone; }
+    public String getEmail() { return email; }
+    public void setEmail(String email) { this.email = email; }
+    public String getGoogleMapsUrl() { return googleMapsUrl; }
+    public void setGoogleMapsUrl(String googleMapsUrl) { this.googleMapsUrl = googleMapsUrl; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -137,6 +155,12 @@ public class ThemeConfigDTO {
         private String termsUrl;
         private String grievanceEmail;
         private String consentNoticeText;
+        private String address;
+        private Double latitude;
+        private Double longitude;
+        private String phone;
+        private String email;
+        private String googleMapsUrl;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -164,6 +188,12 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder termsUrl(String termsUrl) { this.termsUrl = termsUrl; return this; }
         public ThemeConfigDTOBuilder grievanceEmail(String grievanceEmail) { this.grievanceEmail = grievanceEmail; return this; }
         public ThemeConfigDTOBuilder consentNoticeText(String consentNoticeText) { this.consentNoticeText = consentNoticeText; return this; }
+        public ThemeConfigDTOBuilder address(String address) { this.address = address; return this; }
+        public ThemeConfigDTOBuilder latitude(Double latitude) { this.latitude = latitude; return this; }
+        public ThemeConfigDTOBuilder longitude(Double longitude) { this.longitude = longitude; return this; }
+        public ThemeConfigDTOBuilder phone(String phone) { this.phone = phone; return this; }
+        public ThemeConfigDTOBuilder email(String email) { this.email = email; return this; }
+        public ThemeConfigDTOBuilder googleMapsUrl(String googleMapsUrl) { this.googleMapsUrl = googleMapsUrl; return this; }
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
@@ -175,6 +205,12 @@ public class ThemeConfigDTO {
             dto.setTermsUrl(this.termsUrl);
             dto.setGrievanceEmail(this.grievanceEmail);
             dto.setConsentNoticeText(this.consentNoticeText);
+            dto.setAddress(this.address);
+            dto.setLatitude(this.latitude);
+            dto.setLongitude(this.longitude);
+            dto.setPhone(this.phone);
+            dto.setEmail(this.email);
+            dto.setGoogleMapsUrl(this.googleMapsUrl);
             return dto;
         }
     }

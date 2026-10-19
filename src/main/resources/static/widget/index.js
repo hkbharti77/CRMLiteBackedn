@@ -179,7 +179,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
             } else if (action === 'CATALOG') {
                 flowEngine.startCatalogFlow();
             } else if (action === 'ABOUT') {
-                flowEngine.startAboutFlow(theme.aboutUs);
+                flowEngine.startAboutFlow(theme.aboutUs, theme);
             } else if (action === 'LINK') {
                 const url = card.actionPayload || '#';
                 if (url.startsWith('#')) {

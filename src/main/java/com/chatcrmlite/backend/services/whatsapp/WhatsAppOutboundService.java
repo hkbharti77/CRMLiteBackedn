@@ -91,6 +91,26 @@ public class WhatsAppOutboundService {
     }
 
     @Transactional
+    public Message sendLocation(Contact contact, double latitude, double longitude, String name, String address, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendLocation(
+                    contact.getWaId(),
+                    latitude,
+                    longitude,
+                    name != null ? name : "Our Location",
+                    address != null ? address : "",
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            return recordOutgoing(contact, owner, "📍 " + (name != null ? name : "Location") + " (" + latitude + ", " + longitude + ")", metaMessageId, "LOCATION");
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send LOCATION to contact={} owner={}: {}",
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
+            throw e;
+        }
+    }
+
+    @Transactional
     public Message sendFlow(Contact contact, String headerText, String bodyText, String footerText,
                             com.chatcrmlite.backend.models.flows.WhatsAppFlow flow,
                             com.chatcrmlite.backend.models.flows.FlowRevision revision, 

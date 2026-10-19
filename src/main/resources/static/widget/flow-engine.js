@@ -405,13 +405,41 @@ export function createFlowEngine({
             mode = 'rag';
         },
 
-        startAboutFlow(aboutUsText) {
+        startAboutFlow(aboutUsText, themeData) {
             addUserBubble('About Us');
-            if (aboutUsText && aboutUsText.trim() !== '') {
-                addBotBubble(aboutUsText);
+            const data = themeData || getTheme() || {};
+            const about = aboutUsText || data.aboutUs;
+            let content = '';
+
+            if (about && about.trim() !== '') {
+                content += about.trim();
             } else {
-                addBotBubble('Information about our business is coming soon!');
+                content += 'Welcome to ' + (data.businessName || 'our business') + '!';
             }
+
+            const details = [];
+            if (data.address && data.address.trim()) {
+                details.push('📍 **Address:** ' + data.address.trim());
+            }
+            if (data.phone && data.phone.trim()) {
+                details.push('📞 **Phone:** ' + data.phone.trim());
+            }
+            if (data.email && data.email.trim()) {
+                details.push('✉️ **Email:** ' + data.email.trim());
+            }
+
+            const lat = data.latitude;
+            const lng = data.longitude;
+            const mapsUrl = data.googleMapsUrl || (lat && lng ? `https://www.google.com/maps?q=${lat},${lng}` : null);
+            if (mapsUrl) {
+                details.push('🗺️ **Google Maps:** [Open in Google Maps ↗](' + mapsUrl + ')');
+            }
+
+            if (details.length > 0) {
+                content += '\n\n' + details.join('\n\n');
+            }
+
+            addBotBubble(content);
             mode = 'rag';
             ui.setInputEnabled(true, 'Ask me anything...');
         },
