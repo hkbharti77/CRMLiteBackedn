@@ -26,6 +26,10 @@ public interface WhatsAppCampaignRecipientRepository extends JpaRepository<Whats
     long countByCampaignAndStatusIn(WhatsAppCampaign campaign, java.util.Collection<WhatsAppCampaignRecipient.RecipientStatus> statuses);
 
     @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE WhatsAppCampaignRecipient r SET r.clickCount = COALESCE(r.clickCount, 0) + 1, r.lastClickedAt = :now, r.firstClickedAt = COALESCE(r.firstClickedAt, :now) WHERE r.id = :id")
+    void recordClick(@org.springframework.data.repository.query.Param("id") UUID id, @org.springframework.data.repository.query.Param("now") java.time.LocalDateTime now);
+
+    @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("DELETE FROM WhatsAppCampaignRecipient r WHERE r.campaign = :campaign")
     void deleteByCampaign(@org.springframework.data.repository.query.Param("campaign") WhatsAppCampaign campaign);
 }

@@ -1,4 +1,4 @@
-CREATE TABLE commerce_orders (
+CREATE TABLE IF NOT EXISTS commerce_orders (
     id UUID PRIMARY KEY,
     tenant_id UUID NOT NULL REFERENCES tenants(id),
     waba_id VARCHAR(255) NOT NULL,
@@ -24,7 +24,7 @@ CREATE TABLE commerce_orders (
     UNIQUE(tenant_id, whatsapp_message_id)
 );
 
-CREATE TABLE commerce_order_items (
+CREATE TABLE IF NOT EXISTS commerce_order_items (
     id UUID PRIMARY KEY,
     order_id UUID NOT NULL REFERENCES commerce_orders(id) ON DELETE CASCADE,
     product_retailer_id VARCHAR(255) NOT NULL,

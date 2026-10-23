@@ -3,6 +3,7 @@ package com.chatcrmlite.backend.services.whatsapp.campaign;
 import com.chatcrmlite.backend.clients.WhatsAppClient;
 import com.chatcrmlite.backend.models.*;
 import com.chatcrmlite.backend.repositories.*;
+import com.chatcrmlite.backend.dto.WhatsAppTemplateDto;
 import com.chatcrmlite.backend.services.whatsapp.WhatsAppOutboundService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -34,6 +35,7 @@ public class CampaignMessageWorker {
     private final ObjectMapper objectMapper;
     private final WhatsAppRecipientResolver recipientResolver;
     private final ContactRepository contactRepository;
+    private final WhatsAppLinkTrackingService linkTrackingService;
 
     /**
      * Scheduled task that polls for active RUNNING campaigns and dispatches messages
@@ -213,10 +215,36 @@ public class CampaignMessageWorker {
 
             List<String> parameters = parseParameters(recipient.getResolvedVariablesJson());
 
+            // Build rendered body and wrap any raw URLs with tracking tokens
+            String renderedBody = buildRenderedBody(snapshot.getBodyText(), parameters);
+            String trackedBody = linkTrackingService.wrapBodyUrls(recipient.getCampaign(), recipient, renderedBody);
+
+            // Wrap CTA URL buttons and append to message if present
+            if (snapshot.getButtonsJson() != null && !snapshot.getButtonsJson().isBlank()) {
+                try {
+                    List<WhatsAppTemplateDto.TemplateButtonDto> buttons = objectMapper.readValue(
+                            snapshot.getButtonsJson(),
+                            new TypeReference<List<WhatsAppTemplateDto.TemplateButtonDto>>() {}
+                    );
+                    for (int i = 0; i < buttons.size(); i++) {
+                        WhatsAppTemplateDto.TemplateButtonDto btn = buttons.get(i);
+                        if (btn != null && "URL".equalsIgnoreCase(btn.getType()) && btn.getUrl() != null && !btn.getUrl().isBlank()) {
+                            String trackingUrl = linkTrackingService.wrapUrl(recipient.getCampaign(), recipient, btn.getUrl(), i, btn.getText());
+                            if (!trackedBody.contains(trackingUrl) && !trackedBody.contains(btn.getUrl())) {
+                                String label = (btn.getText() != null && !btn.getText().isBlank()) ? btn.getText() : "Click here";
+                                trackedBody += "\n\n\uD83D\uDD17 " + label + ": " + trackingUrl;
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.debug("[CampaignWorker] Non-critical button parsing: {}", e.getMessage());
+                }
+            }
+
             // Build Meta template payload parameters or send text fallback with BSUID/Phone wire distinction
             String metaMessageId = whatsappClient.sendMessageToRecipient(
                     targetRecipient,
-                    buildRenderedBody(snapshot.getBodyText(), parameters),
+                    trackedBody,
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );

@@ -84,6 +84,13 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
     private LocalDateTime sentAt;
     private LocalDateTime deliveredAt;
     private LocalDateTime readAt;
+    private LocalDateTime firstClickedAt;
+    private LocalDateTime lastClickedAt;
+
+    @Builder.Default
+    @Column(name = "click_count", nullable = false)
+    private Integer clickCount = 0;
+
     private LocalDateTime createdAt;
 
     @PrePersist
@@ -100,6 +107,9 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
         }
         if (attemptCount == null) {
             attemptCount = 0;
+        }
+        if (clickCount == null) {
+            clickCount = 0;
         }
         if (availableAt == null) {
             availableAt = LocalDateTime.now();

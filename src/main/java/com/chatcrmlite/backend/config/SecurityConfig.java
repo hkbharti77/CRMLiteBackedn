@@ -132,6 +132,8 @@ public class SecurityConfig {
                     "/public/**",
                     "/api/v1/t/o/**",
                     "/api/v1/t/c/**",
+                    "/api/v1/t/w/**",
+                    "/api/v1/t/**",
                     "/api/v1/u/**",
                     "/api/v1/voice/whatsapp/calls/*/recording/stream",
                     "/api/v1/voice/whatsapp/calls/*/recording/download",

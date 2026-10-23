@@ -1,4 +1,4 @@
-CREATE TABLE commerce_products (
+CREATE TABLE IF NOT EXISTS commerce_products (
     id UUID PRIMARY KEY,
     catalog_id UUID NOT NULL REFERENCES commerce_catalogs(id) ON DELETE CASCADE,
     product_retailer_id VARCHAR(255) NOT NULL,
@@ -14,4 +14,4 @@ CREATE TABLE commerce_products (
     CONSTRAINT uk_commerce_products_catalog_retailer UNIQUE (catalog_id, product_retailer_id)
 );
 
-CREATE INDEX idx_commerce_products_catalog_id ON commerce_products(catalog_id);
+CREATE INDEX IF NOT EXISTS idx_commerce_products_catalog_id ON commerce_products(catalog_id);
