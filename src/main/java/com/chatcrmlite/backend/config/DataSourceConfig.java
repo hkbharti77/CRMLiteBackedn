@@ -137,22 +137,40 @@ public class DataSourceConfig {
         // at the correct version instead of Flyway's default "1".
         String baselineVersion = env.getProperty("spring.flyway.baseline-version", "10097");
         String table = env.getProperty("spring.flyway.table", "flyway_schema_history_3");
-        return org.flywaydb.core.Flyway.configure()
-                .dataSource(writerDataSource)
+        String flywayUrl = env.getProperty("spring.flyway.url", env.getProperty("spring.datasource.writer.jdbc-url"));
+        String flywayUser = env.getProperty("spring.flyway.user", env.getProperty("spring.datasource.writer.username"));
+        String flywayPassword = env.getProperty("spring.flyway.password", env.getProperty("spring.datasource.writer.password"));
+
+        var builder = org.flywaydb.core.Flyway.configure()
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
                 .baselineVersion(baselineVersion)
                 .table(table)
                 .outOfOrder(true)
-                .validateOnMigrate(false)
-                .load();
+                .validateOnMigrate(false);
+
+        if (flywayUrl != null && !flywayUrl.isBlank() && flywayUser != null && !flywayUser.isBlank()) {
+            builder.dataSource(flywayUrl, flywayUser, flywayPassword);
+        } else {
+            builder.dataSource(writerDataSource);
+        }
+
+        return builder.load();
     }
 
-    /** Runs Flyway.migrate() during context init, before JPA (see depends-on post-processor below). */
+    /** Runs Flyway repair + migrate during context init, before JPA (see depends-on post-processor below). */
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public FlywayMigrationInitializer flywayInitializer(org.flywaydb.core.Flyway flyway) {
-        return new FlywayMigrationInitializer(flyway);
+        return new FlywayMigrationInitializer(flyway, f -> {
+            try {
+                f.repair();
+            } catch (Exception e) {
+                org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
+                        .warn("Flyway auto-repair notice: {}", e.getMessage());
+            }
+            f.migrate();
+        });
     }
 
     /**
