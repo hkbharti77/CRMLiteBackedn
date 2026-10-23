@@ -37,6 +37,7 @@ public class EffectiveEntitlementsDTO {
         private boolean hasCustomWidget;
         private boolean hasRagLlm;
         private boolean hasEmailCampaign;
+        private boolean hasVoiceBot;
     }
 
     @Data

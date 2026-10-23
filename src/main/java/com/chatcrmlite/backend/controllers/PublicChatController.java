@@ -69,6 +69,9 @@ public class PublicChatController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsAppConfigRepository;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.billing.CreditMeteringService creditMeteringService;
+
     @PostMapping("/livechat/request/{businessId}")
     public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
             @PathVariable UUID businessId,
@@ -192,7 +195,11 @@ public class PublicChatController {
         if (owner != null && owner.getTenant() != null) {
             try {
                 SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
-                if (!plan.isHasRagLlm()) {
+                Long creditBalance = owner.getTenant().getAiCreditBalance();
+                boolean hasCredits = creditBalance != null && creditBalance > 0;
+
+                // Allow AI if plan has RAG LLM OR tenant has AI credits remaining
+                if (!plan.isHasRagLlm() && !hasCredits) {
                     String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
                     webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg);
                     return ResponseEntity.ok(Map.of("response", noRagMsg));
@@ -323,6 +330,17 @@ public class PublicChatController {
         Map<String, Object> responseMap = new java.util.HashMap<>();
         responseMap.put("response", response);
         if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
+
+        // Deduct 1 AI credit if answering via credit metering
+        if (owner != null && owner.getTenant() != null && creditMeteringService != null) {
+            try {
+                if (creditMeteringService.hasAvailableCredits(owner.getTenant().getId(), 1)) {
+                    creditMeteringService.deductCredits(owner.getTenant().getId(), 1, "PUBLIC_CHAT", "Chatbot AI Query", sessionId);
+                }
+            } catch (Exception credEx) {
+                // Don't block response on metering error
+            }
+        }
 
         if (owner != null) {
             webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, response);

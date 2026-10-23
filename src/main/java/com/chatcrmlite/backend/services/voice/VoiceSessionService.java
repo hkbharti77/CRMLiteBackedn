@@ -57,6 +57,7 @@ public class VoiceSessionService {
     private final TtsFreeVoiceService ttsFreeVoiceService;
     private final ConversationOrchestrator conversationOrchestrator;
     private final com.chatcrmlite.backend.repositories.voice.VoiceAssistantConfigRepository voiceConfigRepository;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
     private String ttsProvider;
@@ -155,6 +156,12 @@ public class VoiceSessionService {
 
         User business = userRepository.findById(businessId)
                 .orElseThrow(() -> new IllegalArgumentException("Business not found for ID: " + businessId));
+
+        UUID tenantId = business.getTenant() != null ? business.getTenant().getId() : business.getId();
+        if (!quotaEnforcerService.isVoiceBotAllowed(tenantId)) {
+            log.warn("Blocked voice session processing for business {} (tenant {}): Voice Bot not permitted on current subscription plan.", businessId, tenantId);
+            throw new IllegalArgumentException("Voice Assistant is not included in your current subscription plan. Please upgrade to Growth, Scale, or Enterprise to use Voice AI.");
+        }
 
         // 1. Session Setup & Turn Invalidation Check
         VoiceSession session = getOrCreateSession(business, visitorId, existingSessionId);

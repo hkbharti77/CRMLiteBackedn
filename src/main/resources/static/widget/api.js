@@ -161,7 +161,11 @@ export function createApiClient(apiBase, businessId) {
             });
 
             if (!res.ok) {
-                throw new Error(`Voice API error: ${res.status}`);
+                const errJson = await res.json().catch(() => ({}));
+                const err = new Error(errJson.error || `Voice API error: ${res.status}`);
+                err.status = res.status;
+                err.data = errJson;
+                throw err;
             }
             return await res.json();
         },

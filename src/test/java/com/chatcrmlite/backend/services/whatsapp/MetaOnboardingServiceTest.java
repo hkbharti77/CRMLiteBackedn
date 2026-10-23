@@ -56,9 +56,9 @@ class MetaOnboardingServiceTest {
         testUser.setEmail("owner@business.com");
         testUser.setTenant(testTenant);
 
-        ReflectionTestUtils.setField(metaOnboardingService, "appId", "1573307991099476");
+        ReflectionTestUtils.setField(metaOnboardingService, "appId", "mock_app_id_12345");
         ReflectionTestUtils.setField(metaOnboardingService, "appSecret", "mock_secret_12345");
-        ReflectionTestUtils.setField(metaOnboardingService, "configId", "1052344107323702");
+        ReflectionTestUtils.setField(metaOnboardingService, "configId", "mock_config_id_67890");
         ReflectionTestUtils.setField(metaOnboardingService, "graphApiVersion", "v21.0");
         ReflectionTestUtils.setField(metaOnboardingService, "apiBaseUrl", "https://graph.facebook.com");
     }
@@ -70,8 +70,8 @@ class MetaOnboardingServiceTest {
 
         assertNotNull(session);
         assertNotNull(session.get("sessionId"));
-        assertEquals("1573307991099476", session.get("appId"));
-        assertEquals("1052344107323702", session.get("configId"));
+        assertEquals("mock_app_id_12345", session.get("appId"));
+        assertEquals("mock_config_id_67890", session.get("configId"));
         assertNotNull(session.get("launcherUrl"));
     }
 

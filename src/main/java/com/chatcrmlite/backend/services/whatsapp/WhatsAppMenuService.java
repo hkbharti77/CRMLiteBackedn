@@ -41,12 +41,18 @@ public class WhatsAppMenuService {
     @org.springframework.beans.factory.annotation.Autowired
     private com.chatcrmlite.backend.services.livechat.LiveSupportService liveSupportService;
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url}")
     private String appPublicUrl;
 
     public void sendGreetingWithMenu(Contact contact, WhatsAppConfig config, User owner, boolean isNewLead) {
-        String customWelcome = config.getWelcomeMessage();
-        String customReturn  = config.getReturningMessage();
+        if (owner == null && config != null) {
+            owner = resolveOwner(config);
+        }
+        String customWelcome = config != null ? config.getWelcomeMessage() : null;
+        String customReturn  = config != null ? config.getReturningMessage() : null;
         String greeting;
 
         if (isNewLead && customWelcome != null && !customWelcome.isBlank()) {
@@ -54,10 +60,13 @@ public class WhatsAppMenuService {
         } else if (!isNewLead && customReturn != null && !customReturn.isBlank()) {
             greeting = interpolateVariables(customReturn, contact, owner);
         } else {
-            String name = contact.getName();
+            String name = contact != null ? contact.getName() : null;
             String displayName = (name == null || name.startsWith("WhatsApp User")) ? "there" : name.split(" ")[0];
+            String bizName = (owner != null && owner.getBusinessName() != null)
+                    ? owner.getBusinessName()
+                    : (config != null && config.getVerifiedName() != null ? config.getVerifiedName() : "our service");
             greeting = "\uD83D\uDC4B Hello" + (displayName.equals("there") ? "" : " " + displayName) + "!\n"
-                    + "Welcome to *" + (owner.getBusinessName() != null ? owner.getBusinessName() : "our service") + "*.\n\n"
+                    + "Welcome to *" + bizName + "*.\n\n"
                     + "Please choose from our services below \uD83D\uDC47";
         }
 
@@ -688,16 +697,22 @@ public class WhatsAppMenuService {
     }
 
     private String interpolateVariables(String text, Contact contact, User owner) {
-        String name = contact.getName();
+        String name = contact != null ? contact.getName() : null;
         String displayName = (name == null || name.startsWith("WhatsApp User")) ? "there" : name.split(" ")[0];
-        String bizName = (owner.getBusinessName() != null) ? owner.getBusinessName() : "our business";
+        String bizName = (owner != null && owner.getBusinessName() != null) ? owner.getBusinessName() : "our business";
         return text.replace("{{name}}", displayName).replace("{{business}}", bizName);
     }
 
     private User resolveOwner(WhatsAppConfig config) {
+        if (config == null) return null;
         User owner = config.getUser();
-        if (owner == null) {
-            throw new IllegalStateException("WhatsApp config has no owner user");
+        if (owner == null && config.getTenant() != null && userRepository != null) {
+            owner = userRepository.findByTenantIdAndRole(config.getTenant().getId(), User.Role.OWNER)
+                    .stream().findFirst()
+                    .orElseGet(() -> userRepository.findAllByTenant(config.getTenant()).stream().findFirst().orElse(null));
+            if (owner != null) {
+                config.setUser(owner);
+            }
         }
         return owner;
     }

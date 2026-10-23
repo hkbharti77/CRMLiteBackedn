@@ -46,9 +46,9 @@ public class AIQuotaServiceTest {
     }
 
     @Test
-    void testCheckAndEnforceQuota_ProPlan_AllowsHigherLimit() {
-        when(tokenBudgetService.getDailyUsage(tenantId)).thenReturn(50_000L); // Under PRO limit but over FREE limit
+    void testCheckAndEnforceQuota_GrowthPlan_AllowsHigherLimit() {
+        when(tokenBudgetService.getDailyUsage(tenantId)).thenReturn(50_000L); // Under GROWTH limit but over FREE limit
 
-        assertDoesNotThrow(() -> aiQuotaService.checkAndEnforceQuota(tenantId, User.PlanType.PRO));
+        assertDoesNotThrow(() -> aiQuotaService.checkAndEnforceQuota(tenantId, User.PlanType.GROWTH));
     }
 }

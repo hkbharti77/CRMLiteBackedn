@@ -25,6 +25,12 @@ public class WorkflowOrchestrator {
     private final com.chatcrmlite.backend.services.whatsapp.checkout.CommerceCheckoutService checkoutService;
     private final com.chatcrmlite.backend.repositories.ContactRepository contactRepository;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.billing.CreditMeteringService creditMeteringService;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.whatsapp.AntiBotLoopService antiBotLoopService;
+
     @Autowired
     public WorkflowOrchestrator(
             QueueRouter router,
@@ -98,6 +104,25 @@ public class WorkflowOrchestrator {
                 return;
             }
 
+            // Anti-Bot Loop Protection: Detect external bot auto-responders or identical repeat ping-pong
+            if (antiBotLoopService != null && contactId != null && text != null && !text.isBlank()) {
+                com.chatcrmlite.backend.models.Contact contact = contactRepository != null 
+                        ? contactRepository.findById(contactId).orElse(null) : null;
+                if (contact != null) {
+                    var loopResult = antiBotLoopService.inspectAndProtect(tenantId, contact, text);
+                    if (loopResult.isLoopDetected()) {
+                        log.warn("🛡️ [Workflow] Bot loop circuit breaker tripped for contact {} (Reason: {}). Halting workflow to protect Meta billing.",
+                                waId, loopResult.reason());
+                        completeStage(context, ProcessingContext.WorkflowStage.COMPLETED);
+                        return;
+                    }
+                }
+            }
+
+            if (antiBotLoopService != null && ("interactive".equals(type) || buttonId != null)) {
+                antiBotLoopService.resetTurnBudget(tenantId, waId);
+            }
+
             // Case 1: WhatsApp Native Cart Order arrived -> Handled by WhatsAppOrderService & CommerceCheckoutService
             if ("order".equals(type)) {
                 log.info("🛒 [Workflow] WhatsApp Order received and processed by CommerceCheckoutService for waId={}. Completing workflow.", waId);
@@ -149,9 +174,10 @@ public class WorkflowOrchestrator {
             if (!routeToFlow) {
                 try {
                     com.chatcrmlite.backend.models.TenantSubscription sub = quotaEnforcerService.getActiveSubscription(tenantId);
-                    if (sub != null && !sub.getPlan().isHasRagLlm()) {
+                    boolean hasCredits = creditMeteringService != null && creditMeteringService.hasAvailableCredits(tenantId, 1);
+                    if (sub != null && !sub.getPlan().isHasRagLlm() && !hasCredits) {
                         routeToFlow = true;
-                        log.info("Tenant {} plan does not support RAG LLM. Routing to menu/flow.", tenantId);
+                        log.info("Tenant {} plan does not support RAG LLM and has no AI credits. Routing to menu/flow.", tenantId);
                     }
                 } catch (Exception e) {
                     if (e instanceof IllegalStateException && e.getMessage().contains("Tenant not found")) {

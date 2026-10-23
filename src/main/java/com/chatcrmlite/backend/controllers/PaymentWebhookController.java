@@ -42,6 +42,9 @@ public class PaymentWebhookController {
     private final TicketRepository ticketRepository;
     private final CustomEmailRepository customEmailRepository;
     private final ObjectMapper objectMapper;
+    private final com.chatcrmlite.backend.repositories.CreditTopUpProductRepository creditTopUpProductRepository;
+    private final com.chatcrmlite.backend.services.billing.CreditMeteringService creditMeteringService;
+    private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
 
     @Value("${razorpay.webhook.secret:dummy_razorpay_webhook_secret}")
     private String razorpayWebhookSecret;
@@ -61,6 +64,46 @@ public class PaymentWebhookController {
             });
         }
         return ResponseEntity.ok(plans);
+    }
+
+    @GetMapping("/api/v1/billing/topups")
+    public ResponseEntity<List<com.chatcrmlite.backend.models.CreditTopUpProduct>> getCreditTopUpProducts() {
+        return ResponseEntity.ok(creditTopUpProductRepository.findByIsActiveTrue());
+    }
+
+    @PostMapping("/api/v1/billing/topups/{productId}/purchase")
+    public ResponseEntity<?> purchaseTopUp(
+            @AuthenticationPrincipal String email,
+            @PathVariable String productId) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        com.chatcrmlite.backend.models.CreditTopUpProduct product = creditTopUpProductRepository.findById(productId)
+                .orElseThrow(() -> new RuntimeException("Top up product not found: " + productId));
+        UUID tenantId = user.getTenant().getId();
+        creditMeteringService.addCredits(tenantId, (long) product.getCredits(),
+                "TOP_UP_PACK", "Purchased " + product.getName() + " (" + product.getCredits() + " Credits)", UUID.randomUUID().toString());
+        long newBalance = tenantRepository.findById(tenantId).map(t -> t.getAiCreditBalance() != null ? t.getAiCreditBalance() : 0L).orElse(0L);
+        return ResponseEntity.ok(Map.of(
+                "success", true,
+                "creditsGranted", product.getCredits(),
+                "newBalance", newBalance,
+                "product", product.getName()
+        ));
+    }
+
+    @GetMapping("/api/v1/billing/credits")
+    public ResponseEntity<?> getCreditBalance(@AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        UUID tenantId = user.getTenant().getId();
+        long balance = user.getTenant().getAiCreditBalance() != null ? user.getTenant().getAiCreditBalance() : 0L;
+        org.springframework.data.domain.Page<com.chatcrmlite.backend.models.TenantCreditTransaction> history = 
+                creditMeteringService.getTransactionHistory(tenantId, org.springframework.data.domain.PageRequest.of(0, 10));
+
+        Map<String, Object> res = new HashMap<>();
+        res.put("aiCreditBalance", balance);
+        res.put("history", history.getContent());
+        return ResponseEntity.ok(res);
     }
 
     @GetMapping("/api/v1/billing/subscription")
@@ -98,6 +141,10 @@ public class PaymentWebhookController {
         limits.put("hasWhatsapp", sub.getPlan().isHasWhatsapp());
         limits.put("hasCustomWidget", sub.getPlan().isHasCustomWidget());
         limits.put("hasRagLlm", sub.getPlan().isHasRagLlm());
+        limits.put("includedAiCredits", sub.getPlan().getIncludedAiCredits());
+        limits.put("hasVoiceBot", sub.getPlan().isHasVoiceBot());
+        limits.put("hasCallingAgent", sub.getPlan().isHasCallingAgent());
+        limits.put("hasWhatsappCoexistence", sub.getPlan().isHasWhatsappCoexistence());
         response.put("limits", limits);
 
         Map<String, Object> usage = new HashMap<>();
@@ -107,6 +154,16 @@ public class PaymentWebhookController {
         usage.put("appointmentsCount", appointmentsCount);
         usage.put("ticketsCount", ticketsCount);
         usage.put("emailsCount", emailsCount);
+        usage.put("aiCreditBalance", user.getTenant().getAiCreditBalance() != null ? user.getTenant().getAiCreditBalance() : 0L);
+
+        com.chatcrmlite.backend.models.WhatsAppConfig waConfig = user.getTenant().getWhatsappConfig();
+        if (waConfig != null) {
+            usage.put("whatsappIntegrationMode", waConfig.getIntegrationMode());
+            usage.put("whatsappFreeRepliesLimit", waConfig.getMonthlyFreeRepliesLimit());
+            usage.put("whatsappRepliesUsed", waConfig.getMonthlyRepliesUsed());
+            usage.put("whatsappReplyRateInr", waConfig.getServiceReplyRateInr());
+        }
+
         response.put("usage", usage);
 
         return ResponseEntity.ok(response);
@@ -255,7 +312,7 @@ public class PaymentWebhookController {
                     log.info("✅ Razorpay payment success. Tenant: {}, Order: {}", tenantId, orderId);
 
                     subscriptionBillingService.processPaymentSuccess(
-                            tenantId, "PRO", "MONTHLY", amount, currency, orderId, paymentId, PaymentGateway.RAZORPAY, null);
+                            tenantId, "GROWTH", "MONTHLY", amount, currency, orderId, paymentId, PaymentGateway.RAZORPAY, null);
                 } else {
                     log.warn("⚠️ Transaction not found in db for Razorpay order ID: {}", orderId);
                 }

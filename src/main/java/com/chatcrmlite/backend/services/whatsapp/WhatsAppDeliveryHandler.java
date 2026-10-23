@@ -64,8 +64,11 @@ public class WhatsAppDeliveryHandler {
             switch (responseType) {
                 case "AI":
                 case "PLAIN":
-                    if (pendingResponse != null) {
+                    if (pendingResponse != null && !pendingResponse.isBlank()) {
                         messageService.sendInteractiveAiResponse(contact, pendingResponse, imgUrl, videoUrl, documentUrl, documentFilename, config, owner);
+                    } else {
+                        log.warn("⚠️ [WhatsApp-Outbound] pendingResponse is empty for AI/PLAIN. Falling back to menu for recipient {}.", contact.getWaId());
+                        menuService.sendTenantMenuToContact(contact, config);
                     }
                     break;
                 case "GREETING":
@@ -86,7 +89,13 @@ public class WhatsAppDeliveryHandler {
                     menuService.sendTenantMenuToContact(contact, config, pendingResponse);
                     break;
                 case "FLOW_CONSUMED":
+                    log.debug("[WhatsApp-Outbound] Flow consumed message, no outbound message needed.");
+                    break;
                 case "NONE":
+                default:
+                    log.warn("⚠️ [WhatsApp-Outbound] Unhandled or missing responseType '{}' for recipient {}. Sending fallback menu.",
+                            responseType, contact.getWaId());
+                    menuService.sendTenantMenuToContact(contact, config);
                     break;
             }
             log.info("[WhatsApp-Outbound] Successfully dispatched response responseType={} correlationId={}",

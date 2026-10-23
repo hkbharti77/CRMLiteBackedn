@@ -16,7 +16,9 @@ public class AIQuotaService {
     private TokenBudgetService tokenBudgetService;
 
     private static final long FREE_DAILY_LIMIT = 10_000;
-    private static final long PRO_DAILY_LIMIT = 100_000;
+    private static final long STARTER_DAILY_LIMIT = 50_000;
+    private static final long GROWTH_DAILY_LIMIT = 200_000;
+    private static final long SCALE_DAILY_LIMIT = 500_000;
     private static final long ENTERPRISE_DAILY_LIMIT = 1_000_000;
 
     public static class QuotaExceededException extends RuntimeException {
@@ -45,7 +47,9 @@ public class AIQuotaService {
     private long getDailyLimit(User.PlanType plan) {
         if (plan == null) return FREE_DAILY_LIMIT;
         return switch (plan) {
-            case PRO -> PRO_DAILY_LIMIT;
+            case STARTER -> STARTER_DAILY_LIMIT;
+            case GROWTH -> GROWTH_DAILY_LIMIT;
+            case SCALE -> SCALE_DAILY_LIMIT;
             case ENTERPRISE -> ENTERPRISE_DAILY_LIMIT;
             default -> FREE_DAILY_LIMIT;
         };

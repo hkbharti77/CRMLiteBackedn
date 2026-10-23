@@ -327,6 +327,43 @@ public class FlowStateMachine {
             String errorMsg = validateInput(field, activeInput);
             if (errorMsg != null) {
                 log.warn("[StateMachine] Validation failed for field {}: {}", field, errorMsg);
+
+                // Anti-Loop / Bot-Loop Prevention: Track retry count for this state
+                String retryKey = "_retry_" + state.getCurrentState();
+                Map<String, String> data = parseData(state.getCollectedData());
+                int retries = 0;
+                try {
+                    retries = Integer.parseInt(data.getOrDefault(retryKey, "0"));
+                } catch (Exception ignored) {}
+                retries++;
+
+                if (retries >= 3) {
+                    log.warn("🛑 [StateMachine] Max validation retries (3) exceeded for contact={}, state={}. Aborting flow to prevent infinite loop.",
+                            contact.getWaId(), state.getCurrentState());
+                    state.setSessionStatus(SessionStatus.CLOSED);
+                    state.setClosedAt(LocalDateTime.now());
+                    state.setCloseReason("MAX_VALIDATION_RETRIES");
+                    stateRepository.save(state);
+
+                    WhatsAppConfig config = configRepository.findByUserId(owner.getId()).orElse(null);
+                    if (config != null) {
+                        try {
+                            outboundService.sendText(contact,
+                                "⚠️ Form paused after multiple unsuccessful attempts. Type *menu* anytime to start over or reach out to support.",
+                                config, owner);
+                        } catch (Exception e) {
+                            log.warn("[StateMachine] Could not send max retries notification: {}", e.getMessage());
+                        }
+                    }
+                    return;
+                }
+
+                data.put(retryKey, String.valueOf(retries));
+                try {
+                    state.setCollectedData(objectMapper.writeValueAsString(data));
+                    stateRepository.save(state);
+                } catch (Exception ignored) {}
+
                 WhatsAppConfig config = configRepository.findByUserId(owner.getId()).orElse(null);
                 if (config != null) {
                     try {
@@ -356,6 +393,31 @@ public class FlowStateMachine {
 
         if (nextStateName == null) {
             log.warn("[StateMachine] No valid transition found from state {} for input {}", state.getCurrentState(), activeInput);
+
+            String retryKey = "_retry_trans_" + state.getCurrentState();
+            Map<String, String> data = parseData(state.getCollectedData());
+            int retries = 0;
+            try {
+                retries = Integer.parseInt(data.getOrDefault(retryKey, "0"));
+            } catch (Exception ignored) {}
+            retries++;
+
+            if (retries >= 3) {
+                log.warn("🛑 [StateMachine] Max transition retries (3) exceeded for contact={}, state={}. Aborting flow.",
+                        contact.getWaId(), state.getCurrentState());
+                state.setSessionStatus(SessionStatus.CLOSED);
+                state.setClosedAt(LocalDateTime.now());
+                state.setCloseReason("MAX_TRANSITION_RETRIES");
+                stateRepository.save(state);
+                return;
+            }
+
+            data.put(retryKey, String.valueOf(retries));
+            try {
+                state.setCollectedData(objectMapper.writeValueAsString(data));
+                stateRepository.save(state);
+            } catch (Exception ignored) {}
+
             // Re-send current state message as a fallback (user sent invalid/unexpected input)
             WhatsAppConfig config = configRepository.findByUserId(owner.getId()).orElse(null);
             if (config != null && currentStateDef.getOptions() != null && !currentStateDef.getOptions().isEmpty()) {

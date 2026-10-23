@@ -67,6 +67,18 @@ public class SubscriptionPlan implements Serializable {
     @Column(name = "is_contact_us", nullable = false)
     private boolean isContactUs = false;
 
+    @Column(name = "included_ai_credits", nullable = false)
+    private int includedAiCredits = 0;
+
+    @Column(name = "has_voice_bot", nullable = false)
+    private boolean hasVoiceBot = false;
+
+    @Column(name = "has_calling_agent", nullable = false)
+    private boolean hasCallingAgent = false;
+
+    @Column(name = "has_whatsapp_coexistence", nullable = false)
+    private boolean hasWhatsappCoexistence = true;
+
     public SubscriptionPlan() {}
 
     public SubscriptionPlan(String id, String name, BigDecimal priceMonthly, BigDecimal priceYearly, int employeeLimit, int primaryResourceLimit, int secondaryResourceLimit, int ticketLimit, int emailLimit, boolean hasWhatsapp, boolean hasCustomWidget, boolean hasRagLlm) {
@@ -176,6 +188,18 @@ public class SubscriptionPlan implements Serializable {
     public boolean isContactUs() { return isContactUs; }
     public void setContactUs(boolean contactUs) { this.isContactUs = contactUs; }
 
+    public int getIncludedAiCredits() { return includedAiCredits; }
+    public void setIncludedAiCredits(int includedAiCredits) { this.includedAiCredits = includedAiCredits; }
+
+    public boolean isHasVoiceBot() { return hasVoiceBot; }
+    public void setHasVoiceBot(boolean hasVoiceBot) { this.hasVoiceBot = hasVoiceBot; }
+
+    public boolean isHasCallingAgent() { return hasCallingAgent; }
+    public void setHasCallingAgent(boolean hasCallingAgent) { this.hasCallingAgent = hasCallingAgent; }
+
+    public boolean isHasWhatsappCoexistence() { return hasWhatsappCoexistence; }
+    public void setHasWhatsappCoexistence(boolean hasWhatsappCoexistence) { this.hasWhatsappCoexistence = hasWhatsappCoexistence; }
+
     public static SubscriptionPlanBuilder builder() {
         return new SubscriptionPlanBuilder();
     }
@@ -199,6 +223,10 @@ public class SubscriptionPlan implements Serializable {
         private int whatsappCampaignLimit;
         private boolean hasCustomWidget;
         private boolean hasRagLlm = true;
+        private int includedAiCredits = 0;
+        private boolean hasVoiceBot = false;
+        private boolean hasCallingAgent = false;
+        private boolean hasWhatsappCoexistence = true;
 
         public SubscriptionPlanBuilder id(String id) { this.id = id; return this; }
         public SubscriptionPlanBuilder name(String name) { this.name = name; return this; }
@@ -218,11 +246,19 @@ public class SubscriptionPlan implements Serializable {
         public SubscriptionPlanBuilder whatsappCampaignLimit(int whatsappCampaignLimit) { this.whatsappCampaignLimit = whatsappCampaignLimit; return this; }
         public SubscriptionPlanBuilder hasCustomWidget(boolean hasCustomWidget) { this.hasCustomWidget = hasCustomWidget; return this; }
         public SubscriptionPlanBuilder hasRagLlm(boolean hasRagLlm) { this.hasRagLlm = hasRagLlm; return this; }
+        public SubscriptionPlanBuilder includedAiCredits(int includedAiCredits) { this.includedAiCredits = includedAiCredits; return this; }
+        public SubscriptionPlanBuilder hasVoiceBot(boolean hasVoiceBot) { this.hasVoiceBot = hasVoiceBot; return this; }
+        public SubscriptionPlanBuilder hasCallingAgent(boolean hasCallingAgent) { this.hasCallingAgent = hasCallingAgent; return this; }
+        public SubscriptionPlanBuilder hasWhatsappCoexistence(boolean hasWhatsappCoexistence) { this.hasWhatsappCoexistence = hasWhatsappCoexistence; return this; }
 
         public SubscriptionPlan build() {
             SubscriptionPlan plan = new SubscriptionPlan(id, name, priceMonthlyInr, priceYearlyInr, priceMonthlyUsd, priceYearlyUsd, employeeLimit, primaryResourceLimit, secondaryResourceLimit, ticketLimit, emailLimit, hasWhatsapp, hasWhatsappCampaign, whatsappCampaignLimit, hasCustomWidget, hasRagLlm);
             if (priceMonthly != null) plan.setPriceMonthly(priceMonthly);
             if (priceYearly != null) plan.setPriceYearly(priceYearly);
+            plan.setIncludedAiCredits(includedAiCredits);
+            plan.setHasVoiceBot(hasVoiceBot);
+            plan.setHasCallingAgent(hasCallingAgent);
+            plan.setHasWhatsappCoexistence(hasWhatsappCoexistence);
             return plan;
         }
     }

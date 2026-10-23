@@ -128,6 +128,13 @@ public class EntitlementResolverService {
         String planId = basePlan != null ? basePlan.getId() : "FREE";
         String planName = basePlan != null ? basePlan.getName() : "Free Plan";
 
+        // Expiry Guard: If subscription has expired, force FREE entitlements
+        if (sub != null && !"FREE".equalsIgnoreCase(planId) && sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
+            basePlan = subscriptionPlanRepository.findById("FREE").orElse(basePlan);
+            planId = "FREE";
+            planName = "Free Plan";
+        }
+
         TenantSubscriptionOverride override = overrideRepository.findByTenantId(tenantId).orElse(null);
 
         Map<String, OverrideAction> pageOverrides = override != null && override.getPageOverrides() != null ? new HashMap<>(override.getPageOverrides()) : new HashMap<>();
@@ -224,6 +231,14 @@ public class EntitlementResolverService {
         SubscriptionPlan basePlan = (sub != null && sub.getPlan() != null) ? sub.getPlan() : subscriptionPlanRepository.findById("FREE").orElse(null);
         String planId = basePlan != null ? basePlan.getId() : "FREE";
         String planName = basePlan != null ? basePlan.getName() : "Free Plan";
+
+        // Expiry Guard: If subscription has expired, force FREE entitlements
+        if (sub != null && !"FREE".equalsIgnoreCase(planId) && sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
+            log.warn("⚠️ Subscription expired for tenant {}. Forcing FREE entitlements in matrix.", tenantId);
+            basePlan = subscriptionPlanRepository.findById("FREE").orElse(basePlan);
+            planId = "FREE";
+            planName = "Free Plan";
+        }
 
         TenantSubscriptionOverride override = overrideRepository.findByTenantId(tenantId).orElse(null);
 
@@ -404,6 +419,13 @@ public class EntitlementResolverService {
         SubscriptionPlan basePlan = (sub != null && sub.getPlan() != null) ? sub.getPlan() : subscriptionPlanRepository.findById("FREE").orElse(null);
         String planId = basePlan != null ? basePlan.getId() : "FREE";
 
+        // Expiry Guard: If subscription has expired, force FREE entitlements
+        if (sub != null && !"FREE".equalsIgnoreCase(planId) && sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
+            log.warn("⚠️ Subscription expired for tenant {}. Forcing FREE entitlements in DTO.", tenantId);
+            basePlan = subscriptionPlanRepository.findById("FREE").orElse(basePlan);
+            planId = "FREE";
+        }
+
         TenantSubscriptionOverride override = overrideRepository.findByTenantId(tenantId).orElse(null);
 
         boolean isOverrideActive = false;
@@ -426,6 +448,7 @@ public class EntitlementResolverService {
         boolean hasWaCamp = plan != null && plan.isHasWhatsappCampaign();
         boolean hasWidget = plan != null && plan.isHasCustomWidget();
         boolean hasRag = plan != null && plan.isHasRagLlm();
+        boolean hasVoice = plan != null && plan.isHasVoiceBot();
 
         int empLimit = plan != null ? plan.getEmployeeLimit() : 1;
         int priLimit = plan != null ? plan.getPrimaryResourceLimit() : 100;
@@ -443,6 +466,7 @@ public class EntitlementResolverService {
             trace.put("hasWhatsappCampaign", new EffectiveEntitlementsDTO.PropertyTrace(hasWaCamp, "BASE_PLAN"));
             trace.put("hasCustomWidget", new EffectiveEntitlementsDTO.PropertyTrace(hasWidget, "BASE_PLAN"));
             trace.put("hasRagLlm", new EffectiveEntitlementsDTO.PropertyTrace(hasRag, "BASE_PLAN"));
+            trace.put("hasVoiceBot", new EffectiveEntitlementsDTO.PropertyTrace(hasVoice, "BASE_PLAN"));
             trace.put("employeeLimit", new EffectiveEntitlementsDTO.PropertyTrace(empLimit, "BASE_PLAN"));
             trace.put("maxRecipientsPerWhatsappCampaign", new EffectiveEntitlementsDTO.PropertyTrace(maxRecip, "BASE_PLAN"));
             trace.put("maxAllowedPriority", new EffectiveEntitlementsDTO.PropertyTrace(maxPri.name(), "BASE_PLAN"));
@@ -459,6 +483,7 @@ public class EntitlementResolverService {
                         .hasCustomWidget(hasWidget)
                         .hasRagLlm(hasRag)
                         .hasEmailCampaign(true)
+                        .hasVoiceBot(hasVoice)
                         .build())
                 .limits(EffectiveEntitlementsDTO.LimitsDTO.builder()
                         .employeeLimit(empLimit)
@@ -498,6 +523,7 @@ public class EntitlementResolverService {
         boolean hasWidget = resolveBoolean(featMap, "hasCustomWidget", basePlan != null && basePlan.isHasCustomWidget(), trace, "hasCustomWidget");
         boolean hasRag = resolveBoolean(featMap, "hasRagLlm", basePlan != null && basePlan.isHasRagLlm(), trace, "hasRagLlm");
         boolean hasEmailCamp = resolveBoolean(featMap, "hasEmailCampaign", true, trace, "hasEmailCampaign");
+        boolean hasVoice = resolveBoolean(featMap, "hasVoiceBot", basePlan != null && basePlan.isHasVoiceBot(), trace, "hasVoiceBot");
 
         int empLimit = resolveInt(quotaMap, "employeeLimit", basePlan != null ? basePlan.getEmployeeLimit() : 1, trace, "employeeLimit");
         int priLimit = resolveInt(quotaMap, "primaryResourceLimit", basePlan != null ? basePlan.getPrimaryResourceLimit() : 100, trace, "primaryResourceLimit");
@@ -538,6 +564,7 @@ public class EntitlementResolverService {
                         .hasCustomWidget(hasWidget)
                         .hasRagLlm(hasRag)
                         .hasEmailCampaign(hasEmailCamp)
+                        .hasVoiceBot(hasVoice)
                         .build())
                 .limits(EffectiveEntitlementsDTO.LimitsDTO.builder()
                         .employeeLimit(empLimit)

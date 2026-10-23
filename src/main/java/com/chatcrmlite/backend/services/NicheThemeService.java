@@ -134,6 +134,7 @@ public class NicheThemeService {
 
         UUID tenantIdForQuota = user.getTenant() != null ? user.getTenant().getId() : user.getId();
         boolean allowBranding = quotaEnforcerService.isCustomWidgetBrandingAllowed(tenantIdForQuota);
+        boolean hasVoiceBot = quotaEnforcerService.isVoiceBotAllowed(tenantIdForQuota);
         String finalLogoUrl = user.getLogoUrl() != null && !user.getLogoUrl().isBlank() ? user.getLogoUrl() : null;
         String finalWidgetIconUrl = user.getWidgetIconUrl() != null && !user.getWidgetIconUrl().isBlank() ? user.getWidgetIconUrl() : null;
         boolean showWatermark = !allowBranding;
@@ -205,6 +206,7 @@ public class NicheThemeService {
                 .termsUrl(termsUrl)
                 .grievanceEmail(user.getEmail() != null && !user.getEmail().isBlank() ? user.getEmail() : null)
                 .consentNoticeText(shortNotice)
+                .hasVoiceBot(hasVoiceBot)
                 .build();
     }
 

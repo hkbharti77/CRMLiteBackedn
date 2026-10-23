@@ -35,6 +35,7 @@ public class ThemeConfigDTO {
     private String phone;
     private String email;
     private String googleMapsUrl;
+    private Boolean hasVoiceBot;
 
     public ThemeConfigDTO() {}
 
@@ -123,6 +124,8 @@ public class ThemeConfigDTO {
     public void setEmail(String email) { this.email = email; }
     public String getGoogleMapsUrl() { return googleMapsUrl; }
     public void setGoogleMapsUrl(String googleMapsUrl) { this.googleMapsUrl = googleMapsUrl; }
+    public Boolean getHasVoiceBot() { return hasVoiceBot; }
+    public void setHasVoiceBot(Boolean hasVoiceBot) { this.hasVoiceBot = hasVoiceBot; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();
@@ -161,6 +164,7 @@ public class ThemeConfigDTO {
         private String phone;
         private String email;
         private String googleMapsUrl;
+        private Boolean hasVoiceBot;
 
         public ThemeConfigDTOBuilder primaryColor(String primaryColor) { this.primaryColor = primaryColor; return this; }
         public ThemeConfigDTOBuilder secondaryColor(String secondaryColor) { this.secondaryColor = secondaryColor; return this; }
@@ -194,6 +198,7 @@ public class ThemeConfigDTO {
         public ThemeConfigDTOBuilder phone(String phone) { this.phone = phone; return this; }
         public ThemeConfigDTOBuilder email(String email) { this.email = email; return this; }
         public ThemeConfigDTOBuilder googleMapsUrl(String googleMapsUrl) { this.googleMapsUrl = googleMapsUrl; return this; }
+        public ThemeConfigDTOBuilder hasVoiceBot(Boolean hasVoiceBot) { this.hasVoiceBot = hasVoiceBot; return this; }
 
         public ThemeConfigDTO build() {
             ThemeConfigDTO dto = new ThemeConfigDTO(primaryColor, secondaryColor, accentColor, backgroundColor, fontFamily, nicheIcon, businessName, welcomeMessage, returningMessage, businessSubType, logoUrl, showWatermark, ctaButtons, menuSections, aboutUs, aiResponseMenuJson, flowCancelMenuJson, flowCompletionMenuJson);
@@ -211,6 +216,7 @@ public class ThemeConfigDTO {
             dto.setPhone(this.phone);
             dto.setEmail(this.email);
             dto.setGoogleMapsUrl(this.googleMapsUrl);
+            dto.setHasVoiceBot(this.hasVoiceBot);
             return dto;
         }
     }

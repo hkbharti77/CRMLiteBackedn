@@ -47,13 +47,13 @@ public class MetaOnboardingService {
     @Autowired
     private WhatsAppConfigRepository whatsappConfigRepository;
 
-    @Value("${meta.app.id:1573307991099476}")
+    @Value("${meta.app.id:}")
     private String appId;
 
     @Value("${meta.app-secret:}")
     private String appSecret;
 
-    @Value("${meta.config.id:1052344107323702}")
+    @Value("${meta.config.id:}")
     private String configId;
 
     @Value("${meta.graph-api-version:v21.0}")
@@ -209,6 +209,10 @@ public class MetaOnboardingService {
      * Note: External Meta calls run outside any DB transaction to avoid connection pool starvation.
      */
     public Map<String, Object> exchangeAndProvision(String code, String sessionId, User user) {
+        return exchangeAndProvision(code, sessionId, user, null, null);
+    }
+
+    public Map<String, Object> exchangeAndProvision(String code, String sessionId, User user, String hintWabaId, String hintPhoneNumberId) {
         if (!StringUtils.hasText(code)) {
             throw new IllegalArgumentException("OAuth authorization code is required");
         }
@@ -217,7 +221,8 @@ public class MetaOnboardingService {
         OnboardingSession session = validateAndConsumeSession(sessionId, user);
         UUID tenantId = session.getTenantId();
 
-        log.info("[MetaOnboarding] Initiating exchange for tenantId={}, userEmail={}", tenantId, session.getUserEmail());
+        log.info("[MetaOnboarding] Initiating exchange for tenantId={}, userEmail={}, hintWabaId={}, hintPhoneNumberId={}",
+                tenantId, session.getUserEmail(), hintWabaId, hintPhoneNumberId);
 
         try {
             // 2. Exchange Authorization Code for Access Token
@@ -231,8 +236,10 @@ public class MetaOnboardingService {
                     ? tokenResult.getTokenExpiry()
                     : debugResult.getTokenExpiry();
 
-            // 4. Resolve Authoritative WABA ID
-            String wabaId = resolveWaba(businessId, tokenResult.getAccessToken(), debugResult);
+            // 4. Resolve Authoritative WABA ID (prefer explicit hint from Embedded Signup postMessage if available)
+            String wabaId = StringUtils.hasText(hintWabaId)
+                    ? hintWabaId
+                    : resolveWaba(businessId, tokenResult.getAccessToken(), debugResult);
 
             // 4b. Resolve true Meta Business Portfolio ID (owner_business_info or /me/businesses)
             String realBmId = resolveBusinessPortfolioId(wabaId, tokenResult.getAccessToken());
@@ -240,8 +247,8 @@ public class MetaOnboardingService {
                 businessId = realBmId;
             }
 
-            // 5. Resolve Registered Phone Number Details
-            PhoneDetailsResult phoneDetails = resolvePhoneNumber(wabaId, tokenResult.getAccessToken());
+            // 5. Resolve Registered Phone Number Details (prefer explicit hint if available)
+            PhoneDetailsResult phoneDetails = resolvePhoneNumber(wabaId, tokenResult.getAccessToken(), hintPhoneNumberId);
 
             // 6. Subscribe WABA to Webhook
             WebhookSubscriptionResult webhookResult = subscribeWebhook(wabaId, tokenResult.getAccessToken());
@@ -476,6 +483,30 @@ public class MetaOnboardingService {
      * Resolves Phone Number Details for the given WABA.
      */
     public PhoneDetailsResult resolvePhoneNumber(String wabaId, String accessToken) {
+        return resolvePhoneNumber(wabaId, accessToken, null);
+    }
+
+    public PhoneDetailsResult resolvePhoneNumber(String wabaId, String accessToken, String hintPhoneNumberId) {
+        if (StringUtils.hasText(hintPhoneNumberId)) {
+            try {
+                String singleUrl = String.format("%s/%s?fields=id,display_phone_number,verified_name,quality_rating&access_token=%s",
+                        getGraphApiUrl(), hintPhoneNumberId, accessToken);
+                ResponseEntity<String> response = restTemplate.getForEntity(singleUrl, String.class);
+                JsonNode phoneNode = objectMapper.readTree(response.getBody());
+                if (phoneNode.has("id")) {
+                    log.info("[MetaOnboarding] Resolved specific phone number {} from hint", hintPhoneNumberId);
+                    return PhoneDetailsResult.builder()
+                            .phoneNumberId(phoneNode.path("id").asText())
+                            .displayPhoneNumber(phoneNode.path("display_phone_number").asText(null))
+                            .verifiedName(phoneNode.path("verified_name").asText(null))
+                            .qualityRating(phoneNode.path("quality_rating").asText("UNKNOWN"))
+                            .build();
+                }
+            } catch (Exception e) {
+                log.warn("[MetaOnboarding] Could not fetch hint phone number {}: {}", hintPhoneNumberId, e.getMessage());
+            }
+        }
+
         String url = String.format("%s/%s/phone_numbers?access_token=%s", getGraphApiUrl(), wabaId, accessToken);
         try {
             ResponseEntity<String> response = restTemplate.getForEntity(url, String.class);

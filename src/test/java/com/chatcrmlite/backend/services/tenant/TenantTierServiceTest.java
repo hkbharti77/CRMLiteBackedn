@@ -41,18 +41,18 @@ class TenantTierServiceTest {
     @Test
     void testCacheMissAndHit() {
         TenantSubscription mockSub = mock(TenantSubscription.class, RETURNS_DEEP_STUBS);
-        when(mockSub.getPlan().getId()).thenReturn("PRO");
+        when(mockSub.getPlan().getId()).thenReturn("GROWTH");
 
         when(tenantSubscriptionRepository.findByTenantId(tenantId)).thenReturn(Optional.of(mockSub));
 
         // First call: Cache Miss
         PlanType tier1 = tenantTierService.getTier(tenantId);
-        assertEquals(PlanType.PRO, tier1);
+        assertEquals(PlanType.GROWTH, tier1);
         verify(tenantSubscriptionRepository, times(1)).findByTenantId(tenantId);
 
         // Second call: Cache Hit
         PlanType tier2 = tenantTierService.getTier(tenantId);
-        assertEquals(PlanType.PRO, tier2);
+        assertEquals(PlanType.GROWTH, tier2);
         
         // Repository should not be called again
         verify(tenantSubscriptionRepository, times(1)).findByTenantId(tenantId);
@@ -93,20 +93,20 @@ class TenantTierServiceTest {
         cacheField.set(tenantTierService, shortLivedCache);
 
         TenantSubscription mockSub = mock(TenantSubscription.class, RETURNS_DEEP_STUBS);
-        when(mockSub.getPlan().getId()).thenReturn("PRO");
+        when(mockSub.getPlan().getId()).thenReturn("GROWTH");
 
         when(tenantSubscriptionRepository.findByTenantId(tenantId)).thenReturn(Optional.of(mockSub));
 
         // First call: Cache Miss
         PlanType tier1 = tenantTierService.getTier(tenantId);
-        assertEquals(PlanType.PRO, tier1);
+        assertEquals(PlanType.GROWTH, tier1);
         
         // Wait for cache to expire
         Thread.sleep(150);
         
         // Second call: Should be a Miss again due to expiration
         PlanType tier2 = tenantTierService.getTier(tenantId);
-        assertEquals(PlanType.PRO, tier2);
+        assertEquals(PlanType.GROWTH, tier2);
         
         // Verify repository was called twice
         verify(tenantSubscriptionRepository, times(2)).findByTenantId(tenantId);

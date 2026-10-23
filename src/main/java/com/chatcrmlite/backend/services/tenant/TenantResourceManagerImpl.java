@@ -77,14 +77,20 @@ public class TenantResourceManagerImpl implements TenantResourceManager {
         
         if (type == ResourceType.MESSAGES_PER_SECOND) {
             if (tier == PlanType.FREE) return 2;
-            if (tier == PlanType.ENTERPRISE) return 50;
-            return 10; // PRO / Default
+            if (tier == PlanType.STARTER) return 10;
+            if (tier == PlanType.GROWTH) return 25;
+            if (tier == PlanType.SCALE) return 50;
+            if (tier == PlanType.ENTERPRISE) return 100;
+            return 10;
         }
         
         if (type == ResourceType.AI_TOKENS) {
             if (tier == PlanType.FREE) return 50000;
+            if (tier == PlanType.STARTER) return 100000;
+            if (tier == PlanType.GROWTH) return 250000;
+            if (tier == PlanType.SCALE) return 500000;
             if (tier == PlanType.ENTERPRISE) return 1000000;
-            return 200000; // PRO / Default
+            return 100000;
         }
         
         if (type == ResourceType.MAX_CONNECTIONS) return 50;

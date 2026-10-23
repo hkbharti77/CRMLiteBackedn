@@ -44,15 +44,27 @@ public class FaqMatchingService {
      * 2. Approximate nearest-neighbor search via HNSW pgvector
      */
     public MatchResult findBestMatch(UUID tenantId, String rawQuery, float[] queryEmbedding) {
-        if (rawQuery == null || rawQuery.trim().isEmpty()) {
+        if (rawQuery == null || rawQuery.trim().isEmpty() || tenantId == null) {
             return new MatchResult(null, 0.0f, false);
         }
 
+        String queryClean = rawQuery.trim();
+
         // 1. Exact match via Database
-        Optional<FaqItem> exactMatch = faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, rawQuery);
+        Optional<FaqItem> exactMatch = faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, queryClean);
+        if (exactMatch.isEmpty()) {
+            String stripped = queryClean.replaceAll("[?!.]+$", "").trim();
+            if (!stripped.equalsIgnoreCase(queryClean)) {
+                exactMatch = faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, stripped);
+            }
+            if (exactMatch.isEmpty() && !queryClean.endsWith("?")) {
+                exactMatch = faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, stripped + "?");
+            }
+        }
+
         if (exactMatch.isPresent()) {
             FaqItem item = exactMatch.get();
-            log.info("[FAQ-Engine] Exact question match hit! FAQ ID: {}", item.getId());
+            log.info("[FAQ-Engine] Exact question match hit! FAQ ID: {} | Question: '{}'", item.getId(), item.getQuestion());
             faqItemRepository.incrementHitCount(item.getId());
             return new MatchResult(item, 1.0f, true);
         }
@@ -78,8 +90,8 @@ public class FaqMatchingService {
                 // Fetch the fully managed entity safely
                 Optional<FaqItem> itemOpt = faqItemRepository.findById(match.getId());
                 if (itemOpt.isPresent()) {
-                    log.info("[FAQ-Engine] High-confidence pgvector match! Score: {} >= {}", 
-                            String.format("%.4f", similarity), matchingThreshold);
+                    log.info("[FAQ-Engine] High-confidence pgvector match! Score: {} >= {} | Question: '{}'", 
+                            String.format("%.4f", similarity), matchingThreshold, itemOpt.get().getQuestion());
                     faqItemRepository.incrementHitCount(itemOpt.get().getId());
                     return new MatchResult(itemOpt.get(), similarity, true);
                 }

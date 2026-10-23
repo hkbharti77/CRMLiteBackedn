@@ -25,6 +25,9 @@ public class PublicVoiceChatController {
     private final VoiceSessionService voiceSessionService;
     private final com.chatcrmlite.backend.services.ai.DeepgramVoiceService deepgramVoiceService;
     private final com.chatcrmlite.backend.services.voice.SpeechNormalizer speechNormalizer;
+    private final com.chatcrmlite.backend.repositories.UserRepository userRepository;
+    private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+    private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
     @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
     private String defaultTtsModel;
@@ -34,6 +37,19 @@ public class PublicVoiceChatController {
 
     @org.springframework.beans.factory.annotation.Value("${voice.max-tts-characters:3000}")
     private int maxTtsCharacters;
+
+    private UUID resolveTenantId(UUID businessId) {
+        if (businessId == null) return null;
+        com.chatcrmlite.backend.models.User user = userRepository.findById(businessId).orElse(null);
+        if (user != null) {
+            return user.getTenant() != null ? user.getTenant().getId() : user.getId();
+        }
+        com.chatcrmlite.backend.models.Tenant tenant = tenantRepository.findById(businessId).orElse(null);
+        if (tenant != null) {
+            return tenant.getId();
+        }
+        return businessId;
+    }
 
     /**
      * Public Voice Turn Endpoint (Multipart Audio / Fallback Transcript)
@@ -48,6 +64,17 @@ public class PublicVoiceChatController {
             @RequestParam(value = "preferredLang", required = false, defaultValue = "en") String preferredLang,
             HttpServletRequest request
     ) {
+        UUID tenantId = resolveTenantId(businessId);
+        if (!quotaEnforcerService.isVoiceBotAllowed(tenantId)) {
+            log.warn("⛔ Voice Assistant turn denied for business {} (tenant {}): Plan does not permit Voice Bot.", businessId, tenantId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                    .body(Map.of(
+                            "success", false,
+                            "error", "Voice Assistant is not included in your current subscription plan. Please upgrade to Growth, Scale, or Enterprise to enable Voice AI.",
+                            "planRestricted", true
+                    ));
+        }
+
         String clientIp = getClientIp(request);
         if (!voiceSessionService.checkRateLimit(clientIp)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
@@ -137,6 +164,12 @@ public class PublicVoiceChatController {
             @RequestBody Map<String, String> payload,
             HttpServletRequest request
     ) {
+        UUID tenantId = resolveTenantId(businessId);
+        if (!quotaEnforcerService.isVoiceBotAllowed(tenantId)) {
+            log.warn("⛔ TTS synthesis denied for business {} (tenant {}): Voice Bot not permitted in subscription plan.", businessId, tenantId);
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        }
+
         String clientIp = getClientIp(request);
         if (!voiceSessionService.checkRateLimit(clientIp)) {
             return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).build();
@@ -194,14 +227,17 @@ public class PublicVoiceChatController {
      */
     @GetMapping("/config/{businessId}")
     public ResponseEntity<Map<String, Object>> getVoiceConfig(@PathVariable UUID businessId) {
+        UUID tenantId = resolveTenantId(businessId);
+        boolean voiceAllowed = quotaEnforcerService.isVoiceBotAllowed(tenantId);
+
         Map<String, Object> config = new HashMap<>();
-        config.put("voiceEnabled", true);
+        config.put("voiceEnabled", voiceAllowed);
         config.put("defaultModelTTS", defaultTtsModel);
         config.put("defaultModelSTT", defaultSttModel);
         config.put("silenceTimeoutMs", 800);
         config.put("maxTurnDurationSeconds", 45);
         config.put("supportedLanguages", new String[]{"en", "hi", "hinglish"});
-        config.put("autoPlayVoice", true);
+        config.put("autoPlayVoice", voiceAllowed);
         return ResponseEntity.ok(config);
     }
 

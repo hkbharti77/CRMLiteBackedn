@@ -18,4 +18,7 @@ public interface TenantSubscriptionRepository extends JpaRepository<TenantSubscr
     Optional<TenantSubscription> findByStripeSubscriptionId(String stripeSubscriptionId);
 
     Optional<TenantSubscription> findByRazorpaySubscriptionId(String razorpaySubscriptionId);
+
+    @Query("SELECT ts FROM TenantSubscription ts WHERE ts.plan.id <> 'FREE' AND ts.currentPeriodEnd IS NOT NULL AND ts.currentPeriodEnd < :now")
+    java.util.List<TenantSubscription> findAllExpiredPaidSubscriptions(@Param("now") java.time.LocalDateTime now);
 }

@@ -49,7 +49,7 @@ class FlowButtonValidatorTest {
     @Test
     @DisplayName("Allows valid published flow button owned by tenant")
     void testValidPublishedFlowButton() {
-        String flowId = "1090379999982717";
+        String flowId = "mock_flow_id_99999";
         WhatsAppFlow flow = WhatsAppFlow.builder()
                 .metaFlowId(flowId)
                 .status(FlowLifecycleStatus.PUBLISHED)
@@ -73,7 +73,7 @@ class FlowButtonValidatorTest {
     @Test
     @DisplayName("Rejects flow button when flow is still in DRAFT status")
     void testDraftFlowThrows() {
-        String flowId = "1090379999982717";
+        String flowId = "mock_flow_id_99999";
         WhatsAppFlow flow = WhatsAppFlow.builder()
                 .name("Draft Lead Flow")
                 .metaFlowId(flowId)
