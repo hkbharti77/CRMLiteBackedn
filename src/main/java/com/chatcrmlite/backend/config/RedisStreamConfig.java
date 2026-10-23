@@ -1,6 +1,7 @@
 package com.chatcrmlite.backend.config;
 
 import com.chatcrmlite.backend.services.WebhookWorker;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -21,7 +22,10 @@ import org.springframework.data.redis.stream.Subscription;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 @Configuration
 @Profile("!test")
@@ -53,6 +57,25 @@ public class RedisStreamConfig {
     private final com.chatcrmlite.backend.services.workflow.FlowWorker flowWorker;
     private final com.chatcrmlite.backend.services.workflow.DeliveryWorker deliveryWorker;
 
+    /** All active containers — stopped before the Redis connection factory is closed. */
+    private final List<StreamMessageListenerContainer<String, MapRecord<String, String, String>>> activeContainers
+            = new CopyOnWriteArrayList<>();
+
+    @PreDestroy
+    public void stopAllContainers() {
+        log.info("🛑 [RedisStreamConfig] Stopping {} stream listener container(s) before Redis shutdown…",
+                activeContainers.size());
+        for (StreamMessageListenerContainer<String, MapRecord<String, String, String>> c : activeContainers) {
+            try {
+                c.stop();
+            } catch (Exception ex) {
+                log.debug("Container stop produced a non-fatal warning: {}", ex.getMessage());
+            }
+        }
+        activeContainers.clear();
+        log.info("✅ [RedisStreamConfig] All stream listener containers stopped.");
+    }
+
     @Bean(name = "redisStreamTaskExecutor")
     public TaskExecutor redisStreamTaskExecutor() {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
@@ -63,6 +86,7 @@ public class RedisStreamConfig {
         executor.setQueueCapacity(200);
         executor.setThreadNamePrefix("RedisStreamWorker-");
         executor.setDaemon(true);
+        executor.setWaitForTasksToCompleteOnShutdown(false);
         executor.initialize();
         return executor;
     }
@@ -117,31 +141,36 @@ public class RedisStreamConfig {
                 stream, groupName, consumerName);
 
         org.springframework.util.ErrorHandler errorHandler = t -> {
-            String msg = t != null ? t.getMessage() : "";
-            Throwable cause = t != null ? t.getCause() : null;
-            String causeMsg = cause != null ? cause.getMessage() : "";
-            boolean isClosed = (msg != null && (msg.contains("Connection closed") || msg.contains("Connection reset") || msg.contains("ClosedChannelException")))
-                    || (causeMsg != null && (causeMsg.contains("Connection closed") || causeMsg.contains("Connection reset") || causeMsg.contains("ClosedChannelException")));
+            if (t == null) return;
+            String msg = t.getMessage() != null ? t.getMessage() : "";
+            Throwable cause = t.getCause();
+            String causeMsg = cause != null && cause.getMessage() != null ? cause.getMessage() : "";
 
-            if (msg != null && (msg.contains("Redisson is shutdown") || msg.contains("RedissonShutdownException"))) {
-                log.debug("Redis stream worker [{}] stopped gracefully (Redisson shutdown).", consumerName);
-            } else if (isClosed) {
+            // Suppress noisy errors that occur during normal JVM shutdown
+            boolean isShutdown = msg.contains("destroyed and cannot be used")
+                    || msg.contains("Redisson is shutdown")
+                    || msg.contains("RedissonShutdownException")
+                    || msg.contains("Connection is closed");
+            if (isShutdown) {
+                log.debug("Redis stream worker [{}] stopped due to shutdown.", consumerName);
+                return;
+            }
+
+            boolean isClosed = msg.contains("Connection closed") || msg.contains("Connection reset")
+                    || msg.contains("ClosedChannelException")
+                    || causeMsg.contains("Connection closed") || causeMsg.contains("Connection reset")
+                    || causeMsg.contains("ClosedChannelException");
+
+            if (isClosed) {
                 log.warn("🔌 [RedisStreamWorker-{}] Redis connection closed on stream '{}'. Backing off 2s for reconnection...", consumerName, stream);
-                try {
-                    Thread.sleep(2000);
-                } catch (InterruptedException ignored) {
-                }
-            } else if (t instanceof NullPointerException && msg != null && msg.contains("\"records\" is null")) {
+                try { Thread.sleep(2000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            } else if (t instanceof NullPointerException && msg.contains("\"records\" is null")) {
                 log.debug("Redis stream worker [{}] encountered null records (often due to read timeout). Retrying...", consumerName);
-            } else if (t instanceof org.springframework.dao.QueryTimeoutException || (msg != null && msg.contains("Redis command timed out"))) {
+            } else if (t instanceof org.springframework.dao.QueryTimeoutException || msg.contains("Redis command timed out")) {
                 log.warn("⏱️ [RedisStreamWorker-{}] Redis read timed out on stream '{}'. Backing off 1s before retry...", consumerName, stream);
-                try {
-                    Thread.sleep(1000);
-                } catch (InterruptedException ignored) {
-                }
+                try { Thread.sleep(1000); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
             } else {
-                log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}",
-                        consumerName, stream, (t != null ? t.getMessage() : "unknown error"), t);
+                log.error("❌ [RedisStreamWorker-{}] Error processing stream '{}': {}", consumerName, stream, msg, t);
             }
         };
 
@@ -168,6 +197,9 @@ public class RedisStreamConfig {
         Subscription subscription = container.register(readRequest, listener);
 
         container.start();
+        // Track so we can stop it in @PreDestroy before LettuceConnectionFactory is destroyed
+        activeContainers.add(container);
+
         log.info("🚀 [WhatsApp-Queue] Consumer started successfully. Stream: {}, Consumer group: {}, Consumer name: {}",
                 stream, groupName, consumerName);
         return subscription;

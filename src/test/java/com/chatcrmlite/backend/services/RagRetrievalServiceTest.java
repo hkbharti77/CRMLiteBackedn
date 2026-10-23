@@ -102,7 +102,7 @@ class RagRetrievalServiceTest {
 
         mockUser = new User();
         mockUser.setId(ownerUserId);
-        mockUser.setPlanType(User.PlanType.PRO);
+        mockUser.setPlanType(User.PlanType.GROWTH);
         mockUser.setBusinessType("REAL_ESTATE");
         mockUser.setTenant(mockTenant);
 

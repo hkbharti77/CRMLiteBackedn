@@ -37,6 +37,7 @@ export class VoiceEngine {
         this.silenceTimer = null;
         this.maxTurnTimer = null;
         this.isVoiceModeActive = false;
+        this.hasVoiceBot = null;
 
         // Language Configuration (English-only voice assistant)
         this.currentLang = 'en-US';
@@ -48,6 +49,13 @@ export class VoiceEngine {
         this.speechStartTime = 0;
         this.hasSpoken = false;
         this.vadCheckInterval = null;
+    }
+
+    setHasVoiceBot(allowed) {
+        this.hasVoiceBot = allowed;
+        if (allowed === false && this.isVoiceModeActive) {
+            this.stopVoiceMode();
+        }
     }
 
     setLanguage(langCode) {
@@ -84,6 +92,15 @@ export class VoiceEngine {
     }
 
     async startVoiceMode() {
+        if (this.hasVoiceBot === false) {
+            const errMsg = 'Voice Assistant is not included in the current subscription plan. Please upgrade to Growth, Scale, or Enterprise to use Voice AI.';
+            console.warn('🎙️ [VoiceEngine] Voice Assistant blocked: subscription plan does not include voice bot.');
+            this.setState(VoiceState.ERROR, { message: errMsg });
+            this.callbacks.onError(errMsg);
+            setTimeout(() => this.stopVoiceMode(), 1200);
+            return;
+        }
+
         this.isVoiceModeActive = true;
         this.setState(VoiceState.MIC_PERMISSION, { message: 'Requesting microphone permission...' });
 
@@ -479,8 +496,21 @@ export class VoiceEngine {
             }
         } catch (err) {
             console.error('Voice processing error:', err);
-            this.setState(VoiceState.ERROR, { message: err.message });
-            this.callbacks.onError('Voice assistant is temporarily busy. Retrying...');
+            const isPlanRestricted = err.status === 403 || (err.data && err.data.planRestricted);
+            const userMsg = isPlanRestricted
+                ? ((err.data && err.data.error) ? err.data.error : 'Voice Assistant is not included in your current subscription plan. Please upgrade to enable Voice AI.')
+                : (err.message || 'Voice assistant is temporarily busy. Retrying...');
+            this.setState(VoiceState.ERROR, { message: userMsg });
+            this.callbacks.onError(userMsg);
+
+            if (isPlanRestricted) {
+                this.hasVoiceBot = false;
+                setTimeout(() => {
+                    this.stopVoiceMode();
+                }, 1500);
+                return;
+            }
+
             setTimeout(() => {
                 this.setState(VoiceState.READY);
                 if (this.isVoiceModeActive) {

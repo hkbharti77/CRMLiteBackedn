@@ -51,10 +51,10 @@ public class MetaGatewayController {
     @Autowired
     private com.chatcrmlite.backend.clients.MetaCommerceClient metaCommerceClient;
 
-    @Value("${meta.app.id:1573307991099476}")
+    @Value("${meta.app.id:}")
     private String metaAppId;
 
-    @Value("${meta.config.id:1052344107323702}")
+    @Value("${meta.config.id:}")
     private String metaConfigId;
 
     @Value("${app.public.url:http://localhost:8080}")
@@ -126,8 +126,8 @@ public class MetaGatewayController {
             @RequestParam(required = false) String theme,
             @RequestParam(required = false) String origin) {
 
-        String safeAppId = StringUtils.hasText(metaAppId) ? metaAppId : "1573307991099476";
-        String safeConfigId = StringUtils.hasText(metaConfigId) ? metaConfigId : "1052344107323702";
+        String safeAppId = StringUtils.hasText(metaAppId) ? metaAppId : "";
+        String safeConfigId = StringUtils.hasText(metaConfigId) ? metaConfigId : "";
         String safeSessionId = sessionId != null ? sessionId : "";
         String safeToken = token != null ? token : "";
         String initialThemeClass = "dark".equalsIgnoreCase(theme) ? "dark" : ("light".equalsIgnoreCase(theme) ? "light" : "auto");
@@ -214,6 +214,11 @@ public class MetaGatewayController {
             <h1>Meta WhatsApp Gateway</h1>
             <p>Connect your WhatsApp Business number with <strong>Coexistence Mode</strong>. Keep your mobile WhatsApp app active while automating chats & broadcasts via CRM.</p>
 
+            <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 20px; font-size: 12px; text-align: left; line-height: 1.5; color: var(--text-secondary);">
+              <strong style="color: #1877F2;">💡 Crucial Step:</strong> On the final screen of Meta popup (&quot;Assets successfully created&quot;), click the <strong>blue &quot;Finish&quot; button</strong>.<br>
+              <span style="opacity: 0.85;">⚠️ <strong>Do NOT click &quot;Add payment method&quot;</strong> in the popup (it diverts to external billing). You can add payment methods anytime later in Meta Business Manager.</span>
+            </div>
+
             <button id="connectBtn" class="btn-fb" onclick="launchFacebookLogin()">
               <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
               <span>Connect with Facebook</span>
@@ -256,6 +261,33 @@ public class MetaGatewayController {
                 } catch(e) {}
               }
             }
+
+            let metaWabaId = '';
+            let metaPhoneId = '';
+
+            // Capture Meta Embedded Signup events (FINISH, CANCEL)
+            window.addEventListener('message', function(event) {
+              if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+              try {
+                const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+                if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+                  if (data.data) {
+                    if (data.data.waba_id) metaWabaId = data.data.waba_id;
+                    if (data.data.phone_number_id) metaPhoneId = data.data.phone_number_id;
+                  }
+                  if (data.event === 'FINISH') {
+                    setStatus('loading', '✓ Meta account confirmed! Exchanging tokens & auto-configuring CRM...');
+                  } else if (data.event === 'CANCEL') {
+                    setStatus('error', '⚠️ WhatsApp onboarding was cancelled or payment setup was opened. Please click &quot;Connect with Facebook&quot; and then press the blue <strong>Finish</strong> button on the Meta confirmation screen.');
+                    const btn = document.getElementById('connectBtn');
+                    if (btn) {
+                      btn.disabled = false;
+                      btn.innerHTML = 'Connect with Facebook';
+                    }
+                  }
+                }
+              } catch(e) {}
+            });
 
             function setStatus(type, html) {
               const box = document.getElementById('statusBox');
@@ -309,19 +341,15 @@ public class MetaGatewayController {
               if (!sdkReady || typeof FB === 'undefined' || !FB.login) {
                 if (window.FB && typeof window.FB.init === 'function') {
                   initSdkIfAvailable();
-                  if (!sdkReady || !FB.login) {
-                    pendingLogin = true;
-                    setStatus('loading', 'Initializing Meta SDK, opening login in a moment...');
-                    return;
-                  }
-                } else {
-                  pendingLogin = true;
-                  const btn = document.getElementById('connectBtn');
-                  btn.disabled = true;
-                  btn.innerHTML = '<span class="spinner"></span> <span>Loading Meta SDK...</span>';
-                  setStatus('loading', 'Meta JavaScript SDK is downloading. Connecting automatically as soon as ready...');
-                  return;
                 }
+              }
+
+              // If Facebook SDK is blocked by browser/ad-blocker, seamlessly fallback to direct Meta onboarding URL
+              if (typeof FB === 'undefined' || !FB.login) {
+                const directUrl = 'https://business.facebook.com/messaging/whatsapp/onboard/?app_id=' + encodeURIComponent(APP_ID) + '&config_id=' + encodeURIComponent(CONFIG_ID) + '&extras=' + encodeURIComponent(JSON.stringify({ sessionInfoVersion: '3', version: 'v4' }));
+                setStatus('loading', 'Opening direct Meta WhatsApp onboarding dialog...');
+                window.location.href = directUrl;
+                return;
               }
 
               const btn = document.getElementById('connectBtn');
@@ -329,63 +357,71 @@ public class MetaGatewayController {
               btn.innerHTML = '<span class="spinner"></span> <span>Connecting to Meta...</span>';
               setStatus('loading', 'Opening official Meta authorization dialog...');
 
-              FB.login(function(response) {
-                if (response.authResponse && response.authResponse.code) {
-                  const oauthCode = response.authResponse.code;
-                  setStatus('loading', 'Exchanging authorization code with backend & registering webhooks...');
+              try {
+                FB.login(function(response) {
+                  if (response && response.authResponse && response.authResponse.code) {
+                    const oauthCode = response.authResponse.code;
+                    setStatus('loading', 'Exchanging authorization code with backend & registering webhooks...');
 
-                  fetch('/api/v1/integrations/meta/gateway/exchange', {
-                    method: 'POST',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      ...(TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {})
-                    },
-                    body: JSON.stringify({ 
-                      code: oauthCode,
-                      sessionId: SESSION_ID,
-                      token: TOKEN
+                    fetch('/api/v1/integrations/meta/gateway/exchange', {
+                      method: 'POST',
+                      headers: {
+                        'Content-Type': 'application/json',
+                        ...(TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {})
+                      },
+                      body: JSON.stringify({ 
+                        code: oauthCode,
+                        sessionId: SESSION_ID,
+                        token: TOKEN,
+                        wabaId: metaWabaId,
+                        phoneNumberId: metaPhoneId
+                      })
                     })
-                  })
-                  .then(res => res.json())
-                  .then(data => {
-                    if (data.error) {
-                      setStatus('error', 'Gateway Exchange Error: ' + data.error);
+                    .then(res => res.json())
+                    .then(data => {
+                      if (data.error) {
+                        setStatus('error', 'Gateway Exchange Error: ' + data.error);
+                        btn.disabled = false;
+                        btn.innerHTML = 'Retry Connection';
+                      } else {
+                        setStatus('success', '✓ WhatsApp Coexistence Connected Successfully! Redirecting back to CRM...');
+                        if (window.opener) {
+                          window.opener.postMessage({
+                            type: 'META_WHATSAPP_CONNECTED',
+                            success: true,
+                            data: data
+                          }, '*');
+                        }
+                        setTimeout(() => {
+                          try { window.close(); } catch(e) {}
+                        }, 1500);
+                      }
+                    })
+                    .catch(err => {
+                      setStatus('error', 'Network error contacting backend: ' + err.message);
                       btn.disabled = false;
                       btn.innerHTML = 'Retry Connection';
-                    } else {
-                      setStatus('success', '✓ WhatsApp Coexistence Connected Successfully! Redirecting back to CRM...');
-                      if (window.opener) {
-                        window.opener.postMessage({
-                          type: 'META_WHATSAPP_CONNECTED',
-                          success: true,
-                          data: data
-                        }, '*');
-                      }
-                      setTimeout(() => {
-                        try { window.close(); } catch(e) {}
-                      }, 1500);
-                    }
-                  })
-                  .catch(err => {
-                    setStatus('error', 'Network error contacting backend: ' + err.message);
+                    });
+                  } else {
+                    setStatus('error', 'Meta login was cancelled or authorization was denied.');
                     btn.disabled = false;
-                    btn.innerHTML = 'Retry Connection';
-                  });
-                } else {
-                  setStatus('error', 'Meta login was cancelled or authorization was denied.');
-                  btn.disabled = false;
-                  btn.innerHTML = 'Connect with Facebook';
-                }
-              }, {
-                config_id: CONFIG_ID,
-                response_type: 'code',
-                override_default_response_type: true,
-                extras: {
-                  setup: {},
-                  featureType: 'whatsapp_business_app_onboarding',
-                  sessionInfoVersion: '3'
-                }
-              });
+                    btn.innerHTML = 'Connect with Facebook';
+                  }
+                }, {
+                  config_id: CONFIG_ID,
+                  response_type: 'code',
+                  override_default_response_type: true,
+                  extras: {
+                    setup: {},
+                    featureType: 'whatsapp_business_app_onboarding',
+                    sessionInfoVersion: '3'
+                  }
+                });
+              } catch (loginErr) {
+                console.warn('[MetaGateway] FB.login error, falling back to direct URL:', loginErr);
+                const directUrl = 'https://business.facebook.com/messaging/whatsapp/onboard/?app_id=' + encodeURIComponent(APP_ID) + '&config_id=' + encodeURIComponent(CONFIG_ID) + '&extras=' + encodeURIComponent(JSON.stringify({ sessionInfoVersion: '3', version: 'v4' }));
+                window.location.href = directUrl;
+              }
             }
           </script>
           <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js" onerror="handleSdkScriptError()"></script>
@@ -405,7 +441,7 @@ public class MetaGatewayController {
         .replace("__ORIGIN__", origin != null ? origin : (frontendUrl != null ? frontendUrl : ""));
 
         return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_HTML)
+                .contentType(MediaType.valueOf("text/html;charset=UTF-8"))
                 .body(html);
     }
 
@@ -436,13 +472,15 @@ public class MetaGatewayController {
         }
 
         String code = payload.get("code");
+        String wabaId = payload != null ? payload.get("wabaId") : null;
+        String phoneNumberId = payload != null ? payload.get("phoneNumberId") : null;
 
         if (!StringUtils.hasText(code)) {
             return ResponseEntity.badRequest().body(Map.of("error", "OAuth authorization code is required"));
         }
 
         try {
-            Map<String, Object> result = metaOnboardingService.exchangeAndProvision(code, sessionId, user);
+            Map<String, Object> result = metaOnboardingService.exchangeAndProvision(code, sessionId, user, wabaId, phoneNumberId);
             return ResponseEntity.ok(result);
         } catch (IllegalStateException e) {
             log.warn("[MetaGateway] Exchange rejected: {}", e.getMessage());

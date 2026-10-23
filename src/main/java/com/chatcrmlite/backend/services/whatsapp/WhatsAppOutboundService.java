@@ -58,8 +58,39 @@ public class WhatsAppOutboundService {
         this(whatsappClient, messageRepository, null, distributedWebSocketPublisher, null, null);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.WhatsAppConfigRepository whatsAppConfigRepository;
+
     @org.springframework.beans.factory.annotation.Value("${app.public.url:}")
     private String appPublicUrl;
+
+    public void trackServiceReply(WhatsAppConfig config) {
+        if (config == null || whatsAppConfigRepository == null) return;
+        try {
+            LocalDateTime now = LocalDateTime.now();
+            if (config.getLastReplyCounterResetAt() == null || config.getLastReplyCounterResetAt().isBefore(now.minusDays(30))) {
+                config.setMonthlyRepliesUsed(0);
+                config.setLastReplyCounterResetAt(now);
+            }
+            int currentUsed = config.getMonthlyRepliesUsed() != null ? config.getMonthlyRepliesUsed() : 0;
+            config.setMonthlyRepliesUsed(currentUsed + 1);
+            whatsAppConfigRepository.save(config);
+
+            if ("COEXISTENCE".equalsIgnoreCase(config.getIntegrationMode())) {
+                int freeLimit = config.getMonthlyFreeRepliesLimit() != null ? config.getMonthlyFreeRepliesLimit() : 1000;
+                if (currentUsed + 1 > freeLimit) {
+                    log.info("📊 [Coexistence-Billing] Tenant {} used reply {} (exceeds free {}). Billable at ₹{} each.",
+                            config.getTenant() != null ? config.getTenant().getId() : "null",
+                            currentUsed + 1, freeLimit, config.getServiceReplyRateInr());
+                } else {
+                    log.debug("📊 [Coexistence-Billing] Reply {}/{} within monthly free allowance for tenant {}",
+                            currentUsed + 1, freeLimit, config.getTenant() != null ? config.getTenant().getId() : "null");
+                }
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Failed tracking WhatsApp reply usage: {}", e.getMessage());
+        }
+    }
 
     public String convertToWhatsAppMarkdown(String text) {
         if (text == null) return null;
@@ -82,6 +113,7 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
+            trackServiceReply(config);
             return recordOutgoing(contact, owner, text, metaMessageId, "TEXT");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send TEXT reply to contact={} owner={}: {}",
@@ -102,6 +134,7 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
+            trackServiceReply(config);
             return recordOutgoing(contact, owner, "📍 " + (name != null ? name : "Location") + " (" + latitude + ", " + longitude + ")", metaMessageId, "LOCATION");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send LOCATION to contact={} owner={}: {}",
@@ -158,6 +191,7 @@ public class WhatsAppOutboundService {
             session.setMessageId(metaMessageId);
             flowSendSessionRepository.save(session);
 
+            trackServiceReply(config);
             return recordOutgoing(contact, owner, "📄 [WhatsApp Flow] " + (headerText != null ? headerText : ctaText) + " (" + (bodyText != null ? bodyText : "Form") + ")", metaMessageId, "FLOW");
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send FLOW to contact={} owner={}: {}",
@@ -180,6 +214,7 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
+            trackServiceReply(config);
             String mediaUrl = menu.getHeaderDocumentUrl() != null && !menu.getHeaderDocumentUrl().isBlank()
                     ? menu.getHeaderDocumentUrl()
                     : menu.getHeaderImageUrl();
@@ -203,6 +238,7 @@ public class WhatsAppOutboundService {
                     config.getAccessToken(),
                     config.getPhoneNumberId()
             );
+            trackServiceReply(config);
             return recordOutgoing(contact, owner, caption != null ? caption : "", metaMessageId, "IMAGE", imageUrl);
         } catch (Exception e) {
             log.error("[WhatsApp-Outbound] Failed to send IMAGE reply to contact={} owner={}: {}",

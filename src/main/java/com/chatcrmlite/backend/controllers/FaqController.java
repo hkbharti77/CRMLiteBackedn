@@ -1,15 +1,19 @@
 package com.chatcrmlite.backend.controllers;
 
 import com.chatcrmlite.backend.models.FaqItem;
+import com.chatcrmlite.backend.models.Tenant;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.repositories.FaqItemRepository;
 import com.chatcrmlite.backend.repositories.UserRepository;
+import com.chatcrmlite.backend.security.TenantContext;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Arrays;
 import java.util.List;
@@ -32,27 +36,55 @@ public class FaqController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.services.rag.GraphIngestionService graphIngestionService;
 
+    private User getAuthenticatedUser(String email) {
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
+    }
+
+    private Tenant resolveTenant(User user) {
+        if (user.getTenant() != null && user.getTenant().getId() != null) {
+            return user.getTenant();
+        }
+        UUID contextTenantId = TenantContext.getTenantId();
+        if (contextTenantId != null) {
+            Tenant t = new Tenant();
+            t.setId(contextTenantId);
+            return t;
+        }
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, "User does not belong to an active organization");
+    }
+
+    private UUID resolveTenantId(User user) {
+        return resolveTenant(user).getId();
+    }
+
     @GetMapping
     public ResponseEntity<List<FaqItem>> getAllFaqs(@AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
-        List<FaqItem> items = faqItemRepository.findByTenantId(user.getId());
+        User user = getAuthenticatedUser(email);
+        UUID tenantId = resolveTenantId(user);
+        List<FaqItem> items = faqItemRepository.findByTenantId(tenantId);
         return ResponseEntity.ok(items);
     }
 
     @PostMapping
     public ResponseEntity<FaqItem> createFaq(@RequestBody FaqItem dto, @AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        Tenant tenant = resolveTenant(user);
+        UUID tenantId = tenant.getId();
 
-        dto.setTenantId(user.getId());
-        if (dto.getQuestion() != null && !dto.getQuestion().isBlank()) {
-            dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(dto.getQuestion()).content();
-            dto.setEmbedding(Arrays.toString(embedding.vector()));
+        dto.setTenant(tenant);
+        dto.setTenantId(tenantId);
+        if (dto.getQuestion() != null && !dto.getQuestion().isBlank() && embeddingModel != null) {
+            try {
+                dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(dto.getQuestion()).content();
+                dto.setEmbedding(Arrays.toString(embedding.vector()));
+            } catch (Exception e) {
+                log.warn("[FAQ-API] Embedding generation failed for question '{}': {}", dto.getQuestion(), e.getMessage());
+            }
         }
 
         FaqItem saved = faqItemRepository.save(dto);
-        log.info("[FAQ-API] Created FAQ Item ID: {} for tenant: {}", saved.getId(), user.getId());
+        log.info("[FAQ-API] Created FAQ Item ID: {} for tenant: {}", saved.getId(), tenantId);
         if (graphIngestionService != null) {
             try {
                 graphIngestionService.ingestFaq(saved);
@@ -65,12 +97,15 @@ public class FaqController {
 
     @PutMapping("/{id}")
     public ResponseEntity<FaqItem> updateFaq(@PathVariable UUID id, @RequestBody FaqItem dto, @AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        Tenant tenant = resolveTenant(user);
+        UUID tenantId = tenant.getId();
 
-        FaqItem existing = faqItemRepository.findByIdAndTenantId(id, user.getId())
-                .orElseThrow(() -> new RuntimeException("FAQ item not found"));
+        FaqItem existing = faqItemRepository.findByIdAndTenantId(id, tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "FAQ item not found"));
 
+        existing.setTenant(tenant);
+        existing.setTenantId(tenantId);
         existing.setAnswer(dto.getAnswer());
         existing.setCategory(dto.getCategory() != null ? dto.getCategory() : "General");
         existing.setKeywords(dto.getKeywords());
@@ -80,12 +115,18 @@ public class FaqController {
 
         if (dto.getQuestion() != null && !dto.getQuestion().equalsIgnoreCase(existing.getQuestion())) {
             existing.setQuestion(dto.getQuestion());
-            dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(dto.getQuestion()).content();
-            existing.setEmbedding(Arrays.toString(embedding.vector()));
+            if (embeddingModel != null) {
+                try {
+                    dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(dto.getQuestion()).content();
+                    existing.setEmbedding(Arrays.toString(embedding.vector()));
+                } catch (Exception e) {
+                    log.warn("[FAQ-API] Embedding generation failed for updated question '{}': {}", dto.getQuestion(), e.getMessage());
+                }
+            }
         }
 
         FaqItem updated = faqItemRepository.save(existing);
-        log.info("[FAQ-API] Updated FAQ Item ID: {} for tenant: {}", updated.getId(), user.getId());
+        log.info("[FAQ-API] Updated FAQ Item ID: {} for tenant: {}", updated.getId(), tenantId);
         if (graphIngestionService != null) {
             try {
                 graphIngestionService.ingestFaq(updated);
@@ -98,43 +139,44 @@ public class FaqController {
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> deleteFaq(@PathVariable UUID id, @AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        UUID tenantId = resolveTenantId(user);
 
-        int deletedCount = faqItemRepository.deleteByFaqIdAndTenantId(id, user.getId());
-        log.info("[FAQ-API] Deleted FAQ Item ID: {} for tenant: {} (affected: {})", id, user.getId(), deletedCount);
+        int deletedCount = faqItemRepository.deleteByFaqIdAndTenantId(id, tenantId);
+        log.info("[FAQ-API] Deleted FAQ Item ID: {} for tenant: {} (affected: {})", id, tenantId, deletedCount);
         return ResponseEntity.noContent().build();
     }
 
     @DeleteMapping("/all")
     public ResponseEntity<?> deleteAllFaqs(@AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        UUID tenantId = resolveTenantId(user);
 
-        int count = faqItemRepository.deleteAllByTenantId(user.getId());
-        log.info("[FAQ-API] Deleted ALL FAQ Items for tenant: {} (total deleted: {})", user.getId(), count);
+        int count = faqItemRepository.deleteAllByTenantId(tenantId);
+        log.info("[FAQ-API] Deleted ALL FAQ Items for tenant: {} (total deleted: {})", tenantId, count);
         return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "All FAQs deleted successfully."));
     }
 
     @PostMapping("/batch-delete")
     public ResponseEntity<?> batchDeleteFaqs(@RequestBody java.util.Map<String, List<UUID>> payload, @AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        UUID tenantId = resolveTenantId(user);
 
         List<UUID> ids = payload != null ? payload.get("ids") : null;
         if (ids == null || ids.isEmpty()) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "No FAQ IDs provided for deletion"));
         }
 
-        int count = faqItemRepository.deleteByIdInAndTenantId(ids, user.getId());
-        log.info("[FAQ-API] Batch deleted {} FAQ Items for tenant: {}", count, user.getId());
+        int count = faqItemRepository.deleteByIdInAndTenantId(ids, tenantId);
+        log.info("[FAQ-API] Batch deleted {} FAQ Items for tenant: {}", count, tenantId);
         return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "Selected FAQs deleted successfully."));
     }
 
     @PostMapping("/batch")
     public ResponseEntity<?> createBatchFaqs(@RequestBody(required = false) Object payload, @AuthenticationPrincipal String email) {
-        User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        User user = getAuthenticatedUser(email);
+        Tenant tenant = resolveTenant(user);
+        UUID tenantId = tenant.getId();
 
         if (payload == null) {
             return ResponseEntity.badRequest().body(java.util.Map.of("error", "No FAQ items provided"));
@@ -175,7 +217,8 @@ public class FaqController {
 
         for (FaqItem item : items) {
             item.setId(null);
-            item.setTenantId(user.getId());
+            item.setTenant(tenant);
+            item.setTenantId(tenantId);
             if (item.getQuestion() != null && !item.getQuestion().isBlank() && embeddingModel != null) {
                 try {
                     dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(item.getQuestion()).content();
@@ -199,7 +242,7 @@ public class FaqController {
         }
 
         List<FaqItem> saved = faqItemRepository.saveAll(items);
-        log.info("[FAQ-API] Batch imported {} FAQ Items for tenant: {}", saved.size(), user.getId());
+        log.info("[FAQ-API] Batch imported {} FAQ Items for tenant: {}", saved.size(), tenantId);
         if (graphIngestionService != null) {
             for (FaqItem item : saved) {
                 try {

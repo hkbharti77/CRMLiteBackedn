@@ -31,10 +31,10 @@ public class TenantWorkerPoolManager {
     public Executor getExecutor(UUID tenantId) {
         PlanType tier = tierService.getTier(tenantId);
         
-        if (tier == PlanType.ENTERPRISE) {
+        if (tier == PlanType.ENTERPRISE || tier == PlanType.SCALE) {
             return poolCache.get("enterprise:" + tenantId, id -> createPool(20, 50, 500, "ent-" + tenantId + "-"));
-        } else if (tier == PlanType.PRO) {
-            return poolCache.get("pro-shared", id -> createPool(50, 100, 1000, "pro-shared-"));
+        } else if (tier == PlanType.GROWTH || tier == PlanType.STARTER) {
+            return poolCache.get("growth-shared", id -> createPool(50, 100, 1000, "growth-shared-"));
         } else {
             return poolCache.get("free-shared", id -> createPool(10, 20, 200, "free-shared-"));
         }

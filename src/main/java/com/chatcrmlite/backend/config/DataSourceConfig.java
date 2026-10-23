@@ -38,13 +38,13 @@ public class DataSourceConfig {
         HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
         ds.setPoolName("HikariPool-Writer");
         ds.setConnectionTestQuery("SELECT 1");
-        ds.setKeepaliveTime(15000);
-        ds.setMaxLifetime(90000);
-        ds.setIdleTimeout(45000);
-        ds.setValidationTimeout(3000);
-        ds.setConnectionTimeout(30000);
-        ds.setMaximumPoolSize(25);
-        ds.setMinimumIdle(5);
+        ds.setKeepaliveTime(30000);
+        ds.setMaxLifetime(300000);
+        ds.setIdleTimeout(60000);
+        ds.setValidationTimeout(5000);
+        ds.setConnectionTimeout(60000);
+        ds.setMaximumPoolSize(15);
+        ds.setMinimumIdle(2);
         ds.setLeakDetectionThreshold(60000);
         org.springframework.boot.context.properties.bind.Binder.get(env)
                 .bind("spring.datasource.writer.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
@@ -57,13 +57,13 @@ public class DataSourceConfig {
         HikariDataSource ds = DataSourceBuilder.create().type(HikariDataSource.class).build();
         ds.setPoolName("HikariPool-Reader");
         ds.setConnectionTestQuery("SELECT 1");
-        ds.setKeepaliveTime(15000);
-        ds.setMaxLifetime(90000);
-        ds.setIdleTimeout(45000);
-        ds.setValidationTimeout(3000);
-        ds.setConnectionTimeout(30000);
-        ds.setMaximumPoolSize(15);
-        ds.setMinimumIdle(3);
+        ds.setKeepaliveTime(30000);
+        ds.setMaxLifetime(300000);
+        ds.setIdleTimeout(60000);
+        ds.setValidationTimeout(5000);
+        ds.setConnectionTimeout(60000);
+        ds.setMaximumPoolSize(10);
+        ds.setMinimumIdle(2);
         ds.setLeakDetectionThreshold(60000);
         org.springframework.boot.context.properties.bind.Binder.get(env)
                 .bind("spring.datasource.reader.hikari", org.springframework.boot.context.properties.bind.Bindable.ofInstance(ds));
@@ -131,11 +131,18 @@ public class DataSourceConfig {
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public org.flywaydb.core.Flyway flyway(
-            @org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource) {
+            @org.springframework.beans.factory.annotation.Qualifier("writerDataSource") DataSource writerDataSource,
+            org.springframework.core.env.Environment env) {
+        // Read baseline-version and table from application.properties so a fresh DB baselines
+        // at the correct version instead of Flyway's default "1".
+        String baselineVersion = env.getProperty("spring.flyway.baseline-version", "10097");
+        String table = env.getProperty("spring.flyway.table", "flyway_schema_history_3");
         return org.flywaydb.core.Flyway.configure()
                 .dataSource(writerDataSource)
                 .locations("classpath:db/migration")
                 .baselineOnMigrate(true)
+                .baselineVersion(baselineVersion)
+                .table(table)
                 .outOfOrder(true)
                 .validateOnMigrate(false)
                 .load();

@@ -102,19 +102,26 @@ public class RagRetrievalService {
         UUID ownerUserId = scope.ownerUserId();
         UUID knowledgeTenantId = scope.knowledgeTenantId();
 
-        quotaService.checkAndEnforceQuota(ownerUserId, user.getPlanType());
-
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
-        // FAQs are stored with owner user id (FaqController uses user.getId())
-        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
-        if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
-            log.info("[FAQ-FastPath] High-confidence match (Score: {}) for ownerUserId={} knowledgeTenantId={} | Direct FAQ response returned.",
-                    String.format("%.4f", faqMatch.getScore()), ownerUserId, knowledgeTenantId);
+        // 1. FAQ Fast Path (Prioritized, zero tokens consumed)
+        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(knowledgeTenantId, query, queryEmbedding);
+        if ((faqMatch == null || !faqMatch.isHighConfidence() || faqMatch.getFaqItem() == null)
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
+            if (fallbackMatch != null && fallbackMatch.isHighConfidence() && fallbackMatch.getFaqItem() != null) {
+                faqMatch = fallbackMatch;
+            }
+        }
+
+        if (faqMatch != null && faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
+            log.info("[FAQ-FastPath] High-confidence match (Score: {}) for knowledgeTenantId={} | Direct FAQ response returned.",
+                    String.format("%.4f", faqMatch.getScore()), knowledgeTenantId);
             return ChatResponseFormatter.forChatWidget(faqMatch.getFaqItem().getAnswer());
         }
 
+        // 2. Semantic Cache
         String cacheQuery = cacheKey(query, mode);
         // Cache keyed by knowledge tenant so it aligns with document/graph corpus
         String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, knowledgeTenantId);
@@ -125,6 +132,9 @@ public class RagRetrievalService {
                 return ChatResponseFormatter.forChatWidget(cachedResponse);
             }
         }
+
+        // 3. LLM Generation Required -> Check and Enforce Quota
+        quotaService.checkAndEnforceQuota(ownerUserId, user.getPlanType());
 
         // Document chunks + Neo4j graph use real tenant id (RagController upload path)
         HybridRetrievalResult retrieval = hybridRetrievalService.retrieve(
@@ -214,23 +224,34 @@ public class RagRetrievalService {
         UUID ownerUserId = scope.ownerUserId();
         UUID knowledgeTenantId = scope.knowledgeTenantId();
 
-        quotaService.checkAndEnforceQuota(ownerUserId, user.getPlanType());
-
         dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
         float[] queryEmbedding = embedding.vector();
 
-        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
-        if (faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
-            log.info("[Voice-FAQ] High-confidence match (Score: {}) ownerUserId={} knowledgeTenantId={}",
-                    String.format("%.4f", faqMatch.getScore()), ownerUserId, knowledgeTenantId);
+        // 1. Voice FAQ Fast Path (Prioritized, zero tokens consumed)
+        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(knowledgeTenantId, query, queryEmbedding);
+        if ((faqMatch == null || !faqMatch.isHighConfidence() || faqMatch.getFaqItem() == null)
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
+            if (fallbackMatch != null && fallbackMatch.isHighConfidence() && fallbackMatch.getFaqItem() != null) {
+                faqMatch = fallbackMatch;
+            }
+        }
+
+        if (faqMatch != null && faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
+            log.info("[Voice-FAQ] High-confidence match (Score: {}) knowledgeTenantId={}",
+                    String.format("%.4f", faqMatch.getScore()), knowledgeTenantId);
             return faqMatch.getFaqItem().getAnswer();
         }
 
+        // 2. Semantic Cache
         String cacheQuery = cacheKey(query, mode);
         String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, knowledgeTenantId);
         if (cachedResponse != null && !ChatResponseFormatter.looksRobotic(cachedResponse)) {
             return cachedResponse;
         }
+
+        // 3. LLM Generation Required -> Check and Enforce Quota
+        quotaService.checkAndEnforceQuota(ownerUserId, user.getPlanType());
 
         HybridRetrievalResult retrieval = hybridRetrievalService.retrieve(
                 query, knowledgeTenantId, queryEmbedding, context.isRequiresRag(), 4);

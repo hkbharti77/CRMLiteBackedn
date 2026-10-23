@@ -128,25 +128,97 @@ public class DataInitializer implements CommandLineRunner {
             ));
             log.info("[Init] Seeded FREE subscription plan.");
         }
-        if (subscriptionPlanRepository.findById("MIN").isEmpty()) {
-            subscriptionPlanRepository.save(new SubscriptionPlan(
-                "MIN", "Starter Pack", new BigDecimal("1499.00"), new BigDecimal("14390.00"), new BigDecimal("19.99"), new BigDecimal("189.90"),
-                3, 2500, 500, 500, 3000, true, true, 2500, false, false
-            ));
-            log.info("[Init] Seeded MIN subscription plan.");
+        if (subscriptionPlanRepository.findById("STARTER").isEmpty()) {
+            SubscriptionPlan starter = SubscriptionPlan.builder()
+                .id("STARTER")
+                .name("Starter Plan")
+                .priceMonthly(new BigDecimal("1999.00"))
+                .priceYearly(new BigDecimal("19190.00"))
+                .priceMonthlyInr(new BigDecimal("1999.00"))
+                .priceYearlyInr(new BigDecimal("19190.00"))
+                .priceMonthlyUsd(new BigDecimal("24.99"))
+                .priceYearlyUsd(new BigDecimal("239.90"))
+                .employeeLimit(3)
+                .primaryResourceLimit(5000)
+                .secondaryResourceLimit(1000)
+                .ticketLimit(1000)
+                .emailLimit(5000)
+                .hasWhatsapp(true)
+                .hasWhatsappCampaign(true)
+                .whatsappCampaignLimit(2500)
+                .hasCustomWidget(false)
+                .hasRagLlm(false)
+                .includedAiCredits(2500)
+                .hasWhatsappCoexistence(true)
+                .build();
+            subscriptionPlanRepository.save(starter);
+            log.info("[Init] Seeded STARTER subscription plan.");
         }
-        if (subscriptionPlanRepository.findById("PRO").isEmpty()) {
-            subscriptionPlanRepository.save(new SubscriptionPlan(
-                "PRO", "Scale Professional", new BigDecimal("2499.00"), new BigDecimal("23990.00"), new BigDecimal("29.99"), new BigDecimal("287.90"),
-                10, 25000, 25000, 25000, 15000, true, true, 25000, true, true
-            ));
-            log.info("[Init] Seeded PRO subscription plan.");
+        if (subscriptionPlanRepository.findById("GROWTH").isEmpty()) {
+            SubscriptionPlan growth = SubscriptionPlan.builder()
+                .id("GROWTH")
+                .name("Growth Plan")
+                .priceMonthly(new BigDecimal("4999.00"))
+                .priceYearly(new BigDecimal("47990.00"))
+                .priceMonthlyInr(new BigDecimal("4999.00"))
+                .priceYearlyInr(new BigDecimal("47990.00"))
+                .priceMonthlyUsd(new BigDecimal("59.99"))
+                .priceYearlyUsd(new BigDecimal("575.90"))
+                .employeeLimit(8)
+                .primaryResourceLimit(20000)
+                .secondaryResourceLimit(10000)
+                .ticketLimit(10000)
+                .emailLimit(25000)
+                .hasWhatsapp(true)
+                .hasWhatsappCampaign(true)
+                .whatsappCampaignLimit(25000)
+                .hasCustomWidget(true)
+                .hasRagLlm(true)
+                .includedAiCredits(10000)
+                .hasVoiceBot(true)
+                .hasWhatsappCoexistence(true)
+                .build();
+            subscriptionPlanRepository.save(growth);
+            log.info("[Init] Seeded GROWTH subscription plan.");
+        }
+        if (subscriptionPlanRepository.findById("SCALE").isEmpty()) {
+            SubscriptionPlan scale = SubscriptionPlan.builder()
+                .id("SCALE")
+                .name("Scale Plan")
+                .priceMonthly(new BigDecimal("9999.00"))
+                .priceYearly(new BigDecimal("95990.00"))
+                .priceMonthlyInr(new BigDecimal("9999.00"))
+                .priceYearlyInr(new BigDecimal("95990.00"))
+                .priceMonthlyUsd(new BigDecimal("119.99"))
+                .priceYearlyUsd(new BigDecimal("1151.90"))
+                .employeeLimit(20)
+                .primaryResourceLimit(100000)
+                .secondaryResourceLimit(50000)
+                .ticketLimit(50000)
+                .emailLimit(100000)
+                .hasWhatsapp(true)
+                .hasWhatsappCampaign(true)
+                .whatsappCampaignLimit(100000)
+                .hasCustomWidget(true)
+                .hasRagLlm(true)
+                .includedAiCredits(25000)
+                .hasVoiceBot(true)
+                .hasCallingAgent(true)
+                .hasWhatsappCoexistence(true)
+                .build();
+            subscriptionPlanRepository.save(scale);
+            log.info("[Init] Seeded SCALE subscription plan.");
         }
         if (subscriptionPlanRepository.findById("ENTERPRISE").isEmpty()) {
-            subscriptionPlanRepository.save(new SubscriptionPlan(
-                "ENTERPRISE", "Enterprise Max", new BigDecimal("6499.00"), new BigDecimal("62390.00"), new BigDecimal("79.99"), new BigDecimal("767.90"),
+            SubscriptionPlan enterprise = new SubscriptionPlan(
+                "ENTERPRISE", "Enterprise Custom", new BigDecimal("19999.00"), new BigDecimal("191990.00"), new BigDecimal("249.99"), new BigDecimal("2399.90"),
                 50, 1000000, 1000000, 1000000, 1000000, true, true, 1000000, true, true
-            ));
+            );
+            enterprise.setContactUs(true);
+            enterprise.setIncludedAiCredits(100000);
+            enterprise.setHasVoiceBot(true);
+            enterprise.setHasCallingAgent(true);
+            subscriptionPlanRepository.save(enterprise);
             log.info("[Init] Seeded ENTERPRISE subscription plan.");
         }
     }

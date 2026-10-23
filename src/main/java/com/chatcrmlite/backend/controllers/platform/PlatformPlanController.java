@@ -98,6 +98,10 @@ public class PlatformPlanController {
         plan.setHasCustomWidget(planDetails.isHasCustomWidget());
         plan.setHasRagLlm(planDetails.isHasRagLlm());
         plan.setContactUs(planDetails.isContactUs());
+        plan.setIncludedAiCredits(planDetails.getIncludedAiCredits());
+        plan.setHasVoiceBot(planDetails.isHasVoiceBot());
+        plan.setHasCallingAgent(planDetails.isHasCallingAgent());
+        plan.setHasWhatsappCoexistence(planDetails.isHasWhatsappCoexistence());
 
         SubscriptionPlan updated = subscriptionPlanRepository.save(plan);
 

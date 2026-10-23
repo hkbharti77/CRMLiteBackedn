@@ -120,6 +120,9 @@ public class Tenant implements Serializable {
     @Column(name = "currency", length = 10)
     private String currency = "INR";
 
+    @Column(name = "ai_credit_balance", nullable = false)
+    private Long aiCreditBalance = 500L;
+
     @Column(name = "timezone", length = 50)
     private String timezone = "Asia/Kolkata";
 
@@ -224,6 +227,9 @@ public class Tenant implements Serializable {
 
     public String getEmailFooterText() { return emailFooterText; }
     public void setEmailFooterText(String emailFooterText) { this.emailFooterText = emailFooterText; }
+
+    public Long getAiCreditBalance() { return aiCreditBalance != null ? aiCreditBalance : 0L; }
+    public void setAiCreditBalance(Long aiCreditBalance) { this.aiCreditBalance = aiCreditBalance; }
 
     public String getLeadCustomerEmailSubject() { return leadCustomerEmailSubject; }
     public void setLeadCustomerEmailSubject(String s) { this.leadCustomerEmailSubject = s; }

@@ -17,29 +17,29 @@ public interface ConversationStateRepository extends JpaRepository<ConversationS
     @Query("SELECT c FROM ConversationState c WHERE c.contact.id = :id AND c.contact.tenant.id = :tenantId")
     Optional<ConversationState> findByIdAndTenantId(@Param("id") UUID id, @Param("tenantId") UUID tenantId);
 
-    @Query("SELECT c FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != 'CLOSED'")
+    @Query("SELECT c FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != com.chatcrmlite.backend.models.SessionStatus.CLOSED")
     Optional<ConversationState> findActiveByContact(Contact contact);
 
-    @Query("SELECT COUNT(c) > 0 FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != 'CLOSED'")
+    @Query("SELECT COUNT(c) > 0 FROM ConversationState c WHERE c.contact = :contact AND c.sessionStatus != com.chatcrmlite.backend.models.SessionStatus.CLOSED")
     boolean existsActiveByContact(Contact contact);
 
     @Modifying
-    @Query("UPDATE ConversationState c SET c.sessionStatus = 'CLOSED', c.closedAt = CURRENT_TIMESTAMP, c.closeReason = 'RESET' WHERE c.contact = :contact AND c.sessionStatus != 'CLOSED'")
+    @Query("UPDATE ConversationState c SET c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.CLOSED, c.closedAt = CURRENT_TIMESTAMP, c.closeReason = 'RESET' WHERE c.contact = :contact AND c.sessionStatus != com.chatcrmlite.backend.models.SessionStatus.CLOSED")
     void closeActiveByContact(Contact contact);
 
     @Modifying
-    @Query("UPDATE ConversationState c SET c.sessionStatus = 'PENDING_TIMEOUT', c.timeoutStartedAt = :now WHERE c.sessionStatus = 'ACTIVE' AND c.lastActivityAt < :cutoff")
+    @Query("UPDATE ConversationState c SET c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.PENDING_TIMEOUT, c.timeoutStartedAt = :now WHERE c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.ACTIVE AND c.lastActivityAt < :cutoff")
     int claimTimeout(LocalDateTime cutoff, LocalDateTime now);
 
     @Modifying
-    @Query("UPDATE ConversationState c SET c.sessionStatus = 'CLOSED', c.closedAt = :now, c.closeReason = 'HARD_TIMEOUT' WHERE c.sessionStatus = 'PENDING_TIMEOUT' AND c.timeoutStartedAt < :cutoff")
+    @Query("UPDATE ConversationState c SET c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.CLOSED, c.closedAt = :now, c.closeReason = 'HARD_TIMEOUT' WHERE c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.PENDING_TIMEOUT AND c.timeoutStartedAt < :cutoff")
     int closeHardTimeouts(LocalDateTime cutoff, LocalDateTime now);
 
     /** Cleanup stale flows older than the given threshold (e.g., 24 hours). */
     @Modifying
-    @Query("UPDATE ConversationState c SET c.sessionStatus = 'CLOSED', c.closedAt = :now, c.closeReason = 'STALE_FLOW' WHERE c.sessionStatus != 'CLOSED' AND c.lastUpdatedAt < :cutoff")
+    @Query("UPDATE ConversationState c SET c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.CLOSED, c.closedAt = :now, c.closeReason = 'STALE_FLOW' WHERE c.sessionStatus != com.chatcrmlite.backend.models.SessionStatus.CLOSED AND c.lastUpdatedAt < :cutoff")
     void markStaleFlowsClosed(LocalDateTime cutoff, LocalDateTime now);
     
-    @Query("SELECT c FROM ConversationState c WHERE c.sessionStatus = 'PENDING_TIMEOUT' AND c.timeoutStartedAt = :startedAt")
+    @Query("SELECT c FROM ConversationState c WHERE c.sessionStatus = com.chatcrmlite.backend.models.SessionStatus.PENDING_TIMEOUT AND c.timeoutStartedAt = :startedAt")
     java.util.List<ConversationState> findByTimeoutStartedAt(LocalDateTime startedAt);
 }

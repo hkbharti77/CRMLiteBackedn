@@ -30,6 +30,8 @@ public class WhatsAppFlowHandler {
     private final WhatsAppMenuService whatsappMenuService;
     private final WhatsAppFlowRepository whatsappFlowRepository;
     private final FlowRevisionRepository flowRevisionRepository;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.UserRepository userRepository;
 
     @org.springframework.beans.factory.annotation.Autowired
     public WhatsAppFlowHandler(WhatsAppConfigRepository whatsappConfigRepository,
@@ -65,6 +67,14 @@ public class WhatsAppFlowHandler {
             WhatsAppConfig config = whatsappConfigRepository.findByTenantId(context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Config not found"));
             User owner = config.getUser();
+            if (owner == null && userRepository != null && config.getTenant() != null) {
+                owner = userRepository.findByTenantIdAndRole(context.getTenantId(), User.Role.OWNER)
+                        .stream().findFirst()
+                        .orElseGet(() -> userRepository.findAllByTenant(config.getTenant()).stream().findFirst().orElse(null));
+                if (owner != null) {
+                    config.setUser(owner);
+                }
+            }
             Contact contact = contactRepository.findByWaIdAndTenant_Id(context.getWaId(), context.getTenantId())
                     .orElseThrow(() -> new RuntimeException("Contact not found for tenant: " + context.getTenantId()));
 
@@ -166,9 +176,12 @@ public class WhatsAppFlowHandler {
                 context.getMetadata().put("responseType", "MENU");
             }
             
-            log.info("🔀 [Flow-Stage] Completed for {}", context.getMessageId());
         } catch (Exception e) {
-            log.error("❌ [Flow-Stage] Failed for {}", context.getMessageId(), e);
+            log.error("❌ [Flow-Stage] Failed for {}: {}", context.getMessageId(), e.getMessage(), e);
+        } finally {
+            if (!context.getMetadata().containsKey("responseType")) {
+                context.getMetadata().put("responseType", "MENU");
+            }
         }
     }
 

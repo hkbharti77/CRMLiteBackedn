@@ -45,8 +45,11 @@ public class SubscriptionBillingService {
     public int getPlanLevel(String planId) {
         if (planId == null) return 0;
         switch (planId.toUpperCase()) {
-            case "ENTERPRISE": return 2;
-            case "PRO": return 1;
+            case "ENTERPRISE": return 4;
+            case "SCALE": return 3;
+            case "GROWTH":
+            case "PRO": return 2;
+            case "STARTER": return 1;
             case "FREE": default: return 0;
         }
     }
@@ -70,17 +73,19 @@ public class SubscriptionBillingService {
         UUID tenantId = user.getTenant().getId();
         TenantSubscription currentSub = quotaEnforcerService.getActiveSubscription(tenantId);
 
-        if (currentSub != null && currentSub.getStatus() == SubscriptionStatus.ACTIVE && currentSub.getPlan() != null) {
+        if (currentSub != null && currentSub.getPlan() != null) {
             int currentTier = getPlanLevel(currentSub.getPlan().getId());
             int targetTier = getPlanLevel(targetPlanId);
 
-            if (targetTier < currentTier) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                        "Downgrades are not allowed. You are currently on the higher " + currentSub.getPlan().getName() + " tier.");
-            }
-            if (targetTier == currentTier) {
-                throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
-                        "This plan is already active. You are currently subscribed to " + currentSub.getPlan().getName() + ".");
+            if (currentSub.getStatus() == SubscriptionStatus.ACTIVE) {
+                if (targetTier < currentTier) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                            "Downgrades are not allowed. You are currently on the higher " + currentSub.getPlan().getName() + " tier.");
+                }
+                if (targetTier == currentTier) {
+                    throw new ResponseStatusException(HttpStatus.BAD_REQUEST, 
+                            "This plan is already active. You are currently subscribed to " + currentSub.getPlan().getName() + ".");
+                }
             }
         }
     }
@@ -112,6 +117,31 @@ public class SubscriptionBillingService {
             price = billingCycleStr.equalsIgnoreCase("YEARLY") ? 
                     (plan.getPriceYearlyUsd() != null ? plan.getPriceYearlyUsd() : plan.getPriceYearly()) : 
                     (plan.getPriceMonthlyUsd() != null ? plan.getPriceMonthlyUsd() : plan.getPriceMonthly());
+        }
+
+        // Direct zero-cost activation: Free plan or 0 amount checkout bypasses payment gateways
+        if ("FREE".equalsIgnoreCase(plan.getId()) || price == null || price.compareTo(BigDecimal.ZERO) <= 0) {
+            log.info("🆓 Direct activation for FREE/Zero-cost plan: tenant={}, plan={}", tenantId, plan.getId());
+            BillingTransaction freeTx = processPaymentSuccess(
+                    tenantId,
+                    plan.getId(),
+                    billingCycleStr,
+                    BigDecimal.ZERO,
+                    currencyStr,
+                    "free_plan_" + tenantId + "_" + System.currentTimeMillis(),
+                    "free_direct_" + System.currentTimeMillis(),
+                    gatewayStr.equalsIgnoreCase("STRIPE") ? PaymentGateway.STRIPE : PaymentGateway.RAZORPAY,
+                    user.getEmail()
+            );
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("freeActivated", true);
+            response.put("success", true);
+            response.put("planId", plan.getId());
+            response.put("planName", plan.getName());
+            response.put("transactionId", freeTx.getId());
+            response.put("message", "Free plan activated successfully!");
+            return response;
         }
 
         // 3. Server-side Proration calculation for active paid plans
@@ -290,7 +320,11 @@ public class SubscriptionBillingService {
         sub.setCurrentPeriodStart(LocalDateTime.now());
         
         int periodMonths = billingCycleStr.equalsIgnoreCase("YEARLY") ? 12 : 1;
-        sub.setCurrentPeriodEnd(LocalDateTime.now().plusMonths(periodMonths));
+        if ("FREE".equalsIgnoreCase(planId)) {
+            sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
+        } else {
+            sub.setCurrentPeriodEnd(LocalDateTime.now().plusMonths(periodMonths));
+        }
 
         if (gateway == PaymentGateway.STRIPE) {
             sub.setStripeSubscriptionId(resolvedGatewayTxId);

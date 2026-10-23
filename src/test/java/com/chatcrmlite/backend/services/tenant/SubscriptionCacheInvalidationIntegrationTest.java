@@ -130,21 +130,21 @@ public class SubscriptionCacheInvalidationIntegrationTest {
             Map<String, String> request = new HashMap<>();
             request.put("orderId", "test_order_123");
             
-            // This should update to PRO and fire the event
+            // This should update to GROWTH and fire the event
             devMockPaymentController.mockPaymentSuccess(testUser.getEmail(), request);
         });
 
-        // 3. Second lookup -> cache should have been invalidated, pulling PRO from DB
-        assertEquals(User.PlanType.PRO, tenantTierService.getTier(testTenant.getId()));
+        // 3. Second lookup -> cache should have been invalidated, pulling GROWTH from DB
+        assertEquals(User.PlanType.GROWTH, tenantTierService.getTier(testTenant.getId()));
     }
 
     @Test
     void testProToFreeDowngrade_InvalidatesCache() {
-        // 1. Force a PRO subscription manually
+        // 1. Force a GROWTH subscription manually
         transactionTemplate.executeWithoutResult(status -> {
             TenantSubscription sub = new TenantSubscription();
             sub.setTenant(testTenant);
-            sub.setPlan(subscriptionPlanRepository.findById("PRO").get());
+            sub.setPlan(subscriptionPlanRepository.findById("GROWTH").get());
             sub.setStatus(TenantSubscription.SubscriptionStatus.PAST_DUE);
             sub.setBillingCycle(TenantSubscription.BillingCycle.MONTHLY);
             // Expired 1 day ago
@@ -153,8 +153,8 @@ public class SubscriptionCacheInvalidationIntegrationTest {
             tenantSubscriptionRepository.save(sub);
         });
 
-        // 2. Fetch from cache -> should return PRO because the cache fetches from DB without running QuotaEnforcer rules
-        assertEquals(User.PlanType.PRO, tenantTierService.getTier(testTenant.getId()));
+        // 2. Fetch from cache -> should return GROWTH because the cache fetches from DB without running QuotaEnforcer rules
+        assertEquals(User.PlanType.GROWTH, tenantTierService.getTier(testTenant.getId()));
 
         // 3. QuotaEnforcer intercepts an action and realizes it's expired, downgrading to FREE
         transactionTemplate.executeWithoutResult(status -> {
@@ -174,7 +174,7 @@ public class SubscriptionCacheInvalidationIntegrationTest {
         transactionTemplate.executeWithoutResult(status -> {
             TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(testTenant.getId()).orElse(new TenantSubscription());
             sub.setTenant(testTenant);
-            sub.setPlan(subscriptionPlanRepository.findById("PRO").get());
+            sub.setPlan(subscriptionPlanRepository.findById("GROWTH").get());
             sub.setStatus(TenantSubscription.SubscriptionStatus.ACTIVE);
             sub.setCurrentPeriodEnd(LocalDateTime.now().plusMonths(1));
             sub.setCurrentPeriodStart(LocalDateTime.now());
@@ -185,7 +185,7 @@ public class SubscriptionCacheInvalidationIntegrationTest {
             eventPublisher.publishEvent(new com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent(this, testTenant.getId()));
         });
 
-        // 3. Verify cache is PRO
-        assertEquals(User.PlanType.PRO, tenantTierService.getTier(testTenant.getId()));
+        // 3. Verify cache is GROWTH
+        assertEquals(User.PlanType.GROWTH, tenantTierService.getTier(testTenant.getId()));
     }
 }

@@ -9,8 +9,10 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import com.chatcrmlite.backend.event.TenantSubscriptionUpdatedEvent;
+import com.chatcrmlite.backend.models.User;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -90,23 +92,47 @@ public class QuotaEnforcerService {
             eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         }
 
-        if (sub.getStatus() == SubscriptionStatus.PAST_DUE || 
-            sub.getStatus() == SubscriptionStatus.CANCELLED || 
-            sub.getStatus() == SubscriptionStatus.INACTIVE) {
+        // Expiry Guard: Auto-downgrade any paid plan whose current period has ended to FREE
+        if (sub.getPlan() != null && !"FREE".equalsIgnoreCase(sub.getPlan().getId()) && 
+            sub.getCurrentPeriodEnd() != null && sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
             
-            if (sub.getCurrentPeriodEnd().isBefore(LocalDateTime.now())) {
-                log.warn("Subscription for tenant {} is expired (status: {}, end: {}). Auto-downgrading to FREE.", 
-                        tenantId, sub.getStatus(), sub.getCurrentPeriodEnd());
-                
-                SubscriptionPlan freePlan = subscriptionPlanRepository.findById("FREE").orElseThrow();
-                sub.setPlan(freePlan);
-                sub.setStatus(SubscriptionStatus.FREE_TRIAL);
-                sub.setBillingCycle(TenantSubscription.BillingCycle.MONTHLY);
-                sub.setCurrentPeriodStart(LocalDateTime.now());
-                sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
-                sub = tenantSubscriptionRepository.save(sub);
-                eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
+            log.warn("⚠️ Subscription for tenant {} has EXPIRED (plan: {}, status: {}, ended: {}). Auto-downgrading to FREE.", 
+                    tenantId, sub.getPlan().getId(), sub.getStatus(), sub.getCurrentPeriodEnd());
+            
+            SubscriptionPlan freePlan = subscriptionPlanRepository.findById("FREE")
+                    .orElseGet(() -> {
+                        SubscriptionPlan fp = new SubscriptionPlan();
+                        fp.setId("FREE");
+                        fp.setName("Free Plan");
+                        fp.setPriceMonthly(BigDecimal.ZERO);
+                        fp.setPriceYearly(BigDecimal.ZERO);
+                        fp.setEmployeeLimit(1);
+                        fp.setPrimaryResourceLimit(100);
+                        fp.setSecondaryResourceLimit(15);
+                        fp.setTicketLimit(10);
+                        fp.setEmailLimit(500);
+                        return subscriptionPlanRepository.save(fp);
+                    });
+
+            sub.setPlan(freePlan);
+            sub.setStatus(SubscriptionStatus.ACTIVE);
+            sub.setBillingCycle(TenantSubscription.BillingCycle.MONTHLY);
+            sub.setCurrentPeriodStart(LocalDateTime.now());
+            sub.setCurrentPeriodEnd(LocalDateTime.now().plusYears(10));
+            sub = tenantSubscriptionRepository.save(sub);
+
+            // Sync legacy tenant.planType
+            try {
+                Tenant t = tenantRepository.findById(tenantId).orElse(null);
+                if (t != null) {
+                    t.setPlanType(User.PlanType.FREE);
+                    tenantRepository.save(t);
+                }
+            } catch (Exception ex) {
+                log.warn("⚠️ Error updating tenant planType on expiry: {}", ex.getMessage());
             }
+
+            eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
         }
 
         return sub;
@@ -245,6 +271,28 @@ public class QuotaEnforcerService {
             com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO entitlements = entitlementResolverService.getEffectiveEntitlements(tenantId);
             return entitlements.getFeatures().isHasCustomWidget();
         } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if Voice Bot is enabled for this tenant under their DB subscription plan / effective entitlements.
+     */
+    public boolean isVoiceBotAllowed(UUID tenantId) {
+        if (tenantId == null) return false;
+        try {
+            com.chatcrmlite.backend.dtos.EffectiveEntitlementsDTO entitlements = entitlementResolverService.getEffectiveEntitlements(tenantId);
+            if (entitlements != null && entitlements.getFeatures() != null) {
+                return entitlements.getFeatures().isHasVoiceBot();
+            }
+        } catch (Exception e) {
+            log.warn("Failed to check voice bot entitlement for tenant {}: {}", tenantId, e.getMessage());
+        }
+
+        try {
+            TenantSubscription sub = getActiveSubscription(tenantId);
+            return sub != null && sub.getPlan() != null && sub.getPlan().isHasVoiceBot();
+        } catch (Exception ex) {
             return false;
         }
     }

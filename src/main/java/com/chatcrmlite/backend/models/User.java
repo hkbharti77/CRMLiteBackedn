@@ -292,7 +292,7 @@ public class User implements Serializable {
     }
 
     public enum PlanType {
-        FREE, PRO, ENTERPRISE
+        FREE, STARTER, GROWTH, SCALE, ENTERPRISE
     }
 
     public static UserBuilder builder() { return new UserBuilder(); }

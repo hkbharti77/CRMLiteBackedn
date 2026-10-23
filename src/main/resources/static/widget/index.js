@@ -333,10 +333,19 @@ export async function initWidget({ businessId, apiBase } = {}) {
         }
     });
 
+    if (theme.hasVoiceBot !== undefined) {
+        voiceEngine.setHasVoiceBot(theme.hasVoiceBot);
+    }
+
     if (elements.voiceBtn) {
         elements.voiceBtn.onclick = (e) => {
             if (e) e.stopPropagation();
             resetInactivityTimer();
+            if (theme.hasVoiceBot === false) {
+                console.warn('🎙️ Voice Assistant is not enabled for this subscription plan.');
+                flowEngine.addBotBubble('Voice Assistant is not included in the current subscription plan. Please upgrade to Growth, Scale, or Enterprise to use Voice AI.');
+                return;
+            }
             if (voiceEngine.getState() === VoiceState.IDLE) {
                 voiceEngine.startVoiceMode();
             } else {
@@ -417,6 +426,9 @@ export async function initWidget({ businessId, apiBase } = {}) {
         if (bootstrapData.theme) {
             theme = { ...theme, ...bootstrapData.theme };
             storage.saveTheme(theme);
+            if (theme.hasVoiceBot !== undefined) {
+                voiceEngine.setHasVoiceBot(theme.hasVoiceBot);
+            }
             ui.applyTheme(theme, apiBase);
         }
 

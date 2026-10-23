@@ -244,7 +244,7 @@ export function createUIController({
                             <button type="button" id="chat-menu" class="chat-menu-btn" title="Menu" aria-label="Open menu">${icons.menu}</button>
                             <div class="chat-composer">
                                 <textarea id="chat-input" class="chat-input" rows="1" placeholder="Type your message..." autocomplete="off" disabled aria-label="Message"></textarea>
-                                <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input">
+                                <button type="button" id="chat-voice-btn" class="chat-voice-btn" title="Speak with Voice Assistant" aria-label="Voice input"${activeTheme.hasVoiceBot === false ? ' style="display:none;"' : ''}>
                                     <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
                                         <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
@@ -633,6 +633,18 @@ export function createUIController({
 
             this.renderMenuOverlay(t);
             this.renderFooter(t);
+
+            // Dynamically show/hide Voice Assistant based on backend DB subscription entitlements
+            if (elements.voiceBtn) {
+                if (t.hasVoiceBot === false) {
+                    elements.voiceBtn.style.display = 'none';
+                } else if (t.hasVoiceBot === true) {
+                    elements.voiceBtn.style.display = 'flex';
+                }
+            }
+            if (elements.voiceOverlay && t.hasVoiceBot === false) {
+                elements.voiceOverlay.style.display = 'none';
+            }
         },
 
         renderFooter(t) {

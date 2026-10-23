@@ -44,10 +44,11 @@ public class PlatformSubscriptionController {
             map.put("status", Boolean.TRUE.equals(t.getOnboardingCompleted()) ? "active" : "trialing");
             
             int price = switch (t.getPlanType() != null ? t.getPlanType().name().toUpperCase() : "FREE") {
-                case "ENTERPRISE" -> 19999;
-                case "PRO", "SCALE" -> 9999;
+                case "ENTERPRISE" -> 24999;
+                case "SCALE" -> 9999;
                 case "GROWTH" -> 4999;
-                default -> 2999;
+                case "STARTER" -> 1999;
+                default -> 0;
             };
             map.put("mrr", price);
             

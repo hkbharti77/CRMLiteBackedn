@@ -51,6 +51,21 @@ public class WhatsAppConfig implements Serializable {
     @Column(name = "connection_type")
     private String connectionType = "LEGACY"; // "LEGACY" or "EMBEDDED_SIGNUP_COEXISTENCE"
 
+    @Column(name = "integration_mode", length = 30)
+    private String integrationMode = "COEXISTENCE"; // "COEXISTENCE" or "LEGACY_CLOUD_API"
+
+    @Column(name = "monthly_free_replies_limit")
+    private Integer monthlyFreeRepliesLimit = 1000;
+
+    @Column(name = "monthly_replies_used")
+    private Integer monthlyRepliesUsed = 0;
+
+    @Column(name = "service_reply_rate_inr")
+    private java.math.BigDecimal serviceReplyRateInr = new java.math.BigDecimal("0.1150");
+
+    @Column(name = "last_reply_counter_reset_at")
+    private java.time.LocalDateTime lastReplyCounterResetAt = java.time.LocalDateTime.now();
+
     @Column(name = "connection_status")
     private String connectionStatus = "ACTIVE"; // "ACTIVE", "FAILED", "DISCONNECTED"
 
@@ -460,6 +475,21 @@ public class WhatsAppConfig implements Serializable {
         if ("DISABLED".equalsIgnoreCase(accountStatus) || "BANNED".equalsIgnoreCase(accountStatus)) return false;
         return !hasActiveRestriction("RESTRICTED_ADD_PHONE_NUMBER_ACTION");
     }
+
+    public String getIntegrationMode() { return integrationMode != null ? integrationMode : "COEXISTENCE"; }
+    public void setIntegrationMode(String integrationMode) { this.integrationMode = integrationMode; }
+
+    public Integer getMonthlyFreeRepliesLimit() { return monthlyFreeRepliesLimit != null ? monthlyFreeRepliesLimit : 1000; }
+    public void setMonthlyFreeRepliesLimit(Integer limit) { this.monthlyFreeRepliesLimit = limit; }
+
+    public Integer getMonthlyRepliesUsed() { return monthlyRepliesUsed != null ? monthlyRepliesUsed : 0; }
+    public void setMonthlyRepliesUsed(Integer used) { this.monthlyRepliesUsed = used; }
+
+    public java.math.BigDecimal getServiceReplyRateInr() { return serviceReplyRateInr != null ? serviceReplyRateInr : new java.math.BigDecimal("0.1150"); }
+    public void setServiceReplyRateInr(java.math.BigDecimal rate) { this.serviceReplyRateInr = rate; }
+
+    public java.time.LocalDateTime getLastReplyCounterResetAt() { return lastReplyCounterResetAt; }
+    public void setLastReplyCounterResetAt(java.time.LocalDateTime dt) { this.lastReplyCounterResetAt = dt; }
 
     public static WhatsAppConfigBuilder builder() { return new WhatsAppConfigBuilder(); }
 

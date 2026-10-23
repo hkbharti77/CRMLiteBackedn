@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en" class="auto">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Meta WhatsApp Coexistence Gateway | GyanVaniAi Connect</title>
+  <style>
+    :root {
+      --bg-body: #F8FAFC;
+      --text-primary: #0F172A;
+      --text-secondary: #475569;
+      --bg-card: #FFFFFF;
+      --border-card: #E2E8F0;
+      --shadow-card: 0 20px 40px rgba(0,0,0,0.08);
+      --status-load-bg: #EFF6FF;
+      --status-load-border: #BFDBFE;
+      --status-load-text: #1D4ED8;
+      --status-succ-bg: #ECFDF5;
+      --status-succ-border: #A7F3D0;
+      --status-succ-text: #047857;
+      --status-err-bg: #FEF2F2;
+      --status-err-border: #FECACA;
+      --status-err-text: #B91C1C;
+      --theme-btn-bg: #F1F5F9;
+      --theme-btn-border: #CBD5E1;
+      --theme-btn-text: #475569;
+    }
+
+    html.dark {
+      --bg-body: #0B1120;
+      --text-primary: #F9FAFB;
+      --text-secondary: #9CA3AF;
+      --bg-card: #111827;
+      --border-card: #1F2937;
+      --shadow-card: 0 20px 40px rgba(0,0,0,0.5);
+      --status-load-bg: rgba(59, 130, 246, 0.1);
+      --status-load-border: rgba(59, 130, 246, 0.3);
+      --status-load-text: #60A5FA;
+      --status-succ-bg: rgba(16, 185, 129, 0.1);
+      --status-succ-border: rgba(16, 185, 129, 0.3);
+      --status-succ-text: #34D399;
+      --status-err-bg: rgba(239, 68, 68, 0.1);
+      --status-err-border: rgba(239, 68, 68, 0.3);
+      --status-err-text: #F87171;
+      --theme-btn-bg: #1F2937;
+      --theme-btn-border: #374151;
+      --theme-btn-text: #D1D5DB;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    body { background: var(--bg-body); color: var(--text-primary); display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; transition: background 0.3s ease, color 0.3s ease; }
+    .card { position: relative; background: var(--bg-card); border: 1px solid var(--border-card); border-radius: 24px; padding: 36px 32px; max-width: 440px; width: 100%; text-align: center; box-shadow: var(--shadow-card); }
+    .theme-toggle { position: absolute; top: 18px; right: 18px; background: var(--theme-btn-bg); border: 1px solid var(--theme-btn-border); color: var(--theme-btn-text); border-radius: 10px; padding: 6px 10px; font-size: 11px; font-weight: 600; cursor: pointer; }
+    .logo-wrap { width: 60px; height: 60px; margin: 0 auto 18px; background: rgba(24, 119, 242, 0.1); border-radius: 18px; display: flex; align-items: center; justify-content: center; color: #1877F2; }
+    .logo-wrap svg { width: 34px; height: 34px; fill: currentColor; }
+    h1 { font-size: 21px; font-weight: 800; color: var(--text-primary); margin-bottom: 8px; }
+    p { font-size: 13px; color: var(--text-secondary); line-height: 1.5; margin-bottom: 24px; }
+    .btn-fb { background: #1877F2; color: #fff; border: none; padding: 14px 24px; border-radius: 14px; font-size: 14px; font-weight: 700; cursor: pointer; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(24, 119, 242, 0.3); }
+    .btn-fb:hover { background: #166fe5; transform: translateY(-1px); }
+    .btn-fb:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+    .status-box { margin-top: 20px; padding: 14px; border-radius: 12px; font-size: 12px; display: none; text-align: left; line-height: 1.4; }
+    .status-loading { background: var(--status-load-bg); border: 1px solid var(--status-load-border); color: var(--status-load-text); display: block; }
+    .status-success { background: var(--status-succ-bg); border: 1px solid var(--status-succ-border); color: var(--status-succ-text); display: block; }
+    .status-error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); display: block; }
+    .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: #10B981; margin-top: 20px; font-weight: 600; }
+    .spinner { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <button class="theme-toggle" onclick="toggleTheme()" id="themeBtn">
+      <span id="themeIcon">🌓</span> Theme
+    </button>
+
+    <div class="logo-wrap">
+      <svg viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+    </div>
+    <h1>Meta WhatsApp Gateway</h1>
+    <p>Connect your WhatsApp Business number with <strong>Coexistence Mode</strong>. Keep your mobile WhatsApp app active while automating chats & broadcasts via CRM.</p>
+
+    <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.25); border-radius: 12px; padding: 12px; margin-bottom: 20px; font-size: 12px; text-align: left; line-height: 1.5; color: var(--text-secondary);">
+      <strong style="color: #1877F2;">💡 Crucial Step:</strong> On the final screen of Meta popup (&quot;Assets successfully created&quot;), click the <strong>blue &quot;Finish&quot; button</strong>.<br>
+      <span style="opacity: 0.85;">⚠️ <strong>Do NOT click &quot;Add payment method&quot;</strong> in the popup (it diverts to external billing). You can add payment methods anytime later in Meta Business Manager.</span>
+    </div>
+
+    <button id="connectBtn" class="btn-fb" onclick="launchFacebookLogin()">
+      <svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+      <span>Connect with Facebook</span>
+    </button>
+
+    <div id="statusBox" class="status-box"></div>
+
+    <div class="badge">
+      <span>●</span> Official Meta Verified Tech Provider Gateway
+    </div>
+  </div>
+
+  <script>
+    function toggleTheme() {
+      const html = document.documentElement;
+      if (html.classList.contains('dark')) {
+        html.classList.remove('dark');
+        html.classList.add('light');
+      } else {
+        html.classList.remove('light');
+        html.classList.add('dark');
+      }
+    }
+
+    const APP_ID = '1090379999982717';
+    const CONFIG_ID = '1107547908528531';
+    const SESSION_ID = '';
+    let TOKEN = '';
+    const ORIGIN = 'http://localhost:5174';
+    let sdkReady = false;
+    let pendingLogin = false;
+
+    if (!TOKEN || TOKEN === '' || TOKEN === 'null' || TOKEN === 'undefined') {
+      try {
+        TOKEN = localStorage.getItem('crmlite_token') || localStorage.getItem('authToken') || '';
+      } catch(e) {}
+      if (!TOKEN && window.opener) {
+        try {
+          TOKEN = window.opener.localStorage.getItem('crmlite_token') || window.opener.localStorage.getItem('authToken') || '';
+        } catch(e) {}
+      }
+    }
+
+    let metaWabaId = '';
+    let metaPhoneId = '';
+
+    // Capture Meta Embedded Signup events (FINISH, CANCEL)
+    window.addEventListener('message', function(event) {
+      if (event.origin !== "https://www.facebook.com" && event.origin !== "https://web.facebook.com") return;
+      try {
+        const data = typeof event.data === 'string' ? JSON.parse(event.data) : event.data;
+        if (data && data.type === 'WA_EMBEDDED_SIGNUP') {
+          if (data.data) {
+            if (data.data.waba_id) metaWabaId = data.data.waba_id;
+            if (data.data.phone_number_id) metaPhoneId = data.data.phone_number_id;
+          }
+          if (data.event === 'FINISH') {
+            setStatus('loading', '✓ Meta account confirmed! Exchanging tokens & auto-configuring CRM...');
+          } else if (data.event === 'CANCEL') {
+            setStatus('error', '⚠️ WhatsApp onboarding was cancelled or payment setup was opened. Please click &quot;Connect with Facebook&quot; and then press the blue <strong>Finish</strong> button on the Meta confirmation screen.');
+            const btn = document.getElementById('connectBtn');
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = 'Connect with Facebook';
+            }
+          }
+        }
+      } catch(e) {}
+    });
+
+    function setStatus(type, html) {
+      const box = document.getElementById('statusBox');
+      box.className = 'status-box status-' + type;
+      box.innerHTML = html;
+      box.style.display = 'block';
+    }
+
+    function initSdkIfAvailable() {
+      if (window.FB && typeof window.FB.init === 'function') {
+        try {
+          window.FB.init({
+            appId: APP_ID,
+            cookie: true,
+            xfbml: false,
+            version: 'v21.0'
+          });
+          sdkReady = true;
+          const btn = document.getElementById('connectBtn');
+          btn.disabled = false;
+          btn.innerHTML = '<svg style="width:18px;height:18px;fill:currentColor" viewBox="0 0 24 24"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg><span>Connect with Facebook</span>';
+          const box = document.getElementById('statusBox');
+          if (box && box.className.includes('status-error') && box.innerText.includes('SDK is loading')) {
+            box.style.display = 'none';
+          }
+          if (pendingLogin) {
+            pendingLogin = false;
+            launchFacebookLogin();
+          }
+        } catch (e) {
+          console.warn('FB.init error:', e);
+          setStatus('error', 'Facebook SDK initialization error: ' + (e.message || e));
+        }
+      }
+    }
+
+    window.fbAsyncInit = function() {
+      initSdkIfAvailable();
+    };
+
+    function handleSdkScriptError() {
+      sdkReady = false;
+      setStatus('error', '⚠️ <strong>Failed to load Meta JavaScript SDK from connect.facebook.net</strong><br><br>Common causes:<br>• An ad-blocker or privacy extension (e.g. uBlock Origin, Brave Shields) blocked the script.<br>• Corporate firewall / VPN restricting facebook.net.<br><br>Please disable ad-blocking on this window and refresh.');
+      const btn = document.getElementById('connectBtn');
+      btn.disabled = false;
+      btn.innerHTML = 'Retry Loading SDK';
+      btn.onclick = function() { window.location.reload(); };
+    }
+
+    function launchFacebookLogin() {
+      if (!sdkReady || typeof FB === 'undefined' || !FB.login) {
+        if (window.FB && typeof window.FB.init === 'function') {
+          initSdkIfAvailable();
+        }
+      }
+
+      // If Facebook SDK is blocked by browser/ad-blocker, seamlessly fallback to direct Meta onboarding URL
+      if (typeof FB === 'undefined' || !FB.login) {
+        const directUrl = 'https://business.facebook.com/messaging/whatsapp/onboard/?app_id=' + encodeURIComponent(APP_ID) + '&config_id=' + encodeURIComponent(CONFIG_ID) + '&extras=' + encodeURIComponent(JSON.stringify({ sessionInfoVersion: '3', version: 'v4' }));
+        setStatus('loading', 'Opening direct Meta WhatsApp onboarding dialog...');
+        window.location.href = directUrl;
+        return;
+      }
+
+      const btn = document.getElementById('connectBtn');
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner"></span> <span>Connecting to Meta...</span>';
+      setStatus('loading', 'Opening official Meta authorization dialog...');
+
+      try {
+        FB.login(function(response) {
+          if (response && response.authResponse && response.authResponse.code) {
+            const oauthCode = response.authResponse.code;
+            setStatus('loading', 'Exchanging authorization code with backend & registering webhooks...');
+
+            fetch('/api/v1/integrations/meta/gateway/exchange', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                ...(TOKEN ? { 'Authorization': 'Bearer ' + TOKEN } : {})
+              },
+              body: JSON.stringify({
+                code: oauthCode,
+                sessionId: SESSION_ID,
+                token: TOKEN,
+                wabaId: metaWabaId,
+                phoneNumberId: metaPhoneId
+              })
+            })
+            .then(res => res.json())
+            .then(data => {
+              if (data.error) {
+                setStatus('error', 'Gateway Exchange Error: ' + data.error);
+                btn.disabled = false;
+                btn.innerHTML = 'Retry Connection';
+              } else {
+                setStatus('success', '✓ WhatsApp Coexistence Connected Successfully! Redirecting back to CRM...');
+                if (window.opener) {
+                  window.opener.postMessage({
+                    type: 'META_WHATSAPP_CONNECTED',
+                    success: true,
+                    data: data
+                  }, '*');
+                }
+                setTimeout(() => {
+                  try { window.close(); } catch(e) {}
+                }, 1500);
+              }
+            })
+            .catch(err => {
+              setStatus('error', 'Network error contacting backend: ' + err.message);
+              btn.disabled = false;
+              btn.innerHTML = 'Retry Connection';
+            });
+          } else {
+            setStatus('error', 'Meta login was cancelled or authorization was denied.');
+            btn.disabled = false;
+            btn.innerHTML = 'Connect with Facebook';
+          }
+        }, {
+          config_id: CONFIG_ID,
+          response_type: 'code',
+          override_default_response_type: true,
+          extras: {
+            setup: {},
+            featureType: 'whatsapp_business_app_onboarding',
+            sessionInfoVersion: '3'
+          }
+        });
+      } catch (loginErr) {
+        console.warn('[MetaGateway] FB.login error, falling back to direct URL:', loginErr);
+        const directUrl = 'https://business.facebook.com/messaging/whatsapp/onboard/?app_id=' + encodeURIComponent(APP_ID) + '&config_id=' + encodeURIComponent(CONFIG_ID) + '&extras=' + encodeURIComponent(JSON.stringify({ sessionInfoVersion: '3', version: 'v4' }));
+        window.location.href = directUrl;
+      }
+    }
+  </script>
+  <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js" onerror="handleSdkScriptError()"></script>
+  <script>
+    if (window.FB) {
+      initSdkIfAvailable();
+    }
+  </script>
+</body>
+</html>

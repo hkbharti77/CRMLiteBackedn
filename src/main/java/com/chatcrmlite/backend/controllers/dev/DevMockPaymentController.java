@@ -37,6 +37,8 @@ public class DevMockPaymentController {
     private final UserRepository userRepository;
     private final BillingTransactionRepository billingTransactionRepository;
     private final SubscriptionBillingService subscriptionBillingService;
+    private final com.chatcrmlite.backend.repositories.TenantSubscriptionRepository tenantSubscriptionRepository;
+    private final com.chatcrmlite.backend.services.billing.SubscriptionExpiryWorker subscriptionExpiryWorker;
 
     @PostMapping("/mock-success")
     public ResponseEntity<?> mockPaymentSuccess(
@@ -73,7 +75,7 @@ public class DevMockPaymentController {
 
         String planId = request.get("planId");
         if (planId == null || planId.isBlank()) {
-            planId = "PRO";
+            planId = "GROWTH";
             if (transaction.getAmount().compareTo(BigDecimal.valueOf(5000.00)) > 0) {
                 planId = "ENTERPRISE";
             }
@@ -97,5 +99,46 @@ public class DevMockPaymentController {
         response.put("plan", planId.toUpperCase());
         response.put("transactionId", updatedTx.getId());
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/mock-expire")
+    public ResponseEntity<?> mockSubscriptionExpire(@AuthenticationPrincipal String email) {
+        if (email == null || email.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Authentication required");
+        }
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
+
+        if (user.getTenant() == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "User has no tenant");
+        }
+
+        UUID tenantId = user.getTenant().getId();
+        com.chatcrmlite.backend.models.TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "No subscription record found for tenant"));
+
+        String oldPlan = sub.getPlan() != null ? sub.getPlan().getId() : "NONE";
+        // Force expiry timestamp to 1 hour in the past
+        sub.setCurrentPeriodEnd(java.time.LocalDateTime.now().minusHours(1));
+        tenantSubscriptionRepository.save(sub);
+
+        // Trigger the automatic downgrade worker
+        subscriptionExpiryWorker.scanAndDowngradeExpiredSubscriptions();
+
+        // Refresh sub state
+        com.chatcrmlite.backend.models.TenantSubscription refreshedSub = tenantSubscriptionRepository.findByTenantId(tenantId).orElse(null);
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("message", "Subscription forcibly expired and auto-downgraded to FREE");
+        result.put("previousPlan", oldPlan);
+        result.put("currentPlan", refreshedSub != null && refreshedSub.getPlan() != null ? refreshedSub.getPlan().getId() : "FREE");
+        result.put("status", refreshedSub != null ? refreshedSub.getStatus().toString() : "ACTIVE");
+        result.put("periodEnd", refreshedSub != null ? refreshedSub.getCurrentPeriodEnd().toString() : null);
+
+        log.info("🧪 [MOCK-EXPIRE] Tenant {} subscription forcibly expired (was {} -> now {})", 
+                tenantId, oldPlan, result.get("currentPlan"));
+
+        return ResponseEntity.ok(result);
     }
 }

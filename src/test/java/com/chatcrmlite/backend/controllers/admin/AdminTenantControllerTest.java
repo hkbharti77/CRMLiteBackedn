@@ -102,7 +102,7 @@ class AdminTenantControllerTest {
     @DisplayName("TEST 12: Platform SUPER_ADMIN requests Tenant B stats → ALLOW (200)")
     void testPlatformSuperAdmin_CrossTenantStats_Allowed() {
         when(userRepository.findByEmail(superAdminUser.getEmail())).thenReturn(Optional.of(superAdminUser));
-        when(tierService.getTier(tenantBId)).thenReturn(User.PlanType.PRO);
+        when(tierService.getTier(tenantBId)).thenReturn(User.PlanType.GROWTH);
         when(resourceManager.getStatus(eq(tenantBId), any())).thenReturn(new TenantResourceManager.QuotaStatus(5, 50));
 
         ResponseEntity<Map<String, Object>> response = controller.getTenantStats(tenantBId, superAdminUser.getEmail());
@@ -110,6 +110,6 @@ class AdminTenantControllerTest {
         assertEquals(HttpStatus.OK, response.getStatusCode());
         assertNotNull(response.getBody());
         assertEquals(tenantBId, response.getBody().get("tenantId"));
-        assertEquals(User.PlanType.PRO, response.getBody().get("tier"));
+        assertEquals(User.PlanType.GROWTH, response.getBody().get("tier"));
     }
 }
