@@ -39,6 +39,7 @@ public class WhatsAppCampaignService {
     private final DistributedSchedulerService distributedSchedulerService;
     private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
     private final com.chatcrmlite.backend.services.tenant.SubscriptionEntitlementService entitlementService;
+    private final com.chatcrmlite.backend.repositories.WhatsAppCampaignTrackedLinkRepository trackedLinkRepository;
 
     /**
      * Creates or updates a template snapshot ensuring immutable version history.
@@ -471,6 +472,7 @@ public class WhatsAppCampaignService {
     @Transactional
     public void deleteCampaign(UUID id, User user) {
         WhatsAppCampaign campaign = getCampaign(id, user);
+        trackedLinkRepository.deleteByCampaign(campaign);
         recipientRepository.deleteByCampaign(campaign);
         executionRepository.deleteByCampaign(campaign);
         analyticsRepository.deleteByCampaign(campaign);
@@ -491,6 +493,7 @@ public class WhatsAppCampaignService {
 
         int count = list.size();
         for (WhatsAppCampaign c : list) {
+            trackedLinkRepository.deleteByCampaign(c);
             recipientRepository.deleteByCampaign(c);
             executionRepository.deleteByCampaign(c);
             analyticsRepository.deleteByCampaign(c);

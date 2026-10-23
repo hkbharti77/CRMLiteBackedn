@@ -5,6 +5,7 @@ import com.chatcrmlite.backend.models.WhatsAppCampaignAnalytics;
 import com.chatcrmlite.backend.models.WhatsAppCampaignRecipient;
 import com.chatcrmlite.backend.repositories.WhatsAppCampaignAnalyticsRepository;
 import com.chatcrmlite.backend.repositories.WhatsAppCampaignRecipientRepository;
+import com.chatcrmlite.backend.repositories.WhatsAppCampaignTrackedLinkRepository;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -22,6 +23,7 @@ public class CampaignAnalyticsService {
 
     private final WhatsAppCampaignRecipientRepository recipientRepository;
     private final WhatsAppCampaignAnalyticsRepository analyticsRepository;
+    private final WhatsAppCampaignTrackedLinkRepository trackedLinkRepository;
 
     @Transactional
     public void processWebhookStatus(String waMessageId, String metaStatus, String errorMessage) {
@@ -85,6 +87,7 @@ public class CampaignAnalyticsService {
             WhatsAppCampaignRecipient.RecipientStatus.QUEUED,
             WhatsAppCampaignRecipient.RecipientStatus.PENDING
         )));
+        analytics.setTrackedLinkClicks((int) trackedLinkRepository.sumClicksByCampaign(campaign));
         analytics.setLastUpdatedAt(LocalDateTime.now());
 
         return analyticsRepository.save(analytics);
