@@ -9,13 +9,19 @@
 DO $$
 BEGIN
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'contact_tags' AND schemaname = 'public') THEN
-        ALTER TABLE contact_tags RENAME TO contact_tags_old;
+        IF NOT EXISTS (SELECT FROM pg_tables WHERE tablename = 'contact_tags_old' AND schemaname = 'public') THEN
+            ALTER TABLE contact_tags RENAME TO contact_tags_old;
+        END IF;
     END IF;
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'lead_tags' AND schemaname = 'public') THEN
-        ALTER TABLE lead_tags RENAME TO lead_tags_old;
+        IF NOT EXISTS (SELECT FROM pg_tables WHERE tablename = 'lead_tags_old' AND schemaname = 'public') THEN
+            ALTER TABLE lead_tags RENAME TO lead_tags_old;
+        END IF;
     END IF;
     IF EXISTS (SELECT FROM pg_tables WHERE tablename = 'chat_messages_tags' AND schemaname = 'public') THEN
-        ALTER TABLE chat_messages_tags RENAME TO message_tags_old;
+        IF NOT EXISTS (SELECT FROM pg_tables WHERE tablename = 'message_tags_old' AND schemaname = 'public') THEN
+            ALTER TABLE chat_messages_tags RENAME TO message_tags_old;
+        END IF;
     END IF;
 END $$;
 
