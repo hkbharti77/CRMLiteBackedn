@@ -27,6 +27,9 @@ public interface UserRepository extends JpaRepository<User, UUID> {
     @Query("SELECT u FROM User u LEFT JOIN FETCH u.tenant WHERE u.email = :email")
     Optional<User> findByEmailWithTenant(@Param("email") String email);
 
+    @Query("SELECT u FROM User u LEFT JOIN FETCH u.tenant WHERE u.id = :id")
+    Optional<User> findByIdWithTenant(@Param("id") UUID id);
+
     /**
      * Fetches the plan type directly from the tenant without triggering
      * lazy initialization of User.tenant. Safe to call outside a transaction.

@@ -36,6 +36,7 @@ public class ThemeConfigDTO {
     private String email;
     private String googleMapsUrl;
     private Boolean hasVoiceBot;
+    private String visitorToken;
 
     public ThemeConfigDTO() {}
 
@@ -126,6 +127,8 @@ public class ThemeConfigDTO {
     public void setGoogleMapsUrl(String googleMapsUrl) { this.googleMapsUrl = googleMapsUrl; }
     public Boolean getHasVoiceBot() { return hasVoiceBot; }
     public void setHasVoiceBot(Boolean hasVoiceBot) { this.hasVoiceBot = hasVoiceBot; }
+    public String getVisitorToken() { return visitorToken; }
+    public void setVisitorToken(String visitorToken) { this.visitorToken = visitorToken; }
 
     public static ThemeConfigDTOBuilder builder() {
         return new ThemeConfigDTOBuilder();

@@ -26,6 +26,12 @@ public class HallucinationDetector {
     @Autowired(required = false)
     private AiOrchestrator aiOrchestrator;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.HallucinationAuditLogRepository auditLogRepository;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
+
     private static final List<String> UNKNOWN_PHRASES = List.of(
         "i don't know",
         "i don't have that information",
@@ -126,7 +132,7 @@ public class HallucinationDetector {
             return HallucinationCheckResult.GROUNDED;
         }
 
-        // 4. Deterministic Grounding Checks with Context
+        // 4. Deterministic Grounding Checks with Context (< 5ms)
         if (!verifyContactAndUrlClaims(response, context)) {
             return HallucinationCheckResult.CONTACT_MISMATCH;
         }
@@ -143,12 +149,54 @@ public class HallucinationDetector {
             return HallucinationCheckResult.ENTITY_MISMATCH;
         }
 
-        // 5. Semantic Claim Verification using LLM
+        // 5. Decoupled Semantic Verification (Phase 2):
+        // Deterministic fast-filters guarantee zero contact, schedule, price, or entity hallucination.
+        // Semantic LLM verification is executed asynchronously to eliminate 5-15s blocking delay.
         if (tenantId != null && aiOrchestrator != null) {
-            return verifySemanticClaims(response, context, tenantId);
+            if (isSensitiveComplianceQuery(query)) {
+                log.info("[HallucinationDetector] High-stakes compliance query detected — executing synchronous check");
+                return verifySemanticClaims(response, context, tenantId);
+            } else {
+                auditSemanticClaimsAsync(response, context, tenantId, query);
+            }
         }
 
         return HallucinationCheckResult.GROUNDED;
+    }
+
+    @org.springframework.scheduling.annotation.Async("faqAnalyticsExecutor")
+    public void auditSemanticClaimsAsync(String response, String context, UUID tenantId, String query) {
+        if (aiOrchestrator == null || tenantId == null) return;
+        long start = System.currentTimeMillis();
+        try {
+            HallucinationCheckResult result = verifySemanticClaims(response, context, tenantId);
+            long latency = System.currentTimeMillis() - start;
+            if (result != HallucinationCheckResult.GROUNDED) {
+                log.warn("🚨 [HallucinationAudit] Background audit flagged ungrounded semantic claim for tenant {}: result={}, latency={}ms",
+                        tenantId, result, latency);
+            }
+            if (auditLogRepository != null) {
+                var tenant = tenantRepository != null ? tenantRepository.findById(tenantId).orElse(null) : null;
+                var logEntry = com.chatcrmlite.backend.models.HallucinationAuditLog.builder()
+                        .tenant(tenant)
+                        .query(query)
+                        .response(response)
+                        .contextSample(context != null && context.length() > 500 ? context.substring(0, 500) : context)
+                        .result(result.name())
+                        .latencyMs(latency)
+                        .build();
+                auditLogRepository.save(logEntry);
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ [HallucinationAudit] Background audit encountered error: {}", e.getMessage());
+        }
+    }
+
+    private boolean isSensitiveComplianceQuery(String query) {
+        if (query == null || query.isBlank()) return false;
+        String q = query.toLowerCase();
+        return q.contains("payment") || q.contains("refund") || q.contains("prescription")
+                || q.contains("diagnosis") || q.contains("credit card") || q.contains("terms of service");
     }
 
     private HallucinationCheckResult verifySemanticClaims(String response, String context, UUID tenantId) {

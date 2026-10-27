@@ -21,6 +21,10 @@ import com.chatcrmlite.backend.dto.MenuCardDTO;
 import com.chatcrmlite.backend.util.MenuActionTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.concurrent.TimeUnit;
+
 @Service
 public class NicheThemeService {
     
@@ -35,6 +39,11 @@ public class NicheThemeService {
 
     @Autowired
     private CustomMenuCardRepository customMenuCardRepository;
+
+    private final Cache<UUID, ThemeConfigDTO> themeCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(15, TimeUnit.MINUTES)
+            .build();
 
     private static final Map<String, NicheTheme> THEMES = new HashMap<>();
 
@@ -84,6 +93,19 @@ public class NicheThemeService {
     }
 
     public ThemeConfigDTO getThemeForUser(User user) {
+        if (user == null || user.getId() == null) {
+            return buildThemeForUser(user);
+        }
+        return themeCache.get(user.getId(), k -> buildThemeForUser(user));
+    }
+
+    public void invalidateThemeCache(UUID userId) {
+        if (userId != null) {
+            themeCache.invalidate(userId);
+        }
+    }
+
+    public ThemeConfigDTO buildThemeForUser(User user) {
         String slug = FlowTriggerEngine.toSlug(user.getBusinessSubType());
         NicheTheme theme = THEMES.getOrDefault(slug, THEMES.get("generic"));
         

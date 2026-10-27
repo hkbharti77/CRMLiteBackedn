@@ -34,6 +34,20 @@ public class QuotaEnforcerService {
     private final ApplicationEventPublisher eventPublisher;
     private final EntitlementResolverService entitlementResolverService;
 
+    private final com.github.benmanes.caffeine.cache.Cache<UUID, TenantSubscription> subscriptionCache =
+            com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                    .maximumSize(1000)
+                    .expireAfterWrite(10, java.util.concurrent.TimeUnit.MINUTES)
+                    .build();
+
+    @org.springframework.context.event.EventListener
+    public void onSubscriptionUpdated(TenantSubscriptionUpdatedEvent event) {
+        if (event != null && event.getTenantId() != null) {
+            subscriptionCache.invalidate(event.getTenantId());
+            log.debug("🔄 [QuotaEnforcerService] Invalidated subscription cache for tenant {}", event.getTenantId());
+        }
+    }
+
     public static class QuotaExceededException extends RuntimeException {
         public QuotaExceededException(String message) {
             super(message);
@@ -47,10 +61,17 @@ public class QuotaEnforcerService {
     }
 
     /**
-     * Resolves the active subscription plan and verifies subscription state.
-     * If no subscription is configured, it registers a default FREE subscription.
+     * Resolves the active subscription plan and verifies subscription state with Caffeine caching.
      */
     public TenantSubscription getActiveSubscription(UUID tenantId) {
+        if (tenantId == null) return null;
+        return subscriptionCache.get(tenantId, this::resolveActiveSubscription);
+    }
+
+    /**
+     * Authoritative DB resolution of tenant subscription state.
+     */
+    public TenantSubscription resolveActiveSubscription(UUID tenantId) {
         TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId).orElse(null);
 
         if (sub == null) {

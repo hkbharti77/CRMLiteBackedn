@@ -695,6 +695,42 @@ export function createUIController({
             return appendMessageRow(container, sender, msgDiv);
         },
 
+        renderStreamingBotBubble(containerEl) {
+            const container = containerEl || elements.messages;
+            if (!container) return null;
+
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message bot message--streaming';
+
+            const textSpan = document.createElement('span');
+            textSpan.className = 'message-text';
+            textSpan.innerHTML = '<span class="crm-streaming-cursor" style="display:inline-block;animation:crmBlink 0.8s infinite;">▌</span>';
+
+            const timeSpan = document.createElement('span');
+            timeSpan.className = 'message-time';
+            timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+            msgDiv.appendChild(textSpan);
+            msgDiv.appendChild(timeSpan);
+            const row = appendMessageRow(container, 'bot', msgDiv);
+            container.scrollTop = container.scrollHeight;
+
+            return {
+                appendToken(token, fullText) {
+                    textSpan.innerHTML = parseMarkdown(fullText) + '<span class="crm-streaming-cursor" style="display:inline-block;animation:crmBlink 0.8s infinite;">▌</span>';
+                    container.scrollTop = container.scrollHeight;
+                },
+                finalize(fullText) {
+                    msgDiv.classList.remove('message--streaming');
+                    textSpan.innerHTML = parseMarkdown(fullText);
+                    container.scrollTop = container.scrollHeight;
+                },
+                remove() {
+                    if (row) row.remove();
+                }
+            };
+        },
+
         renderVoiceBubble(result, containerEl) {
             const container = containerEl || elements.messages;
             if (!container || !result) return;

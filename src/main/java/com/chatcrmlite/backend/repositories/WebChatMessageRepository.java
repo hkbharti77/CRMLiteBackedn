@@ -20,4 +20,6 @@ public interface WebChatMessageRepository extends JpaRepository<WebChatMessage, 
 
     // DPDP Right to Erasure
     void deleteBySession(WebChatSession session);
+
+    boolean existsByIdempotencyKey(String idempotencyKey);
 }

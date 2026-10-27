@@ -179,6 +179,57 @@ public class RagConfig {
                 .build();
     }
 
+    /**
+     * Configuration of Streaming Chat Model bean supporting OpenRouter, Ollama, and OpenAI-compatible providers.
+     */
+    @Bean
+    public dev.langchain4j.model.chat.StreamingChatLanguageModel streamingChatLanguageModel() {
+        if ("openrouter".equalsIgnoreCase(aiProvider)) {
+            if (openRouterApiKey == null || openRouterApiKey.isBlank()) {
+                return null;
+            }
+            String url = (openRouterBaseUrl != null && !openRouterBaseUrl.isBlank()) 
+                    ? openRouterBaseUrl.trim() 
+                    : "https://openrouter.ai/api/v1";
+            return dev.langchain4j.model.openai.OpenAiStreamingChatModel.builder()
+                    .baseUrl(url)
+                    .apiKey(openRouterApiKey)
+                    .modelName(openRouterModelName)
+                    .timeout(java.time.Duration.ofSeconds(120))
+                    .build();
+        }
+
+        if ("zai".equalsIgnoreCase(aiProvider)) {
+            if (zaiApiKey == null || zaiApiKey.isBlank()) {
+                return null;
+            }
+            String url = (zaiBaseUrl != null && !zaiBaseUrl.isBlank()) 
+                    ? zaiBaseUrl.trim() 
+                    : "https://open.bigmodel.cn/api/paas/v4";
+            return dev.langchain4j.model.openai.OpenAiStreamingChatModel.builder()
+                    .baseUrl(url)
+                    .apiKey(zaiApiKey)
+                    .modelName(zaiModelName)
+                    .timeout(java.time.Duration.ofSeconds(120))
+                    .build();
+        }
+
+        if ("openai".equalsIgnoreCase(aiProvider) || "ollama".equalsIgnoreCase(aiProvider) || "local".equalsIgnoreCase(aiProvider)) {
+            if (openAiBaseUrl == null || openAiBaseUrl.isBlank()) {
+                return null;
+            }
+            String cleanUrl = openAiBaseUrl.trim().replace(" ", "");
+            return dev.langchain4j.model.openai.OpenAiStreamingChatModel.builder()
+                    .baseUrl(cleanUrl)
+                    .apiKey(openAiApiKey)
+                    .modelName(openAiModelName)
+                    .timeout(java.time.Duration.ofSeconds(300))
+                    .build();
+        }
+
+        return null;
+    }
+
     @Bean
     @Conditional(AiEnabledCondition.class)
     public AiProvider chatLanguageModelAiProvider(

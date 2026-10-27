@@ -15,15 +15,23 @@ export function createApiClient(apiBase, businessId) {
         },
 
         async fetchBootstrapData() {
+            const visitorToken = localStorage.getItem('crm_visitor_token');
+            const headers = visitorToken ? { 'X-Visitor-Token': visitorToken } : {};
+
             const [configRes, flowRes, triggersRes, supportRes] = await Promise.all([
-                fetch(`${base}/config/${businessId}`),
+                fetch(`${base}/config/${businessId}`, { headers }),
                 fetch(`${base}/flow/${businessId}`),
                 fetch(`${base}/triggers/${businessId}`),
                 fetch(`${base}/support/config/${businessId}`)
             ]);
 
+            const theme = configRes.ok ? await configRes.json() : null;
+            if (theme && theme.visitorToken) {
+                localStorage.setItem('crm_visitor_token', theme.visitorToken);
+            }
+
             return {
-                theme: configRes.ok ? await configRes.json() : null,
+                theme,
                 flow: flowRes.ok ? await flowRes.json() : null,
                 triggers: triggersRes.ok ? await triggersRes.json() : null,
                 supportConfig: supportRes.ok ? await supportRes.json() : null
@@ -31,22 +39,102 @@ export function createApiClient(apiBase, businessId) {
         },
 
         async sendChatMessage(message, isReturning, sessionId) {
+            const visitorToken = localStorage.getItem('crm_visitor_token');
             const payload = {
                 message,
-                isReturning: String(isReturning)
+                isReturning: String(isReturning),
+                visitorToken: visitorToken || undefined
             };
             if (sessionId) {
                 payload.sessionId = sessionId;
             }
+            const headers = { 'Content-Type': 'application/json' };
+            if (visitorToken) headers['X-Visitor-Token'] = visitorToken;
+
             const res = await fetch(`${base}/chat/${businessId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(payload)
             });
             if (!res.ok) {
                 throw new Error(`Chat API error: ${res.status}`);
             }
             return await res.json();
+        },
+
+        async streamChatMessage(message, isReturning, sessionId, { onChunk, onDone, onFallback, onError, signal } = {}) {
+            const visitorToken = localStorage.getItem('crm_visitor_token');
+            const payload = {
+                message,
+                isReturning: String(isReturning),
+                visitorToken: visitorToken || undefined
+            };
+            if (sessionId) {
+                payload.sessionId = sessionId;
+            }
+
+            const headers = {
+                'Content-Type': 'application/json',
+                'Accept': 'text/event-stream'
+            };
+            if (visitorToken) headers['X-Visitor-Token'] = visitorToken;
+
+            try {
+                const res = await fetch(`${base}/chat/${businessId}/stream`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(payload),
+                    signal
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Streaming API returned ${res.status}`);
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep partial line
+
+                    let currentEvent = 'message';
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed) continue;
+
+                        if (trimmed.startsWith('event:')) {
+                            currentEvent = trimmed.replace('event:', '').trim();
+                        } else if (trimmed.startsWith('data:')) {
+                            const dataStr = trimmed.replace('data:', '').trim();
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (currentEvent === 'chunk' && onChunk) {
+                                    onChunk(data.text || '');
+                                } else if (currentEvent === 'done' && onDone) {
+                                    onDone(data);
+                                } else if ((currentEvent === 'visitor_quota_exhausted' || currentEvent === 'tenant_quota_exhausted') && onFallback) {
+                                    onFallback(currentEvent, data);
+                                } else if (currentEvent === 'error' && onError) {
+                                    onError(new Error(data.message || 'Stream error'));
+                                }
+                            } catch (parseEx) {
+                                if (currentEvent === 'chunk' && onChunk) {
+                                    onChunk(dataStr);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (onError) onError(err);
+                else throw err;
+            }
         },
 
         async fetchFlow(flowType) {
