@@ -26,6 +26,9 @@ public class WebChatMessage implements Serializable {
     @Column(columnDefinition = "text", nullable = false)
     private String content;
 
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
     private LocalDateTime createdAt;
 
     public enum Sender {
@@ -35,14 +38,21 @@ public class WebChatMessage implements Serializable {
     public WebChatMessage() {}
 
     public WebChatMessage(WebChatSession session, Sender sender, String content) {
+        this(session, sender, content, null);
+    }
+
+    public WebChatMessage(WebChatSession session, Sender sender, String content, String idempotencyKey) {
         this.session = session;
         this.sender = sender;
         this.content = content;
+        this.idempotencyKey = idempotencyKey;
     }
 
     @PrePersist
     protected void onCreate() {
-        createdAt = LocalDateTime.now();
+        if (createdAt == null) {
+            createdAt = LocalDateTime.now();
+        }
     }
 
     public UUID getId() { return id; }
@@ -56,6 +66,9 @@ public class WebChatMessage implements Serializable {
     
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public String getIdempotencyKey() { return idempotencyKey; }
+    public void setIdempotencyKey(String idempotencyKey) { this.idempotencyKey = idempotencyKey; }
     
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }

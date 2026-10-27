@@ -22,6 +22,10 @@ import com.chatcrmlite.backend.services.WebChatService;
 import com.chatcrmlite.backend.models.WebChatMessage;
 import com.chatcrmlite.backend.services.memory.ConversationMemoryService;
 import com.chatcrmlite.backend.dto.memory.ConversationContext;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import java.util.concurrent.TimeUnit;
 
 @RestController
 @RequestMapping("/api/v1/public")
@@ -72,6 +76,36 @@ public class PublicChatController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.services.billing.CreditMeteringService creditMeteringService;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.chat.ChatPersistenceProducer chatPersistenceProducer;
+
+    private final Cache<UUID, User> userCache = Caffeine.newBuilder()
+            .maximumSize(1000)
+            .expireAfterWrite(10, TimeUnit.MINUTES)
+            .build();
+
+    private User getCachedUser(UUID businessId) {
+        if (businessId == null) return null;
+        return userCache.get(businessId, id ->
+                userRepository.findByIdWithTenant(id).orElse(null)
+        );
+    }
+
+    public void invalidateUserCache(UUID businessId) {
+        if (businessId != null) {
+            userCache.invalidate(businessId);
+        }
+    }
+
+    private void persistChatMessage(User owner, String sessionId, WebChatMessage.Sender sender, String content, String source) {
+        if (owner == null) return;
+        if (chatPersistenceProducer != null) {
+            chatPersistenceProducer.enqueueMessage(owner.getId(), sessionId, sender, content, source, null);
+        } else {
+            webChatService.saveMessage(owner, sessionId, sender, content);
+        }
+    }
+
     @PostMapping("/livechat/request/{businessId}")
     public ResponseEntity<Map<String, Object>> requestPublicHumanSupport(
             @PathVariable UUID businessId,
@@ -121,9 +155,11 @@ public class PublicChatController {
 
     @GetMapping("/config/{businessId}")
     public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
-        return userRepository.findById(businessId)
-                .map(user -> ResponseEntity.ok(themeService.getThemeForUser(user)))
-                .orElse(ResponseEntity.notFound().build());
+        User user = getCachedUser(businessId);
+        if (user == null) {
+            return ResponseEntity.notFound().build();
+        }
+        return ResponseEntity.ok(themeService.getThemeForUser(user));
     }
 
     /**
@@ -186,22 +222,21 @@ public class PublicChatController {
         }
 
         String sessionId = request.getOrDefault("sessionId", "anonymous");
-        User owner = userRepository.findById(businessId).orElse(null);
+        User owner = getCachedUser(businessId);
         
         if (owner != null) {
-            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.USER, message);
+            persistChatMessage(owner, sessionId, WebChatMessage.Sender.USER, message, "WEBCHAT");
         }
 
         if (owner != null && owner.getTenant() != null) {
             try {
                 SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
-                Long creditBalance = owner.getTenant().getAiCreditBalance();
-                boolean hasCredits = creditBalance != null && creditBalance > 0;
+                boolean hasCredits = creditMeteringService != null && creditMeteringService.hasAvailableCredits(owner.getTenant().getId(), 1);
 
                 // Allow AI if plan has RAG LLM OR tenant has AI credits remaining
                 if (!plan.isHasRagLlm() && !hasCredits) {
                     String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
-                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg);
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg, "MENU");
                     return ResponseEntity.ok(Map.of("response", noRagMsg));
                 }
             } catch (Exception e) {
@@ -230,7 +265,7 @@ public class PublicChatController {
                     responseMap.put("response", greeting);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
                     
-                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, greeting);
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, greeting, "GREETING");
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "abuse_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -242,7 +277,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
-                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg, "GUARDRAIL");
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.MENU && "gibberish".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -254,7 +289,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
-                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg, "GUARDRAIL");
                     return ResponseEntity.ok(responseMap);
                 } else if (guardrail.getDecision() == Decision.IGNORE && "spam_throttled".equals(guardrail.getReason())) {
                     Map<String, Object> responseMap = new java.util.HashMap<>();
@@ -266,7 +301,7 @@ public class PublicChatController {
                     }
                     responseMap.put("response", fallbackMsg);
                     if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
-                    webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg);
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg, "GUARDRAIL");
                     return ResponseEntity.ok(responseMap);
                 }
             } catch (Exception e) {
@@ -287,7 +322,7 @@ public class PublicChatController {
                         Map<String, Object> responseMap = new java.util.HashMap<>();
                         responseMap.put("response", catalogAction.caption());
                         if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
-                        webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, catalogAction.caption());
+                        persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, catalogAction.caption(), "CATALOG");
                         return ResponseEntity.ok(responseMap);
                     } else if (catalogAction.type() == com.chatcrmlite.backend.dto.ai.action.AiAction.AiActionType.SEND_CATALOG && catalogAction.catalogId() != null) {
                         var catalogOpt = tenantAiCatalogRepository.findByIdAndTenantId(catalogAction.catalogId(), owner.getTenant().getId());
@@ -310,7 +345,7 @@ public class PublicChatController {
                             responseMap.put("catalog", catalogMeta);
 
                             if (ctaButtons != null) responseMap.put("ctaButtons", ctaButtons);
-                            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, botMsg + " [Document: " + cat.getFileName() + "]");
+                            persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, botMsg + " [Document: " + cat.getFileName() + "]", "CATALOG");
                             return ResponseEntity.ok(responseMap);
                         }
                     }
@@ -343,9 +378,198 @@ public class PublicChatController {
         }
 
         if (owner != null) {
-            webChatService.saveMessage(owner, sessionId, WebChatMessage.Sender.BOT, response);
+            persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, response, "RAG");
         }
 
         return ResponseEntity.ok(responseMap);
+    }
+
+    /**
+     * Phase 2: High-Performance Streaming Chat Endpoint (Server-Sent Events)
+     * Provides sub-500ms TTFT, atomic credit reservation, and non-blocking durable message persistence.
+     */
+    @PostMapping(value = "/chat/{businessId}/stream", produces = org.springframework.http.MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter handlePublicChatStream(
+            @PathVariable UUID businessId,
+            @RequestBody Map<String, String> request,
+            HttpServletRequest httpRequest) {
+
+        SseEmitter emitter = new SseEmitter(90_000L); // 90 second timeout
+
+        String clientIp = httpRequest.getRemoteAddr();
+
+        // 1. Rate limiting
+        if (!rateLimitConfig.tryConsume("global:" + clientIp, RateLimitConfig.Tier.GLOBAL_AI) ||
+            !rateLimitConfig.tryConsume(clientIp + ":" + businessId, RateLimitConfig.Tier.AI)) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of(
+                        "code", "RATE_LIMIT_EXCEEDED",
+                        "message", "Too many requests. Please wait a moment before sending another message."
+                )));
+                emitter.complete();
+            } catch (Exception ignored) {}
+            return emitter;
+        }
+
+        String message = request.get("message");
+        if (message == null || message.isBlank()) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of("code", "BAD_REQUEST", "message", "Message is required")));
+                emitter.complete();
+            } catch (Exception ignored) {}
+            return emitter;
+        }
+
+        String sessionId = request.getOrDefault("sessionId", "anonymous");
+        User owner = getCachedUser(businessId);
+        if (owner == null) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of("code", "NOT_FOUND", "message", "Business not found")));
+                emitter.complete();
+            } catch (Exception ignored) {}
+            return emitter;
+        }
+
+        // Asynchronously enqueue visitor message to Redis Stream
+        persistChatMessage(owner, sessionId, WebChatMessage.Sender.USER, message, "WEBCHAT");
+
+        ThemeConfigDTO theme = themeService.getThemeForUser(owner);
+        java.util.List<com.chatcrmlite.backend.dto.WidgetCtaDTO> ctaButtons = theme != null ? theme.getCtaButtons() : null;
+
+        // Verify Subscription / Credits
+        if (owner.getTenant() != null) {
+            try {
+                SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
+                boolean hasCredits = creditMeteringService != null && creditMeteringService.hasAvailableCredits(owner.getTenant().getId(), 1);
+                if (!plan.isHasRagLlm() && !hasCredits) {
+                    String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg, "MENU");
+                    sendSingleChunkAndDone(emitter, noRagMsg, "MENU", ctaButtons);
+                    return emitter;
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // Guardrail evaluation
+        try {
+            GuardrailResult guardrail = guardrailService.evaluate(message, "web_user_" + sessionId, false, owner.getBusinessSubType(), businessId);
+            if (guardrail.getDecision() == Decision.GREETING) {
+                boolean isReturning = "true".equalsIgnoreCase(request.get("isReturning"));
+                String greeting = isReturning ? theme.getReturningMessage() : theme.getWelcomeMessage();
+                if (greeting == null || greeting.isBlank()) {
+                    String bizName = owner.getBusinessName() != null ? owner.getBusinessName() : "our business";
+                    greeting = isReturning 
+                        ? "👋 Welcome back to " + bizName + "! How can we help you today?"
+                        : "👋 Hello! Welcome to " + bizName + ". How can we help you today?";
+                }
+                persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, greeting, "GREETING");
+                sendSingleChunkAndDone(emitter, greeting, "GREETING", ctaButtons);
+                return emitter;
+            } else if (guardrail.getDecision() == Decision.IGNORE || guardrail.getDecision() == Decision.MENU) {
+                String fallbackMsg = theme.getGuardrailMessageGibberish();
+                if (fallbackMsg == null || fallbackMsg.isBlank()) {
+                    fallbackMsg = "We couldn't understand your request. Please rephrase your message or select an option below.";
+                }
+                persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackMsg, "GUARDRAIL");
+                sendSingleChunkAndDone(emitter, fallbackMsg, "GUARDRAIL", ctaButtons);
+                return emitter;
+            }
+        } catch (Exception ignored) {}
+
+        // Credit reservation (Two-Phase Protocol)
+        final java.util.concurrent.atomic.AtomicReference<UUID> reservationHolder = new java.util.concurrent.atomic.AtomicReference<>();
+        if (owner.getTenant() != null && creditMeteringService != null) {
+            try {
+                UUID resId = creditMeteringService.reserveCredits(owner.getTenant().getId(), 1, java.time.Duration.ofMinutes(5), sessionId);
+                reservationHolder.set(resId);
+            } catch (Exception credEx) {
+                org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                        .warn("⚠️ Credit reservation failed for tenant {}: {}", owner.getTenant().getId(), credEx.getMessage());
+            }
+        }
+
+        // Disconnect & Timeout lifecycle handlers
+        emitter.onTimeout(() -> {
+            org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                    .warn("⏱️ [PublicChatStream] SSE Stream timed out for sessionId={}", sessionId);
+            if (reservationHolder.get() != null && creditMeteringService != null) {
+                creditMeteringService.releaseReservation(reservationHolder.get());
+            }
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of("code", "STREAM_TIMEOUT", "message", "Request timed out.")));
+                emitter.complete();
+            } catch (Exception ignored) {}
+        });
+
+        emitter.onError(err -> {
+            org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                    .warn("🔌 [PublicChatStream] SSE Client disconnected or error for sessionId={}: {}", sessionId, err.getMessage());
+            if (reservationHolder.get() != null && creditMeteringService != null) {
+                creditMeteringService.releaseReservation(reservationHolder.get());
+            }
+        });
+
+        ConversationContext memContext = conversationMemoryService.getWebChatContext(owner, sessionId, message);
+
+        // Execute streaming RAG pipeline
+        ragRetrievalService.streamAiResponse(
+                memContext,
+                businessId,
+                token -> {
+                    try {
+                        emitter.send(SseEmitter.event().name("chunk").data(Map.of("text", token)));
+                    } catch (Exception e) {
+                        org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                                .debug("Failed sending chunk to SSE emitter: {}", e.getMessage());
+                    }
+                },
+                meta -> {
+                    try {
+                        Map<String, Object> doneData = new java.util.HashMap<>();
+                        doneData.put("done", true);
+                        doneData.put("source", meta.source());
+                        if (ctaButtons != null) doneData.put("ctaButtons", ctaButtons);
+                        emitter.send(SseEmitter.event().name("done").data(doneData));
+                        emitter.complete();
+
+                        // Settle credit reservation
+                        if (reservationHolder.get() != null && creditMeteringService != null) {
+                            creditMeteringService.settleReservation(reservationHolder.get(), 1, "Public Web Chat Stream");
+                        }
+
+                        // Asynchronously persist bot response to Redis Stream
+                        persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, meta.fullResponse(), meta.source());
+                    } catch (Exception ex) {
+                        org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
+                                .warn("Error finalizing SSE stream: {}", ex.getMessage());
+                    }
+                },
+                error -> {
+                    try {
+                        if (reservationHolder.get() != null && creditMeteringService != null) {
+                            creditMeteringService.releaseReservation(reservationHolder.get());
+                        }
+                        emitter.send(SseEmitter.event().name("error").data(Map.of(
+                                "code", "GENERATION_ERROR",
+                                "message", "Unable to generate response. Please try again."
+                        )));
+                        emitter.complete();
+                    } catch (Exception ignored) {}
+                }
+        );
+
+        return emitter;
+    }
+
+    private void sendSingleChunkAndDone(SseEmitter emitter, String content, String source, java.util.List<com.chatcrmlite.backend.dto.WidgetCtaDTO> ctaButtons) {
+        try {
+            emitter.send(SseEmitter.event().name("chunk").data(Map.of("text", content)));
+            Map<String, Object> doneData = new java.util.HashMap<>();
+            doneData.put("done", true);
+            doneData.put("source", source);
+            if (ctaButtons != null) doneData.put("ctaButtons", ctaButtons);
+            emitter.send(SseEmitter.event().name("done").data(doneData));
+            emitter.complete();
+        } catch (Exception ignored) {}
     }
 }

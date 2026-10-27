@@ -56,6 +56,7 @@ public class RedisStreamConfig {
     private final com.chatcrmlite.backend.services.workflow.AIWorker aiWorker;
     private final com.chatcrmlite.backend.services.workflow.FlowWorker flowWorker;
     private final com.chatcrmlite.backend.services.workflow.DeliveryWorker deliveryWorker;
+    private final com.chatcrmlite.backend.services.chat.ChatPersistenceWorker chatPersistenceWorker;
 
     /** All active containers — stopped before the Redis connection factory is closed. */
     private final List<StreamMessageListenerContainer<String, MapRecord<String, String, String>>> activeContainers
@@ -115,30 +116,49 @@ public class RedisStreamConfig {
         return createSubscription(factory, deliveryStream, "delivery-worker", deliveryWorker, redisStreamTaskExecutor);
     }
 
+    @Bean
+    public Subscription chatPersistenceSubscription(RedisConnectionFactory factory, StringRedisTemplate redisTemplate, TaskExecutor redisStreamTaskExecutor) {
+        setupStream(redisTemplate, com.chatcrmlite.backend.services.chat.ChatPersistenceWorker.CHAT_PERSISTENCE_STREAM,
+                com.chatcrmlite.backend.services.chat.ChatPersistenceWorker.CHAT_PERSISTENCE_GROUP);
+        return createSubscription(factory, com.chatcrmlite.backend.services.chat.ChatPersistenceWorker.CHAT_PERSISTENCE_STREAM,
+                com.chatcrmlite.backend.services.chat.ChatPersistenceWorker.CHAT_PERSISTENCE_GROUP,
+                "chat-persistence-worker", chatPersistenceWorker, redisStreamTaskExecutor);
+    }
+
     private void setupStream(StringRedisTemplate redisTemplate, String name) {
+        setupStream(redisTemplate, name, groupName);
+    }
+
+    private void setupStream(StringRedisTemplate redisTemplate, String name, String group) {
         try {
             if (!Boolean.TRUE.equals(redisTemplate.hasKey(name))) {
                 redisTemplate.opsForStream().add(name, Collections.singletonMap("_init", "true"));
-                log.info("📦 [WhatsApp-Queue] Initialized new Redis stream: {}", name);
+                log.info("📦 [Redis-Stream] Initialized new Redis stream: {}", name);
             }
             try {
                 // Use ReadOffset.from("0-0") so consumer group reads from beginning of stream
-                redisTemplate.opsForStream().createGroup(name, ReadOffset.from("0-0"), groupName);
-                log.info("👥 [WhatsApp-Queue] Created consumer group '{}' on stream '{}' with offset '0-0'", groupName, name);
+                redisTemplate.opsForStream().createGroup(name, ReadOffset.from("0-0"), group);
+                log.info("👥 [Redis-Stream] Created consumer group '{}' on stream '{}' with offset '0-0'", group, name);
             } catch (Exception groupEx) {
                 // Group already exists
-                log.debug("[WhatsApp-Queue] Consumer group '{}' on stream '{}' already exists: {}", groupName, name, groupEx.getMessage());
+                log.debug("[Redis-Stream] Consumer group '{}' on stream '{}' already exists: {}", group, name, groupEx.getMessage());
             }
         } catch (Exception e) {
-            log.warn("⚠️ [WhatsApp-Queue] Stream/Group setup issue for '{}' (group '{}'): {}", name, groupName, e.getMessage());
+            log.warn("⚠️ [Redis-Stream] Stream/Group setup issue for '{}' (group '{}'): {}", name, group, e.getMessage());
         }
     }
 
     private Subscription createSubscription(RedisConnectionFactory factory, String stream, String consumerName,
                                            StreamListener<String, MapRecord<String, String, String>> listener,
                                            TaskExecutor taskExecutor) {
-        log.info("[WhatsApp-Queue] Consumer starting. Stream: {}, Consumer group: {}, Consumer name: {}",
-                stream, groupName, consumerName);
+        return createSubscription(factory, stream, groupName, consumerName, listener, taskExecutor);
+    }
+
+    private Subscription createSubscription(RedisConnectionFactory factory, String stream, String group, String consumerName,
+                                           StreamListener<String, MapRecord<String, String, String>> listener,
+                                           TaskExecutor taskExecutor) {
+        log.info("[Redis-Stream] Consumer starting. Stream: {}, Consumer group: {}, Consumer name: {}",
+                stream, group, consumerName);
 
         org.springframework.util.ErrorHandler errorHandler = t -> {
             if (t == null) return;
@@ -188,7 +208,7 @@ public class RedisStreamConfig {
 
         StreamMessageListenerContainer.StreamReadRequest<String> readRequest =
                 StreamMessageListenerContainer.StreamReadRequest.builder(StreamOffset.create(stream, ReadOffset.lastConsumed()))
-                        .consumer(Consumer.from(groupName, consumerName))
+                        .consumer(Consumer.from(group, consumerName))
                         .autoAcknowledge(false)
                         .cancelOnError(t -> false)
                         .errorHandler(errorHandler)
@@ -200,8 +220,8 @@ public class RedisStreamConfig {
         // Track so we can stop it in @PreDestroy before LettuceConnectionFactory is destroyed
         activeContainers.add(container);
 
-        log.info("🚀 [WhatsApp-Queue] Consumer started successfully. Stream: {}, Consumer group: {}, Consumer name: {}",
-                stream, groupName, consumerName);
+        log.info("🚀 [Redis-Stream] Consumer started successfully. Stream: {}, Consumer group: {}, Consumer name: {}",
+                stream, group, consumerName);
         return subscription;
     }
 }

@@ -49,6 +49,74 @@ export function createApiClient(apiBase, businessId) {
             return await res.json();
         },
 
+        async streamChatMessage(message, isReturning, sessionId, { onChunk, onDone, onError, signal } = {}) {
+            const payload = {
+                message,
+                isReturning: String(isReturning)
+            };
+            if (sessionId) {
+                payload.sessionId = sessionId;
+            }
+
+            try {
+                const res = await fetch(`${base}/chat/${businessId}/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'text/event-stream'
+                    },
+                    body: JSON.stringify(payload),
+                    signal
+                });
+
+                if (!res.ok) {
+                    throw new Error(`Streaming API returned ${res.status}`);
+                }
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder('utf-8');
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // keep partial line
+
+                    let currentEvent = 'message';
+                    for (const line of lines) {
+                        const trimmed = line.trim();
+                        if (!trimmed) continue;
+
+                        if (trimmed.startsWith('event:')) {
+                            currentEvent = trimmed.replace('event:', '').trim();
+                        } else if (trimmed.startsWith('data:')) {
+                            const dataStr = trimmed.replace('data:', '').trim();
+                            try {
+                                const data = JSON.parse(dataStr);
+                                if (currentEvent === 'chunk' && onChunk) {
+                                    onChunk(data.text || '');
+                                } else if (currentEvent === 'done' && onDone) {
+                                    onDone(data);
+                                } else if (currentEvent === 'error' && onError) {
+                                    onError(new Error(data.message || 'Stream error'));
+                                }
+                            } catch (parseEx) {
+                                if (currentEvent === 'chunk' && onChunk) {
+                                    onChunk(dataStr);
+                                }
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                if (onError) onError(err);
+                else throw err;
+            }
+        },
+
         async fetchFlow(flowType) {
             let typeParam = (flowType || '').toLowerCase();
             if (typeParam === 'lead_capture') typeParam = 'lead';

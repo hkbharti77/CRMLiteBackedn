@@ -89,54 +89,56 @@ export async function initWidget({ businessId, apiBase } = {}) {
             const chatHistory = storage.loadHistory();
             const isReturning = chatHistory.length > 2;
 
-            const data = await apiClient.sendChatMessage(val, isReturning, storage.getSessionId());
+            let accumulatedText = '';
+            let streamHandle = null;
 
-            if (data.ctaButtons !== undefined) {
-                theme.ctaButtons = data.ctaButtons;
-            }
-
-            ui.setTyping(false);
-            if (data.isGuardrail) {
-                const fallbackMsg = data.response || (data.reason === 'abuse_throttled'
-                    ? (theme.guardrailMessageAbuse || "We cannot process requests containing inappropriate or abusive language. Please communicate respectfully or select an option from the menu.")
-                    : (theme.guardrailMessageGibberish || "We couldn't understand your request. Please rephrase your message or select one of the available options below."));
-                setTimeout(() => {
-                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, fallbackMsg, true, theme, (id, title, actionType) => {
-                        flowEngine.handleMenuAction(id, title, actionType);
-                    });
-                    if (entry) {
-                        const history = storage.loadHistory();
-                        history.push(entry);
-                        storage.saveHistory(history);
+            await apiClient.streamChatMessage(val, isReturning, storage.getSessionId(), {
+                onChunk: (chunk) => {
+                    if (!streamHandle) {
+                        ui.setTyping(false);
+                        streamHandle = ui.renderStreamingBotBubble();
                     }
-                }, 500);
-            } else {
-                const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
-                if (triggered) {
-                    if (data.catalog) {
-                        const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title, actionType) => {
-                            flowEngine.handleMenuAction(id, title, actionType);
-                        }, data.catalog);
-                        if (entry) {
-                            const history = storage.loadHistory();
-                            history.push(entry);
-                            storage.saveHistory(history);
+                    accumulatedText += chunk;
+                    streamHandle.appendToken(chunk, accumulatedText);
+                },
+                onDone: (data) => {
+                    ui.setTyping(false);
+                    if (streamHandle) {
+                        streamHandle.finalize(accumulatedText);
+                        const history = storage.loadHistory();
+                        history.push({ text: accumulatedText, sender: 'bot', time: Date.now() });
+                        storage.saveHistory(history);
+                    } else if (accumulatedText) {
+                        flowEngine.addBotBubble(accumulatedText);
+                    }
+
+                    if (data && data.ctaButtons !== undefined) {
+                        theme.ctaButtons = data.ctaButtons;
+                    }
+                    if (triggered) {
+                        setTimeout(() => flowEngine.suggestForm(), 600);
+                    }
+                },
+                onError: async (err) => {
+                    console.warn('[Widget-Stream] Streaming error, falling back to sync endpoint:', err);
+                    if (streamHandle) {
+                        streamHandle.remove();
+                        streamHandle = null;
+                    }
+                    try {
+                        const data = await apiClient.sendChatMessage(val, isReturning, storage.getSessionId());
+                        ui.setTyping(false);
+                        if (data.ctaButtons !== undefined) {
+                            theme.ctaButtons = data.ctaButtons;
                         }
-                    } else {
+                        const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
                         flowEngine.addBotBubble(finalResponse);
-                    }
-                    setTimeout(() => flowEngine.suggestForm(), 600);
-                } else {
-                    const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, finalResponse, true, theme, (id, title, actionType) => {
-                        flowEngine.handleMenuAction(id, title, actionType);
-                    }, data.catalog);
-                    if (entry) {
-                        const history = storage.loadHistory();
-                        history.push(entry);
-                        storage.saveHistory(history);
+                    } catch (syncErr) {
+                        ui.setTyping(false);
+                        flowEngine.addBotBubble("Connection error. Please try again.");
                     }
                 }
-            }
+            });
         } catch (e) {
             ui.setTyping(false);
             const entry = ui.renderCustomMenu(theme.aiResponseMenuJson, "Connection lost. Please try again.", true, theme, (id, title, actionType) => {

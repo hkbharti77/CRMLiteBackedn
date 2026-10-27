@@ -20,6 +20,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -37,6 +38,11 @@ public class RagRetrievalService {
 
     @Autowired(required = false)
     private AiOrchestrator aiOrchestrator;
+
+    @Autowired(required = false)
+    private dev.langchain4j.model.chat.StreamingChatLanguageModel streamingChatLanguageModel;
+
+    public record StreamCompletionMetadata(String fullResponse, String source, int tokensUsed, long latencyMs) {}
 
     @Autowired
     private UserRepository userRepository;
@@ -393,5 +399,158 @@ public class RagRetrievalService {
     public String fallbackVoiceResponse(ConversationContext context, UUID tenantId, String languageMode, Throwable t) {
         log.error("[Voice-RAG-Fallback] Circuit breaker triggered for voice query: {}. Error: {}", context.getLatestQuery(), t.getMessage());
         return "I am having trouble connecting right now. Please try again in a moment.";
+    }
+
+    @CircuitBreaker(name = "ragRetrieval", fallbackMethod = "fallbackStreamResponse")
+    public void streamAiResponse(ConversationContext context, UUID businessOrOwnerId,
+                                java.util.function.Consumer<String> onToken,
+                                java.util.function.Consumer<StreamCompletionMetadata> onComplete,
+                                java.util.function.Consumer<Throwable> onError) {
+        String query = context.getLatestQuery();
+        long start = System.currentTimeMillis();
+        RagMode mode = RagMode.from(ragModeProperty);
+
+        RagScope scope = resolveRagScope(businessOrOwnerId);
+        User user = scope.owner();
+        UUID ownerUserId = scope.ownerUserId();
+        UUID knowledgeTenantId = scope.knowledgeTenantId();
+
+        // 1. In-Memory Fast-Path FAQ Exact Match (< 25ms warm)
+        FaqMatchingService.MatchResult exactFaq = faqMatchingService.findExactNormalizedMatch(knowledgeTenantId, query);
+        if ((exactFaq == null || !exactFaq.isHighConfidence())
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackExact = faqMatchingService.findExactNormalizedMatch(ownerUserId, query);
+            if (fallbackExact != null && fallbackExact.isHighConfidence()) {
+                exactFaq = fallbackExact;
+            }
+        }
+
+        if (exactFaq != null && exactFaq.isHighConfidence() && exactFaq.getFaqItem() != null) {
+            long exactElapsed = System.currentTimeMillis() - start;
+            String answer = ChatResponseFormatter.forChatWidget(exactFaq.getFaqItem().getAnswer());
+            log.info("[FAQ-FastPath-Stream] In-memory exact hit in {}ms for tenant={} | Instant chunk stream.",
+                    exactElapsed, knowledgeTenantId);
+            onToken.accept(answer);
+            onComplete.accept(new StreamCompletionMetadata(answer, "FAQ", 0, exactElapsed));
+            return;
+        }
+
+        // 2. Lazy embedding generation
+        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
+        float[] queryEmbedding = embedding.vector();
+
+        // 3. Semantic FAQ match
+        FaqMatchingService.MatchResult semanticFaq = faqMatchingService.findSemanticMatch(knowledgeTenantId, query, queryEmbedding);
+        if ((semanticFaq == null || !semanticFaq.isHighConfidence())
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackSemantic = faqMatchingService.findSemanticMatch(ownerUserId, query, queryEmbedding);
+            if (fallbackSemantic != null && fallbackSemantic.isHighConfidence()) {
+                semanticFaq = fallbackSemantic;
+            }
+        }
+
+        if (semanticFaq != null && semanticFaq.isHighConfidence() && semanticFaq.getFaqItem() != null) {
+            long semElapsed = System.currentTimeMillis() - start;
+            String answer = ChatResponseFormatter.forChatWidget(semanticFaq.getFaqItem().getAnswer());
+            log.info("[FAQ-Semantic-Stream] Semantic hit in {}ms for tenant={}", semElapsed, knowledgeTenantId);
+            onToken.accept(answer);
+            onComplete.accept(new StreamCompletionMetadata(answer, "FAQ_SEMANTIC", 0, semElapsed));
+            return;
+        }
+
+        // 4. Semantic Cache
+        String cacheQuery = cacheKey(query, mode);
+        String cachedResponse = semanticCacheService.getCachedResponse(cacheQuery, queryEmbedding, knowledgeTenantId);
+        if (cachedResponse != null && !ChatResponseFormatter.looksRobotic(cachedResponse)) {
+            long cacheElapsed = System.currentTimeMillis() - start;
+            String answer = ChatResponseFormatter.forChatWidget(cachedResponse);
+            onToken.accept(answer);
+            onComplete.accept(new StreamCompletionMetadata(answer, "CACHE", 0, cacheElapsed));
+            return;
+        }
+
+        // 5. LLM Streaming Path
+        quotaService.checkAndEnforceQuota(ownerUserId, user.getPlanType());
+
+        HybridRetrievalResult retrieval = hybridRetrievalService.retrieve(
+                query, knowledgeTenantId, queryEmbedding, context.isRequiresRag(), 8);
+        FusedContext fused = contextFusionService.fuse(retrieval);
+        List<String> chunks = fused.asFlatChunks();
+
+        String niche = user.getBusinessType();
+        String tenantPersona = null;
+        if (user.getTenant() != null && user.getTenant().getId() != null) {
+            Tenant tenant = tenantRepository.findById(user.getTenant().getId()).orElse(null);
+            if (tenant != null) {
+                tenantPersona = tenant.getAiPersonaPrompt();
+            }
+        }
+
+        String prompt = (mode == RagMode.VECTOR && !retrieval.isGraphDegraded()
+                && (retrieval.getGraphResults() == null || retrieval.getGraphResults().isEmpty()))
+                ? promptBuilder.buildRagPrompt(context, chunks, niche, tenantPersona)
+                : promptBuilder.buildHybridRagPrompt(context, fused, niche, tenantPersona);
+
+        if (streamingChatLanguageModel != null) {
+            List<dev.langchain4j.data.message.ChatMessage> messages = new ArrayList<>();
+            messages.add(dev.langchain4j.data.message.UserMessage.from(prompt));
+
+            StringBuilder accumulated = new StringBuilder();
+            streamingChatLanguageModel.generate(messages, new dev.langchain4j.model.StreamingResponseHandler<dev.langchain4j.data.message.AiMessage>() {
+                @Override
+                public void onNext(String token) {
+                    accumulated.append(token);
+                    onToken.accept(token);
+                }
+
+                @Override
+                public void onComplete(dev.langchain4j.model.output.Response<dev.langchain4j.data.message.AiMessage> modelResponse) {
+                    String raw = accumulated.toString();
+                    String formatted = ChatResponseFormatter.forChatWidget(raw);
+                    String contextString = String.join("\n", chunks != null ? chunks : List.of());
+
+                    // Fast deterministic validation & async advisory audit (< 5ms)
+                    hallucinationDetector.check(formatted, contextString, ownerUserId, query);
+
+                    int tokens = 0;
+                    if (modelResponse != null && modelResponse.tokenUsage() != null) {
+                        tokens = modelResponse.tokenUsage().totalTokenCount();
+                        tokenBudgetService.recordTokenUsage(ownerUserId, tokens, 0);
+                        costTracker.trackCost(tokens, 0, ownerUserId);
+                    }
+
+                    semanticCacheService.putCachedResponse(cacheQuery, queryEmbedding, formatted, knowledgeTenantId);
+                    long latency = System.currentTimeMillis() - start;
+                    log.info("[RAG-Stream] Stream complete in {}ms (tokens={}) for tenant={}", latency, tokens, knowledgeTenantId);
+                    onComplete.accept(new StreamCompletionMetadata(formatted, "RAG", tokens, latency));
+                }
+
+                @Override
+                public void onError(Throwable error) {
+                    log.error("[RAG-Stream] Model provider streaming error: {}", error.getMessage());
+                    onError.accept(error);
+                }
+            });
+        } else {
+            // Fallback to synchronous model if streaming model is not configured
+            String response = getAiResponse(context, businessOrOwnerId);
+            if (response != null) {
+                onToken.accept(response);
+                onComplete.accept(new StreamCompletionMetadata(response, "RAG_FALLBACK", 0, System.currentTimeMillis() - start));
+            } else {
+                onError.accept(new RuntimeException("Empty response from AI orchestrator"));
+            }
+        }
+    }
+
+    public void fallbackStreamResponse(ConversationContext context, UUID tenantId,
+                                       java.util.function.Consumer<String> onToken,
+                                       java.util.function.Consumer<StreamCompletionMetadata> onComplete,
+                                       java.util.function.Consumer<Throwable> onError,
+                                       Throwable t) {
+        log.error("[RAG-Stream-Fallback] Circuit breaker triggered: {}", t.getMessage());
+        String msg = "I'm having a little trouble right now. Please try again in a moment.";
+        onToken.accept(msg);
+        onComplete.accept(new StreamCompletionMetadata(msg, "FALLBACK", 0, 0));
     }
 }
