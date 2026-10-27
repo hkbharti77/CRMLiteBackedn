@@ -47,6 +47,7 @@ public class WhatsAppCampaignController {
     private final BroadcastCsvParserService csvParserService;
     private final BroadcastUploadFilterConfigRepository filterConfigRepository;
     private final ObjectMapper objectMapper;
+    private final com.chatcrmlite.backend.services.whatsapp.campaign.WhatsAppAbTestingService abTestingService;
 
     private User getAuthenticatedUser(String email) {
         return userRepository.findByEmail(email)
@@ -59,16 +60,7 @@ public class WhatsAppCampaignController {
             @RequestBody CreateCampaignRequestDto request,
             @AuthenticationPrincipal String email) {
         User user = getAuthenticatedUser(email);
-        WhatsAppCampaign campaign = campaignService.createCampaign(
-                request.getName(),
-                request.getTemplateId(),
-                request.getTargetType(),
-                request.getTargetFilterJson(),
-                request.getVariableMappingJson(),
-                request.getSaveImportedRecipients(),
-                request.getPriority(),
-                user
-        );
+        WhatsAppCampaign campaign = campaignService.createCampaign(request, user);
         return ResponseEntity.ok(campaign);
     }
 
@@ -278,6 +270,26 @@ public class WhatsAppCampaignController {
                 .filterColumns(dto.getFilterColumns() != null ? dto.getFilterColumns() : Collections.emptyList())
                 .filterRules(dto.getFilterRules() != null ? dto.getFilterRules() : Collections.emptyList())
                 .build());
+    }
+
+    @GetMapping("/{id}/ab-metrics")
+    public ResponseEntity<com.chatcrmlite.backend.dtos.CampaignAbMetricsDto> getAbMetrics(
+            @PathVariable UUID id,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        WhatsAppCampaign campaign = campaignService.getCampaign(id, user);
+        return ResponseEntity.ok(abTestingService.getAbMetrics(campaign.getId(), user));
+    }
+
+    @PostMapping("/{id}/promote-winner")
+    public ResponseEntity<com.chatcrmlite.backend.models.WhatsAppCampaignVariant> promoteWinner(
+            @PathVariable UUID id,
+            @RequestParam(required = false) UUID variantId,
+            @AuthenticationPrincipal String email) {
+        User user = getAuthenticatedUser(email);
+        WhatsAppCampaign campaign = campaignService.getCampaign(id, user);
+        com.chatcrmlite.backend.models.WhatsAppCampaignVariant winner = abTestingService.evaluateAndPromoteWinner(campaign.getId(), variantId, user);
+        return ResponseEntity.ok(winner);
     }
 
     // ── JSON Helpers ─────────────────────────────────────────────────────────

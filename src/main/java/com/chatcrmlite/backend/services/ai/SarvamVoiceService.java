@@ -18,9 +18,10 @@ import java.util.Map;
 /**
  * Service for Text-to-Speech using Sarvam AI (samvaad) APIs.
  */
-@Slf4j
 @Service
 public class SarvamVoiceService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(SarvamVoiceService.class);
 
     @Value("${sarvam.api.key:}")
     private String apiKey;

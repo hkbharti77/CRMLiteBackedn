@@ -75,4 +75,29 @@ public class FlowStepDTO {
                 "List options limited to 10 items (WhatsApp limit) for step: " + dataKey);
         }
     }
+
+    public String getDataKey() { return dataKey; }
+    public void setDataKey(String dataKey) { this.dataKey = dataKey; }
+    public String getQuestion() { return question; }
+    public void setQuestion(String question) { this.question = question; }
+    public boolean isUsesButtons() { return usesButtons; }
+    public void setUsesButtons(boolean usesButtons) { this.usesButtons = usesButtons; }
+    public boolean isUsesList() { return usesList; }
+    public void setUsesList(boolean usesList) { this.usesList = usesList; }
+    public boolean isDynamicSource() { return dynamicSource; }
+    public void setDynamicSource(boolean dynamicSource) { this.dynamicSource = dynamicSource; }
+    public com.chatcrmlite.backend.dto.flow.FlowFieldConfig.OptionSource getOptionSource() { return optionSource; }
+    public void setOptionSource(com.chatcrmlite.backend.dto.flow.FlowFieldConfig.OptionSource optionSource) { this.optionSource = optionSource; }
+    public List<String> getOptions() { return options; }
+    public void setOptions(List<String> options) { this.options = options; }
+    public String getFieldType() { return fieldType; }
+    public void setFieldType(String fieldType) { this.fieldType = fieldType; }
+    public boolean isRequired() { return required; }
+    public void setRequired(boolean required) { this.required = required; }
+    public boolean isDefaultEnabled() { return defaultEnabled; }
+    public void setDefaultEnabled(boolean defaultEnabled) { this.defaultEnabled = defaultEnabled; }
+    public Integer getDisplayOrder() { return displayOrder; }
+    public void setDisplayOrder(Integer displayOrder) { this.displayOrder = displayOrder; }
+    public List<String> getApplicableNiches() { return applicableNiches; }
+    public void setApplicableNiches(List<String> applicableNiches) { this.applicableNiches = applicableNiches; }
 }

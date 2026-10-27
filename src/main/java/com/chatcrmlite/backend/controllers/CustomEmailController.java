@@ -26,12 +26,17 @@ public class CustomEmailController {
     private final CustomEmailService customEmailService;
     private final UserRepository     userRepository;
     private final com.chatcrmlite.backend.services.email.EmailInboundReplyService inboundReplyService;
+    private final com.chatcrmlite.backend.services.email.EmailAbTestingService emailAbTestingService;
 
     @Autowired
-    public CustomEmailController(CustomEmailService customEmailService, UserRepository userRepository, com.chatcrmlite.backend.services.email.EmailInboundReplyService inboundReplyService) {
+    public CustomEmailController(CustomEmailService customEmailService,
+                                 UserRepository userRepository,
+                                 com.chatcrmlite.backend.services.email.EmailInboundReplyService inboundReplyService,
+                                 com.chatcrmlite.backend.services.email.EmailAbTestingService emailAbTestingService) {
         this.customEmailService = customEmailService;
         this.userRepository = userRepository;
         this.inboundReplyService = inboundReplyService;
+        this.emailAbTestingService = emailAbTestingService;
     }
 
     private User me() {
@@ -174,5 +179,23 @@ public class CustomEmailController {
         resultDto.setAttributionStatus(message.getAttributionStatus() != null ? message.getAttributionStatus().name() : null);
         resultDto.setReceivedAt(message.getReceivedAt());
         return ResponseEntity.ok(resultDto);
+    }
+
+    @GetMapping("/{id}/ab-metrics")
+    public ResponseEntity<com.chatcrmlite.backend.dto.EmailAbMetricsDto> getAbMetrics(@PathVariable UUID id) {
+        return ResponseEntity.ok(emailAbTestingService.getAbMetrics(id, me()));
+    }
+
+    @PostMapping("/{id}/promote-winner")
+    public ResponseEntity<com.chatcrmlite.backend.dto.EmailVariantDto> promoteWinner(
+            @PathVariable UUID id,
+            @RequestBody(required = false) Map<String, String> payload) {
+        UUID variantId = null;
+        if (payload != null && payload.containsKey("variantId") && payload.get("variantId") != null && !payload.get("variantId").isBlank()) {
+            variantId = UUID.fromString(payload.get("variantId").trim());
+        }
+        com.chatcrmlite.backend.models.email.EmailCampaignVariant winner =
+                emailAbTestingService.evaluateAndPromoteWinner(id, variantId, me());
+        return ResponseEntity.ok(emailAbTestingService.toVariantDto(winner));
     }
 }

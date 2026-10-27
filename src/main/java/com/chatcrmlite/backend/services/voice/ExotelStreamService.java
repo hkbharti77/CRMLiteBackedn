@@ -28,10 +28,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.chatcrmlite.backend.models.voice.VoiceAssistantConfig;
 import com.chatcrmlite.backend.repositories.voice.VoiceAssistantConfigRepository;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ExotelStreamService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExotelStreamService.class);
 
     private final ConcurrentHashMap<String, ExotelCallSession> activeSessions = new ConcurrentHashMap<>();
     private final ExecutorService executorService = Executors.newCachedThreadPool();

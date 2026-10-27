@@ -54,6 +54,9 @@ class WhatsAppCampaignClickAttributionTest {
     @Mock
     private WhatsAppCampaignTrackedLinkRepository trackedLinkRepository;
 
+    @Mock
+    private com.chatcrmlite.backend.repositories.WhatsAppCampaignVariantRepository variantRepository;
+
     private ObjectMapper objectMapper;
 
     private WhatsAppLinkTrackingService linkTrackingService;
@@ -76,7 +79,8 @@ class WhatsAppCampaignClickAttributionTest {
                 trackedLinkRepository,
                 recipientRepository,
                 analyticsService,
-                objectMapper
+                objectMapper,
+                variantRepository
         );
         ReflectionTestUtils.setField(linkTrackingService, "baseUrl", "https://wa.gyanvani.ai");
 
@@ -91,7 +95,8 @@ class WhatsAppCampaignClickAttributionTest {
                 objectMapper,
                 recipientResolver,
                 contactRepository,
-                linkTrackingService
+                linkTrackingService,
+                variantRepository
         );
 
         tenant = new Tenant();

@@ -37,9 +37,10 @@ import java.util.Optional;
  * <p>Callers (e.g. {@code FlowPublishWorker}) use the result objects to classify errors as
  * terminal, retryable, or requiring reconciliation — without catching raw exceptions.
  */
-@Slf4j
 @Component
 public class MetaFlowClient {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MetaFlowClient.class);
 
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;

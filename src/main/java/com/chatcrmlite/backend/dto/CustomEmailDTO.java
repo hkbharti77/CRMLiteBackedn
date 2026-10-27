@@ -43,6 +43,16 @@ public class CustomEmailDTO {
     private double unsubscribeRate;
     private double replyRatePercentage;
 
+    // A/B Testing & Visual Builder
+    private Boolean isAbTest;
+    private Integer abTestPercentage;
+    private String abWinnerMetric;
+    private Integer abEvaluationHours;
+    private LocalDateTime abEvaluationEndsAt;
+    private UUID winningVariantId;
+    private String abStatus;
+    private String builderJson;
+
     private LocalDateTime createdAt;
 
     public CustomEmailDTO() {}
@@ -152,6 +162,23 @@ public class CustomEmailDTO {
     public double getReplyRatePercentage() { return replyRatePercentage; }
     public void setReplyRatePercentage(double replyRatePercentage) { this.replyRatePercentage = replyRatePercentage; }
 
+    public Boolean getIsAbTest() { return isAbTest; }
+    public void setIsAbTest(Boolean isAbTest) { this.isAbTest = isAbTest; }
+    public Integer getAbTestPercentage() { return abTestPercentage; }
+    public void setAbTestPercentage(Integer abTestPercentage) { this.abTestPercentage = abTestPercentage; }
+    public String getAbWinnerMetric() { return abWinnerMetric; }
+    public void setAbWinnerMetric(String abWinnerMetric) { this.abWinnerMetric = abWinnerMetric; }
+    public Integer getAbEvaluationHours() { return abEvaluationHours; }
+    public void setAbEvaluationHours(Integer abEvaluationHours) { this.abEvaluationHours = abEvaluationHours; }
+    public LocalDateTime getAbEvaluationEndsAt() { return abEvaluationEndsAt; }
+    public void setAbEvaluationEndsAt(LocalDateTime abEvaluationEndsAt) { this.abEvaluationEndsAt = abEvaluationEndsAt; }
+    public UUID getWinningVariantId() { return winningVariantId; }
+    public void setWinningVariantId(UUID winningVariantId) { this.winningVariantId = winningVariantId; }
+    public String getAbStatus() { return abStatus; }
+    public void setAbStatus(String abStatus) { this.abStatus = abStatus; }
+    public String getBuilderJson() { return builderJson; }
+    public void setBuilderJson(String builderJson) { this.builderJson = builderJson; }
+
     public LocalDateTime getCreatedAt() { return createdAt; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 
@@ -191,6 +218,14 @@ public class CustomEmailDTO {
         private double bounceRate;
         private double unsubscribeRate;
         private double replyRatePercentage;
+        private Boolean isAbTest;
+        private Integer abTestPercentage;
+        private String abWinnerMetric;
+        private Integer abEvaluationHours;
+        private LocalDateTime abEvaluationEndsAt;
+        private UUID winningVariantId;
+        private String abStatus;
+        private String builderJson;
         private LocalDateTime createdAt;
 
         public CustomEmailDTOBuilder id(UUID id) { this.id = id; return this; }
@@ -224,6 +259,14 @@ public class CustomEmailDTO {
         public CustomEmailDTOBuilder bounceRate(double bounceRate) { this.bounceRate = bounceRate; return this; }
         public CustomEmailDTOBuilder unsubscribeRate(double unsubscribeRate) { this.unsubscribeRate = unsubscribeRate; return this; }
         public CustomEmailDTOBuilder replyRatePercentage(double replyRatePercentage) { this.replyRatePercentage = replyRatePercentage; return this; }
+        public CustomEmailDTOBuilder isAbTest(Boolean isAbTest) { this.isAbTest = isAbTest; return this; }
+        public CustomEmailDTOBuilder abTestPercentage(Integer abTestPercentage) { this.abTestPercentage = abTestPercentage; return this; }
+        public CustomEmailDTOBuilder abWinnerMetric(String abWinnerMetric) { this.abWinnerMetric = abWinnerMetric; return this; }
+        public CustomEmailDTOBuilder abEvaluationHours(Integer abEvaluationHours) { this.abEvaluationHours = abEvaluationHours; return this; }
+        public CustomEmailDTOBuilder abEvaluationEndsAt(LocalDateTime abEvaluationEndsAt) { this.abEvaluationEndsAt = abEvaluationEndsAt; return this; }
+        public CustomEmailDTOBuilder winningVariantId(UUID winningVariantId) { this.winningVariantId = winningVariantId; return this; }
+        public CustomEmailDTOBuilder abStatus(String abStatus) { this.abStatus = abStatus; return this; }
+        public CustomEmailDTOBuilder builderJson(String builderJson) { this.builderJson = builderJson; return this; }
         public CustomEmailDTOBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
 
         public CustomEmailDTO build() {
@@ -259,6 +302,14 @@ public class CustomEmailDTO {
             dto.bounceRate = bounceRate;
             dto.unsubscribeRate = unsubscribeRate;
             dto.replyRatePercentage = replyRatePercentage;
+            dto.isAbTest = isAbTest;
+            dto.abTestPercentage = abTestPercentage;
+            dto.abWinnerMetric = abWinnerMetric;
+            dto.abEvaluationHours = abEvaluationHours;
+            dto.abEvaluationEndsAt = abEvaluationEndsAt;
+            dto.winningVariantId = winningVariantId;
+            dto.abStatus = abStatus;
+            dto.builderJson = builderJson;
             dto.createdAt = createdAt;
             return dto;
         }

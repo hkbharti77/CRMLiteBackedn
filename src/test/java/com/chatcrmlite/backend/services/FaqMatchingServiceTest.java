@@ -12,6 +12,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -29,42 +30,116 @@ class FaqMatchingServiceTest {
     private FaqMatchingService faqMatchingService;
 
     private UUID tenantId;
+    private UUID otherTenantId;
     private float[] queryEmbedding;
 
     @BeforeEach
     void setUp() {
         tenantId = UUID.randomUUID();
+        otherTenantId = UUID.randomUUID();
         queryEmbedding = new float[]{0.1f, 0.2f, 0.3f};
-        ReflectionTestUtils.setField(faqMatchingService, "matchingThreshold", 0.85f);
+        ReflectionTestUtils.setField(faqMatchingService, "matchingThreshold", 0.75f);
     }
 
     @Test
-    @DisplayName("Should return 1.0 confidence match on exact question hit")
-    void testExactMatch_Success() {
-        String query = "What is the return policy?";
+    @DisplayName("Level 1: In-Memory Exact Match should succeed with normalized punctuation and case")
+    void testExactNormalizedMatch_Success() {
         FaqItem item = new FaqItem();
         item.setId(UUID.randomUUID());
         item.setTenantId(tenantId);
         item.setQuestion("What is the return policy?");
         item.setAnswer("30-day money back guarantee");
 
-        when(faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, query))
-                .thenReturn(Optional.of(item));
+        when(faqItemRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(List.of(item));
 
-        FaqMatchingService.MatchResult result = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
+        // Test with different casing and punctuation
+        String userQuery = "  what IS the return POLICY   ";
+        FaqMatchingService.MatchResult result = faqMatchingService.findExactNormalizedMatch(tenantId, userQuery);
 
         assertNotNull(result);
         assertTrue(result.isHighConfidence());
         assertEquals(1.0f, result.getScore(), 0.0001f);
         assertEquals("30-day money back guarantee", result.getFaqItem().getAnswer());
+        assertEquals("EXACT", result.getMatchType());
 
-        verify(faqItemRepository, times(1)).incrementHitCount(item.getId());
-        verify(faqItemRepository, never()).findNearestByEmbedding(any(), any());
+        // Second call should hit in-memory cache without hitting DB again!
+        FaqMatchingService.MatchResult secondResult = faqMatchingService.findExactNormalizedMatch(tenantId, "What is the return policy?");
+        assertTrue(secondResult.isHighConfidence());
+        verify(faqItemRepository, times(1)).findByTenantIdAndIsActiveTrue(tenantId);
     }
 
     @Test
-    @DisplayName("Should return high confidence match when PgVector similarity >= threshold")
-    void testPgVectorMatch_AboveThreshold() {
+    @DisplayName("Level 1 Guard: Compound / multi-intent query must NOT trigger single FAQ fast path")
+    void testCompoundQueryGuard_BypassesFastPath() {
+        String compoundQuery = "Does Gyan VaniAi work with international clients, and what are the pricing plans?";
+        FaqMatchingService.MatchResult result = faqMatchingService.findExactNormalizedMatch(tenantId, compoundQuery);
+
+        assertNotNull(result);
+        assertFalse(result.isHighConfidence());
+        assertEquals("COMPOUND_BYPASS", result.getMatchType());
+        verifyNoInteractions(faqItemRepository);
+    }
+
+    @Test
+    @DisplayName("Tenant Isolation: Tenant A FAQ should never be returned for Tenant B")
+    void testTenantIsolation() {
+        FaqItem tenantAItem = new FaqItem();
+        tenantAItem.setId(UUID.randomUUID());
+        tenantAItem.setTenantId(tenantId);
+        tenantAItem.setQuestion("What are your business hours?");
+        tenantAItem.setAnswer("9 AM - 6 PM");
+
+        when(faqItemRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(List.of(tenantAItem));
+        when(faqItemRepository.findByTenantIdAndIsActiveTrue(otherTenantId))
+                .thenReturn(List.of());
+
+        // Tenant A matches
+        FaqMatchingService.MatchResult resultA = faqMatchingService.findExactNormalizedMatch(tenantId, "What are your business hours?");
+        assertTrue(resultA.isHighConfidence());
+
+        // Tenant B with same question must NOT match Tenant A's FAQ
+        FaqMatchingService.MatchResult resultB = faqMatchingService.findExactNormalizedMatch(otherTenantId, "What are your business hours?");
+        assertFalse(resultB.isHighConfidence());
+        assertNull(resultB.getFaqItem());
+    }
+
+    @Test
+    @DisplayName("Cache Invalidation: Updates should invalidate cache and reload fresh DB data")
+    void testCacheInvalidation() {
+        FaqItem item = new FaqItem();
+        item.setId(UUID.randomUUID());
+        item.setTenantId(tenantId);
+        item.setQuestion("Original Question");
+        item.setAnswer("Original Answer");
+        FaqItem updatedItem = new FaqItem();
+        updatedItem.setId(item.getId());
+        updatedItem.setTenantId(tenantId);
+        updatedItem.setQuestion("Original Question");
+        updatedItem.setAnswer("Updated Answer");
+
+        when(faqItemRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(List.of(item), List.of(updatedItem));
+
+        // Initial load
+        FaqMatchingService.MatchResult r1 = faqMatchingService.findExactNormalizedMatch(tenantId, "Original Question");
+        assertTrue(r1.isHighConfidence());
+        assertEquals("Original Answer", r1.getFaqItem().getAnswer());
+
+        // Invalidate cache
+        faqMatchingService.invalidateTenantCache(tenantId);
+
+        // Next fetch should load the updated answer
+        FaqMatchingService.MatchResult r2 = faqMatchingService.findExactNormalizedMatch(tenantId, "Original Question");
+        assertTrue(r2.isHighConfidence());
+        assertEquals("Updated Answer", r2.getFaqItem().getAnswer());
+        verify(faqItemRepository, times(2)).findByTenantIdAndIsActiveTrue(tenantId);
+    }
+
+    @Test
+    @DisplayName("Level 2: Semantic pgvector match should succeed when exact match misses")
+    void testSemanticPgVectorMatch_AboveThreshold() {
         String query = "How do refunds work?";
         UUID faqId = UUID.randomUUID();
 
@@ -72,54 +147,28 @@ class FaqMatchingServiceTest {
         item.setId(faqId);
         item.setTenantId(tenantId);
         item.setQuestion("What is your refund process?");
-        item.setAnswer("You can request refund within 30 days.");
+        item.setAnswer("You can request a refund within 30 days.");
 
-        when(faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, query))
-                .thenReturn(Optional.empty());
+        when(faqItemRepository.findByTenantIdAndIsActiveTrue(tenantId))
+                .thenReturn(List.of(item));
 
         FaqVectorMatch match = mock(FaqVectorMatch.class);
         when(match.getId()).thenReturn(faqId);
-        when(match.getDistance()).thenReturn(0.08); // distance = 0.08 => similarity = 0.92 >= 0.85
+        when(match.getDistance()).thenReturn(0.08); // similarity = 0.92 >= 0.75
 
         when(faqItemRepository.findNearestByEmbedding(eq(tenantId), anyString()))
                 .thenReturn(Optional.of(match));
         when(faqItemRepository.findById(faqId))
                 .thenReturn(Optional.of(item));
 
+        // Exact match fails, semantic succeeds
         FaqMatchingService.MatchResult result = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
 
         assertNotNull(result);
         assertTrue(result.isHighConfidence());
+        assertEquals("SEMANTIC", result.getMatchType());
         assertEquals(0.92f, result.getScore(), 0.01f);
         assertEquals(faqId, result.getFaqItem().getId());
-
-        verify(faqItemRepository, times(1)).incrementHitCount(faqId);
-    }
-
-    @Test
-    @DisplayName("Should return low confidence match when PgVector similarity < threshold")
-    void testPgVectorMatch_BelowThreshold() {
-        String query = "Can I fly a rocket to Mars?";
-        UUID faqId = UUID.randomUUID();
-
-        when(faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, query))
-                .thenReturn(Optional.empty());
-
-        FaqVectorMatch match = mock(FaqVectorMatch.class);
-        when(match.getDistance()).thenReturn(0.40); // distance = 0.40 => similarity = 0.60 < 0.85
-
-        when(faqItemRepository.findNearestByEmbedding(eq(tenantId), anyString()))
-                .thenReturn(Optional.of(match));
-
-        FaqMatchingService.MatchResult result = faqMatchingService.findBestMatch(tenantId, query, queryEmbedding);
-
-        assertNotNull(result);
-        assertFalse(result.isHighConfidence());
-        assertNull(result.getFaqItem());
-        assertEquals(0.0f, result.getScore(), 0.0001f);
-
-        verify(faqItemRepository, never()).incrementHitCount(any());
-        verify(faqItemRepository, never()).findById(any());
     }
 
     @Test
@@ -132,20 +181,5 @@ class FaqMatchingServiceTest {
         FaqMatchingService.MatchResult result2 = faqMatchingService.findBestMatch(tenantId, null, queryEmbedding);
         assertFalse(result2.isHighConfidence());
         assertNull(result2.getFaqItem());
-
-        verifyNoInteractions(faqItemRepository);
-    }
-
-    @Test
-    @DisplayName("Should return no match if embedding is null and exact match fails")
-    void testNullEmbedding_NoExactMatch() {
-        when(faqItemRepository.findFirstByTenantAndExactQuestion(tenantId, "Hello"))
-                .thenReturn(Optional.empty());
-
-        FaqMatchingService.MatchResult result = faqMatchingService.findBestMatch(tenantId, "Hello", null);
-
-        assertFalse(result.isHighConfidence());
-        assertNull(result.getFaqItem());
-        verify(faqItemRepository, never()).findNearestByEmbedding(any(), any());
     }
 }

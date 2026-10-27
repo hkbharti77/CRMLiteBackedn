@@ -20,10 +20,11 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ExotelMediaWebSocketHandler extends TextWebSocketHandler {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ExotelMediaWebSocketHandler.class);
 
     private final ObjectMapper objectMapper;
     private final ExotelStreamService streamService;

@@ -23,10 +23,11 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ConversationMemoryService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ConversationMemoryService.class);
 
     private final WebChatSessionRepository webChatSessionRepository;
     private final WebChatMessageRepository webChatMessageRepository;

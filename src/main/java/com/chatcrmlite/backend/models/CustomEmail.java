@@ -53,6 +53,30 @@ public class CustomEmail extends BaseTenantEntity {
 
     private UUID snapshotId;
 
+    @Column(name = "is_ab_test", nullable = false)
+    private boolean isAbTest = false;
+
+    @Column(name = "ab_test_percentage", nullable = false)
+    private int abTestPercentage = 20;
+
+    @Column(name = "ab_winner_metric", length = 30)
+    private String abWinnerMetric = "OPEN_RATE";
+
+    @Column(name = "ab_evaluation_hours", nullable = false)
+    private int abEvaluationHours = 6;
+
+    @Column(name = "ab_evaluation_ends_at")
+    private LocalDateTime abEvaluationEndsAt;
+
+    @Column(name = "winning_variant_id")
+    private UUID winningVariantId;
+
+    @Column(name = "ab_status", length = 20)
+    private String abStatus;
+
+    @Column(name = "builder_json", columnDefinition = "TEXT")
+    private String builderJson;
+
     @Version
     private int version;
 
@@ -160,6 +184,25 @@ public class CustomEmail extends BaseTenantEntity {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
 
+    public boolean isAbTest() { return isAbTest; }
+    public boolean getIsAbTest() { return isAbTest; }
+    public void setAbTest(boolean abTest) { isAbTest = abTest; }
+    public void setIsAbTest(boolean abTest) { this.isAbTest = abTest; }
+    public int getAbTestPercentage() { return abTestPercentage; }
+    public void setAbTestPercentage(int abTestPercentage) { this.abTestPercentage = abTestPercentage; }
+    public String getAbWinnerMetric() { return abWinnerMetric; }
+    public void setAbWinnerMetric(String abWinnerMetric) { this.abWinnerMetric = abWinnerMetric; }
+    public int getAbEvaluationHours() { return abEvaluationHours; }
+    public void setAbEvaluationHours(int abEvaluationHours) { this.abEvaluationHours = abEvaluationHours; }
+    public LocalDateTime getAbEvaluationEndsAt() { return abEvaluationEndsAt; }
+    public void setAbEvaluationEndsAt(LocalDateTime abEvaluationEndsAt) { this.abEvaluationEndsAt = abEvaluationEndsAt; }
+    public UUID getWinningVariantId() { return winningVariantId; }
+    public void setWinningVariantId(UUID winningVariantId) { this.winningVariantId = winningVariantId; }
+    public String getAbStatus() { return abStatus; }
+    public void setAbStatus(String abStatus) { this.abStatus = abStatus; }
+    public String getBuilderJson() { return builderJson; }
+    public void setBuilderJson(String builderJson) { this.builderJson = builderJson; }
+
     public static CustomEmailBuilder builder() {
         return new CustomEmailBuilder();
     }
@@ -189,6 +232,14 @@ public class CustomEmail extends BaseTenantEntity {
         private int version = 0;
         private LocalDateTime createdAt = LocalDateTime.now();
         private LocalDateTime updatedAt;
+        private boolean isAbTest = false;
+        private int abTestPercentage = 20;
+        private String abWinnerMetric = "OPEN_RATE";
+        private int abEvaluationHours = 6;
+        private LocalDateTime abEvaluationEndsAt;
+        private UUID winningVariantId;
+        private String abStatus;
+        private String builderJson;
 
         public CustomEmailBuilder id(UUID id) { this.id = id; return this; }
         public CustomEmailBuilder owner(User owner) { this.owner = owner; return this; }
@@ -218,11 +269,29 @@ public class CustomEmail extends BaseTenantEntity {
         public CustomEmailBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
         public CustomEmailBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
 
+        public CustomEmailBuilder isAbTest(boolean isAbTest) { this.isAbTest = isAbTest; return this; }
+        public CustomEmailBuilder abTestPercentage(Integer abTestPercentage) { if (abTestPercentage != null) this.abTestPercentage = abTestPercentage; return this; }
+        public CustomEmailBuilder abWinnerMetric(String abWinnerMetric) { this.abWinnerMetric = abWinnerMetric; return this; }
+        public CustomEmailBuilder abEvaluationHours(Integer abEvaluationHours) { if (abEvaluationHours != null) this.abEvaluationHours = abEvaluationHours; return this; }
+        public CustomEmailBuilder abEvaluationEndsAt(LocalDateTime abEvaluationEndsAt) { this.abEvaluationEndsAt = abEvaluationEndsAt; return this; }
+        public CustomEmailBuilder winningVariantId(UUID winningVariantId) { this.winningVariantId = winningVariantId; return this; }
+        public CustomEmailBuilder abStatus(String abStatus) { this.abStatus = abStatus; return this; }
+        public CustomEmailBuilder builderJson(String builderJson) { this.builderJson = builderJson; return this; }
+
         public CustomEmail build() {
-            return new CustomEmail(id, owner, name, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
+            CustomEmail email = new CustomEmail(id, owner, name, subject, body, ctaLabel, ctaUrl, recipientMode, tagsFilter, status, 
                                    scheduledAt, startedAt, completedAt, pausedAt, cancelledAt, sentAt, 
                                    totalRecipients, processedRecipients, totalSent, totalFailed, 
                                    snapshotId, version, createdAt, updatedAt);
+            email.setAbTest(this.isAbTest);
+            email.setAbTestPercentage(this.abTestPercentage);
+            email.setAbWinnerMetric(this.abWinnerMetric);
+            email.setAbEvaluationHours(this.abEvaluationHours);
+            email.setAbEvaluationEndsAt(this.abEvaluationEndsAt);
+            email.setWinningVariantId(this.winningVariantId);
+            email.setAbStatus(this.abStatus);
+            email.setBuilderJson(this.builderJson);
+            return email;
         }
     }
 

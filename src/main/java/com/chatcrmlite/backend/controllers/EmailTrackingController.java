@@ -31,6 +31,7 @@ public class EmailTrackingController {
     private final EmailTrackedLinkRepository linkRepository;
     private final EmailSuppressionService suppressionService;
     private final RateLimitConfig rateLimitConfig;
+    private final com.chatcrmlite.backend.repositories.email.EmailCampaignVariantRepository variantRepository;
 
     // Standard 1x1 transparent PNG bytes
     private static final byte[] PNG_BYTES = new byte[]{
@@ -69,7 +70,10 @@ public class EmailTrackingController {
             eventRepository.save(event);
 
             // Atomic DB update to preserve earliest first_opened_at timestamp
-            recipientRepository.updateFirstOpenedAt(recipient.getId(), now);
+            int updated = recipientRepository.updateFirstOpenedAt(recipient.getId(), now);
+            if (updated > 0 && recipient.getVariantId() != null && variantRepository != null) {
+                variantRepository.incrementOpenedCount(recipient.getVariantId());
+            }
         }
 
         HttpHeaders headers = new HttpHeaders();
@@ -124,7 +128,10 @@ public class EmailTrackingController {
                 eventRepository.save(event);
 
                 // Atomic DB update for first_clicked_at
-                recipientRepository.updateFirstClickedAt(recipient.getId(), now);
+                int updated = recipientRepository.updateFirstClickedAt(recipient.getId(), now);
+                if (updated > 0 && recipient.getVariantId() != null && variantRepository != null) {
+                    variantRepository.incrementClickedCount(recipient.getVariantId());
+                }
             }
 
             HttpHeaders headers = new HttpHeaders();

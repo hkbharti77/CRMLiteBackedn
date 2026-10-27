@@ -27,6 +27,7 @@ public class CampaignAudienceResolver {
     private final PersonalizationEngine personalizationEngine;
     private final ObjectMapper objectMapper;
     private final WhatsAppRecipientResolver recipientResolver;
+    private final WhatsAppAbTestingService abTestingService;
 
     @Transactional
     public void resolveAndFreezeAudience(WhatsAppCampaign campaign) {
@@ -134,6 +135,11 @@ public class CampaignAudienceResolver {
         }
 
         recipientRepository.saveAll(recipientsToSave);
+
+        // Partition audience across variants if campaign is an A/B test
+        if (Boolean.TRUE.equals(campaign.getIsAbTest())) {
+            abTestingService.partitionAudience(campaign, recipientsToSave);
+        }
 
         // Update Campaign Analytics
         WhatsAppCampaignAnalytics analytics = analyticsRepository.findByCampaign(campaign)

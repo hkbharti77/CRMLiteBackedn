@@ -25,9 +25,10 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-@Slf4j
 @Service
 public class ConversationOrchestrator {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ConversationOrchestrator.class);
 
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private AiOrchestrator aiOrchestrator;

@@ -39,6 +39,15 @@ public class DynamicUrlValidator {
 
         @Builder.Default
         private List<String> allowedProtocols = List.of("http://", "https://");
+
+        public int getMaxVariables() { return maxVariables; }
+        public void setMaxVariables(int maxVariables) { this.maxVariables = maxVariables; }
+        public String getAllowedVariablePattern() { return allowedVariablePattern; }
+        public void setAllowedVariablePattern(String pattern) { this.allowedVariablePattern = pattern; }
+        public boolean isVariableMustBeAtEnd() { return variableMustBeAtEnd; }
+        public void setVariableMustBeAtEnd(boolean v) { this.variableMustBeAtEnd = v; }
+        public List<String> getAllowedProtocols() { return allowedProtocols; }
+        public void setAllowedProtocols(List<String> p) { this.allowedProtocols = p; }
     }
 
     private final DynamicUrlRules rules;

@@ -87,4 +87,37 @@ public class VoiceAssistantConfig implements Serializable {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
+
+    public Tenant getTenant() { return tenant; }
+    public void setTenant(Tenant tenant) { this.tenant = tenant; }
+
+    public String getAssistantName() { return assistantName; }
+    public void setAssistantName(String assistantName) { this.assistantName = assistantName; }
+
+    public String getGreetingText() { return greetingText; }
+    public void setGreetingText(String greetingText) { this.greetingText = greetingText; }
+
+    public String getPersonaPrompt() { return personaPrompt; }
+    public void setPersonaPrompt(String personaPrompt) { this.personaPrompt = personaPrompt; }
+
+    public String getTtsVoiceId() { return ttsVoiceId; }
+    public void setTtsVoiceId(String ttsVoiceId) { this.ttsVoiceId = ttsVoiceId; }
+
+    public Boolean getEnabled() { return enabled; }
+    public void setEnabled(Boolean enabled) { this.enabled = enabled; }
+
+    public Long getVersion() { return version; }
+    public void setVersion(Long version) { this.version = version; }
+
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public User getUpdatedBy() { return updatedBy; }
+    public void setUpdatedBy(User updatedBy) { this.updatedBy = updatedBy; }
 }

@@ -41,6 +41,7 @@ public class WhatsAppLinkTrackingService {
     private final WhatsAppCampaignRecipientRepository recipientRepository;
     private final CampaignAnalyticsService analyticsService;
     private final ObjectMapper objectMapper;
+    private final com.chatcrmlite.backend.repositories.WhatsAppCampaignVariantRepository variantRepository;
 
     @Value("${app.tracking.base-url:${app.frontend.url:http://localhost:8080}}")
     private String baseUrl;
@@ -245,6 +246,13 @@ public class WhatsAppLinkTrackingService {
         // 2. Atomic update of recipient click count
         if (link.getRecipient() != null && link.getRecipient().getId() != null) {
             recipientRepository.recordClick(link.getRecipient().getId(), now);
+            if (link.getRecipient().getVariant() != null && link.getRecipient().getVariant().getId() != null) {
+                try {
+                    variantRepository.incrementClickCount(link.getRecipient().getVariant().getId());
+                } catch (Exception e) {
+                    log.debug("[WhatsAppTracking] Failed incrementing variant clickCount: {}", e.getMessage());
+                }
+            }
         }
 
         // 3. Rollup campaign analytics

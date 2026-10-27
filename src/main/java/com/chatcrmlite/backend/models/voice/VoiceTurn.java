@@ -68,4 +68,31 @@ public class VoiceTurn implements Serializable {
             this.wasInterrupted = false;
         }
     }
+
+    public UUID getId() { return id; }
+    public void setId(UUID id) { this.id = id; }
+    public VoiceSession getSession() { return session; }
+    public void setSession(VoiceSession session) { this.session = session; }
+    public Integer getTurnNumber() { return turnNumber; }
+    public void setTurnNumber(Integer turnNumber) { this.turnNumber = turnNumber; }
+    public String getUserTranscript() { return userTranscript; }
+    public void setUserTranscript(String userTranscript) { this.userTranscript = userTranscript; }
+    public String getBotResponseText() { return botResponseText; }
+    public void setBotResponseText(String botResponseText) { this.botResponseText = botResponseText; }
+    public Double getAudioDurationSeconds() { return audioDurationSeconds; }
+    public void setAudioDurationSeconds(Double audioDurationSeconds) { this.audioDurationSeconds = audioDurationSeconds; }
+    public Integer getSttLatencyMs() { return sttLatencyMs; }
+    public void setSttLatencyMs(Integer sttLatencyMs) { this.sttLatencyMs = sttLatencyMs; }
+    public Integer getLlmLatencyMs() { return llmLatencyMs; }
+    public void setLlmLatencyMs(Integer llmLatencyMs) { this.llmLatencyMs = llmLatencyMs; }
+    public Integer getTtsLatencyMs() { return ttsLatencyMs; }
+    public void setTtsLatencyMs(Integer ttsLatencyMs) { this.ttsLatencyMs = ttsLatencyMs; }
+    public Integer getTtfaMs() { return ttfaMs; }
+    public void setTtfaMs(Integer ttfaMs) { this.ttfaMs = ttfaMs; }
+    public Boolean getWasInterrupted() { return wasInterrupted; }
+    public void setWasInterrupted(Boolean wasInterrupted) { this.wasInterrupted = wasInterrupted; }
+    public String getDetectedLanguage() { return detectedLanguage; }
+    public void setDetectedLanguage(String detectedLanguage) { this.detectedLanguage = detectedLanguage; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
 }

@@ -8,9 +8,10 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 
-@Slf4j
 @RequiredArgsConstructor
 public class AiOrchestrator {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiOrchestrator.class);
 
     private final List<AiProvider> providers;
     private final ModelHealthMonitor healthMonitor;

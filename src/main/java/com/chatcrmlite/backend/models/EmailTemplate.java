@@ -21,6 +21,9 @@ public class EmailTemplate extends BaseTenantEntity {
     @Column(nullable = false, columnDefinition = "TEXT")
     private String content;
 
+    @Column(name = "builder_json", columnDefinition = "TEXT")
+    private String builderJson;
+
     @Column(name = "interest_category")
     private String interestCategory;
 
@@ -45,6 +48,9 @@ public class EmailTemplate extends BaseTenantEntity {
     
     public String getContent() { return content; }
     public void setContent(String content) { this.content = content; }
+
+    public String getBuilderJson() { return builderJson; }
+    public void setBuilderJson(String builderJson) { this.builderJson = builderJson; }
     
     public String getInterestCategory() { return interestCategory; }
     public void setInterestCategory(String interestCategory) { this.interestCategory = interestCategory; }

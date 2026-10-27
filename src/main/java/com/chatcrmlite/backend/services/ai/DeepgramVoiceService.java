@@ -23,9 +23,10 @@ import java.util.Map;
  * Enterprise-grade Direct Deepgram Voice Service for Speech-to-Text (Nova-2)
  * and Text-to-Speech (Aura) with streaming playback support.
  */
-@Slf4j
 @Service
 public class DeepgramVoiceService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DeepgramVoiceService.class);
 
     @Value("${deepgram.api.key:43762e9a6e2f28db37cbaea5f671582aa181a4bc}")
     private String apiKey;
@@ -81,6 +82,54 @@ public class DeepgramVoiceService {
         private int latencyMs;
         private boolean success;
         private String errorMessage;
+
+        public DeepgramTranscriptionResult() {}
+
+        public DeepgramTranscriptionResult(String transcript, String detectedLanguage, double confidence, int latencyMs, boolean success, String errorMessage) {
+            this.transcript = transcript;
+            this.detectedLanguage = detectedLanguage;
+            this.confidence = confidence;
+            this.latencyMs = latencyMs;
+            this.success = success;
+            this.errorMessage = errorMessage;
+        }
+
+        public String getTranscript() { return transcript; }
+        public void setTranscript(String transcript) { this.transcript = transcript; }
+        public String getDetectedLanguage() { return detectedLanguage; }
+        public void setDetectedLanguage(String detectedLanguage) { this.detectedLanguage = detectedLanguage; }
+        public double getConfidence() { return confidence; }
+        public void setConfidence(double confidence) { this.confidence = confidence; }
+        public int getLatencyMs() { return latencyMs; }
+        public void setLatencyMs(int latencyMs) { this.latencyMs = latencyMs; }
+        public boolean isSuccess() { return success; }
+        public void setSuccess(boolean success) { this.success = success; }
+        public String getErrorMessage() { return errorMessage; }
+        public void setErrorMessage(String errorMessage) { this.errorMessage = errorMessage; }
+
+        public static Builder builder() {
+            return new Builder();
+        }
+
+        public static class Builder {
+            private String transcript;
+            private String detectedLanguage;
+            private double confidence;
+            private int latencyMs;
+            private boolean success;
+            private String errorMessage;
+
+            public Builder transcript(String transcript) { this.transcript = transcript; return this; }
+            public Builder detectedLanguage(String detectedLanguage) { this.detectedLanguage = detectedLanguage; return this; }
+            public Builder confidence(double confidence) { this.confidence = confidence; return this; }
+            public Builder latencyMs(int latencyMs) { this.latencyMs = latencyMs; return this; }
+            public Builder success(boolean success) { this.success = success; return this; }
+            public Builder errorMessage(String errorMessage) { this.errorMessage = errorMessage; return this; }
+
+            public DeepgramTranscriptionResult build() {
+                return new DeepgramTranscriptionResult(transcript, detectedLanguage, confidence, latencyMs, success, errorMessage);
+            }
+        }
     }
 
     /**

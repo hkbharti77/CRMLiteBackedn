@@ -16,9 +16,10 @@ import com.chatcrmlite.backend.models.ConversationState;
 import com.chatcrmlite.backend.repositories.TenantFlowConfigRepository;
 import java.util.stream.Collectors;
 
-@Slf4j
 @Service
 public class ToolRegistry {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ToolRegistry.class);
 
     private final Map<String, VoiceTool> tools;
     private final TenantRepository tenantRepository;

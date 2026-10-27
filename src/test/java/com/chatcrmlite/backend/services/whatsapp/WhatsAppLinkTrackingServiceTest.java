@@ -38,6 +38,9 @@ class WhatsAppLinkTrackingServiceTest {
     @Mock
     private CampaignAnalyticsService analyticsService;
 
+    @Mock
+    private com.chatcrmlite.backend.repositories.WhatsAppCampaignVariantRepository variantRepository;
+
     private ObjectMapper objectMapper;
 
     private WhatsAppLinkTrackingService trackingService;
@@ -54,7 +57,8 @@ class WhatsAppLinkTrackingServiceTest {
                 trackedLinkRepository,
                 recipientRepository,
                 analyticsService,
-                objectMapper
+                objectMapper,
+                variantRepository
         );
         ReflectionTestUtils.setField(trackingService, "baseUrl", "https://crm.gyanvani.ai");
 

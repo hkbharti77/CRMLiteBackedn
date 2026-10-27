@@ -24,7 +24,8 @@ public class CampaignQueueProducer {
     @Transactional
     public int queueCampaignRecipients(WhatsAppCampaign campaign) {
         String queueKey = CAMPAIGN_QUEUE_PREFIX + campaign.getId().toString();
-        log.info("[CampaignQueueProducer] Enqueueing recipients for campaignId={} key={}", campaign.getId(), queueKey);
+        log.info("[CampaignQueueProducer] Enqueueing recipients for campaignId={} key={} isAbTest={}",
+                campaign.getId(), queueKey, campaign.getIsAbTest());
 
         int totalQueued = 0;
         int page = 0;
@@ -32,11 +33,20 @@ public class CampaignQueueProducer {
 
         List<WhatsAppCampaignRecipient> batch;
         do {
-            batch = recipientRepository.findByCampaignAndStatus(
-                    campaign,
-                    WhatsAppCampaignRecipient.RecipientStatus.PENDING,
-                    PageRequest.of(page, pageSize)
-            );
+            if (Boolean.TRUE.equals(campaign.getIsAbTest())) {
+                batch = recipientRepository.findByCampaignAndIsHoldoutAndStatus(
+                        campaign,
+                        false,
+                        WhatsAppCampaignRecipient.RecipientStatus.PENDING,
+                        PageRequest.of(page, pageSize)
+                );
+            } else {
+                batch = recipientRepository.findByCampaignAndStatus(
+                        campaign,
+                        WhatsAppCampaignRecipient.RecipientStatus.PENDING,
+                        PageRequest.of(page, pageSize)
+                );
+            }
 
             for (WhatsAppCampaignRecipient recipient : batch) {
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.QUEUED);
@@ -55,6 +65,31 @@ public class CampaignQueueProducer {
         } while (!batch.isEmpty());
 
         log.info("[CampaignQueueProducer] Enqueued {} recipients into Redis for campaignId={}", totalQueued, campaign.getId());
+        return totalQueued;
+    }
+
+    @Transactional
+    public int queueHoldoutRecipients(WhatsAppCampaign campaign, List<WhatsAppCampaignRecipient> holdouts) {
+        if (holdouts == null || holdouts.isEmpty()) {
+            return 0;
+        }
+        String queueKey = CAMPAIGN_QUEUE_PREFIX + campaign.getId().toString();
+        int totalQueued = 0;
+
+        for (WhatsAppCampaignRecipient recipient : holdouts) {
+            recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.QUEUED);
+            if (recipient.getAvailableAt() == null) {
+                recipient.setAvailableAt(java.time.LocalDateTime.now());
+            }
+            String tenantIdStr = campaign.getTenant() != null ? campaign.getTenant().getId().toString() : "global";
+            int attempt = recipient.getAttemptCount() != null ? recipient.getAttemptCount() : 0;
+            recipient.setIdempotencyKey(tenantIdStr + ":" + campaign.getId() + ":" + recipient.getId() + ":" + attempt);
+            stringRedisTemplate.opsForList().rightPush(queueKey, recipient.getId().toString());
+            totalQueued++;
+        }
+
+        recipientRepository.saveAll(holdouts);
+        log.info("[CampaignQueueProducer] Enqueued {} winning holdout recipients into Redis for campaignId={}", totalQueued, campaign.getId());
         return totalQueued;
     }
 
