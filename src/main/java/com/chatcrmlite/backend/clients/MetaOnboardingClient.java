@@ -17,9 +17,10 @@ import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
 
-@Slf4j
 @Component
 public class MetaOnboardingClient {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MetaOnboardingClient.class);
 
     @Autowired
     private RestTemplate restTemplate;

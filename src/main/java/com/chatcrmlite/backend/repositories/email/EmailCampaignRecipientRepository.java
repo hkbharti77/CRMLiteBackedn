@@ -26,6 +26,18 @@ public interface EmailCampaignRecipientRepository extends JpaRepository<EmailCam
     long countByCampaignIdAndDeliveryStatus(UUID campaignId, EmailCampaignRecipient.DeliveryStatus status);
     
     org.springframework.data.domain.Page<EmailCampaignRecipient> findByCampaignIdAndDeliveryStatus(UUID campaignId, EmailCampaignRecipient.DeliveryStatus status, org.springframework.data.domain.Pageable pageable);
+    org.springframework.data.domain.Page<EmailCampaignRecipient> findByCampaignIdAndDeliveryStatusAndIsHoldoutFalse(UUID campaignId, EmailCampaignRecipient.DeliveryStatus status, org.springframework.data.domain.Pageable pageable);
+
+    java.util.List<EmailCampaignRecipient> findByCampaignIdAndIsHoldout(UUID campaignId, boolean isHoldout);
+    java.util.List<EmailCampaignRecipient> findByCampaignIdAndVariantId(UUID campaignId, UUID variantId);
+    long countByVariantId(UUID variantId);
+    long countByCampaignIdAndIsHoldout(UUID campaignId, boolean isHoldout);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @org.springframework.data.jpa.repository.Query("UPDATE EmailCampaignRecipient r SET r.variantId = :winnerVariantId, r.isHoldout = false, r.deliveryStatus = :pendingStatus WHERE r.campaignId = :campaignId AND r.isHoldout = true")
+    int releaseHoldoutToWinner(@org.springframework.data.repository.query.Param("campaignId") UUID campaignId,
+                              @org.springframework.data.repository.query.Param("winnerVariantId") UUID winnerVariantId,
+                              @org.springframework.data.repository.query.Param("pendingStatus") EmailCampaignRecipient.DeliveryStatus pendingStatus);
 
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.data.jpa.repository.Query("UPDATE EmailCampaignRecipient r SET r.replyCount = r.replyCount + 1, r.repliedAt = COALESCE(r.repliedAt, :receivedAt) WHERE r.id = :id AND r.tenant.id = :tenantId")

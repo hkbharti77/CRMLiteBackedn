@@ -58,4 +58,54 @@ public class TenantFlowConfig {
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
     }
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public User getTenant() { return tenant; }
+    public void setTenant(User tenant) { this.tenant = tenant; }
+    public ConversationState.FlowType getFlowType() { return flowType; }
+    public void setFlowType(ConversationState.FlowType flowType) { this.flowType = flowType; }
+    public String getConfigurationJson() { return configurationJson; }
+    public void setConfigurationJson(String configurationJson) { this.configurationJson = configurationJson; }
+    public String getIntentDescription() { return intentDescription; }
+    public void setIntentDescription(String intentDescription) { this.intentDescription = intentDescription; }
+    public java.util.List<String> getTriggerExamples() { return triggerExamples; }
+    public void setTriggerExamples(java.util.List<String> triggerExamples) { this.triggerExamples = triggerExamples; }
+    public Integer getTemplateVersion() { return templateVersion; }
+    public void setTemplateVersion(Integer templateVersion) { this.templateVersion = templateVersion; }
+    public LocalDateTime getCreatedAt() { return createdAt; }
+    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public LocalDateTime getUpdatedAt() { return updatedAt; }
+    public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
+
+    public static TenantFlowConfigBuilder builder() {
+        return new TenantFlowConfigBuilder();
+    }
+
+    public static class TenantFlowConfigBuilder {
+        private Long id;
+        private User tenant;
+        private ConversationState.FlowType flowType;
+        private String configurationJson;
+        private String intentDescription;
+        private java.util.List<String> triggerExamples = new java.util.ArrayList<>();
+        private Integer templateVersion = 1;
+        private LocalDateTime createdAt = LocalDateTime.now();
+        private LocalDateTime updatedAt = LocalDateTime.now();
+
+        public TenantFlowConfigBuilder id(Long id) { this.id = id; return this; }
+        public TenantFlowConfigBuilder tenant(User tenant) { this.tenant = tenant; return this; }
+        public TenantFlowConfigBuilder flowType(ConversationState.FlowType flowType) { this.flowType = flowType; return this; }
+        public TenantFlowConfigBuilder configurationJson(String configurationJson) { this.configurationJson = configurationJson; return this; }
+        public TenantFlowConfigBuilder intentDescription(String intentDescription) { this.intentDescription = intentDescription; return this; }
+        public TenantFlowConfigBuilder triggerExamples(java.util.List<String> triggerExamples) { this.triggerExamples = triggerExamples; return this; }
+        public TenantFlowConfigBuilder templateVersion(Integer templateVersion) { this.templateVersion = templateVersion; return this; }
+        public TenantFlowConfigBuilder createdAt(LocalDateTime createdAt) { this.createdAt = createdAt; return this; }
+        public TenantFlowConfigBuilder updatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; return this; }
+
+        public TenantFlowConfig build() {
+            TenantFlowConfig c = new TenantFlowConfig(id, tenant, flowType, configurationJson, intentDescription, triggerExamples, templateVersion, createdAt, updatedAt);
+            return c;
+        }
+    }
 }

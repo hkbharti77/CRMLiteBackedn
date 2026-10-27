@@ -188,6 +188,8 @@ public class Tenant implements Serializable {
 
     public String getBusinessName() { return businessName; }
     public void setBusinessName(String businessName) { this.businessName = businessName; }
+    public String getName() { return businessName; }
+    public void setName(String name) { this.businessName = name; }
 
     public String getBusinessType() { return businessType; }
     public void setBusinessType(String businessType) { this.businessType = businessType; }

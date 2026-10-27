@@ -57,6 +57,9 @@ public class MessageController {
     @Autowired
     private WhatsAppOutboundService whatsappOutboundService;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.storage.CloudinaryStorageService cloudinaryStorageService;
+
     @GetMapping("/chats")
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ResponseEntity<List<Map<String, Object>>> getActiveChats(@AuthenticationPrincipal String email) {
@@ -226,6 +229,89 @@ public class MessageController {
             return ResponseEntity.ok().build();
         } catch (Exception e) {
             return ResponseEntity.badRequest().body("Failed to send flow: " + e.getMessage());
+        }
+    }
+
+    @PostMapping(value = "/{contactId}/voice-note", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<?> sendVoiceNoteMultipart(
+            @PathVariable UUID contactId,
+            @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
+            @RequestParam(value = "duration", required = false) Integer duration,
+            @AuthenticationPrincipal String email) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "User not found"));
+
+        Contact contact = contactRepository.findById(contactId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Contact not found"));
+
+        if (!authorizationService.canSendMessage(contact, user)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Chat is locked by another agent");
+        }
+
+        if (file == null || file.isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Audio file cannot be empty"));
+        }
+
+        if (file.getSize() > 16L * 1024 * 1024) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Voice note exceeds 16MB limit"));
+        }
+
+        if (cloudinaryStorageService == null || !cloudinaryStorageService.isConfigured()) {
+            return ResponseEntity.status(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE)
+                    .body(Map.of("error", "Media storage is not configured on the server"));
+        }
+
+        try {
+            UUID tenantId = user.getTenant() != null ? user.getTenant().getId() : user.getId();
+            String audioUrl = cloudinaryStorageService.uploadTenantFile(tenantId, "voice_notes", file);
+
+            Message message = whatsappMessageService.sendVoiceNote(contactId, audioUrl, user);
+            contactService.toggleBotPaused(contactId, true, user);
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("messageId", message != null ? message.getId() : null);
+            resp.put("mediaUrl", audioUrl);
+            resp.put("duration", duration);
+            resp.put("status", "SENT");
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Failed to send voice note: " + e.getMessage()));
+        }
+    }
+
+    @PostMapping(value = "/{contactId}/voice-note", consumes = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    public ResponseEntity<?> sendVoiceNoteJson(
+            @PathVariable UUID contactId,
+            @RequestBody Map<String, Object> body,
+            @AuthenticationPrincipal String email) {
+
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "User not found"));
+
+        Contact contact = contactRepository.findById(contactId)
+                .orElseThrow(() -> new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.NOT_FOUND, "Contact not found"));
+
+        if (!authorizationService.canSendMessage(contact, user)) {
+            throw new org.springframework.web.server.ResponseStatusException(org.springframework.http.HttpStatus.FORBIDDEN, "Chat is locked by another agent");
+        }
+
+        String audioUrl = body != null ? (String) body.get("audioUrl") : null;
+        if (audioUrl == null || audioUrl.isBlank()) {
+            return ResponseEntity.badRequest().body(Map.of("error", "audioUrl is required"));
+        }
+
+        try {
+            Message message = whatsappMessageService.sendVoiceNote(contactId, audioUrl, user);
+            contactService.toggleBotPaused(contactId, true, user);
+
+            Map<String, Object> resp = new HashMap<>();
+            resp.put("messageId", message != null ? message.getId() : null);
+            resp.put("mediaUrl", audioUrl);
+            resp.put("status", "SENT");
+            return ResponseEntity.ok(resp);
+        } catch (Exception e) {
+            return ResponseEntity.badRequest().body(Map.of("error", "Failed to send voice note: " + e.getMessage()));
         }
     }
 }

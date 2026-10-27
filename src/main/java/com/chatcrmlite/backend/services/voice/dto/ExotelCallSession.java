@@ -44,4 +44,31 @@ public class ExotelCallSession {
     public CallState getState() {
         return this.state.get();
     }
+
+    public String getCallId() { return callId; }
+    public String getStreamId() { return streamId; }
+    public String getPhoneNumber() { return phoneNumber; }
+    public String getLanguage() { return language; }
+    public WebSocketSession getWebSocketSession() { return webSocketSession; }
+
+    public ConversationTurn getCurrentTurn() { return currentTurn; }
+    public void setCurrentTurn(ConversationTurn currentTurn) { this.currentTurn = currentTurn; }
+
+    public BlockingQueue<AudioChunk> getInboundAudioQueue() { return inboundAudioQueue; }
+    public BlockingQueue<AudioChunk> getOutboundAudioQueue() { return outboundAudioQueue; }
+
+    public long getLastSpeechEndMs() { return lastSpeechEndMs; }
+    public void setLastSpeechEndMs(long lastSpeechEndMs) { this.lastSpeechEndMs = lastSpeechEndMs; }
+
+    public long getSttFinalMs() { return sttFinalMs; }
+    public void setSttFinalMs(long sttFinalMs) { this.sttFinalMs = sttFinalMs; }
+
+    public long getLlmFirstTokenMs() { return llmFirstTokenMs; }
+    public void setLlmFirstTokenMs(long llmFirstTokenMs) { this.llmFirstTokenMs = llmFirstTokenMs; }
+
+    public long getFirstSentenceReadyMs() { return firstSentenceReadyMs; }
+    public void setFirstSentenceReadyMs(long firstSentenceReadyMs) { this.firstSentenceReadyMs = firstSentenceReadyMs; }
+
+    public long getTtsFirstAudioMs() { return ttsFirstAudioMs; }
+    public void setTtsFirstAudioMs(long ttsFirstAudioMs) { this.ttsFirstAudioMs = ttsFirstAudioMs; }
 }

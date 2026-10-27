@@ -2,6 +2,7 @@ package com.chatcrmlite.backend.services.whatsapp;
 
 import com.chatcrmlite.backend.dto.MenuDto;
 import com.chatcrmlite.backend.models.Contact;
+import com.chatcrmlite.backend.models.Message;
 import com.chatcrmlite.backend.models.User;
 import com.chatcrmlite.backend.models.WhatsAppConfig;
 import com.chatcrmlite.backend.repositories.ContactRepository;
@@ -159,4 +160,17 @@ public class WhatsAppMessageService {
         menuService.sendTenantMenuToContact(contact, config);
     }
 
+    @Transactional
+    public Message sendVoiceNote(UUID contactId, String audioUrl, User currentUser) {
+        Contact contact = contactRepository.findById(contactId)
+                .filter(c -> c.getOwner() != null && c.getOwner().getTenant() != null && 
+                             c.getOwner().getTenant().getId().equals(currentUser.getTenant().getId()))
+                .orElseThrow(() -> new IllegalArgumentException("Contact not found for tenant: " + currentUser.getTenant().getId()));
+
+        WhatsAppConfig config = whatsappConfigRepository.findByTenantId(currentUser.getTenant().getId())
+                .orElseThrow(() -> new IllegalStateException("WhatsApp configuration not found for tenant: " + currentUser.getTenant().getId()));
+
+        User owner = config.getUser() != null ? config.getUser() : currentUser;
+        return outboundService.sendAudio(contact, audioUrl, config, owner);
+    }
 }

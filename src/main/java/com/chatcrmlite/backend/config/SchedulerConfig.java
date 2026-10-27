@@ -52,4 +52,19 @@ public class SchedulerConfig {
         exec.initialize();
         return exec;
     }
+
+    @Bean("faqAnalyticsExecutor")
+    public org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor faqAnalyticsExecutor() {
+        org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor exec =
+                new org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor();
+        exec.setCorePoolSize(2);
+        exec.setMaxPoolSize(8);
+        exec.setQueueCapacity(2000);
+        exec.setThreadNamePrefix("faq-analytics-");
+        exec.setRejectedExecutionHandler(new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
+        exec.setWaitForTasksToCompleteOnShutdown(true);
+        exec.setAwaitTerminationSeconds(5);
+        exec.initialize();
+        return exec;
+    }
 }

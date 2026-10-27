@@ -44,6 +44,15 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
 
     @com.fasterxml.jackson.annotation.JsonIgnore
     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "variant_id")
+    private WhatsAppCampaignVariant variant;
+
+    @Builder.Default
+    @Column(name = "is_holdout", nullable = false)
+    private Boolean isHoldout = false;
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "contact_id", nullable = true, foreignKey = @ForeignKey(name = "fk_wa_camp_recip_contact"))
     @org.hibernate.annotations.OnDelete(action = org.hibernate.annotations.OnDeleteAction.SET_NULL)
     private Contact contact;
@@ -110,6 +119,9 @@ public class WhatsAppCampaignRecipient extends BaseTenantEntity {
         }
         if (clickCount == null) {
             clickCount = 0;
+        }
+        if (isHoldout == null) {
+            isHoldout = false;
         }
         if (availableAt == null) {
             availableAt = LocalDateTime.now();

@@ -138,6 +138,13 @@ public class CustomEmailService {
     @Autowired
     private ObjectMapper objectMapper;
 
+    @Autowired(required = false)
+    @org.springframework.context.annotation.Lazy
+    private com.chatcrmlite.backend.services.email.EmailAbTestingService emailAbTestingService;
+
+    @Autowired
+    private com.chatcrmlite.backend.repositories.email.EmailCampaignVariantRepository variantRepository;
+
     @Autowired
     private com.chatcrmlite.backend.repositories.email.EmailInboundMessageRepository inboundMessageRepository;
 
@@ -334,6 +341,11 @@ public class CustomEmailService {
                 .ctaUrl(req.getCtaUrl())
                 .recipientMode(req.getRecipientMode() != null ? req.getRecipientMode() : RecipientMode.ALL)
                 .tagsFilter(req.getTagsFilter())
+                .isAbTest(req.getIsAbTest())
+                .abTestPercentage(req.getAbTestPercentage())
+                .abWinnerMetric(req.getAbWinnerMetric())
+                .abEvaluationHours(req.getAbEvaluationHours())
+                .builderJson(req.getBuilderJson())
                 .status(EmailStatus.DRAFT)
                 .build();
         return toDTO(customEmailRepository.save(draft));
@@ -350,6 +362,11 @@ public class CustomEmailService {
                 .ctaUrl(req.getCtaUrl())
                 .recipientMode(req.getRecipientMode() != null ? req.getRecipientMode() : RecipientMode.ALL)
                 .tagsFilter(req.getTagsFilter())
+                .isAbTest(req.getIsAbTest())
+                .abTestPercentage(req.getAbTestPercentage())
+                .abWinnerMetric(req.getAbWinnerMetric())
+                .abEvaluationHours(req.getAbEvaluationHours())
+                .builderJson(req.getBuilderJson())
                 .status(EmailStatus.DRAFT)
                 .build();
         return customEmailRepository.save(campaign);
@@ -470,6 +487,11 @@ public class CustomEmailService {
             if (req.getCtaUrl() != null) campaign.setCtaUrl(req.getCtaUrl());
             if (req.getRecipientMode() != null) campaign.setRecipientMode(req.getRecipientMode());
             if (req.getTagsFilter() != null) campaign.setTagsFilter(req.getTagsFilter());
+            campaign.setAbTest(req.isAbTest());
+            if (req.getAbTestPercentage() != null) campaign.setAbTestPercentage(req.getAbTestPercentage());
+            if (req.getAbWinnerMetric() != null) campaign.setAbWinnerMetric(req.getAbWinnerMetric());
+            if (req.getAbEvaluationHours() != null) campaign.setAbEvaluationHours(req.getAbEvaluationHours());
+            if (req.getBuilderJson() != null) campaign.setBuilderJson(req.getBuilderJson());
         } else {
             campaign = saveCampaign(actor, req);
         }
@@ -479,7 +501,7 @@ public class CustomEmailService {
         }
 
         // 1. Resolve and freeze immutable audience snapshot
-        resolveAndFreezeAudience(campaign, req.getManualRecipients());
+        resolveAndFreezeAudience(campaign, req, actor);
 
         // 2. Schedule or immediate execute
         if (req.getScheduledAt() != null && req.getScheduledAt().isAfter(LocalDateTime.now())) {
@@ -505,15 +527,19 @@ public class CustomEmailService {
             );
         } else {
             stateService.transitionState(campaign, EmailStatus.SENDING, actor);
+            if (Boolean.TRUE.equals(campaign.getIsAbTest()) && emailAbTestingService != null) {
+                emailAbTestingService.scheduleEvaluationJob(campaign, LocalDateTime.now());
+            }
             startCampaignExecution(campaign.getId());
         }
         
         return toDTO(customEmailRepository.save(campaign));
     }
 
-    private void resolveAndFreezeAudience(CustomEmail campaign, String manualRecipients) {
+    private void resolveAndFreezeAudience(CustomEmail campaign, CustomEmailRequest req, User actor) {
         log.info("[EmailAudienceResolver] Resolving immutable audience snapshot for campaignId={}", campaign.getId());
 
+        String manualRecipients = req != null ? req.getManualRecipients() : null;
         String filterJson = campaign.getRecipientMode() == RecipientMode.MANUAL ? manualRecipients : campaign.getTagsFilter();
         List<String> recipientsRaw = audienceResolver.resolveEmailAddresses(campaign.getOwner(), campaign.getRecipientMode().name(), filterJson);
         
@@ -563,6 +589,12 @@ public class CustomEmailService {
         }
 
         recipientRepository.saveAll(recipientsToSave);
+
+        // A/B testing partitioning
+        if (Boolean.TRUE.equals(campaign.getIsAbTest()) && emailAbTestingService != null && req != null && req.getVariants() != null && req.getVariants().size() >= 2) {
+            emailAbTestingService.createVariantsForCampaign(campaign, req.getVariants(), actor);
+            emailAbTestingService.partitionAudience(campaign, recipientsToSave);
+        }
 
         // Create Snapshot
         EmailCampaignSnapshot snapshot = EmailCampaignSnapshot.builder()
@@ -617,12 +649,22 @@ public class CustomEmailService {
                     break;
                 }
 
-                Page<EmailCampaignRecipient> pendingBatch = recipientRepository.findByCampaignIdAndDeliveryStatus(
-                        campaignId, DeliveryStatus.PENDING, PageRequest.of(0, batchSize));
+                boolean isAbTesting = Boolean.TRUE.equals(campaign.getIsAbTest())
+                        && !"WINNER_PROMOTED".equalsIgnoreCase(campaign.getAbStatus());
+
+                Page<EmailCampaignRecipient> pendingBatch = isAbTesting
+                        ? recipientRepository.findByCampaignIdAndDeliveryStatusAndIsHoldoutFalse(
+                                campaignId, DeliveryStatus.PENDING, PageRequest.of(0, batchSize))
+                        : recipientRepository.findByCampaignIdAndDeliveryStatus(
+                                campaignId, DeliveryStatus.PENDING, PageRequest.of(0, batchSize));
 
                 if (pendingBatch.isEmpty()) {
-                    log.info("[CustomEmail] Campaign {} execution finished. No pending recipients left.", campaignId);
-                    stateService.transitionState(campaign, EmailStatus.COMPLETED, null);
+                    if (isAbTesting) {
+                        log.info("[CustomEmail] Campaign {} A/B test sample dispatched. Holdout pool awaiting evaluation.", campaignId);
+                    } else {
+                        log.info("[CustomEmail] Campaign {} execution finished. No pending recipients left.", campaignId);
+                        stateService.transitionState(campaign, EmailStatus.COMPLETED, null);
+                    }
                     break;
                 }
 
@@ -673,8 +715,24 @@ public class CustomEmailService {
 
                         String unsubUrl = trackingService.getUnsubscribeUrl(trackingToken);
 
-                        String subject = personaliseString(campaign.getSubject(), name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
-                        String body = personaliseString(campaign.getBody(), name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+                        String rawSubject = campaign.getSubject();
+                        String rawBody = campaign.getBody();
+
+                        if (recipient.getVariantId() != null && variantRepository != null) {
+                            com.chatcrmlite.backend.models.email.EmailCampaignVariant variant =
+                                    variantRepository.findById(recipient.getVariantId()).orElse(null);
+                            if (variant != null) {
+                                if (variant.getSubject() != null && !variant.getSubject().isBlank()) {
+                                    rawSubject = variant.getSubject();
+                                }
+                                if (variant.getBody() != null && !variant.getBody().isBlank()) {
+                                    rawBody = variant.getBody();
+                                }
+                            }
+                        }
+
+                        String subject = personaliseString(rawSubject, name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
+                        String body = personaliseString(rawBody, name, recipient.getEmail(), businessName, unsubUrl, campaign.getCtaLabel(), campaign.getCtaUrl());
 
                         sendOne(recipient.getEmail(), subject, body,
                                 campaign.getCtaLabel(), campaign.getCtaUrl(), businessName,
@@ -682,6 +740,9 @@ public class CustomEmailService {
 
                         recipient.setDeliveryStatus(DeliveryStatus.SENT);
                         recipient.setSentAt(LocalDateTime.now());
+                        if (recipient.getVariantId() != null && variantRepository != null) {
+                            variantRepository.incrementSentCount(recipient.getVariantId());
+                        }
                         sentThisRun++;
                     } catch (Exception ex) {
                         log.error("[CustomEmail] SMTP failed to send to {} — {}", recipient.getEmail(), ex.getMessage());
@@ -1033,6 +1094,14 @@ public class CustomEmailService {
                 .bounceRate(Math.round(bounceRate * 100.0) / 100.0)
                 .unsubscribeRate(Math.round(unsubscribeRate * 100.0) / 100.0)
                 .replyRatePercentage(Math.round(replyRate * 100.0) / 100.0)
+                .isAbTest(e.getIsAbTest())
+                .abTestPercentage(e.getAbTestPercentage())
+                .abWinnerMetric(e.getAbWinnerMetric())
+                .abEvaluationHours(e.getAbEvaluationHours())
+                .abEvaluationEndsAt(e.getAbEvaluationEndsAt())
+                .winningVariantId(e.getWinningVariantId())
+                .abStatus(e.getAbStatus())
+                .builderJson(e.getBuilderJson())
                 .createdAt(e.getCreatedAt())
                 .build();
     }

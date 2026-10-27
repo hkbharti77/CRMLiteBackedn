@@ -99,6 +99,32 @@ public class WhatsAppCampaign extends BaseTenantEntity {
     @Builder.Default
     private Boolean saveImportedRecipients = false;
 
+    @Column(name = "is_ab_test", nullable = false)
+    @Builder.Default
+    private Boolean isAbTest = false;
+
+    @Column(name = "ab_test_percentage")
+    @Builder.Default
+    private Integer abTestPercentage = 20;
+
+    @Column(name = "ab_winner_metric", length = 30)
+    @Builder.Default
+    private String abWinnerMetric = "CLICK_RATE";
+
+    @Column(name = "ab_evaluation_hours")
+    @Builder.Default
+    private Integer abEvaluationHours = 4;
+
+    @Column(name = "ab_evaluation_ends_at")
+    private LocalDateTime abEvaluationEndsAt;
+
+    @Column(name = "winning_variant_id")
+    private UUID winningVariantId;
+
+    @Column(name = "ab_status", length = 30)
+    @Builder.Default
+    private String abStatus = "DISABLED";
+
     private LocalDateTime scheduledAt;
     private LocalDateTime startedAt;
     private LocalDateTime completedAt;
@@ -138,6 +164,21 @@ public class WhatsAppCampaign extends BaseTenantEntity {
         }
         if (priorityRank == null) {
             priorityRank = priority.getRank();
+        }
+        if (isAbTest == null) {
+            isAbTest = false;
+        }
+        if (abTestPercentage == null) {
+            abTestPercentage = 20;
+        }
+        if (abWinnerMetric == null) {
+            abWinnerMetric = "CLICK_RATE";
+        }
+        if (abEvaluationHours == null) {
+            abEvaluationHours = 4;
+        }
+        if (abStatus == null) {
+            abStatus = isAbTest ? "TESTING" : "DISABLED";
         }
     }
 

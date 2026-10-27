@@ -36,6 +36,9 @@ public class FaqController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.services.rag.GraphIngestionService graphIngestionService;
 
+    @Autowired
+    private com.chatcrmlite.backend.services.FaqMatchingService faqMatchingService;
+
     private User getAuthenticatedUser(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "User not found"));
@@ -92,6 +95,7 @@ public class FaqController {
                 log.warn("[FAQ-API] Graph ingest skipped: {}", e.getMessage());
             }
         }
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.ok(saved);
     }
 
@@ -134,6 +138,7 @@ public class FaqController {
                 log.warn("[FAQ-API] Graph ingest skipped: {}", e.getMessage());
             }
         }
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.ok(updated);
     }
 
@@ -144,6 +149,7 @@ public class FaqController {
 
         int deletedCount = faqItemRepository.deleteByFaqIdAndTenantId(id, tenantId);
         log.info("[FAQ-API] Deleted FAQ Item ID: {} for tenant: {} (affected: {})", id, tenantId, deletedCount);
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.noContent().build();
     }
 
@@ -154,6 +160,7 @@ public class FaqController {
 
         int count = faqItemRepository.deleteAllByTenantId(tenantId);
         log.info("[FAQ-API] Deleted ALL FAQ Items for tenant: {} (total deleted: {})", tenantId, count);
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "All FAQs deleted successfully."));
     }
 
@@ -169,6 +176,7 @@ public class FaqController {
 
         int count = faqItemRepository.deleteByIdInAndTenantId(ids, tenantId);
         log.info("[FAQ-API] Batch deleted {} FAQ Items for tenant: {}", count, tenantId);
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.ok(java.util.Map.of("success", true, "deletedCount", count, "message", "Selected FAQs deleted successfully."));
     }
 
@@ -252,6 +260,7 @@ public class FaqController {
                 }
             }
         }
+        faqMatchingService.invalidateTenantCache(tenantId);
         return ResponseEntity.ok(saved);
     }
 }

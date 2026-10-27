@@ -31,7 +31,7 @@ public abstract class BaseTenantEntity implements Serializable {
             if (tenantId != null) {
                 Tenant t = new Tenant();
                 t.setId(tenantId);
-                this.tenant(t);
+                return this.tenant(t);
             }
             return self();
         }

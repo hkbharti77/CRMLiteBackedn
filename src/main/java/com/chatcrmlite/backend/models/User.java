@@ -194,6 +194,11 @@ public class User implements Serializable {
     public String getDisplayName() { return displayName; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
 
+    public String getName() {
+        return displayName != null && !displayName.isBlank() ? displayName : (email != null ? email.split("@")[0] : "User");
+    }
+    public void setName(String name) { this.displayName = name; }
+
     public String getFirstName() {
         if (displayName != null && !displayName.isBlank()) {
             return displayName.split(" ")[0];

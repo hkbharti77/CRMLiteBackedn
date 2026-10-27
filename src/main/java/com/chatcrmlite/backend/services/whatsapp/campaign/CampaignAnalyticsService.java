@@ -24,6 +24,7 @@ public class CampaignAnalyticsService {
     private final WhatsAppCampaignRecipientRepository recipientRepository;
     private final WhatsAppCampaignAnalyticsRepository analyticsRepository;
     private final WhatsAppCampaignTrackedLinkRepository trackedLinkRepository;
+    private final com.chatcrmlite.backend.repositories.WhatsAppCampaignVariantRepository variantRepository;
 
     @Transactional
     public void processWebhookStatus(String waMessageId, String metaStatus, String errorMessage) {
@@ -46,10 +47,24 @@ public class CampaignAnalyticsService {
             case "delivered":
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.DELIVERED);
                 recipient.setDeliveredAt(now);
+                if (recipient.getVariant() != null && recipient.getVariant().getId() != null) {
+                    try {
+                        variantRepository.incrementDeliveredCount(recipient.getVariant().getId());
+                    } catch (Exception e) {
+                        log.debug("[Analytics] Failed incrementing variant deliveredCount: {}", e.getMessage());
+                    }
+                }
                 break;
             case "read":
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.READ);
                 recipient.setReadAt(now);
+                if (recipient.getVariant() != null && recipient.getVariant().getId() != null) {
+                    try {
+                        variantRepository.incrementReadCount(recipient.getVariant().getId());
+                    } catch (Exception e) {
+                        log.debug("[Analytics] Failed incrementing variant readCount: {}", e.getMessage());
+                    }
+                }
                 break;
             case "failed":
                 recipient.setStatus(WhatsAppCampaignRecipient.RecipientStatus.FAILED);

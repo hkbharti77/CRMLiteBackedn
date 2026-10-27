@@ -24,9 +24,10 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-@Slf4j
 @Service
 public class RagRetrievalService {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(RagRetrievalService.class);
 
     @Autowired
     private PromptBuilder promptBuilder;
@@ -102,23 +103,41 @@ public class RagRetrievalService {
         UUID ownerUserId = scope.ownerUserId();
         UUID knowledgeTenantId = scope.knowledgeTenantId();
 
-        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
-        float[] queryEmbedding = embedding.vector();
-
-        // 1. FAQ Fast Path (Prioritized, zero tokens consumed)
-        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(knowledgeTenantId, query, queryEmbedding);
-        if ((faqMatch == null || !faqMatch.isHighConfidence() || faqMatch.getFaqItem() == null)
+        // 1. LEVEL 1: In-Memory Ultra-Fast FAQ Exact Match (Zero CPU embedding, zero DB roundtrip)
+        FaqMatchingService.MatchResult exactFaq = faqMatchingService.findExactNormalizedMatch(knowledgeTenantId, query);
+        if ((exactFaq == null || !exactFaq.isHighConfidence())
                 && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
-            FaqMatchingService.MatchResult fallbackMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
-            if (fallbackMatch != null && fallbackMatch.isHighConfidence() && fallbackMatch.getFaqItem() != null) {
-                faqMatch = fallbackMatch;
+            FaqMatchingService.MatchResult fallbackExact = faqMatchingService.findExactNormalizedMatch(ownerUserId, query);
+            if (fallbackExact != null && fallbackExact.isHighConfidence()) {
+                exactFaq = fallbackExact;
             }
         }
 
-        if (faqMatch != null && faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
-            log.info("[FAQ-FastPath] High-confidence match (Score: {}) for knowledgeTenantId={} | Direct FAQ response returned.",
-                    String.format("%.4f", faqMatch.getScore()), knowledgeTenantId);
-            return ChatResponseFormatter.forChatWidget(faqMatch.getFaqItem().getAnswer());
+        if (exactFaq != null && exactFaq.isHighConfidence() && exactFaq.getFaqItem() != null) {
+            long exactElapsed = System.currentTimeMillis() - start;
+            log.info("[FAQ-FastPath] In-memory exact match in {}ms for tenant={} | Direct FAQ response returned.",
+                    exactElapsed, knowledgeTenantId);
+            return ChatResponseFormatter.forChatWidget(exactFaq.getFaqItem().getAnswer());
+        }
+
+        // 2. LAZY EMBEDDING GENERATION: Only generate embedding when exact match misses
+        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
+        float[] queryEmbedding = embedding.vector();
+
+        // 3. LEVEL 2: Semantic FAQ match via pgvector nearest-neighbor
+        FaqMatchingService.MatchResult semanticFaq = faqMatchingService.findSemanticMatch(knowledgeTenantId, query, queryEmbedding);
+        if ((semanticFaq == null || !semanticFaq.isHighConfidence())
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackSemantic = faqMatchingService.findSemanticMatch(ownerUserId, query, queryEmbedding);
+            if (fallbackSemantic != null && fallbackSemantic.isHighConfidence()) {
+                semanticFaq = fallbackSemantic;
+            }
+        }
+
+        if (semanticFaq != null && semanticFaq.isHighConfidence() && semanticFaq.getFaqItem() != null) {
+            log.info("[FAQ-Semantic] High-confidence match (Score: {}) for knowledgeTenantId={} | Direct FAQ response returned.",
+                    String.format("%.4f", semanticFaq.getScore()), knowledgeTenantId);
+            return ChatResponseFormatter.forChatWidget(semanticFaq.getFaqItem().getAnswer());
         }
 
         // 2. Semantic Cache
@@ -224,23 +243,39 @@ public class RagRetrievalService {
         UUID ownerUserId = scope.ownerUserId();
         UUID knowledgeTenantId = scope.knowledgeTenantId();
 
-        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
-        float[] queryEmbedding = embedding.vector();
-
-        // 1. Voice FAQ Fast Path (Prioritized, zero tokens consumed)
-        FaqMatchingService.MatchResult faqMatch = faqMatchingService.findBestMatch(knowledgeTenantId, query, queryEmbedding);
-        if ((faqMatch == null || !faqMatch.isHighConfidence() || faqMatch.getFaqItem() == null)
+        // 1. LEVEL 1: In-Memory Ultra-Fast FAQ Exact Match (Zero CPU embedding, zero DB roundtrip)
+        FaqMatchingService.MatchResult exactFaq = faqMatchingService.findExactNormalizedMatch(knowledgeTenantId, query);
+        if ((exactFaq == null || !exactFaq.isHighConfidence())
                 && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
-            FaqMatchingService.MatchResult fallbackMatch = faqMatchingService.findBestMatch(ownerUserId, query, queryEmbedding);
-            if (fallbackMatch != null && fallbackMatch.isHighConfidence() && fallbackMatch.getFaqItem() != null) {
-                faqMatch = fallbackMatch;
+            FaqMatchingService.MatchResult fallbackExact = faqMatchingService.findExactNormalizedMatch(ownerUserId, query);
+            if (fallbackExact != null && fallbackExact.isHighConfidence()) {
+                exactFaq = fallbackExact;
             }
         }
 
-        if (faqMatch != null && faqMatch.isHighConfidence() && faqMatch.getFaqItem() != null) {
-            log.info("[Voice-FAQ] High-confidence match (Score: {}) knowledgeTenantId={}",
-                    String.format("%.4f", faqMatch.getScore()), knowledgeTenantId);
-            return faqMatch.getFaqItem().getAnswer();
+        if (exactFaq != null && exactFaq.isHighConfidence() && exactFaq.getFaqItem() != null) {
+            log.info("[Voice-FAQ] In-memory exact match for knowledgeTenantId={}", knowledgeTenantId);
+            return exactFaq.getFaqItem().getAnswer();
+        }
+
+        // 2. LAZY EMBEDDING GENERATION: Only generate embedding when exact match misses
+        dev.langchain4j.data.embedding.Embedding embedding = embeddingModel.embed(query).content();
+        float[] queryEmbedding = embedding.vector();
+
+        // 3. LEVEL 2: Semantic FAQ match via pgvector nearest-neighbor
+        FaqMatchingService.MatchResult semanticFaq = faqMatchingService.findSemanticMatch(knowledgeTenantId, query, queryEmbedding);
+        if ((semanticFaq == null || !semanticFaq.isHighConfidence())
+                && ownerUserId != null && !ownerUserId.equals(knowledgeTenantId)) {
+            FaqMatchingService.MatchResult fallbackSemantic = faqMatchingService.findSemanticMatch(ownerUserId, query, queryEmbedding);
+            if (fallbackSemantic != null && fallbackSemantic.isHighConfidence()) {
+                semanticFaq = fallbackSemantic;
+            }
+        }
+
+        if (semanticFaq != null && semanticFaq.isHighConfidence() && semanticFaq.getFaqItem() != null) {
+            log.info("[Voice-FAQ] High-confidence semantic match (Score: {}) knowledgeTenantId={}",
+                    String.format("%.4f", semanticFaq.getScore()), knowledgeTenantId);
+            return semanticFaq.getFaqItem().getAnswer();
         }
 
         // 2. Semantic Cache

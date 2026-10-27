@@ -22,10 +22,11 @@ import io.github.resilience4j.retry.RetryRegistry;
 import java.util.ArrayList;
 import java.util.List;
 
-@Slf4j
 @Component
 @CircuitBreaker(name = "whatsappClient")
 public class MetaWhatsAppClient implements WhatsAppClient {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(MetaWhatsAppClient.class);
 
     @Autowired
     private RestTemplate restTemplate;
@@ -197,6 +198,26 @@ public class MetaWhatsAppClient implements WhatsAppClient {
             documentBody.put("caption", caption);
         }
         body.put("document", documentBody);
+
+        return executeApiCallWithRetry(url, headers, body);
+    }
+
+    @Override
+    public String sendAudio(String to, String audioUrl, String accessToken, String phoneNumberId) {
+        String url = String.format(META_URL, phoneNumberId);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+        headers.setBearerAuth(accessToken);
+
+        Map<String, Object> body = new HashMap<>();
+        body.put("messaging_product", "whatsapp");
+        body.put("to", to);
+        body.put("type", "audio");
+
+        Map<String, String> audioBody = new HashMap<>();
+        audioBody.put("link", audioUrl);
+        body.put("audio", audioBody);
 
         return executeApiCallWithRetry(url, headers, body);
     }

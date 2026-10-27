@@ -283,19 +283,23 @@ public class JourneyExecutionEngine {
         try {
             if ("WHATSAPP".equalsIgnoreCase(channel)) {
                 String message = nodeConfig.has("message") ? nodeConfig.get("message").asText() : "Journey update for " + contact.getName();
-                log.info("[JourneyDispatch] Dispatching WhatsApp message to {} for biz={}", contact.getWaId(), run.getBusinessId());
+                message = interpolatePlaceholders(message, contact, run.getContextData());
+                log.info("[JourneyDispatch] Dispatching WhatsApp message to {} for biz={}: {}", contact.getWaId(), run.getBusinessId(), message);
                 attempt.setStatus("DELIVERED");
                 dispatch.setStatus("DELIVERED");
             } else if ("EMAIL".equalsIgnoreCase(channel)) {
                 String subject = nodeConfig.has("subject") ? nodeConfig.get("subject").asText() : "Update from CRM";
                 String body = nodeConfig.has("body") ? nodeConfig.get("body").asText() : "Hello " + contact.getName();
+                subject = interpolatePlaceholders(subject, contact, run.getContextData());
+                body = interpolatePlaceholders(body, contact, run.getContextData());
                 if (contact.getEmail() != null && !contact.getEmail().isEmpty()) {
-                    log.info("[JourneyDispatch] Dispatching Email to {} for biz={}", contact.getEmail(), run.getBusinessId());
+                    log.info("[JourneyDispatch] Dispatching Email to {} for biz={}: subject='{}'", contact.getEmail(), run.getBusinessId(), subject);
                     attempt.setStatus("SENT");
                     dispatch.setStatus("SENT");
                 }
             } else if ("SMS".equalsIgnoreCase(channel)) {
                 String smsContent = nodeConfig.has("message") ? nodeConfig.get("message").asText() : "SMS update for " + contact.getName();
+                smsContent = interpolatePlaceholders(smsContent, contact, run.getContextData());
                 com.chatcrmlite.backend.dtos.sms.SmsSendRequest smsReq = com.chatcrmlite.backend.dtos.sms.SmsSendRequest.builder()
                         .phoneNumber(contact.getWaId())
                         .messageContent(smsContent)
@@ -320,6 +324,39 @@ public class JourneyExecutionEngine {
             messageDispatchRepository.save(dispatch);
             throw e;
         }
+    }
+
+    private String interpolatePlaceholders(String text, Contact contact, String contextDataJson) {
+        if (text == null) return "";
+        String result = text;
+        if (contact != null) {
+            result = result.replace("{{name}}", contact.getName() != null ? contact.getName() : "Customer")
+                           .replace("{{contact_name}}", contact.getName() != null ? contact.getName() : "Customer")
+                           .replace("{{phone}}", contact.getWaId() != null ? contact.getWaId() : "")
+                           .replace("{{email}}", contact.getEmail() != null ? contact.getEmail() : "");
+        }
+        if (contextDataJson != null && !contextDataJson.isBlank()) {
+            try {
+                JsonNode ctx = objectMapper.readTree(contextDataJson);
+                if (ctx.has("lead_number") && !ctx.get("lead_number").isNull()) {
+                    result = result.replace("{{lead_number}}", ctx.get("lead_number").asText(""));
+                }
+                if (ctx.has("new_status") && !ctx.get("new_status").isNull()) {
+                    result = result.replace("{{new_status}}", ctx.get("new_status").asText(""))
+                                   .replace("{{stage}}", ctx.get("new_status").asText(""));
+                }
+                if (ctx.has("deal_value") && !ctx.get("deal_value").isNull()) {
+                    result = result.replace("{{deal_value}}", ctx.get("deal_value").asText(""));
+                }
+                if (ctx.has("deal_label") && !ctx.get("deal_label").isNull()) {
+                    result = result.replace("{{deal_label}}", ctx.get("deal_label").asText(""));
+                }
+                if (ctx.has("owner_name") && !ctx.get("owner_name").isNull()) {
+                    result = result.replace("{{owner_name}}", ctx.get("owner_name").asText(""));
+                }
+            } catch (Exception ignored) {}
+        }
+        return result;
     }
 
     private boolean checkChannelConsent(String businessId, UUID contactId, String channel) {

@@ -59,4 +59,26 @@ public class CustomEmailRequest {
     public void setManualRecipients(String manualRecipients) { this.manualRecipients = manualRecipients; }
     public java.time.LocalDateTime getScheduledAt() { return scheduledAt; }
     public void setScheduledAt(java.time.LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
+
+    private boolean isAbTest = false;
+    private Integer abTestPercentage;
+    private String abWinnerMetric;
+    private Integer abEvaluationHours;
+    private String builderJson;
+    private java.util.List<EmailVariantInput> variants;
+
+    public boolean isAbTest() { return isAbTest; }
+    public boolean getIsAbTest() { return isAbTest; }
+    public void setAbTest(boolean abTest) { isAbTest = abTest; }
+    public void setIsAbTest(boolean abTest) { this.isAbTest = abTest; }
+    public Integer getAbTestPercentage() { return abTestPercentage; }
+    public void setAbTestPercentage(Integer abTestPercentage) { this.abTestPercentage = abTestPercentage; }
+    public String getAbWinnerMetric() { return abWinnerMetric; }
+    public void setAbWinnerMetric(String abWinnerMetric) { this.abWinnerMetric = abWinnerMetric; }
+    public Integer getAbEvaluationHours() { return abEvaluationHours; }
+    public void setAbEvaluationHours(Integer abEvaluationHours) { this.abEvaluationHours = abEvaluationHours; }
+    public String getBuilderJson() { return builderJson; }
+    public void setBuilderJson(String builderJson) { this.builderJson = builderJson; }
+    public java.util.List<EmailVariantInput> getVariants() { return variants; }
+    public void setVariants(java.util.List<EmailVariantInput> variants) { this.variants = variants; }
 }

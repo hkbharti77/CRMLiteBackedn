@@ -40,6 +40,8 @@ public class WhatsAppCampaignService {
     private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
     private final com.chatcrmlite.backend.services.tenant.SubscriptionEntitlementService entitlementService;
     private final com.chatcrmlite.backend.repositories.WhatsAppCampaignTrackedLinkRepository trackedLinkRepository;
+    private final com.chatcrmlite.backend.repositories.WhatsAppCampaignVariantRepository variantRepository;
+    private final WhatsAppAbTestingService abTestingService;
 
     /**
      * Creates or updates a template snapshot ensuring immutable version history.
@@ -73,6 +75,41 @@ public class WhatsAppCampaignService {
     /**
      * Create a new draft WhatsApp campaign.
      */
+    @Transactional
+    public WhatsAppCampaign createCampaign(com.chatcrmlite.backend.dtos.CreateCampaignRequestDto request, User owner) {
+        String templateIdOrName = request.getTemplateId();
+        if ((templateIdOrName == null || templateIdOrName.isBlank()) && Boolean.TRUE.equals(request.getIsAbTest())
+                && request.getVariants() != null && !request.getVariants().isEmpty()) {
+            templateIdOrName = request.getVariants().get(0).getTemplateId();
+        }
+
+        WhatsAppCampaign campaign = createCampaign(
+                request.getName(),
+                templateIdOrName,
+                request.getTargetType(),
+                request.getTargetFilterJson(),
+                request.getVariableMappingJson(),
+                request.getSaveImportedRecipients(),
+                request.getPriority(),
+                owner
+        );
+
+        if (Boolean.TRUE.equals(request.getIsAbTest())) {
+            campaign.setIsAbTest(true);
+            campaign.setAbTestPercentage(request.getAbTestPercentage() != null ? request.getAbTestPercentage() : 20);
+            campaign.setAbWinnerMetric(request.getAbWinnerMetric() != null ? request.getAbWinnerMetric() : "CLICK_RATE");
+            campaign.setAbEvaluationHours(request.getAbEvaluationHours() != null ? request.getAbEvaluationHours() : 4);
+            campaign.setAbStatus("TESTING");
+            campaign = campaignRepository.save(campaign);
+
+            if (request.getVariants() != null && !request.getVariants().isEmpty()) {
+                abTestingService.createVariantsForCampaign(campaign, request.getVariants(), owner);
+            }
+        }
+
+        return campaign;
+    }
+
     @Transactional
     public WhatsAppCampaign createCampaign(String name, String templateIdOrName, WhatsAppCampaign.TargetType targetType,
                                             String targetFilterJson, String variableMappingJson, Boolean saveImportedRecipients, User owner) {
@@ -286,6 +323,9 @@ public class WhatsAppCampaignService {
             );
 
             auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.SCHEDULED, "{\"scheduledAt\": \"" + scheduleTime + "\"}");
+            if (Boolean.TRUE.equals(saved.getIsAbTest())) {
+                abTestingService.scheduleEvaluationJob(saved, scheduleTime);
+            }
             return saved;
         } else {
             campaign.setStatus(WhatsAppCampaign.Status.RUNNING);
@@ -293,6 +333,9 @@ public class WhatsAppCampaignService {
             WhatsAppCampaign saved = campaignRepository.save(campaign);
 
             auditService.logAction(saved, actor, WhatsAppCampaignAuditLog.Action.STARTED, "{\"startedAt\": \"" + LocalDateTime.now() + "\"}");
+            if (Boolean.TRUE.equals(saved.getIsAbTest())) {
+                abTestingService.scheduleEvaluationJob(saved, LocalDateTime.now());
+            }
             return saved;
         }
     }
@@ -322,6 +365,9 @@ public class WhatsAppCampaignService {
         if (campaign.getStatus() == WhatsAppCampaign.Status.SCHEDULED) {
             jobCancelled = distributedSchedulerService.cancelJob("campaign-job-" + campaign.getId());
             log.info("Cancelled Quartz job for scheduled WhatsApp campaign {}: {}", campaign.getId(), jobCancelled);
+        }
+        if (Boolean.TRUE.equals(campaign.getIsAbTest())) {
+            distributedSchedulerService.cancelJob("ab-winner-" + campaign.getId());
         }
         campaign.setStatus(WhatsAppCampaign.Status.CANCELLED);
         WhatsAppCampaign saved = campaignRepository.save(campaign);
@@ -472,6 +518,10 @@ public class WhatsAppCampaignService {
     @Transactional
     public void deleteCampaign(UUID id, User user) {
         WhatsAppCampaign campaign = getCampaign(id, user);
+        if (Boolean.TRUE.equals(campaign.getIsAbTest())) {
+            distributedSchedulerService.cancelJob("ab-winner-" + campaign.getId());
+        }
+        variantRepository.deleteAll(variantRepository.findByCampaignOrderByVariantLabelAsc(campaign));
         trackedLinkRepository.deleteByCampaign(campaign);
         recipientRepository.deleteByCampaign(campaign);
         executionRepository.deleteByCampaign(campaign);
@@ -493,6 +543,10 @@ public class WhatsAppCampaignService {
 
         int count = list.size();
         for (WhatsAppCampaign c : list) {
+            if (Boolean.TRUE.equals(c.getIsAbTest())) {
+                distributedSchedulerService.cancelJob("ab-winner-" + c.getId());
+            }
+            variantRepository.deleteAll(variantRepository.findByCampaignOrderByVariantLabelAsc(c));
             trackedLinkRepository.deleteByCampaign(c);
             recipientRepository.deleteByCampaign(c);
             executionRepository.deleteByCampaign(c);

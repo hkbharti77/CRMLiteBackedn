@@ -17,6 +17,13 @@ public class ConversationTurn {
         this.cancellationToken = new AtomicBoolean(false);
     }
 
+    public String getTurnId() { return turnId; }
+    public long getCreatedAt() { return createdAt; }
+    public String getUserTranscript() { return userTranscript; }
+    public void setUserTranscript(String userTranscript) { this.userTranscript = userTranscript; }
+    public AtomicBoolean getCancellationToken() { return cancellationToken; }
+    public void setCancellationToken(AtomicBoolean cancellationToken) { this.cancellationToken = cancellationToken; }
+
     public void cancel() {
         this.cancellationToken.set(true);
     }

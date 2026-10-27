@@ -200,6 +200,7 @@
       <version>8.10.1</version>
     </dependency>
 
+
     <!-- Document Processing -->
     <dependency>
       <groupId>org.apache.pdfbox</groupId>
@@ -423,9 +424,6 @@
         <configuration>
           <source>${java.version}</source>
           <target>${java.version}</target>
-          <compilerArgs>
-            <arg>-proc:full</arg>
-          </compilerArgs>
           <annotationProcessorPaths>
             <path>
               <groupId>org.projectlombok</groupId>

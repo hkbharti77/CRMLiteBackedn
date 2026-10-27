@@ -8,10 +8,11 @@ import org.springframework.context.event.EventListener;
 import com.chatcrmlite.backend.security.TenantContext;
 import org.springframework.stereotype.Component;
 
-@Slf4j
 @Component
 @org.springframework.context.annotation.Profile("!test")
 public class AiWarmupConfig {
+
+    private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(AiWarmupConfig.class);
 
     /**
      * Warm up the AI models on startup to avoid cold-start latency 

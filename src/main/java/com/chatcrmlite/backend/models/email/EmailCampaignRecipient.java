@@ -74,6 +74,18 @@ public class EmailCampaignRecipient extends BaseTenantEntity {
     @Column(name = "reply_count", nullable = false)
     private int replyCount = 0;
 
+    @Column(name = "variant_id")
+    private UUID variantId;
+
+    @Builder.Default
+    @Column(name = "is_holdout", nullable = false)
+    private boolean isHoldout = false;
+
+    public boolean isHoldout() { return isHoldout; }
+    public boolean getIsHoldout() { return isHoldout; }
+    public void setHoldout(boolean isHoldout) { this.isHoldout = isHoldout; }
+    public void setIsHoldout(boolean isHoldout) { this.isHoldout = isHoldout; }
+
     @Column(name = "created_at", nullable = false)
     @Builder.Default
     private LocalDateTime createdAt = LocalDateTime.now();

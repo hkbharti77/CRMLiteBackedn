@@ -247,6 +247,24 @@ public class WhatsAppOutboundService {
         }
     }
 
+    @Transactional
+    public Message sendAudio(Contact contact, String audioUrl, WhatsAppConfig config, User owner) {
+        try {
+            String metaMessageId = whatsappClient.sendAudio(
+                    contact.getWaId(),
+                    audioUrl,
+                    config.getAccessToken(),
+                    config.getPhoneNumberId()
+            );
+            trackServiceReply(config);
+            return recordOutgoing(contact, owner, "🎤 [Voice Note]", metaMessageId, "AUDIO", audioUrl);
+        } catch (Exception e) {
+            log.error("[WhatsApp-Outbound] Failed to send AUDIO reply to contact={} owner={}: {}",
+                    contact.getWaId(), (owner != null ? owner.getId() : "null"), e.getMessage(), e);
+            throw e;
+        }
+    }
+
     public String resolveCatalogDocumentUrl(com.chatcrmlite.backend.models.TenantAiCatalog catalog) {
         if (catalog == null) return null;
         String documentUrl = catalog.getCloudinaryUrl();

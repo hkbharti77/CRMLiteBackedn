@@ -36,6 +36,7 @@ public class CampaignMessageWorker {
     private final WhatsAppRecipientResolver recipientResolver;
     private final ContactRepository contactRepository;
     private final WhatsAppLinkTrackingService linkTrackingService;
+    private final WhatsAppCampaignVariantRepository variantRepository;
 
     /**
      * Scheduled task that polls for active RUNNING campaigns and dispatches messages
@@ -142,7 +143,11 @@ public class CampaignMessageWorker {
                         continue;
                     }
 
-                    sendRecipientMessage(recipient, snapshot, config);
+                    WhatsAppTemplateSnapshot effectiveSnapshot = (recipient.getVariant() != null && recipient.getVariant().getTemplateSnapshot() != null)
+                            ? recipient.getVariant().getTemplateSnapshot()
+                            : snapshot;
+
+                    sendRecipientMessage(recipient, effectiveSnapshot, config);
                 }
             } catch (Exception e) {
                 log.error("[CampaignWorker] Error processing recipient task task={}: {}", recipientIdStr, e.getMessage());
@@ -254,6 +259,14 @@ public class CampaignMessageWorker {
             recipient.setSentAt(LocalDateTime.now());
             recipient.setNextAttemptAt(null);
             recipientRepository.save(recipient);
+
+            if (recipient.getVariant() != null && recipient.getVariant().getId() != null) {
+                try {
+                    variantRepository.incrementSentCount(recipient.getVariant().getId());
+                } catch (Exception e) {
+                    log.debug("[CampaignWorker] Non-critical error incrementing variant sentCount: {}", e.getMessage());
+                }
+            }
 
         } catch (Exception e) {
             log.warn("[CampaignWorker] Failed sending message to recipientId={} attempt={}: {}", recipient.getId(), attempt + 1, e.getMessage());
