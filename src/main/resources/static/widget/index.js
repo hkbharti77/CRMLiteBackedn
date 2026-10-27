@@ -119,6 +119,21 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         setTimeout(() => flowEngine.suggestForm(), 600);
                     }
                 },
+                onFallback: (eventType, data) => {
+                    ui.setTyping(false);
+                    if (streamHandle) {
+                        streamHandle.remove();
+                        streamHandle = null;
+                    }
+                    const notice = data.notice || "You have reached your daily question limit for this session.";
+                    flowEngine.addBotBubble(notice);
+                    if (data.ctaButtons !== undefined) {
+                        theme.ctaButtons = data.ctaButtons;
+                    }
+                    if (eventType === 'visitor_quota_exhausted') {
+                        setTimeout(() => flowEngine.suggestForm(), 500);
+                    }
+                },
                 onError: async (err) => {
                     console.warn('[Widget-Stream] Streaming error, falling back to sync endpoint:', err);
                     if (streamHandle) {
@@ -133,6 +148,9 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         }
                         const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
                         flowEngine.addBotBubble(finalResponse);
+                        if (data.code === 'VISITOR_QUOTA_EXHAUSTED') {
+                            setTimeout(() => flowEngine.suggestForm(), 500);
+                        }
                     } catch (syncErr) {
                         ui.setTyping(false);
                         flowEngine.addBotBubble("Connection error. Please try again.");

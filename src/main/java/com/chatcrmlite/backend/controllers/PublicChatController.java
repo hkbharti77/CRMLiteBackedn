@@ -79,6 +79,12 @@ public class PublicChatController {
     @Autowired(required = false)
     private com.chatcrmlite.backend.services.chat.ChatPersistenceProducer chatPersistenceProducer;
 
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.visitor.VisitorTokenService visitorTokenService;
+
+    @Autowired(required = false)
+    private com.chatcrmlite.backend.services.visitor.VisitorQuotaService visitorQuotaService;
+
     private final Cache<UUID, User> userCache = Caffeine.newBuilder()
             .maximumSize(1000)
             .expireAfterWrite(10, TimeUnit.MINUTES)
@@ -154,12 +160,22 @@ public class PublicChatController {
     }
 
     @GetMapping("/config/{businessId}")
-    public ResponseEntity<ThemeConfigDTO> getPublicConfig(@PathVariable UUID businessId) {
+    public ResponseEntity<ThemeConfigDTO> getPublicConfig(
+            @PathVariable UUID businessId,
+            @RequestHeader(value = "X-Visitor-Token", required = false) String visitorTokenHeader,
+            @RequestParam(value = "visitorToken", required = false) String visitorTokenParam) {
         User user = getCachedUser(businessId);
         if (user == null) {
             return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.ok(themeService.getThemeForUser(user));
+        ThemeConfigDTO theme = themeService.getThemeForUser(user);
+        if (visitorTokenService != null && theme != null) {
+            UUID tenantId = (user.getTenant() != null) ? user.getTenant().getId() : null;
+            String rawToken = (visitorTokenHeader != null && !visitorTokenHeader.isBlank()) ? visitorTokenHeader : visitorTokenParam;
+            var identity = visitorTokenService.resolveVisitorIdentity(rawToken, tenantId);
+            theme.setVisitorToken(identity.getFullToken());
+        }
+        return ResponseEntity.ok(theme);
     }
 
     /**
@@ -221,11 +237,49 @@ public class PublicChatController {
             return ResponseEntity.badRequest().body(Map.of("error", "Message is required"));
         }
 
+        if (visitorQuotaService != null && message.length() > visitorQuotaService.getMaxPromptLengthChars()) {
+            return ResponseEntity.badRequest().body(Map.of(
+                    "error", "Message is too long. Please shorten your question to under " + visitorQuotaService.getMaxPromptLengthChars() + " characters."
+            ));
+        }
+
         String sessionId = request.getOrDefault("sessionId", "anonymous");
         User owner = getCachedUser(businessId);
         
         if (owner != null) {
             persistChatMessage(owner, sessionId, WebChatMessage.Sender.USER, message, "WEBCHAT");
+        }
+
+        UUID tenantId = (owner != null && owner.getTenant() != null) ? owner.getTenant().getId() : null;
+        String rawVisitorToken = httpRequest.getHeader("X-Visitor-Token");
+        if (rawVisitorToken == null || rawVisitorToken.isBlank()) {
+            rawVisitorToken = request.get("visitorToken");
+        }
+        String visitorId = sessionId;
+        if (visitorTokenService != null) {
+            var identity = visitorTokenService.resolveVisitorIdentity(rawVisitorToken, tenantId);
+            visitorId = identity.getVisitorId();
+        }
+
+        if (visitorQuotaService != null && tenantId != null) {
+            var quotaResult = visitorQuotaService.checkAndReserveQuota(tenantId, visitorId, 150, message);
+            if (!quotaResult.isAllowed()) {
+                if (quotaResult.getStatus() == com.chatcrmlite.backend.services.visitor.VisitorQuotaService.QuotaStatus.CONCURRENT_BLOCKED) {
+                    return ResponseEntity.status(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS)
+                            .body(Map.of("error", quotaResult.getMessage()));
+                } else {
+                    String fallbackNotice = "You have reached your daily question limit for this session. To speak directly with our team, please use the contact options below:";
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackNotice, "FAIR_SHARE_EXCEEDED");
+                    Map<String, Object> resp = new java.util.HashMap<>();
+                    resp.put("response", fallbackNotice);
+                    resp.put("code", "VISITOR_QUOTA_EXHAUSTED");
+                    ThemeConfigDTO theme = themeService.getThemeForUser(owner);
+                    if (theme != null && theme.getCtaButtons() != null) {
+                        resp.put("ctaButtons", theme.getCtaButtons());
+                    }
+                    return ResponseEntity.ok(resp);
+                }
+            }
         }
 
         if (owner != null && owner.getTenant() != null) {
@@ -377,6 +431,12 @@ public class PublicChatController {
             }
         }
 
+        // Settle visitor quota tokens
+        if (visitorQuotaService != null && tenantId != null) {
+            int actualTokens = response != null ? Math.max(1, response.length() / 4) : 100;
+            visitorQuotaService.settleVisitorUsage(tenantId, visitorId, 150, actualTokens);
+        }
+
         if (owner != null) {
             persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, response, "RAG");
         }
@@ -420,6 +480,17 @@ public class PublicChatController {
             return emitter;
         }
 
+        if (visitorQuotaService != null && message.length() > visitorQuotaService.getMaxPromptLengthChars()) {
+            try {
+                emitter.send(SseEmitter.event().name("error").data(Map.of(
+                        "code", "PROMPT_TOO_LONG",
+                        "message", "Your message is too long (max " + visitorQuotaService.getMaxPromptLengthChars() + " characters). Please shorten it."
+                )));
+                emitter.complete();
+            } catch (Exception ignored) {}
+            return emitter;
+        }
+
         String sessionId = request.getOrDefault("sessionId", "anonymous");
         User owner = getCachedUser(businessId);
         if (owner == null) {
@@ -436,12 +507,59 @@ public class PublicChatController {
         ThemeConfigDTO theme = themeService.getThemeForUser(owner);
         java.util.List<com.chatcrmlite.backend.dto.WidgetCtaDTO> ctaButtons = theme != null ? theme.getCtaButtons() : null;
 
+        UUID tenantId = (owner.getTenant() != null) ? owner.getTenant().getId() : null;
+
+        // Resolve cryptographically signed Visitor Identity
+        String rawVisitorToken = httpRequest.getHeader("X-Visitor-Token");
+        if (rawVisitorToken == null || rawVisitorToken.isBlank()) {
+            rawVisitorToken = request.get("visitorToken");
+        }
+        String visitorId = sessionId;
+        if (visitorTokenService != null) {
+            var identity = visitorTokenService.resolveVisitorIdentity(rawVisitorToken, tenantId);
+            visitorId = identity.getVisitorId();
+        }
+        final String effectiveVisitorId = visitorId;
+
+        // 2. Micro Layer: Atomic Visitor Fair-Share Quota Reservation (Redis Lua)
+        if (visitorQuotaService != null && tenantId != null) {
+            var quotaResult = visitorQuotaService.checkAndReserveQuota(tenantId, effectiveVisitorId, 150, message);
+            if (!quotaResult.isAllowed()) {
+                if (quotaResult.getStatus() == com.chatcrmlite.backend.services.visitor.VisitorQuotaService.QuotaStatus.CONCURRENT_BLOCKED) {
+                    try {
+                        emitter.send(SseEmitter.event().name("error").data(Map.of(
+                                "code", "CONCURRENT_REQUEST_BLOCKED",
+                                "message", quotaResult.getMessage()
+                        )));
+                        emitter.complete();
+                    } catch (Exception ignored) {}
+                    return emitter;
+                } else {
+                    // Scenario A: Visitor Fair-Share Quota Exceeded!
+                    String fallbackNotice = "You have reached your daily question limit for this session. To speak directly with our team, please use the contact options below:";
+                    persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, fallbackNotice, "FAIR_SHARE_EXCEEDED");
+                    try {
+                        Map<String, Object> fallbackData = new java.util.HashMap<>();
+                        fallbackData.put("notice", fallbackNotice);
+                        fallbackData.put("code", "VISITOR_QUOTA_EXHAUSTED");
+                        if (ctaButtons != null) fallbackData.put("ctaButtons", ctaButtons);
+                        emitter.send(SseEmitter.event().name("visitor_quota_exhausted").data(fallbackData));
+                        emitter.complete();
+                    } catch (Exception ignored) {}
+                    return emitter;
+                }
+            }
+        }
+
         // Verify Subscription / Credits
         if (owner.getTenant() != null) {
             try {
                 SubscriptionPlan plan = quotaEnforcerService.getActiveSubscription(owner.getTenant().getId()).getPlan();
                 boolean hasCredits = creditMeteringService != null && creditMeteringService.hasAvailableCredits(owner.getTenant().getId(), 1);
                 if (!plan.isHasRagLlm() && !hasCredits) {
+                    if (visitorQuotaService != null && tenantId != null) {
+                        visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
+                    }
                     String noRagMsg = "I am a menu-based assistant. Please use the options provided to interact.";
                     persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, noRagMsg, "MENU");
                     sendSingleChunkAndDone(emitter, noRagMsg, "MENU", ctaButtons);
@@ -454,6 +572,9 @@ public class PublicChatController {
         try {
             GuardrailResult guardrail = guardrailService.evaluate(message, "web_user_" + sessionId, false, owner.getBusinessSubType(), businessId);
             if (guardrail.getDecision() == Decision.GREETING) {
+                if (visitorQuotaService != null && tenantId != null) {
+                    visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
+                }
                 boolean isReturning = "true".equalsIgnoreCase(request.get("isReturning"));
                 String greeting = isReturning ? theme.getReturningMessage() : theme.getWelcomeMessage();
                 if (greeting == null || greeting.isBlank()) {
@@ -466,6 +587,9 @@ public class PublicChatController {
                 sendSingleChunkAndDone(emitter, greeting, "GREETING", ctaButtons);
                 return emitter;
             } else if (guardrail.getDecision() == Decision.IGNORE || guardrail.getDecision() == Decision.MENU) {
+                if (visitorQuotaService != null && tenantId != null) {
+                    visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
+                }
                 String fallbackMsg = theme.getGuardrailMessageGibberish();
                 if (fallbackMsg == null || fallbackMsg.isBlank()) {
                     fallbackMsg = "We couldn't understand your request. Please rephrase your message or select an option below.";
@@ -476,24 +600,42 @@ public class PublicChatController {
             }
         } catch (Exception ignored) {}
 
-        // Credit reservation (Two-Phase Protocol)
+        // 3. Macro Layer: Tenant Credit Reservation (Two-Phase Protocol with DB Pessimistic Lock)
         final java.util.concurrent.atomic.AtomicReference<UUID> reservationHolder = new java.util.concurrent.atomic.AtomicReference<>();
         if (owner.getTenant() != null && creditMeteringService != null) {
             try {
                 UUID resId = creditMeteringService.reserveCredits(owner.getTenant().getId(), 1, java.time.Duration.ofMinutes(5), sessionId);
                 reservationHolder.set(resId);
             } catch (Exception credEx) {
+                // Scenario B: Tenant AI Credits Exhausted!
                 org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
                         .warn("⚠️ Credit reservation failed for tenant {}: {}", owner.getTenant().getId(), credEx.getMessage());
+                if (visitorQuotaService != null && tenantId != null) {
+                    visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
+                }
+                String tenantDepletedMsg = "Our AI assistant is currently unavailable. Please select an option from our menu or contact our team directly:";
+                persistChatMessage(owner, sessionId, WebChatMessage.Sender.BOT, tenantDepletedMsg, "TENANT_EXHAUSTED");
+                try {
+                    Map<String, Object> tenantFallback = new java.util.HashMap<>();
+                    tenantFallback.put("notice", tenantDepletedMsg);
+                    tenantFallback.put("code", "TENANT_QUOTA_EXHAUSTED");
+                    if (ctaButtons != null) tenantFallback.put("ctaButtons", ctaButtons);
+                    emitter.send(SseEmitter.event().name("tenant_quota_exhausted").data(tenantFallback));
+                    emitter.complete();
+                } catch (Exception ignored) {}
+                return emitter;
             }
         }
 
-        // Disconnect & Timeout lifecycle handlers
+        // Disconnect & Timeout lifecycle handlers (Release credit and visitor reservations)
         emitter.onTimeout(() -> {
             org.slf4j.LoggerFactory.getLogger(PublicChatController.class)
                     .warn("⏱️ [PublicChatStream] SSE Stream timed out for sessionId={}", sessionId);
             if (reservationHolder.get() != null && creditMeteringService != null) {
                 creditMeteringService.releaseReservation(reservationHolder.get());
+            }
+            if (visitorQuotaService != null && tenantId != null) {
+                visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
             }
             try {
                 emitter.send(SseEmitter.event().name("error").data(Map.of("code", "STREAM_TIMEOUT", "message", "Request timed out.")));
@@ -506,6 +648,9 @@ public class PublicChatController {
                     .warn("🔌 [PublicChatStream] SSE Client disconnected or error for sessionId={}: {}", sessionId, err.getMessage());
             if (reservationHolder.get() != null && creditMeteringService != null) {
                 creditMeteringService.releaseReservation(reservationHolder.get());
+            }
+            if (visitorQuotaService != null && tenantId != null) {
+                visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
             }
         });
 
@@ -532,9 +677,15 @@ public class PublicChatController {
                         emitter.send(SseEmitter.event().name("done").data(doneData));
                         emitter.complete();
 
-                        // Settle credit reservation
+                        // 4. Settle credit reservation
                         if (reservationHolder.get() != null && creditMeteringService != null) {
                             creditMeteringService.settleReservation(reservationHolder.get(), 1, "Public Web Chat Stream");
+                        }
+
+                        // Settle visitor actual tokens
+                        if (visitorQuotaService != null && tenantId != null) {
+                            int actualTokens = meta.fullResponse() != null ? Math.max(1, meta.fullResponse().length() / 4) : 100;
+                            visitorQuotaService.settleVisitorUsage(tenantId, effectiveVisitorId, 150, actualTokens);
                         }
 
                         // Asynchronously persist bot response to Redis Stream
@@ -548,6 +699,9 @@ public class PublicChatController {
                     try {
                         if (reservationHolder.get() != null && creditMeteringService != null) {
                             creditMeteringService.releaseReservation(reservationHolder.get());
+                        }
+                        if (visitorQuotaService != null && tenantId != null) {
+                            visitorQuotaService.releaseVisitorReservation(tenantId, effectiveVisitorId, 150);
                         }
                         emitter.send(SseEmitter.event().name("error").data(Map.of(
                                 "code", "GENERATION_ERROR",
