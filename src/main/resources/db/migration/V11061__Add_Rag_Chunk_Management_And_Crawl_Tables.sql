@@ -24,20 +24,35 @@ CREATE TABLE IF NOT EXISTS knowledge_documents (
 CREATE INDEX IF NOT EXISTS idx_knowledge_documents_tenant_status 
     ON knowledge_documents(tenant_id, status);
 
--- Seed knowledge_documents from legacy document_chunks if records exist
+-- Clean up orphaned document_chunks whose tenant_id does not exist in tenants
+DELETE FROM document_chunks 
+WHERE tenant_id NOT IN (SELECT id FROM tenants);
+
+-- Seed knowledge_documents from legacy document_chunks if records exist and tenant exists
+WITH legacy_docs AS (
+    SELECT 
+        dc.document_id, 
+        dc.tenant_id, 
+        COALESCE(MAX(dc.metadata->>'source'), 'Document-' || SUBSTRING(dc.document_id::text, 1, 8)) AS name,
+        COUNT(*) AS total_chunks,
+        ROW_NUMBER() OVER (PARTITION BY dc.document_id ORDER BY COUNT(*) DESC) AS rn
+    FROM document_chunks dc
+    INNER JOIN tenants t ON t.id = dc.tenant_id
+    GROUP BY dc.document_id, dc.tenant_id
+)
 INSERT INTO knowledge_documents (id, tenant_id, name, source_type, active_version, status, total_chunks, created_at, updated_at)
 SELECT 
     document_id, 
     tenant_id, 
-    COALESCE(MAX(metadata->>'source'), 'Document-' || SUBSTRING(document_id::text, 1, 8)) AS name,
-    'UPLOAD' AS source_type,
-    1 AS active_version,
-    'ACTIVE' AS status,
-    COUNT(*) AS total_chunks,
-    NOW(),
+    name, 
+    'UPLOAD', 
+    1, 
+    'ACTIVE', 
+    total_chunks, 
+    NOW(), 
     NOW()
-FROM document_chunks
-GROUP BY document_id, tenant_id
+FROM legacy_docs
+WHERE rn = 1
 ON CONFLICT (id) DO NOTHING;
 
 -- 2. Stage 1 Backfill: Overflow-safe metadata extraction with bounded regex and deduplication
