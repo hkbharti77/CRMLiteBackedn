@@ -65,14 +65,16 @@ public class ConversationOrchestrator {
         boolean includePhone = !isTelephonyOrWhatsApp; // Must ask phone on Website Voice Assistant!
 
         // ── Dynamic specs from FlowConfigService (only attach tools if turn is actionable) ──
-        List<ToolSpecification> availableTools = toolRegistry.getEnabledToolSpecsForTenant(
-                context != null ? context.tenantId() : null, 
-                context != null ? context.userId() : null, 
-                includePhone
-        );
-        List<ToolSpecification> tools = (isSimpleGreeting || availableTools == null) 
-                ? Collections.emptyList() 
-                : availableTools;
+        List<ToolSpecification> tools = isSimpleGreeting
+                ? Collections.emptyList()
+                : toolRegistry.getEnabledToolSpecsForTenant(
+                        context != null ? context.tenantId() : null, 
+                        context != null ? context.userId() : null, 
+                        includePhone
+                  );
+        if (tools == null) {
+            tools = Collections.emptyList();
+        }
 
         log.debug("[Orchestrator] Turn for tenant={} isSimpleGreeting={} activeTools={} includePhone={}", 
                 context.tenantId(), isSimpleGreeting, tools.size(), includePhone);
@@ -148,7 +150,7 @@ public class ConversationOrchestrator {
                     .tools(tools.isEmpty() ? null : tools)
                     .tenantId(context.tenantId())
                     .complexity(AiRequest.TaskComplexity.LOW)
-                    .maxTokens(55)
+                    .maxTokens(120)
                     .temperature(0.3)
                     .build();
 

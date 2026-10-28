@@ -66,6 +66,12 @@ public class DataInitializer implements CommandLineRunner {
             jdbcTemplate.execute("ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_seen_at TIMESTAMP;");
             jdbcTemplate.execute("ALTER TABLE billing_transactions ADD COLUMN IF NOT EXISTS invoice_email_status VARCHAR(20) DEFAULT 'PENDING';");
             jdbcTemplate.execute("ALTER TABLE billing_transactions ADD COLUMN IF NOT EXISTS invoice_email_sent_at TIMESTAMP;");
+            jdbcTemplate.execute("UPDATE subscription_plans SET has_rag_llm = TRUE WHERE id IN ('FREE', 'STARTER');");
+            jdbcTemplate.execute("DROP INDEX IF EXISTS document_chunks_hash_tenant_unique_idx;");
+            jdbcTemplate.execute("INSERT INTO tenant_rag_quotas (tenant_id, daily_page_limit, daily_pages_consumed, monthly_chunk_limit, monthly_chunks_consumed, timezone, last_daily_reset_at, last_monthly_reset_at, updated_at) " +
+                    "SELECT id, 5, 0, 250, 0, 'UTC', NOW(), NOW(), NOW() FROM tenants ON CONFLICT (tenant_id) DO NOTHING;");
+            jdbcTemplate.execute("UPDATE rag_crawl_jobs j SET total_chunks = d.total_chunks FROM knowledge_documents d WHERE j.document_id = d.id AND (j.total_chunks = 0 OR j.total_chunks IS NULL);");
+            jdbcTemplate.execute("DELETE FROM knowledge_documents WHERE status = 'ACTIVE' AND id NOT IN (SELECT DISTINCT document_id FROM document_chunks WHERE is_active = TRUE);");
         } catch (Exception e) {
             log.warn("[SchemaMigration] Column auto-migration notice: {}", e.getMessage());
         }
@@ -124,7 +130,7 @@ public class DataInitializer implements CommandLineRunner {
         if (subscriptionPlanRepository.findById("FREE").isEmpty()) {
             subscriptionPlanRepository.save(new SubscriptionPlan(
                 "FREE", "Free Starter Pack", BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO,
-                1, 100, 15, 10, 500, false, false, 0, false, false
+                1, 100, 15, 10, 500, false, false, 0, false, true
             ));
             log.info("[Init] Seeded FREE subscription plan.");
         }
@@ -147,7 +153,7 @@ public class DataInitializer implements CommandLineRunner {
                 .hasWhatsappCampaign(true)
                 .whatsappCampaignLimit(2500)
                 .hasCustomWidget(false)
-                .hasRagLlm(false)
+                .hasRagLlm(true)
                 .includedAiCredits(2500)
                 .hasWhatsappCoexistence(true)
                 .build();

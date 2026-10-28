@@ -29,8 +29,33 @@ public interface DocumentChunkRepository extends JpaRepository<DocumentChunk, UU
     @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM DocumentChunk d WHERE d.tenant.id = :tenantId AND d.contentHash = :contentHash")
     boolean existsByTenantIdAndContentHash(@Param("tenantId") UUID tenantId, @Param("contentHash") String contentHash);
 
+    @Query("SELECT CASE WHEN COUNT(d) > 0 THEN true ELSE false END FROM DocumentChunk d WHERE d.documentId = :documentId AND d.chunkIndex = :chunkIndex AND d.isActive = TRUE")
+    boolean existsByDocumentIdAndChunkIndexAndIsActiveTrue(@Param("documentId") UUID documentId, @Param("chunkIndex") Integer chunkIndex);
+
     @Query("SELECT d FROM DocumentChunk d WHERE d.documentId = :documentId AND d.tenant.id = :tenantId")
     List<DocumentChunk> findByDocumentIdAndTenantId(@Param("documentId") UUID documentId, @Param("tenantId") UUID tenantId);
+
+    @Query("SELECT d FROM DocumentChunk d WHERE d.documentId = :documentId AND d.isActive = TRUE ORDER BY d.chunkIndex ASC")
+    List<DocumentChunk> findByDocumentIdAndIsActiveTrueOrderByChunkIndexAsc(@Param("documentId") UUID documentId);
+
+    @Query("SELECT d FROM DocumentChunk d WHERE d.documentId = :documentId AND d.tenant.id = :tenantId AND d.isActive = TRUE ORDER BY d.chunkIndex ASC")
+    org.springframework.data.domain.Page<DocumentChunk> findByDocumentIdAndTenantIdAndIsActiveTrueOrderByChunkIndexAsc(
+            @Param("documentId") UUID documentId, @Param("tenantId") UUID tenantId, org.springframework.data.domain.Pageable pageable);
+
+    @Query("SELECT COUNT(d) FROM DocumentChunk d WHERE d.documentId = :documentId AND d.isActive = TRUE")
+    long countByDocumentIdAndIsActiveTrue(@Param("documentId") UUID documentId);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE DocumentChunk d SET d.isActive = FALSE, d.updatedAt = :now WHERE d.documentId = :documentId AND d.isActive = TRUE")
+    int deactivateActiveChunks(@Param("documentId") UUID documentId, @Param("now") java.time.Instant now);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("UPDATE DocumentChunk d SET d.isActive = TRUE, d.updatedAt = :now WHERE d.documentId = :documentId AND d.version = :version")
+    int activateCandidateChunks(@Param("documentId") UUID documentId, @Param("version") Integer version, @Param("now") java.time.Instant now);
+
+    @org.springframework.data.jpa.repository.Modifying
+    @Query("DELETE FROM DocumentChunk d WHERE d.documentId = :documentId AND d.version = :version AND d.isActive = FALSE")
+    int deleteCandidateChunks(@Param("documentId") UUID documentId, @Param("version") Integer version);
 
     @org.springframework.data.jpa.repository.Modifying
     @org.springframework.transaction.annotation.Transactional

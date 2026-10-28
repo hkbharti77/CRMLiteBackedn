@@ -369,7 +369,7 @@ public class RagConfig {
         @Override
         public double getCostPer1kTokens() {
             if ("openrouter".equalsIgnoreCase(aiProvider)) {
-                return 0.0002;
+                return (openRouterModelName != null && openRouterModelName.endsWith(":free")) ? 0.0 : 0.0002;
             }
             return "google".equalsIgnoreCase(aiProvider) || "gemini".equalsIgnoreCase(aiProvider) ? 0.00015 : 0.0;
         }

@@ -29,10 +29,10 @@ public class PublicVoiceChatController {
     private final com.chatcrmlite.backend.repositories.TenantRepository tenantRepository;
     private final com.chatcrmlite.backend.services.tenant.QuotaEnforcerService quotaEnforcerService;
 
-    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
+    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-2-thalia-en}")
     private String defaultTtsModel;
 
-    @org.springframework.beans.factory.annotation.Value("${deepgram.stt.model:nova-2}")
+    @org.springframework.beans.factory.annotation.Value("${deepgram.stt.model:nova-3}")
     private String defaultSttModel;
 
     @org.springframework.beans.factory.annotation.Value("${voice.max-tts-characters:3000}")

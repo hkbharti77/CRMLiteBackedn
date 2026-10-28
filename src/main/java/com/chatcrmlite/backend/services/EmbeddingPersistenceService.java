@@ -45,8 +45,8 @@ public class EmbeddingPersistenceService {
         int savedCount = 0;
         int skippedDuplicates = 0;
         for (DocumentChunk chunk : chunks) {
-            if (chunk.getContentHash() != null
-                    && repository.existsByTenantIdAndContentHash(tenantId, chunk.getContentHash())) {
+            if (chunk.getDocumentId() != null && chunk.getChunkIndex() != null
+                    && repository.existsByDocumentIdAndChunkIndexAndIsActiveTrue(chunk.getDocumentId(), chunk.getChunkIndex())) {
                 skippedDuplicates++;
                 continue;
             }

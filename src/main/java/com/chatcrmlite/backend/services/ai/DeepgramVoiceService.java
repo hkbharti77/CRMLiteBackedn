@@ -31,7 +31,7 @@ public class DeepgramVoiceService {
     @Value("${deepgram.api.key:43762e9a6e2f28db37cbaea5f671582aa181a4bc}")
     private String apiKey;
 
-    @Value("${deepgram.stt.model:nova-2}")
+    @Value("${deepgram.stt.model:nova-3}")
     private String sttModel;
 
     @Value("${deepgram.stt.smart-format:true}")
@@ -43,7 +43,7 @@ public class DeepgramVoiceService {
     @Value("${deepgram.stt.detect-language:true}")
     private boolean detectLanguage;
 
-    @Value("${deepgram.tts.model:aura-stella-en}")
+    @Value("${deepgram.tts.model:aura-2-thalia-en}")
     private String ttsModel;
 
     @Value("${deepgram.connect-timeout-ms:8000}")
@@ -298,7 +298,7 @@ public class DeepgramVoiceService {
         }
 
         long start = System.currentTimeMillis();
-        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-stella-en");
+        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-2-thalia-en");
         String safeKey = maskKey(apiKey);
 
         // Request linear16 PCM (raw). container=none guarantees no WAV header.
@@ -375,7 +375,7 @@ public class DeepgramVoiceService {
         }
 
         long start = System.currentTimeMillis();
-        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-stella-en");
+        String activeModel = (customModel != null && customModel.startsWith("aura-")) ? customModel : (ttsModel != null && ttsModel.startsWith("aura-") ? ttsModel : "aura-2-thalia-en");
         String safeKey = maskKey(apiKey);
 
         // Request WAV (linear16 PCM) so OpusAudioEncoder can parse the WAV header without resampling.

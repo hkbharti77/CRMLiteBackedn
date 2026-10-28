@@ -38,8 +38,8 @@ public class WhatsAppVoiceCallBridgeService {
     @org.springframework.beans.factory.annotation.Value("${voice.tts.provider:deepgram}")
     private String ttsProvider = "deepgram";
 
-    @org.springframework.beans.factory.annotation.Value("${sarvam.tts.speaker:simran}")
-    private String sarvamSpeaker = "simran";
+    @org.springframework.beans.factory.annotation.Value("${sarvam.tts.speaker:simran_enhi_customer}")
+    private String sarvamSpeaker = "simran_enhi_customer";
 
     @org.springframework.beans.factory.annotation.Value("${sarvam.tts.language:hi-IN}")
     private String sarvamLanguage = "hi-IN";
@@ -104,7 +104,7 @@ public class WhatsAppVoiceCallBridgeService {
         if (this.sarvamSpeaker != null && !this.sarvamSpeaker.isBlank()) {
             return this.sarvamSpeaker.trim();
         }
-        return "simran";
+        return "simran_enhi_customer";
     }
 
     @org.springframework.beans.factory.annotation.Autowired

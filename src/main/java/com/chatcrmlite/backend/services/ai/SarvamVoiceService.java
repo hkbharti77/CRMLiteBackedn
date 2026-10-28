@@ -26,10 +26,10 @@ public class SarvamVoiceService {
     @Value("${sarvam.api.key:}")
     private String apiKey;
 
-    @Value("${sarvam.tts.speaker:simran}")
+    @Value("${sarvam.tts.speaker:simran_enhi_customer}")
     private String defaultSpeaker;
 
-    @Value("${sarvam.tts.model:bulbul:v3}")
+    @Value("${sarvam.tts.model:bulbul:v4-flash}")
     private String defaultModel;
 
     @Value("${sarvam.connect-timeout-ms:3000}")
@@ -74,12 +74,14 @@ public class SarvamVoiceService {
         long start = System.currentTimeMillis();
         String effectiveDefaultSpeaker = (defaultSpeaker != null && !defaultSpeaker.isBlank())
                 ? defaultSpeaker.trim()
-                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_SPEAKER", "simran").trim();
-        String activeSpeaker = (customSpeaker != null && !customSpeaker.isBlank()) ? customSpeaker.trim() : effectiveDefaultSpeaker;
+                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_SPEAKER", "simran_enhi_customer").trim();
+        String rawSpeaker = (customSpeaker != null && !customSpeaker.isBlank()) ? customSpeaker.trim() : effectiveDefaultSpeaker;
 
         String effectiveModel = (defaultModel != null && !defaultModel.isBlank())
                 ? defaultModel.trim()
-                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_MODEL", "bulbul:v3").trim();
+                : com.chatcrmlite.backend.utils.DotenvLoader.get("SARVAM_TTS_MODEL", "bulbul:v4-flash").trim();
+
+        String activeSpeaker = mapToCompatibleSpeaker(rawSpeaker, effectiveModel);
 
         String langCode = (targetLanguageCode != null && !targetLanguageCode.isBlank()) ? targetLanguageCode.trim() : "hi-IN";
         String safeKey = maskKey(effectiveApiKey);
@@ -176,6 +178,51 @@ public class SarvamVoiceService {
         log.error("[Sarvam-TTS] All {} synthesis attempts failed. Last error: {}",
                 attempts, lastException != null ? lastException.getMessage() : "unknown");
         return new byte[0];
+    }
+
+    /**
+     * Normalizes and maps speaker IDs between legacy v3 names and v4-flash persona identifiers.
+     */
+    public static String mapToCompatibleSpeaker(String speaker, String model) {
+        if (speaker == null || speaker.isBlank()) {
+            return (model != null && model.contains("v4")) ? "simran_enhi_customer" : "simran";
+        }
+        String clean = speaker.trim().toLowerCase();
+
+        boolean isV4 = model != null && model.contains("v4");
+        if (isV4) {
+            // If already in v4 persona format (e.g. simran_enhi_customer, rahul_hi_conversational)
+            if (clean.contains("_")) {
+                return clean;
+            }
+            // Map legacy v3 speaker names to their premier v4-flash personas
+            switch (clean) {
+                case "simran": return "simran_enhi_customer";
+                case "priya": return "ishita_enhi_customer";
+                case "neha": return "neha_en_customer";
+                case "ishita": return "ishita_enhi_customer";
+                case "ritu": return "ritu_hi_customer";
+                case "sanchita": return "sanchita_hi_assistant";
+                case "roopa": return "roopa_hi_conversational";
+                case "shalini": return "shalini_enhi_customer";
+                case "rahul": return "rahul_hi_conversational";
+                case "rohan": return "rohan_en_recovery";
+                case "amit": return "amit_hi_conversational";
+                case "shubh": return "shubh_enhi_customer";
+                case "aditya": return "aditya_hi_conversational";
+                case "sunny": return "sunny_enhi_customer";
+                case "ratan": return "ratan_hi_customer_expressive";
+                case "dev": return "dev_en_conversational";
+                default: return "simran_enhi_customer";
+            }
+        } else {
+            // For v3 or older, extract base speaker name if persona format was passed
+            if (clean.contains("_")) {
+                String base = clean.split("_")[0];
+                return base;
+            }
+            return clean;
+        }
     }
 
     private String maskKey(String key) {
