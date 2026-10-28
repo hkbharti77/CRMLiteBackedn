@@ -47,6 +47,7 @@ public class ContactService {
             contacts = contactRepository.findAllByOwnerWithTags(user);
         }
         return contacts.stream()
+                .filter(c -> !c.isMerged())
                 .map(this::toDTO)
                 .collect(Collectors.toList());
     }
@@ -347,6 +348,8 @@ public class ContactService {
                 .emailConsentStatus(emailStatus)
                 .smsConsentStatus(smsStatus)
                 .marketingOptedOut(c.isMarketingOptedOut())
+                .isMerged(c.isMerged())
+                .mergedIntoId(c.getMergedIntoId())
                 .tags(c.getTags().stream()
                         .map(Tag::getName)
                         .collect(Collectors.toList()))

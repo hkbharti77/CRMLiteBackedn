@@ -62,5 +62,20 @@ public interface ContactRepository extends JpaRepository<Contact, UUID>, JpaSpec
      */
     @Query("SELECT DISTINCT c FROM Contact c LEFT JOIN FETCH c.tags")
     List<Contact> findAllWithTags();
+
+    @Query("SELECT c FROM Contact c WHERE c.tenant.id = :tenantId AND c.isMerged = false")
+    List<Contact> findAllActiveByTenant(@Param("tenantId") UUID tenantId);
+
+    @Query("SELECT c FROM Contact c WHERE c.tenant.id = :tenantId AND c.id <> :excludeId AND c.isMerged = false AND (" +
+           "(:phone IS NOT NULL AND c.waId = :phone) OR " +
+           "(:email IS NOT NULL AND LOWER(c.email) = LOWER(:email)) OR " +
+           "(:name IS NOT NULL AND LOWER(c.name) = LOWER(:name)))")
+    List<Contact> findPotentialDuplicates(
+            @Param("tenantId") UUID tenantId,
+            @Param("excludeId") UUID excludeId,
+            @Param("phone") String phone,
+            @Param("email") String email,
+            @Param("name") String name
+    );
 }
 

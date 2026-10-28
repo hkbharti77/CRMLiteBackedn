@@ -73,7 +73,7 @@ public class VoiceSessionService {
         return "deepgram";
     }
 
-    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-stella-en}")
+    @org.springframework.beans.factory.annotation.Value("${deepgram.tts.model:aura-2-thalia-en}")
     private String defaultTtsModel;
 
     @org.springframework.beans.factory.annotation.Value("${voice.max-audio-size-bytes:10485760}")
@@ -300,7 +300,7 @@ public class VoiceSessionService {
 
             String speakerId = session.getVoiceId();
             if (speakerId == null || speakerId.isBlank() || speakerId.startsWith("aura-")) {
-                speakerId = "simran"; // Safe default if unset or old Deepgram ID is found
+                speakerId = "simran_enhi_customer"; // Safe default if unset or old Deepgram ID is found
             } else if (speakerId.equals("arvind")) {
                 speakerId = "rahul"; // Map old invalid arvind to rahul
             } else if (speakerId.equals("amartya")) {

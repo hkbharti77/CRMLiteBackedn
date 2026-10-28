@@ -93,34 +93,115 @@ public class DataSourceConfig {
     }
 
     private void ensureQuartzTablesExist(DataSource dataSource) {
+        org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class);
         try (java.sql.Connection conn = dataSource.getConnection()) {
             boolean tableExists = false;
-            try (java.sql.PreparedStatement ps = conn.prepareStatement(
-                    "SELECT 1 FROM information_schema.tables WHERE table_name = 'qrtz_scheduler_state'")) {
+            // 1. Check for PostgreSQL search_path resolution via to_regclass
+            try (java.sql.PreparedStatement ps = conn.prepareStatement("SELECT to_regclass('qrtz_scheduler_state')")) {
                 try (java.sql.ResultSet rs = ps.executeQuery()) {
-                    if (rs.next()) {
+                    if (rs.next() && rs.getString(1) != null) {
                         tableExists = true;
                     }
                 }
+            } catch (Exception e) {
+                // Fallback for dialects without to_regclass (e.g. H2 in tests)
+                try (java.sql.PreparedStatement ps = conn.prepareStatement(
+                        "SELECT 1 FROM information_schema.tables WHERE LOWER(table_name) = 'qrtz_scheduler_state'")) {
+                    try (java.sql.ResultSet rs = ps.executeQuery()) {
+                        if (rs.next()) {
+                            tableExists = true;
+                        }
+                    }
+                } catch (Exception ignored) {}
             }
+
             if (!tableExists) {
-                org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
-                        .info("Quartz scheduler state table not found; executing schema.sql to ensure Quartz tables exist...");
-                org.springframework.core.io.ClassPathResource resource =
-                        new org.springframework.core.io.ClassPathResource("schema.sql");
-                if (resource.exists()) {
-                    org.springframework.jdbc.datasource.init.ResourceDatabasePopulator populator =
-                            new org.springframework.jdbc.datasource.init.ResourceDatabasePopulator(resource);
-                    populator.setContinueOnError(true);
-                    populator.setIgnoreFailedDrops(true);
-                    populator.execute(dataSource);
-                    org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
-                            .info("Successfully verified and initialized Quartz tables on writerDataSource.");
+                logger.info("Quartz scheduler state table not found; executing quartz-schema-postgres.sql to ensure Quartz tables exist...");
+                org.springframework.core.io.Resource resource =
+                        new org.springframework.core.io.ClassPathResource("quartz-schema-postgres.sql");
+                if (!resource.exists()) {
+                    resource = new org.springframework.core.io.ClassPathResource("schema.sql");
                 }
+
+                if (resource.exists()) {
+                    executeQuartzDdlScript(conn, resource, logger);
+                } else {
+                    logger.warn("Neither quartz-schema-postgres.sql nor schema.sql found in classpath; cannot auto-create Quartz tables.");
+                }
+            } else {
+                logger.info("Verified Quartz scheduler tables exist on writerDataSource.");
             }
         } catch (Exception e) {
-            org.slf4j.LoggerFactory.getLogger(DataSourceConfig.class)
-                    .warn("Pre-startup check for Quartz tables encountered a non-fatal warning: {}", e.getMessage());
+            logger.error("Pre-startup check/initialization for Quartz tables encountered an error: {}", e.getMessage(), e);
+        }
+    }
+
+    private void executeQuartzDdlScript(java.sql.Connection conn, org.springframework.core.io.Resource resource, org.slf4j.Logger logger) {
+        try {
+            String script;
+            try (java.io.InputStream is = resource.getInputStream()) {
+                script = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            }
+
+            String[] statements = script.split(";");
+            boolean originalAutoCommit = conn.getAutoCommit();
+            try {
+                conn.setAutoCommit(true); // Isolate each DDL statement so one failure doesn't abort the connection in PostgreSQL
+                for (String rawStmt : statements) {
+                    String stmtSql = rawStmt.trim();
+                    while (stmtSql.startsWith("--")) {
+                        int newlineIdx = stmtSql.indexOf('\n');
+                        if (newlineIdx == -1) {
+                            stmtSql = "";
+                            break;
+                        }
+                        stmtSql = stmtSql.substring(newlineIdx + 1).trim();
+                    }
+                    if (stmtSql.isEmpty()) {
+                        continue;
+                    }
+                    if (stmtSql.toUpperCase().startsWith("CREATE EXTENSION")) {
+                        continue;
+                    }
+                    try (java.sql.Statement s = conn.createStatement()) {
+                        s.execute(stmtSql);
+                    } catch (java.sql.SQLException ex) {
+                        logger.debug("Notice executing Quartz DDL statement: {} (SQL: {})", ex.getMessage(),
+                                stmtSql.length() > 60 ? stmtSql.substring(0, 60) + "..." : stmtSql);
+                    }
+                }
+            } finally {
+                try {
+                    conn.setAutoCommit(originalAutoCommit);
+                } catch (Exception ignored) {}
+            }
+
+            // Verify table actually exists now
+            boolean verified = false;
+            try (java.sql.Statement stmt = conn.createStatement()) {
+                try (java.sql.ResultSet rs = stmt.executeQuery("SELECT 1 FROM qrtz_scheduler_state LIMIT 1")) {
+                    verified = true;
+                }
+            } catch (Exception ex) {
+                // Ignore query error, will check to_regclass
+            }
+            if (!verified) {
+                try (java.sql.PreparedStatement ps = conn.prepareStatement("SELECT to_regclass('qrtz_scheduler_state')")) {
+                    try (java.sql.ResultSet rs = ps.executeQuery()) {
+                        if (rs.next() && rs.getString(1) != null) {
+                            verified = true;
+                        }
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            if (verified) {
+                logger.info("Successfully verified and initialized Quartz tables on writerDataSource.");
+            } else {
+                logger.error("WARNING: Quartz tables DDL executed, but qrtz_scheduler_state table could not be verified on writerDataSource!");
+            }
+        } catch (Exception e) {
+            logger.error("Failed to execute Quartz DDL script from {}: {}", resource.getFilename(), e.getMessage(), e);
         }
     }
 

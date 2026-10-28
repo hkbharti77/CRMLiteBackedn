@@ -91,6 +91,12 @@ public class Contact extends BaseTenantEntity {
     @Column(name = "marketing_preference_at")
     private java.time.Instant marketingPreferenceAt;
 
+    @Column(name = "is_merged", nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean isMerged = false;
+
+    @Column(name = "merged_into_id")
+    private UUID mergedIntoId;
+
     public Contact() {}
 
     public Contact(UUID id, String waId, String displayId, String name, String email, List<Tag> tags, String source, User owner, boolean botPaused) {
@@ -228,6 +234,11 @@ public class Contact extends BaseTenantEntity {
         }
     }
 
+    public boolean isMerged() { return isMerged; }
+    public void setMerged(boolean merged) { isMerged = merged; }
+    public UUID getMergedIntoId() { return mergedIntoId; }
+    public void setMergedIntoId(UUID mergedIntoId) { this.mergedIntoId = mergedIntoId; }
+
     public static ContactBuilder builder() { return new ContactBuilder(); }
 
     public static class ContactBuilder {
@@ -242,6 +253,8 @@ public class Contact extends BaseTenantEntity {
         private boolean botPaused;
         private String bsuid;
         private String parentBsuid;
+        private boolean isMerged;
+        private UUID mergedIntoId;
 
         public ContactBuilder id(UUID id) { this.id = id; return this; }
         public ContactBuilder waId(String waId) { this.waId = waId; return this; }
@@ -254,11 +267,15 @@ public class Contact extends BaseTenantEntity {
         public ContactBuilder botPaused(boolean botPaused) { this.botPaused = botPaused; return this; }
         public ContactBuilder bsuid(String bsuid) { this.bsuid = bsuid; return this; }
         public ContactBuilder parentBsuid(String parentBsuid) { this.parentBsuid = parentBsuid; return this; }
+        public ContactBuilder isMerged(boolean isMerged) { this.isMerged = isMerged; return this; }
+        public ContactBuilder mergedIntoId(UUID mergedIntoId) { this.mergedIntoId = mergedIntoId; return this; }
 
         public Contact build() {
             Contact c = new Contact(id, waId, displayId, name, email, tags, source, owner, botPaused);
             c.setBsuid(this.bsuid);
             c.setParentBsuid(this.parentBsuid);
+            c.setMerged(this.isMerged);
+            c.setMergedIntoId(this.mergedIntoId);
             return c;
         }
     }

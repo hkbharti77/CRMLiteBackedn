@@ -222,6 +222,10 @@
       <artifactId>jsoup</artifactId>
       <version>1.18.3</version>
     </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents.client5</groupId>
+      <artifactId>httpclient5</artifactId>
+    </dependency>
     
     <!-- Export Formats -->
     <dependency>

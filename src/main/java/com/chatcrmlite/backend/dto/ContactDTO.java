@@ -21,6 +21,8 @@ public class ContactDTO implements Serializable {
     private String emailConsentStatus = "UNKNOWN";
     private String smsConsentStatus = "UNKNOWN";
     private boolean marketingOptedOut = false;
+    private boolean isMerged = false;
+    private UUID mergedIntoId;
 
     public ContactDTO() {}
 
@@ -60,6 +62,10 @@ public class ContactDTO implements Serializable {
     public void setSmsConsentStatus(String smsConsentStatus) { this.smsConsentStatus = smsConsentStatus; }
     public boolean isMarketingOptedOut() { return marketingOptedOut; }
     public void setMarketingOptedOut(boolean marketingOptedOut) { this.marketingOptedOut = marketingOptedOut; }
+    public boolean isMerged() { return isMerged; }
+    public void setMerged(boolean merged) { isMerged = merged; }
+    public UUID getMergedIntoId() { return mergedIntoId; }
+    public void setMergedIntoId(UUID mergedIntoId) { this.mergedIntoId = mergedIntoId; }
 
     public static ContactDTOBuilder builder() {
         return new ContactDTOBuilder();
@@ -78,6 +84,8 @@ public class ContactDTO implements Serializable {
         private String emailConsentStatus = "UNKNOWN";
         private String smsConsentStatus = "UNKNOWN";
         private boolean marketingOptedOut = false;
+        private boolean isMerged = false;
+        private UUID mergedIntoId;
 
         public ContactDTOBuilder id(UUID id) { this.id = id; return this; }
         public ContactDTOBuilder waId(String waId) { this.waId = waId; return this; }
@@ -91,6 +99,8 @@ public class ContactDTO implements Serializable {
         public ContactDTOBuilder emailConsentStatus(String emailConsentStatus) { this.emailConsentStatus = emailConsentStatus; return this; }
         public ContactDTOBuilder smsConsentStatus(String smsConsentStatus) { this.smsConsentStatus = smsConsentStatus; return this; }
         public ContactDTOBuilder marketingOptedOut(boolean marketingOptedOut) { this.marketingOptedOut = marketingOptedOut; return this; }
+        public ContactDTOBuilder isMerged(boolean isMerged) { this.isMerged = isMerged; return this; }
+        public ContactDTOBuilder mergedIntoId(UUID mergedIntoId) { this.mergedIntoId = mergedIntoId; return this; }
 
         public ContactDTO build() {
             ContactDTO dto = new ContactDTO(id, waId, name, email, phone, tags, source, botPaused);
@@ -98,6 +108,8 @@ public class ContactDTO implements Serializable {
             dto.setEmailConsentStatus(emailConsentStatus);
             dto.setSmsConsentStatus(smsConsentStatus);
             dto.setMarketingOptedOut(marketingOptedOut);
+            dto.setMerged(isMerged);
+            dto.setMergedIntoId(mergedIntoId);
             return dto;
         }
     }

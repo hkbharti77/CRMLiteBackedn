@@ -677,14 +677,19 @@ public class PublicChatController {
                         emitter.send(SseEmitter.event().name("done").data(doneData));
                         emitter.complete();
 
-                        // 4. Settle credit reservation
+                        // 4. Settle credit reservation: FAQ queries are FREE (0 AI credits), RAG LLM costs 1 credit
                         if (reservationHolder.get() != null && creditMeteringService != null) {
-                            creditMeteringService.settleReservation(reservationHolder.get(), 1, "Public Web Chat Stream");
+                            if ("FAQ".equalsIgnoreCase(meta.source()) || "FAQ_SEMANTIC".equalsIgnoreCase(meta.source())) {
+                                creditMeteringService.releaseReservation(reservationHolder.get());
+                            } else {
+                                creditMeteringService.settleReservation(reservationHolder.get(), 1, "Public Web Chat Stream");
+                            }
                         }
 
-                        // Settle visitor actual tokens
+                        // Settle visitor actual tokens (FAQ consumes 0 AI LLM tokens)
                         if (visitorQuotaService != null && tenantId != null) {
-                            int actualTokens = meta.fullResponse() != null ? Math.max(1, meta.fullResponse().length() / 4) : 100;
+                            boolean isFaq = "FAQ".equalsIgnoreCase(meta.source()) || "FAQ_SEMANTIC".equalsIgnoreCase(meta.source());
+                            int actualTokens = isFaq ? 0 : (meta.fullResponse() != null ? Math.max(1, meta.fullResponse().length() / 4) : 100);
                             visitorQuotaService.settleVisitorUsage(tenantId, effectiveVisitorId, 150, actualTokens);
                         }
 

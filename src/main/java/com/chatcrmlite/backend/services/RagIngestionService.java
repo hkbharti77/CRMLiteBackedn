@@ -1,10 +1,13 @@
 package com.chatcrmlite.backend.services;
 
 import com.chatcrmlite.backend.models.DocumentChunk;
+import com.chatcrmlite.backend.models.KnowledgeDocument;
+import com.chatcrmlite.backend.repositories.KnowledgeDocumentRepository;
 import com.chatcrmlite.backend.services.ingestion.DocumentExtractionErrorCode;
 import com.chatcrmlite.backend.services.ingestion.DocumentExtractionException;
 import com.chatcrmlite.backend.services.ingestion.DocumentTextExtractor;
 import com.chatcrmlite.backend.services.rag.GraphIngestionService;
+import com.chatcrmlite.backend.services.rag.TenantQuotaManager;
 import dev.langchain4j.model.embedding.EmbeddingModel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -39,6 +43,12 @@ public class RagIngestionService {
     @Autowired
     private DocumentTextExtractor documentTextExtractor;
 
+    @Autowired
+    private TenantQuotaManager quotaManager;
+
+    @Autowired
+    private KnowledgeDocumentRepository knowledgeDocumentRepository;
+
     @Autowired(required = false)
     private GraphIngestionService graphIngestionService;
 
@@ -52,12 +62,22 @@ public class RagIngestionService {
             return ingestText(text, tenantId, filename, documentId);
         } catch (DocumentExtractionException e) {
             log.error("Ingestion extraction failed for tenant {}: [{}] {}", tenantId, e.getCode(), e.getMessage());
+            try {
+                quotaManager.releaseReservation(tenantId, documentId);
+            } catch (Exception qe) {
+                log.warn("Failed to release reservation for doc {}: {}", documentId, qe.getMessage());
+            }
             status.put("status", "FAILED");
             status.put("error", e.getMessage());
             status.put("errorCode", e.getCode().name());
             return CompletableFuture.completedFuture(status);
         } catch (Exception e) {
             log.error("Ingestion failed for tenant {}: {}", tenantId, e.getMessage());
+            try {
+                quotaManager.releaseReservation(tenantId, documentId);
+            } catch (Exception qe) {
+                log.warn("Failed to release reservation for doc {}: {}", documentId, qe.getMessage());
+            }
             status.put("status", "FAILED");
             status.put("error", e.getMessage());
             status.put("errorCode", DocumentExtractionErrorCode.PARSER_FAILURE.name());
@@ -99,6 +119,9 @@ public class RagIngestionService {
                 DocumentChunk docChunk = DocumentChunk.builder()
                         .documentId(documentId)
                         .tenantId(tenantId)
+                        .chunkIndex(i)
+                        .version(1)
+                        .isActive(true)
                         .content(chunk)
                         .contentHash(hash)
                         .embedding(embeddingString)
@@ -109,6 +132,43 @@ public class RagIngestionService {
             }
 
             int savedCount = persistenceService.saveChunks(tenantId, docChunks);
+            if (savedCount == 0) {
+                log.warn("No chunks saved for document {} (tenant: {})", documentId, tenantId);
+                status.put("status", "FAILED");
+                status.put("error", "No chunks were persisted");
+                status.put("errorCode", DocumentExtractionErrorCode.EMPTY_DOCUMENT.name());
+                return CompletableFuture.completedFuture(status);
+            }
+
+            // Register or update KnowledgeDocument
+            KnowledgeDocument doc = knowledgeDocumentRepository.findById(documentId).orElse(null);
+            if (doc == null) {
+                doc = KnowledgeDocument.builder()
+                        .id(documentId)
+                        .tenantId(tenantId)
+                        .name(source != null ? source : "Uploaded Document")
+                        .sourceType((source != null && (source.startsWith("http://") || source.startsWith("https://") || source.startsWith("Web Ingestion:"))) ? "WEB_CRAWL" : "UPLOAD")
+                        .sourceUrl((source != null && (source.startsWith("http://") || source.startsWith("https://"))) ? source : null)
+                        .activeVersion(1)
+                        .status("ACTIVE")
+                        .totalChunks(savedCount)
+                        .createdAt(Instant.now())
+                        .updatedAt(Instant.now())
+                        .build();
+                knowledgeDocumentRepository.save(doc);
+            } else {
+                doc.setTotalChunks(savedCount);
+                doc.setStatus("ACTIVE");
+                doc.setUpdatedAt(Instant.now());
+                knowledgeDocumentRepository.save(doc);
+            }
+
+            // Settle chunk quota reservation atomically
+            try {
+                quotaManager.settleReservation(tenantId, documentId, 0, savedCount);
+            } catch (Exception qe) {
+                log.warn("Quota settlement skipped or already settled for document {}: {}", documentId, qe.getMessage());
+            }
 
             try {
                 if (graphIngestionService != null && graphIngestionService.isAvailable()) {
@@ -125,6 +185,11 @@ public class RagIngestionService {
 
         } catch (Exception e) {
             log.error("Text ingestion failed for tenant {}: {}", tenantId, e.getMessage());
+            try {
+                quotaManager.releaseReservation(tenantId, documentId);
+            } catch (Exception re) {
+                log.warn("Failed to release reservation for failed document {}: {}", documentId, re.getMessage());
+            }
             status.put("status", "FAILED");
             status.put("error", e.getMessage());
             status.put("errorCode", DocumentExtractionErrorCode.PARSER_FAILURE.name());

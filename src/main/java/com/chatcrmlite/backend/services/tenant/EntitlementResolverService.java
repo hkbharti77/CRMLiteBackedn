@@ -365,7 +365,7 @@ public class EntitlementResolverService {
             return basePlan != null ? basePlan.isHasWhatsapp() : isProOrHigher;
         }
         if (key.equals("SERVICE_AI_RAG_LLM") || key.equals("PAGE_KNOWLEDGE_BASE") || key.equals("SETTINGS_SUPPORT_CATEGORIES")) {
-            return basePlan != null ? basePlan.isHasRagLlm() : "ENTERPRISE".equalsIgnoreCase(planId);
+            return basePlan != null ? basePlan.isHasRagLlm() : true;
         }
         if (key.equals("SERVICE_EMAIL_DISPATCH") || key.equals("PAGE_EMAILS") || key.equals("SETTINGS_EMAIL_PROVIDERS")) {
             return true;
@@ -447,7 +447,7 @@ public class EntitlementResolverService {
         boolean hasWa = plan != null && plan.isHasWhatsapp();
         boolean hasWaCamp = plan != null && plan.isHasWhatsappCampaign();
         boolean hasWidget = plan != null && plan.isHasCustomWidget();
-        boolean hasRag = plan != null && plan.isHasRagLlm();
+        boolean hasRag = plan != null ? plan.isHasRagLlm() : true;
         boolean hasVoice = plan != null && plan.isHasVoiceBot();
 
         int empLimit = plan != null ? plan.getEmployeeLimit() : 1;

@@ -57,7 +57,7 @@ public class DeepgramLiveSttSession {
                                  String callId,
                                  ObjectMapper objectMapper) {
         this.apiKey = apiKey != null ? apiKey.trim() : "";
-        this.model = (model != null && !model.isBlank()) ? model : "nova-2";
+        this.model = (model != null && !model.isBlank()) ? model : "nova-3";
         this.smartFormat = smartFormat;
         this.punctuate = punctuate;
         this.language = (language != null && !language.isBlank()) ? language : "en-IN";
