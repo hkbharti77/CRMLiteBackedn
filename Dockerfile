@@ -31,4 +31,6 @@ EXPOSE 8080 50000-50100/udp
 
 # JVM flags optimized for 2GB total RAM budget (EC2 t3.small / 2GB):
 # Heap (900m) + Metaspace (256m) + CodeCache (96m) = ~1.3GB safe footprint with G1GC
-ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xms256m", "-Xmx900m", "-XX:+UseG1GC", "-XX:MaxMetaspaceSize=256m", "-XX:ReservedCodeCacheSize=96m", "-Xss512k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
+ENV JAVA_TOOL_OPTIONS="-XX:MaxMetaspaceSize=256m -XX:ReservedCodeCacheSize=96m -Xms256m -Xmx900m -XX:+UseG1GC"
+
+ENTRYPOINT ["java", "-XX:+UseContainerSupport", "-Xss512k", "-XX:+ExitOnOutOfMemoryError", "-Djava.security.egd=file:/dev/./urandom", "-jar", "app.jar"]
