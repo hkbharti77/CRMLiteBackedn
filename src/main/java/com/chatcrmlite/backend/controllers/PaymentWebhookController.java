@@ -15,6 +15,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 
 import java.math.BigDecimal;
@@ -96,7 +97,12 @@ public class PaymentWebhookController {
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new RuntimeException("User not found"));
         UUID tenantId = user.getTenant().getId();
-        long balance = user.getTenant().getAiCreditBalance() != null ? user.getTenant().getAiCreditBalance() : 0L;
+
+        // Ensure active plan credits have been granted to the tenant
+        subscriptionBillingService.ensurePlanCreditsGranted(tenantId);
+
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(user.getTenant());
+        long balance = tenant.getAiCreditBalance() != null ? tenant.getAiCreditBalance() : 0L;
         org.springframework.data.domain.Page<com.chatcrmlite.backend.models.TenantCreditTransaction> history = 
                 creditMeteringService.getTransactionHistory(tenantId, org.springframework.data.domain.PageRequest.of(0, 10));
 
@@ -112,7 +118,12 @@ public class PaymentWebhookController {
                 .orElseThrow(() -> new RuntimeException("User not found"));
         UUID tenantId = user.getTenant().getId();
         
+        // Ensure active plan credits have been granted to the tenant
+        subscriptionBillingService.ensurePlanCreditsGranted(tenantId);
+
         TenantSubscription sub = quotaEnforcerService.getActiveSubscription(tenantId);
+        Tenant tenant = tenantRepository.findById(tenantId).orElse(user.getTenant());
+        long currentCredits = tenant.getAiCreditBalance() != null ? tenant.getAiCreditBalance() : 0L;
         
         long employeesCount = userRepository.countByTenantId(tenantId);
         long leadsCount = leadRepository.countByTenantId(tenantId);
@@ -130,7 +141,8 @@ public class PaymentWebhookController {
         response.put("billingCycle", sub.getBillingCycle().toString());
         response.put("currentPeriodStart", sub.getCurrentPeriodStart());
         response.put("currentPeriodEnd", sub.getCurrentPeriodEnd());
-        response.put("primaryResource", user.getTenant().getPrimaryResource().toString());
+        response.put("primaryResource", tenant.getPrimaryResource() != null ? tenant.getPrimaryResource().toString() : "LEADS");
+        response.put("aiCreditBalance", currentCredits);
         
         Map<String, Object> limits = new HashMap<>();
         limits.put("employeeLimit", sub.getPlan().getEmployeeLimit());
@@ -154,7 +166,7 @@ public class PaymentWebhookController {
         usage.put("appointmentsCount", appointmentsCount);
         usage.put("ticketsCount", ticketsCount);
         usage.put("emailsCount", emailsCount);
-        usage.put("aiCreditBalance", user.getTenant().getAiCreditBalance() != null ? user.getTenant().getAiCreditBalance() : 0L);
+        usage.put("aiCreditBalance", currentCredits);
 
         com.chatcrmlite.backend.models.WhatsAppConfig waConfig = user.getTenant().getWhatsappConfig();
         if (waConfig != null) {
@@ -179,7 +191,19 @@ public class PaymentWebhookController {
         return ResponseEntity.ok(transactions);
     }
 
+    @GetMapping(value = "/api/v1/billing/invoice/{transactionId}/data", produces = org.springframework.http.MediaType.APPLICATION_JSON_VALUE)
+    @Transactional(readOnly = true)
+    public ResponseEntity<Map<String, Object>> getInvoiceData(
+            @PathVariable UUID transactionId,
+            @AuthenticationPrincipal String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+        Map<String, Object> invoiceData = subscriptionBillingService.getInvoiceData(transactionId, user);
+        return ResponseEntity.ok(invoiceData);
+    }
+
     @GetMapping(value = "/api/v1/billing/invoice/{transactionId}/download", produces = org.springframework.http.MediaType.TEXT_HTML_VALUE)
+    @Transactional(readOnly = true)
     public ResponseEntity<String> downloadInvoice(
             @PathVariable UUID transactionId,
             @AuthenticationPrincipal String email) {

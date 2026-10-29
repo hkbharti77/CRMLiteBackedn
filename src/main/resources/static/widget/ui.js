@@ -720,9 +720,38 @@ export function createUIController({
                     textSpan.innerHTML = parseMarkdown(fullText) + '<span class="crm-streaming-cursor" style="display:inline-block;animation:crmBlink 0.8s infinite;">▌</span>';
                     container.scrollTop = container.scrollHeight;
                 },
-                finalize(fullText) {
+                finalize(fullText, ctaButtons, onCtaSelect) {
                     msgDiv.classList.remove('message--streaming');
                     textSpan.innerHTML = parseMarkdown(fullText);
+                    if (ctaButtons && ctaButtons.length > 0) {
+                        msgDiv.classList.add('has-ctas');
+                        const ctaWrap = document.createElement('div');
+                        ctaWrap.className = 'cta-card-wrap';
+                        ctaButtons.forEach(btnConfig => {
+                            const btn = document.createElement('button');
+                            btn.type = 'button';
+                            btn.className = 'flow-btn';
+                            const labelSpan = document.createElement('span');
+                            labelSpan.className = 'btn-text';
+                            labelSpan.textContent = btnConfig.label || '';
+                            btn.appendChild(labelSpan);
+                            const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+                            arrow.setAttribute('class', 'btn-arrow');
+                            arrow.setAttribute('viewBox', '0 0 24 24');
+                            arrow.setAttribute('fill', 'none');
+                            arrow.setAttribute('stroke', 'currentColor');
+                            arrow.setAttribute('stroke-width', '2.5');
+                            arrow.innerHTML = '<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>';
+                            btn.appendChild(arrow);
+                            btn.onclick = () => {
+                                btn.classList.add('selected');
+                                ctaWrap.querySelectorAll('.flow-btn').forEach(b => b.disabled = true);
+                                if (onCtaSelect) onCtaSelect(btnConfig);
+                            };
+                            ctaWrap.appendChild(btn);
+                        });
+                        msgDiv.insertBefore(ctaWrap, timeSpan);
+                    }
                     container.scrollTop = container.scrollHeight;
                 },
                 remove() {

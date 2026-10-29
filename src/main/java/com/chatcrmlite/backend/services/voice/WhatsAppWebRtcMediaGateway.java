@@ -818,7 +818,7 @@ public class WhatsAppWebRtcMediaGateway {
             try {
                 Thread.sleep(800);
                 if (session.state != CallMediaState.MEDIA_ACTIVE && session.state != CallMediaState.SRTP_READY) return;
-                final int welcomeTurnId = session.turnId.get();
+                final int welcomeTurnId = session.turnId.incrementAndGet();
                 WhatsAppVoiceCallBridgeService.WhatsAppVoiceTurnResult turn =
                         voiceCallBridgeService.processCallTurn(session.tenantId, callId, new byte[0], "audio/wav", "Hello, I just connected", chunk -> {
                             enqueueOutboundAudio(callId, chunk, welcomeTurnId);
@@ -1670,7 +1670,7 @@ public class WhatsAppWebRtcMediaGateway {
         }
 
         private static final byte[] OPUS_SILENCE_FRAME = new byte[] { (byte) 0xF8, (byte) 0xFF, (byte) 0xFE };
-        public static final int PRE_ROLL_MIN_FRAMES = 12; // ~240ms pre-roll jitter buffer (smooth WebRTC playback without network underrun)
+        public static final int PRE_ROLL_MIN_FRAMES = 5; // ~100ms pre-roll jitter buffer (fast start & prevents mid-stream stalls)
 
         public static class OutboundRtpFrame {
             public final byte[] packetData;

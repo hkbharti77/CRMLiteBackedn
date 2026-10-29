@@ -53,10 +53,38 @@ public class SentenceChunker {
      */
     public static List<String> chunkText(String text) {
         if (text == null || text.isBlank()) return List.of();
+        String clean = text.trim();
+        // Responses <= 80 characters (typical voice greetings and confirmations) are best synthesized as a single unit
+        // to avoid high-latency multi-request roundtrips and RTP queue under-runs.
+        if (clean.length() <= 80) {
+            return List.of(clean);
+        }
         SentenceChunker chunker = new SentenceChunker();
-        List<String> chunks = new ArrayList<>(chunker.accept(text));
-        chunks.addAll(chunker.flush());
-        return chunks;
+        List<String> rawChunks = new ArrayList<>(chunker.accept(clean));
+        rawChunks.addAll(chunker.flush());
+
+        // Merge fragments shorter than 30 characters (e.g. "Hello!", "Sure.", "Yes.") with the next chunk
+        List<String> merged = new ArrayList<>();
+        StringBuilder cur = new StringBuilder();
+        for (String chunk : rawChunks) {
+            if (cur.length() > 0) {
+                cur.append(" ");
+            }
+            cur.append(chunk);
+            if (cur.length() >= 30) {
+                merged.add(cur.toString());
+                cur.setLength(0);
+            }
+        }
+        if (cur.length() > 0) {
+            if (!merged.isEmpty() && cur.length() < 25) {
+                int lastIdx = merged.size() - 1;
+                merged.set(lastIdx, merged.get(lastIdx) + " " + cur.toString());
+            } else {
+                merged.add(cur.toString());
+            }
+        }
+        return merged.isEmpty() ? List.of(clean) : merged;
     }
 
     /**
@@ -69,6 +97,7 @@ public class SentenceChunker {
                    .replaceAll("(?m)^\\s*[-*•]\\s+", "")
                    .replaceAll("(?m)^\\s*#+\\s+", "")
                    .replaceAll("https?://\\S+", "the link")
+                   .replaceAll("[\\p{So}\\p{Cn}]", "")
                    .replaceAll("\\s+", " ")
                    .trim();
     }

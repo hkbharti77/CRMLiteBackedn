@@ -15,4 +15,10 @@ public interface TenantCreditTransactionRepository extends JpaRepository<TenantC
     
     @Query("SELECT t FROM TenantCreditTransaction t WHERE t.tenant.id = :tenantId ORDER BY t.createdAt DESC")
     Page<TenantCreditTransaction> findByTenantId(@Param("tenantId") UUID tenantId, Pageable pageable);
+
+    @Query("SELECT COUNT(t) > 0 FROM TenantCreditTransaction t WHERE t.tenant.id = :tenantId AND t.referenceId = :referenceId")
+    boolean existsByTenantIdAndReferenceId(@Param("tenantId") UUID tenantId, @Param("referenceId") String referenceId);
+
+    @Query("SELECT COUNT(t) > 0 FROM TenantCreditTransaction t WHERE t.tenant.id = :tenantId AND t.category = :category")
+    boolean existsByTenantIdAndCategory(@Param("tenantId") UUID tenantId, @Param("category") String category);
 }

@@ -138,7 +138,7 @@ public class NicheThemeService {
             com.chatcrmlite.backend.models.ConversationState.FlowType primaryFlow = blueprint.getFlowType();
             if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.APPOINTMENT) hasAppointment = true;
             if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.BOOKING) hasBooking = true;
-            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE) hasLead = true;
+            if (primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.LEAD_CAPTURE || primaryFlow == com.chatcrmlite.backend.models.ConversationState.FlowType.ENQUIRY) hasLead = true;
         }
 
         if (hasAppointment) {
@@ -152,6 +152,9 @@ public class NicheThemeService {
         }
         if (config != null && Boolean.TRUE.equals(config.getShowSupportFormButton())) {
             ctaButtons.add(new WidgetCtaDTO("🎫 Get Support", "SUPPORT"));
+        }
+        if (ctaButtons.isEmpty()) {
+            ctaButtons.add(new WidgetCtaDTO(templateEngine.getTriggerButtonLabel(user, "lead"), "LEAD"));
         }
 
         UUID tenantIdForQuota = user.getTenant() != null ? user.getTenant().getId() : user.getId();

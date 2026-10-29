@@ -39,10 +39,10 @@ export function createFlowEngine({
         ui.renderMessageBubble(entry);
     }
 
-    function addBotBubbleWithCTAs(text) {
+    function addBotBubbleWithCTAs(text, customCtas) {
         const t = text || "Hello! How can I help you today?";
         const currentTheme = getTheme();
-        const ctas = currentTheme.ctaButtons || [];
+        const ctas = (customCtas && customCtas.length > 0) ? customCtas : (currentTheme.ctaButtons || []);
         const entry = { text: t, sender: 'bot', time: Date.now(), ctas: ctas.length ? ctas : undefined };
         const history = storage.loadHistory();
         history.push(entry);
@@ -835,16 +835,17 @@ export function createFlowEngine({
             ui.setInputEnabled(true, 'Ask me anything...');
         },
 
-        showDynamicCTAs() {
+        showDynamicCTAs(customCtas) {
             const currentTheme = getTheme();
             const { messages } = ui.getElements();
             if (!messages) return;
 
-            if (currentTheme.ctaButtons && currentTheme.ctaButtons.length > 0) {
-                ui.renderButtons(currentTheme.ctaButtons.map(b => b.label), (label) => {
-                    const btnConfig = currentTheme.ctaButtons.find(b => b.label === label);
+            const ctaList = (customCtas && customCtas.length > 0) ? customCtas : (currentTheme.ctaButtons || []);
+            if (ctaList && ctaList.length > 0) {
+                ui.renderButtons(ctaList.map(b => b.label), (label) => {
+                    const btnConfig = ctaList.find(b => b.label === label);
                     if (btnConfig) this.handleCtaAction(btnConfig);
-                }, false, null, { outline: true, ctaConfigs: currentTheme.ctaButtons });
+                }, false, null, { outline: true, ctaConfigs: ctaList });
             }
         },
 

@@ -199,6 +199,7 @@
         <div class="input-row">
             <input type="text" id="biz-id" placeholder="Paste Business UUID here..." />
             <button onclick="loadWidget()">Load</button>
+            <button type="button" onclick="clearChatAndReload()" style="background:#e11d48;">Clear Chat</button>
         </div>
 
         <div class="code-block" id="snippet-block">
@@ -245,6 +246,15 @@
             document.getElementById('snippet-id').textContent = id;
             injectWidget(id);
         });
+
+        function clearChatAndReload() {
+            const id = document.getElementById('biz-id').value.trim() || '00000000-0000-0000-0000-000000000000';
+            localStorage.removeItem('crm_chat_history_' + id);
+            localStorage.removeItem('crm_chat_theme_' + id);
+            localStorage.removeItem('crm_chat_session_' + id);
+            localStorage.removeItem('crm_visitor_token');
+            loadWidget();
+        }
 
         function loadWidget() {
             const id = document.getElementById('biz-id').value.trim() || '00000000-0000-0000-0000-000000000000';
