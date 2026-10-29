@@ -45,6 +45,8 @@ public class DeepgramLiveSttSession {
 
     private final Queue<ByteBuffer> outboundAudioQueue = new ConcurrentLinkedQueue<>();
     private WebSocket webSocket;
+    private final AtomicLong lastAudioSentMs = new AtomicLong(System.currentTimeMillis());
+    private java.util.concurrent.ScheduledExecutorService keepAliveScheduler;
 
     private volatile Consumer<String> interimListener;
     private volatile Consumer<String> speechFinalListener;
@@ -124,6 +126,7 @@ public class DeepgramLiveSttSession {
                             this.webSocket = ws;
                             this.connected.set(true);
                             log.info("✅ [DeepgramLiveSTT] Connected live WebSocket STT successfully for callId={}", callId);
+                            startKeepAliveTimer();
                             drainAudioQueue();
                         }
                     });
@@ -141,6 +144,7 @@ public class DeepgramLiveSttSession {
         if (closed.get() || pcmChunk == null || pcmChunk.length == 0) return;
 
         bytesStreamed.addAndGet(pcmChunk.length);
+        lastAudioSentMs.set(System.currentTimeMillis());
 
         // Cap queue to 50 frames (~1 sec) to prevent stale accumulation if network stalls
         while (outboundAudioQueue.size() > 50) {
@@ -233,9 +237,38 @@ public class DeepgramLiveSttSession {
     /**
      * Closes the live streaming STT session gracefully.
      */
+    private synchronized void startKeepAliveTimer() {
+        if (keepAliveScheduler != null && !keepAliveScheduler.isShutdown()) {
+            return;
+        }
+        keepAliveScheduler = java.util.concurrent.Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "deepgram-stt-keepalive-" + (callId != null ? callId : "call"));
+            t.setDaemon(true);
+            return t;
+        });
+        keepAliveScheduler.scheduleAtFixedRate(() -> {
+            try {
+                if (connected.get() && webSocket != null && !closed.get()) {
+                    long elapsed = System.currentTimeMillis() - lastAudioSentMs.get();
+                    if (elapsed >= 3000) {
+                        sendKeepAlive();
+                    }
+                }
+            } catch (Exception ignored) {}
+        }, 3000, 3000, java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Closes the live streaming STT session gracefully.
+     */
     public void close() {
         if (closed.compareAndSet(false, true)) {
             connected.set(false);
+            if (keepAliveScheduler != null) {
+                try {
+                    keepAliveScheduler.shutdownNow();
+                } catch (Exception ignored) {}
+            }
             if (webSocket != null) {
                 try {
                     webSocket.sendText("{\"type\":\"CloseStream\"}", true);

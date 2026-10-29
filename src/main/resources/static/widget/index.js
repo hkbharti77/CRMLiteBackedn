@@ -102,19 +102,29 @@ export async function initWidget({ businessId, apiBase } = {}) {
                     streamHandle.appendToken(chunk, accumulatedText);
                 },
                 onDone: (data) => {
-                    ui.setTyping(false);
-                    if (streamHandle) {
-                        streamHandle.finalize(accumulatedText);
-                        const history = storage.loadHistory();
-                        history.push({ text: accumulatedText, sender: 'bot', time: Date.now() });
-                        storage.saveHistory(history);
-                    } else if (accumulatedText) {
-                        flowEngine.addBotBubble(accumulatedText);
-                    }
-
                     if (data && data.ctaButtons !== undefined) {
                         theme.ctaButtons = data.ctaButtons;
                     }
+                    ui.setTyping(false);
+                    const ctas = (data && data.ctaButtons && data.ctaButtons.length > 0)
+                        ? data.ctaButtons
+                        : (theme.ctaButtons && theme.ctaButtons.length > 0 ? theme.ctaButtons : []);
+
+                    if (streamHandle) {
+                        streamHandle.finalize(accumulatedText, ctas, (btnConfig) => {
+                            flowEngine.handleCtaAction(btnConfig);
+                        });
+                        const history = storage.loadHistory();
+                        history.push({ text: accumulatedText, sender: 'bot', time: Date.now(), ctas: ctas.length ? ctas : undefined });
+                        storage.saveHistory(history);
+                    } else if (accumulatedText) {
+                        if (ctas && ctas.length > 0) {
+                            flowEngine.addBotBubbleWithCTAs(accumulatedText, ctas);
+                        } else {
+                            flowEngine.addBotBubble(accumulatedText);
+                        }
+                    }
+
                     if (triggered) {
                         setTimeout(() => flowEngine.suggestForm(), 600);
                     }
@@ -125,10 +135,17 @@ export async function initWidget({ businessId, apiBase } = {}) {
                         streamHandle.remove();
                         streamHandle = null;
                     }
-                    const notice = data.notice || "You have reached your daily question limit for this session.";
-                    flowEngine.addBotBubble(notice);
-                    if (data.ctaButtons !== undefined) {
+                    if (data && data.ctaButtons !== undefined) {
                         theme.ctaButtons = data.ctaButtons;
+                    }
+                    const notice = data.notice || "You have reached your daily question limit for this session.";
+                    const ctas = (data && data.ctaButtons && data.ctaButtons.length > 0)
+                        ? data.ctaButtons
+                        : (theme.ctaButtons && theme.ctaButtons.length > 0 ? theme.ctaButtons : []);
+                    if (ctas && ctas.length > 0) {
+                        flowEngine.addBotBubbleWithCTAs(notice, ctas);
+                    } else {
+                        flowEngine.addBotBubble(notice);
                     }
                     if (eventType === 'visitor_quota_exhausted') {
                         setTimeout(() => flowEngine.suggestForm(), 500);
@@ -143,11 +160,18 @@ export async function initWidget({ businessId, apiBase } = {}) {
                     try {
                         const data = await apiClient.sendChatMessage(val, isReturning, storage.getSessionId());
                         ui.setTyping(false);
-                        if (data.ctaButtons !== undefined) {
+                        if (data && data.ctaButtons !== undefined) {
                             theme.ctaButtons = data.ctaButtons;
                         }
                         const finalResponse = data.response || "I'm sorry, I couldn't understand that.";
-                        flowEngine.addBotBubble(finalResponse);
+                        const ctas = (data && data.ctaButtons && data.ctaButtons.length > 0)
+                            ? data.ctaButtons
+                            : (theme.ctaButtons && theme.ctaButtons.length > 0 ? theme.ctaButtons : []);
+                        if (ctas && ctas.length > 0) {
+                            flowEngine.addBotBubbleWithCTAs(finalResponse, ctas);
+                        } else {
+                            flowEngine.addBotBubble(finalResponse);
+                        }
                         if (data.code === 'VISITOR_QUOTA_EXHAUSTED') {
                             setTimeout(() => flowEngine.suggestForm(), 500);
                         }
@@ -445,6 +469,7 @@ export async function initWidget({ businessId, apiBase } = {}) {
 
         if (bootstrapData.theme) {
             theme = { ...theme, ...bootstrapData.theme };
+            // Theme loaded dynamically from backend
             storage.saveTheme(theme);
             if (theme.hasVoiceBot !== undefined) {
                 voiceEngine.setHasVoiceBot(theme.hasVoiceBot);

@@ -109,7 +109,8 @@ public class SarvamVoiceService {
 
                 Map<String, Object> body = new HashMap<>();
                 body.put("text", spokenText);
-                body.put("inputs", Collections.singletonList(spokenText));
+                // Sarvam API v1: do not send inputs when text is present (prevents HTTP 400)
+                // body.put("inputs", Collections.singletonList(spokenText));
                 body.put("target_language_code", langCode);
                 body.put("speaker", activeSpeaker);
                 body.put("model", effectiveModel);

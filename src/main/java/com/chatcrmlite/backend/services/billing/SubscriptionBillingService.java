@@ -25,6 +25,7 @@ import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -41,6 +42,8 @@ public class SubscriptionBillingService {
     private final TenantRepository tenantRepository;
     private final QuotaEnforcerService quotaEnforcerService;
     private final ApplicationEventPublisher eventPublisher;
+    private final CreditMeteringService creditMeteringService;
+    private final com.chatcrmlite.backend.repositories.TenantCreditTransactionRepository creditTransactionRepository;
 
     public int getPlanLevel(String planId) {
         if (planId == null) return 0;
@@ -271,6 +274,10 @@ public class SubscriptionBillingService {
         response.put("message", "Payment verified and subscription activated successfully!");
         response.put("planId", planId.toUpperCase());
         response.put("transactionId", transaction.getId());
+        Tenant refreshedTenant = tenantRepository.findById(user.getTenant().getId()).orElse(user.getTenant());
+        long newBalance = refreshedTenant.getAiCreditBalance() != null ? refreshedTenant.getAiCreditBalance() : 0L;
+        response.put("newBalance", newBalance);
+        response.put("aiCreditBalance", newBalance);
         return response;
     }
 
@@ -365,6 +372,28 @@ public class SubscriptionBillingService {
         }
         BillingTransaction savedTx = billingTransactionRepository.save(transaction);
 
+        // Grant plan's included AI credits
+        int includedCredits = plan.getIncludedAiCredits();
+        if (includedCredits > 0 && !"FREE".equalsIgnoreCase(planId)) {
+            boolean alreadyCredited = creditTransactionRepository
+                    .existsByTenantIdAndReferenceId(tenantId, resolvedGatewayTxId);
+            if (!alreadyCredited) {
+                try {
+                    creditMeteringService.addCredits(
+                            tenantId,
+                            (long) includedCredits,
+                            "INCLUDED_PLAN",
+                            "Plan Subscription (" + plan.getName() + " - " + billingCycleStr + ")",
+                            resolvedGatewayTxId
+                    );
+                    log.info("💎 Successfully credited {} AI credits for plan {} to tenant {}", 
+                            includedCredits, planId, tenantId);
+                } catch (Exception e) {
+                    log.error("⚠️ Failed to credit included AI credits for tenant {}: {}", tenantId, e.getMessage(), e);
+                }
+            }
+        }
+
         // Publish event for cache invalidation
         eventPublisher.publishEvent(new TenantSubscriptionUpdatedEvent(this, tenantId));
 
@@ -377,6 +406,143 @@ public class SubscriptionBillingService {
         return savedTx;
     }
 
+    @Transactional
+    public void ensurePlanCreditsGranted(UUID tenantId) {
+        if (tenantId == null) return;
+        try {
+            TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenantId).orElse(null);
+            if (sub == null || sub.getPlan() == null || sub.getStatus() != SubscriptionStatus.ACTIVE) {
+                return;
+            }
+            SubscriptionPlan plan = sub.getPlan();
+            int includedCredits = plan.getIncludedAiCredits();
+            if (includedCredits <= 0 || "FREE".equalsIgnoreCase(plan.getId())) return;
+
+            // Find successful billing transactions for this tenant
+            List<BillingTransaction> transactions = billingTransactionRepository.findByTenantId(tenantId);
+            BillingTransaction latestSuccessTx = transactions.stream()
+                    .filter(tx -> tx.getStatus() == TransactionStatus.SUCCESS)
+                    .findFirst()
+                    .orElse(null);
+
+            String refId = latestSuccessTx != null && latestSuccessTx.getGatewayTransactionId() != null
+                    ? latestSuccessTx.getGatewayTransactionId()
+                    : "plan_active_" + plan.getId() + "_" + tenantId;
+
+            boolean alreadyCredited = creditTransactionRepository.existsByTenantIdAndReferenceId(tenantId, refId)
+                    || creditTransactionRepository.existsByTenantIdAndCategory(tenantId, "INCLUDED_PLAN");
+
+            if (!alreadyCredited) {
+                log.info("🎁 Backfilling missing {} AI credits for active plan {} to tenant {}", 
+                        includedCredits, plan.getId(), tenantId);
+                creditMeteringService.addCredits(
+                        tenantId,
+                        (long) includedCredits,
+                        "INCLUDED_PLAN",
+                        "Plan Subscription (" + plan.getName() + " - " + sub.getBillingCycle() + ")",
+                        refId
+                );
+            }
+        } catch (Exception e) {
+            log.warn("⚠️ Could not ensure plan credits granted for tenant {}: {}", tenantId, e.getMessage());
+        }
+    }
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> getInvoiceData(UUID transactionId, User user) {
+        if (user == null || user.getTenant() == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User authentication required.");
+        }
+
+        BillingTransaction tx = billingTransactionRepository.findById(transactionId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Billing transaction receipt not found: " + transactionId));
+
+        // Security check: tenant matching or super admin
+        String roleStr = user.getRole() != null ? user.getRole().name().toUpperCase() : "";
+        String cleanEmail = user.getEmail() != null ? user.getEmail().toLowerCase().trim() : "";
+        boolean isSuperAdmin = roleStr.contains("SUPER") || roleStr.contains("PLATFORM") || "gyanvaniai@gmail.com".equalsIgnoreCase(cleanEmail);
+
+        if (!isSuperAdmin && !tx.getTenant().getId().equals(user.getTenant().getId())) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Access denied to this billing transaction receipt.");
+        }
+
+        Tenant tenant = tx.getTenant();
+        if (tenant != null && user.getTenant() != null && tenant.getId().equals(user.getTenant().getId())) {
+            tenant = user.getTenant();
+        } else if (tenant != null && tenant.getId() != null) {
+            tenant = tenantRepository.findById(tenant.getId()).orElse(tenant);
+        }
+
+        UUID resolvedTenantId = tenant != null ? tenant.getId() : (tx.getTenant() != null ? tx.getTenant().getId() : user.getTenant().getId());
+        TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(resolvedTenantId).orElse(null);
+        SubscriptionPlan plan = (sub != null && sub.getPlan() != null) ? sub.getPlan() : null;
+
+        String planName = plan != null ? plan.getName() : "Subscription Plan";
+        String tierId = plan != null ? plan.getId().toUpperCase() : "PRO";
+        String billingCycle = (sub != null && sub.getBillingCycle() != null) ? sub.getBillingCycle().name() : "MONTHLY";
+
+        String createdDate = tx.getCreatedAt() != null 
+                ? tx.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("MMMM dd, yyyy - HH:mm:ss"))
+                : java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("MMMM dd, yyyy"));
+
+        String invoiceNo = "INV-" + (tx.getCreatedAt() != null ? tx.getCreatedAt().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd")) : "2026") + "-" + tx.getId().toString().substring(0, 8).toUpperCase();
+        String formattedAmount = (tx.getCurrency() != null ? tx.getCurrency() : "INR") + " " + String.format("%.2f", tx.getAmount() != null ? tx.getAmount() : java.math.BigDecimal.ZERO);
+        String periodText = (sub != null && sub.getCurrentPeriodStart() != null && sub.getCurrentPeriodEnd() != null)
+                ? sub.getCurrentPeriodStart().format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy")) + " to " + sub.getCurrentPeriodEnd().format(java.time.format.DateTimeFormatter.ofPattern("MMM dd, yyyy"))
+                : "Active Subscription";
+
+        int staffLimit = plan != null ? plan.getEmployeeLimit() : 10;
+        int leadLimit = plan != null ? plan.getPrimaryResourceLimit() : 25000;
+        int emailLimit = plan != null ? plan.getEmailLimit() : 15000;
+        boolean hasWhatsapp = plan == null || plan.isHasWhatsapp();
+        boolean hasAi = plan != null && plan.isHasRagLlm();
+
+        String businessName = "Workspace #" + resolvedTenantId;
+        if (tenant != null) {
+            try {
+                if (tenant.getBusinessName() != null && !tenant.getBusinessName().isBlank()) {
+                    businessName = tenant.getBusinessName();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to retrieve business name for tenant {}: {}", tenant.getId(), e.getMessage());
+            }
+        }
+
+        Map<String, Object> data = new HashMap<>();
+        data.put("invoiceNo", invoiceNo);
+        data.put("transactionId", tx.getId().toString());
+        data.put("createdAt", tx.getCreatedAt() != null ? tx.getCreatedAt().toString() : java.time.LocalDateTime.now().toString());
+        data.put("createdDateFormatted", createdDate);
+        data.put("amount", tx.getAmount());
+        data.put("currency", tx.getCurrency() != null ? tx.getCurrency() : "INR");
+        data.put("formattedAmount", formattedAmount);
+        data.put("status", tx.getStatus() != null ? tx.getStatus().name() : "SUCCESS");
+        data.put("paymentGateway", tx.getPaymentGateway() != null ? tx.getPaymentGateway().name() : "RAZORPAY");
+        data.put("gatewayTransactionId", tx.getGatewayTransactionId() != null ? tx.getGatewayTransactionId() : "N/A");
+
+        Map<String, Object> billedTo = new HashMap<>();
+        billedTo.put("tenantId", resolvedTenantId.toString());
+        billedTo.put("businessName", businessName);
+        billedTo.put("email", user.getEmail());
+        data.put("billedTo", billedTo);
+
+        Map<String, Object> planInfo = new HashMap<>();
+        planInfo.put("tierId", tierId);
+        planInfo.put("planName", planName);
+        planInfo.put("billingCycle", billingCycle);
+        planInfo.put("periodText", periodText);
+        planInfo.put("staffLimit", staffLimit);
+        planInfo.put("leadLimit", leadLimit);
+        planInfo.put("emailLimit", emailLimit);
+        planInfo.put("hasWhatsapp", hasWhatsapp);
+        planInfo.put("hasAi", hasAi);
+        planInfo.put("hasMultiCurrency", true);
+        data.put("plan", planInfo);
+
+        return data;
+    }
+
+    @Transactional(readOnly = true)
     public String generateInvoiceHtml(UUID transactionId, User user) {
         if (user == null || user.getTenant() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User authentication required.");
@@ -395,7 +561,14 @@ public class SubscriptionBillingService {
         }
 
         Tenant tenant = tx.getTenant();
-        TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(tenant.getId()).orElse(null);
+        if (tenant != null && user.getTenant() != null && tenant.getId().equals(user.getTenant().getId())) {
+            tenant = user.getTenant();
+        } else if (tenant != null && tenant.getId() != null) {
+            tenant = tenantRepository.findById(tenant.getId()).orElse(tenant);
+        }
+
+        UUID resolvedTenantId = tenant != null ? tenant.getId() : (tx.getTenant() != null ? tx.getTenant().getId() : user.getTenant().getId());
+        TenantSubscription sub = tenantSubscriptionRepository.findByTenantId(resolvedTenantId).orElse(null);
         SubscriptionPlan plan = (sub != null && sub.getPlan() != null) ? sub.getPlan() : null;
 
         String planName = plan != null ? plan.getName() : "Subscription Plan";
@@ -418,6 +591,17 @@ public class SubscriptionBillingService {
         boolean hasWhatsapp = plan == null || plan.isHasWhatsapp();
         boolean hasAi = plan != null && plan.isHasRagLlm();
         boolean hasMultiCurrency = true;
+
+        String businessName = "Workspace #" + resolvedTenantId;
+        if (tenant != null) {
+            try {
+                if (tenant.getBusinessName() != null && !tenant.getBusinessName().isBlank()) {
+                    businessName = tenant.getBusinessName();
+                }
+            } catch (Exception e) {
+                log.warn("Failed to retrieve business name for tenant {}: {}", tenant.getId(), e.getMessage());
+            }
+        }
 
         StringBuilder sb = new StringBuilder();
         sb.append("<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n");
@@ -472,7 +656,10 @@ public class SubscriptionBillingService {
         sb.append("  <div class=\"grid-2\">\n");
         sb.append("    <div class=\"box\">\n");
         sb.append("      <div class=\"box-label\">Billed To</div>\n");
-        sb.append("      <div class=\"box-text\">").append(tenant.getBusinessName() != null ? tenant.getBusinessName() : "Workspace #" + tenant.getId()).append("</div>\n");
+        sb.append("      <div class=\"box-text\">").append(businessName).append("</div>\n");
+        sb.append("      <div class=\"box-text\" style=\"color:#64748b;font-weight:500;\">Email: ").append(user.getEmail()).append("</div>\n");
+        sb.append("      <div class=\"box-text\" style=\"color:#64748b;font-size:11px;font-family:monospace;\">Tenant ID: ").append(resolvedTenantId).append("</div>\n");
+        sb.append("    </div>\n");
         sb.append("      <div class=\"box-text\" style=\"color:#64748b;font-weight:500;\">Email: ").append(user.getEmail()).append("</div>\n");
         sb.append("      <div class=\"box-text\" style=\"color:#64748b;font-size:11px;font-family:monospace;\">Tenant ID: ").append(tenant.getId()).append("</div>\n");
         sb.append("    </div>\n");
@@ -533,6 +720,7 @@ public class SubscriptionBillingService {
         return sb.toString();
     }
 
+    @Transactional
     public void resendInvoiceEmail(UUID transactionId, User user) {
         if (user == null || user.getTenant() == null) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User authentication required.");

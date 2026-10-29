@@ -19,6 +19,17 @@ import java.util.stream.Collectors;
 @Service
 public class ToolRegistry {
 
+    private static class CachedSpecs {
+        final List<ToolSpecification> specs;
+        final long timestamp;
+        CachedSpecs(List<ToolSpecification> specs, long timestamp) {
+            this.specs = specs;
+            this.timestamp = timestamp;
+        }
+    }
+    private final java.util.concurrent.ConcurrentHashMap<String, CachedSpecs> specsCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final long CACHE_TTL_MS = 60_000L;
+
     private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ToolRegistry.class);
 
     private final Map<String, VoiceTool> tools;
@@ -72,6 +83,11 @@ public class ToolRegistry {
     }
 
     public List<ToolSpecification> getEnabledToolSpecsForTenant(UUID tenantId, UUID userId, boolean includePhone) {
+        String cacheKey = (tenantId != null ? tenantId.toString() : "default") + ":" + (userId != null ? userId.toString() : "") + ":" + includePhone;
+        CachedSpecs cached = specsCache.get(cacheKey);
+        if (cached != null && (System.currentTimeMillis() - cached.timestamp < CACHE_TTL_MS)) {
+            return cached.specs;
+        }
         Tenant tenant = resolveTenant(tenantId);
         if (tenant == null) {
             log.warn("[ToolRegistry] Tenant not found for id={}, returning empty tool specs", tenantId);
@@ -110,6 +126,7 @@ public class ToolRegistry {
         }
 
         log.info("[ToolRegistry] Built {} dynamic tool specs for tenant={} userId={} (includePhone={})", specs.size(), effectiveTenantId, userId, includePhone);
+        specsCache.put(cacheKey, new CachedSpecs(specs, System.currentTimeMillis()));
         return specs;
     }
 
