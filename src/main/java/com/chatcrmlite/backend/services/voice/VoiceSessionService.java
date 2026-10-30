@@ -310,6 +310,13 @@ public class VoiceSessionService {
             }
             
             speechAudio = sarvamVoiceService.synthesizeSpeech(speakableText, targetLangCode, speakerId);
+            if (speechAudio == null || speechAudio.length == 0) {
+                log.warn("[VoiceSession] Sarvam TTS returned empty or failed for turn #{}. Falling back to Deepgram TTS.", turnNum);
+                String requestedVoiceId = (session.getVoiceId() != null && session.getVoiceId().startsWith("aura-"))
+                        ? session.getVoiceId()
+                        : defaultTtsModel;
+                speechAudio = deepgramVoiceService.synthesizeSpeech(speakableText, requestedVoiceId);
+            }
         } else if ("ttsfree".equalsIgnoreCase(ttsProvider)) {
             // Use TTSFree API
             String ttsFreeLang = "English";
@@ -317,6 +324,13 @@ public class VoiceSessionService {
             else if ("gu".equals(languageMode)) ttsFreeLang = "Gujarati";
             
             speechAudio = ttsFreeVoiceService.synthesizeSpeech(speakableText, ttsFreeLang);
+            if (speechAudio == null || speechAudio.length == 0) {
+                log.warn("[VoiceSession] TTSFree returned empty audio for turn #{}. Falling back to Deepgram TTS.", turnNum);
+                String requestedVoiceId = (session.getVoiceId() != null && session.getVoiceId().startsWith("aura-"))
+                        ? session.getVoiceId()
+                        : defaultTtsModel;
+                speechAudio = deepgramVoiceService.synthesizeSpeech(speakableText, requestedVoiceId);
+            }
         } else {
             // Use Deepgram TTS
             String requestedVoiceId = (session.getVoiceId() != null && !session.getVoiceId().toLowerCase().contains("fish-audio"))
