@@ -124,6 +124,19 @@ public class SarvamVoiceService {
 
                 if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
                     byte[] responseBytes = response.getBody();
+                    if (responseBytes.length > 2 && responseBytes[0] == (byte) 0x1F && responseBytes[1] == (byte) 0x8B) {
+                        try (java.util.zip.GZIPInputStream gis = new java.util.zip.GZIPInputStream(new java.io.ByteArrayInputStream(responseBytes));
+                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream()) {
+                            byte[] buffer = new byte[8192];
+                            int len;
+                            while ((len = gis.read(buffer)) > 0) {
+                                baos.write(buffer, 0, len);
+                            }
+                            responseBytes = baos.toByteArray();
+                        } catch (Exception gzipEx) {
+                            log.warn("[Sarvam-TTS] Failed to decompress GZIP response: {}", gzipEx.getMessage());
+                        }
+                    }
                     MediaType contentType = response.getHeaders().getContentType();
 
                     boolean isAudioContentType = contentType != null && contentType.getType().equalsIgnoreCase("audio");

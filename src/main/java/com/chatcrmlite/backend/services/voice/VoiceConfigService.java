@@ -60,7 +60,7 @@ public class VoiceConfigService {
         }
         if (dto.getTtsVoiceId() != null && !dto.getTtsVoiceId().isBlank()) {
             String voiceId = sanitize(dto.getTtsVoiceId());
-            if (voiceId.matches("^[a-zA-Z0-9-]+$")) {
+            if (voiceId.matches("^[a-zA-Z0-9-_:]+$")) {
                 config.setTtsVoiceId(voiceId);
             } else {
                 log.warn("[VoiceConfig] Rejected unknown ttsVoiceId='{}' for tenant={}", voiceId, tenant.getId());
