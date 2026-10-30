@@ -4,6 +4,7 @@ import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
 import org.springframework.boot.autoconfigure.flyway.FlywayMigrationInitializer;
 import org.springframework.boot.autoconfigure.quartz.QuartzDataSource;
+import org.springframework.boot.autoconfigure.quartz.SchedulerFactoryBeanCustomizer;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.jdbc.DataSourceBuilder;
 import org.springframework.context.annotation.Bean;
@@ -166,7 +167,7 @@ public class DataSourceConfig {
                     try (java.sql.Statement s = conn.createStatement()) {
                         s.execute(stmtSql);
                     } catch (java.sql.SQLException ex) {
-                        logger.debug("Notice executing Quartz DDL statement: {} (SQL: {})", ex.getMessage(),
+                        logger.warn("Notice executing Quartz DDL statement: {} (SQL: {})", ex.getMessage(),
                                 stmtSql.length() > 60 ? stmtSql.substring(0, 60) + "..." : stmtSql);
                     }
                 }
@@ -262,7 +263,23 @@ public class DataSourceConfig {
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "spring.flyway.enabled", havingValue = "true", matchIfMissing = true)
     public static BeanFactoryPostProcessor entityManagerFactoryDependsOnFlyway() {
         return beanFactory -> {
-            for (String beanName : new String[]{"entityManagerFactory", "entityManagerFactoryBuilder"}) {
+            Set<String> targetBeanNames = new LinkedHashSet<>(Arrays.asList(
+                    "entityManagerFactory",
+                    "entityManagerFactoryBuilder",
+                    "quartzScheduler",
+                    "schedulerFactoryBean"
+            ));
+
+            try {
+                for (String name : beanFactory.getBeanNamesForType(org.quartz.Scheduler.class, true, false)) {
+                    targetBeanNames.add(name);
+                }
+                for (String name : beanFactory.getBeanNamesForType(org.springframework.scheduling.quartz.SchedulerFactoryBean.class, true, false)) {
+                    targetBeanNames.add(name);
+                }
+            } catch (Exception ignored) {}
+
+            for (String beanName : targetBeanNames) {
                 if (!beanFactory.containsBeanDefinition(beanName)) {
                     continue;
                 }
@@ -275,6 +292,15 @@ public class DataSourceConfig {
                 dependsOn.add("flyway");
                 definition.setDependsOn(dependsOn.toArray(String[]::new));
             }
+        };
+    }
+
+    @Bean
+    public SchedulerFactoryBeanCustomizer quartzSchedulerCustomizer() {
+        return schedulerFactoryBean -> {
+            // Give 5 seconds startup delay so Flyway and Hikari pools fully settle before Quartz starts polling triggers
+            schedulerFactoryBean.setStartupDelay(5);
+            schedulerFactoryBean.setWaitForJobsToCompleteOnShutdown(true);
         };
     }
 
